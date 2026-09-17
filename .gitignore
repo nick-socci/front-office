@@ -1,0 +1,28 @@
+# Secrets / auth
+.env
+*.env
+
+# ESPN league cookies live only in .env — never commit them
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# dbt
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+
+# Data / warehouse
+*.duckdb
+data/raw/
+data/*.csv
+data/*.json
+
+# Dagster
+.dagster_home/
+
+# OS
+.DS_Store
