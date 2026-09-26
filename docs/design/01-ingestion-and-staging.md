@@ -1,9 +1,10 @@
-# Front Office — Sub-project 1: Ingestion → DuckDB → dbt staging → CI
+# 01 — Ingestion → DuckDB → dbt staging → CI
 
-**Date:** 2026-09-20 · **Status:** Approved design, pending implementation plan
-**Context:** [HANDOVER.md](../../../HANDOVER.md) holds the overall plan. This spec covers the first of
-several sub-projects. Later ones are marts and the platform-neutral `int_*` layer, orchestration and
-deployment, the dashboard, and the BigQuery migration. Each gets its own spec.
+**Date:** 2026-09-20 · **Status:** Built and merged as PRs 1–6. Kept as written.
+**Context:** [`00-project-origin.md`](00-project-origin.md) holds the overall plan. This spec covers
+the first of several sub-projects. Later ones are marts and the platform-neutral `int_*` layer
+([`02-intermediate-and-marts.md`](02-intermediate-and-marts.md)), orchestration and deployment, the
+dashboard, and the BigQuery migration. Each gets its own doc.
 
 ## Decisions made
 

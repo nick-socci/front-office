@@ -84,7 +84,7 @@ the rest.
 
 Written with Claude Code, deliberately and openly. What that meant in practice:
 
-- **Design first.** A [spec](docs/superpowers/specs/2026-09-20-ingestion-and-staging-design.md)
+- **Design first.** A [spec](docs/design/01-ingestion-and-staging.md)
   was written and reviewed before any code, then twice critiqued adversarially; both
   critiques changed the design (entity-grain dedupe, the settle window, allowlist
   fixtures).
@@ -118,3 +118,6 @@ Not planned: a multi-user portal. It would mean holding other people's ESPN sess
 cookies, which is a security problem I have no interest in owning. The data model is
 league-agnostic anyway (`league_id` + `season` on every row, scoring rules read as data),
 so a second league or platform would slot in behind the existing seam.
+
+The design docs behind each of these, written before the work and annotated afterwards
+where reality disagreed, are in [`docs/`](docs/).
