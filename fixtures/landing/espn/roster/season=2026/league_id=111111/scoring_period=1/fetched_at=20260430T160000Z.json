@@ -1,7 +1,7 @@
 {
  "id": "111111",
  "seasonId": 2026,
- "scoringPeriodId": 101,
+ "scoringPeriodId": 1,
  "teams": [
   {
    "id": 1,
@@ -87,7 +87,7 @@
      },
      {
       "playerId": 33710,
-      "lineupSlotId": 16,
+      "lineupSlotId": 4,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -100,7 +100,7 @@
      },
      {
       "playerId": 5218285,
-      "lineupSlotId": 4,
+      "lineupSlotId": 12,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -178,7 +178,7 @@
      },
      {
       "playerId": 41178,
-      "lineupSlotId": 16,
+      "lineupSlotId": 13,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -243,7 +243,7 @@
      },
      {
       "playerId": 4683375,
-      "lineupSlotId": 13,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -269,7 +269,7 @@
      },
      {
       "playerId": 4917646,
-      "lineupSlotId": 0,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -308,7 +308,7 @@
      },
      {
       "playerId": 5149064,
-      "lineupSlotId": 12,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -321,7 +321,7 @@
      },
      {
       "playerId": 4743772,
-      "lineupSlotId": 16,
+      "lineupSlotId": 0,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -333,15 +333,15 @@
       }
      },
      {
-      "playerId": 39907,
+      "playerId": 42796,
       "lineupSlotId": 5,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
        "player": {
-        "fullName": "Tommy Edman",
-        "defaultPositionId": 4,
-        "proTeamId": 19
+        "fullName": "Kyle Stowers",
+        "defaultPositionId": 7,
+        "proTeamId": 28
        }
       }
      }
@@ -432,7 +432,7 @@
      },
      {
       "playerId": 32667,
-      "lineupSlotId": 16,
+      "lineupSlotId": 13,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -458,7 +458,7 @@
      },
      {
       "playerId": 32691,
-      "lineupSlotId": 12,
+      "lineupSlotId": 4,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -562,7 +562,7 @@
      },
      {
       "playerId": 4863321,
-      "lineupSlotId": 16,
+      "lineupSlotId": 14,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -588,7 +588,7 @@
      },
      {
       "playerId": 33773,
-      "lineupSlotId": 13,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -640,7 +640,7 @@
      },
      {
       "playerId": 4728688,
-      "lineupSlotId": 4,
+      "lineupSlotId": 12,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -692,7 +692,7 @@
      },
      {
       "playerId": 4414215,
-      "lineupSlotId": 14,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -1018,7 +1018,7 @@
     "entries": [
      {
       "playerId": 42403,
-      "lineupSlotId": 16,
+      "lineupSlotId": 4,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -1031,7 +1031,7 @@
      },
      {
       "playerId": 30951,
-      "lineupSlotId": 12,
+      "lineupSlotId": 1,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -1057,7 +1057,7 @@
      },
      {
       "playerId": 36969,
-      "lineupSlotId": 5,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -1291,7 +1291,7 @@
      },
      {
       "playerId": 4926296,
-      "lineupSlotId": 16,
+      "lineupSlotId": 5,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -1304,7 +1304,7 @@
      },
      {
       "playerId": 41345,
-      "lineupSlotId": 4,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -1330,7 +1330,7 @@
      },
      {
       "playerId": 40810,
-      "lineupSlotId": 1,
+      "lineupSlotId": 12,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -1708,7 +1708,7 @@
     "entries": [
      {
       "playerId": 38980,
-      "lineupSlotId": 16,
+      "lineupSlotId": 5,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -1851,7 +1851,7 @@
      },
      {
       "playerId": 42178,
-      "lineupSlotId": 12,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -1864,7 +1864,7 @@
      },
      {
       "playerId": 41199,
-      "lineupSlotId": 16,
+      "lineupSlotId": 14,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -1877,7 +1877,7 @@
      },
      {
       "playerId": 34945,
-      "lineupSlotId": 16,
+      "lineupSlotId": 12,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -1955,7 +1955,7 @@
      },
      {
       "playerId": 4326697,
-      "lineupSlotId": 14,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -1981,7 +1981,7 @@
      },
      {
       "playerId": 4722857,
-      "lineupSlotId": 5,
+      "lineupSlotId": 2,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2020,7 +2020,7 @@
      },
      {
       "playerId": 40459,
-      "lineupSlotId": 2,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2157,7 +2157,7 @@
      },
      {
       "playerId": 5080761,
-      "lineupSlotId": 16,
+      "lineupSlotId": 14,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2209,7 +2209,7 @@
      },
      {
       "playerId": 32758,
-      "lineupSlotId": 16,
+      "lineupSlotId": 1,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2235,7 +2235,7 @@
      },
      {
       "playerId": 39572,
-      "lineupSlotId": 1,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2326,7 +2326,7 @@
      },
      {
       "playerId": 33840,
-      "lineupSlotId": 14,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2339,7 +2339,7 @@
      },
      {
       "playerId": 40937,
-      "lineupSlotId": 16,
+      "lineupSlotId": 14,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2375,19 +2375,6 @@
         "proTeamId": 16
        }
       }
-     },
-     {
-      "playerId": 4726080,
-      "lineupSlotId": 14,
-      "injuryStatus": "NORMAL",
-      "acquisitionType": null,
-      "playerPoolEntry": {
-       "player": {
-        "fullName": "Spencer Arrighetti",
-        "defaultPositionId": 1,
-        "proTeamId": 14
-       }
-      }
      }
     ]
    }
@@ -2398,7 +2385,7 @@
     "entries": [
      {
       "playerId": 41216,
-      "lineupSlotId": 14,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2411,7 +2398,7 @@
      },
      {
       "playerId": 32081,
-      "lineupSlotId": 14,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2437,7 +2424,7 @@
      },
      {
       "playerId": 42409,
-      "lineupSlotId": 16,
+      "lineupSlotId": 14,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2450,7 +2437,7 @@
      },
      {
       "playerId": 32078,
-      "lineupSlotId": 17,
+      "lineupSlotId": 5,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2458,6 +2445,19 @@
         "fullName": "George Springer",
         "defaultPositionId": 10,
         "proTeamId": 14
+       }
+      }
+     },
+     {
+      "playerId": 40926,
+      "lineupSlotId": 17,
+      "injuryStatus": "NORMAL",
+      "acquisitionType": null,
+      "playerPoolEntry": {
+       "player": {
+        "fullName": "Brent Rooker",
+        "defaultPositionId": 10,
+        "proTeamId": 11
        }
       }
      },
@@ -2502,7 +2502,7 @@
      },
      {
       "playerId": 34401,
-      "lineupSlotId": 16,
+      "lineupSlotId": 14,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2541,7 +2541,7 @@
      },
      {
       "playerId": 36618,
-      "lineupSlotId": 16,
+      "lineupSlotId": 15,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2567,7 +2567,7 @@
      },
      {
       "playerId": 33372,
-      "lineupSlotId": 14,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2632,7 +2632,7 @@
      },
      {
       "playerId": 5201821,
-      "lineupSlotId": 15,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2645,7 +2645,7 @@
      },
      {
       "playerId": 31098,
-      "lineupSlotId": 16,
+      "lineupSlotId": 14,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -2718,19 +2718,6 @@
         "fullName": "Emilio Pagan",
         "defaultPositionId": 11,
         "proTeamId": 17
-       }
-      }
-     },
-     {
-      "playerId": 36181,
-      "lineupSlotId": 5,
-      "injuryStatus": "NORMAL",
-      "acquisitionType": null,
-      "playerPoolEntry": {
-       "player": {
-        "fullName": "Mickey Moniak",
-        "defaultPositionId": 9,
-        "proTeamId": 27
        }
       }
      }
@@ -3088,7 +3075,7 @@
     "entries": [
      {
       "playerId": 41221,
-      "lineupSlotId": 13,
+      "lineupSlotId": 14,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3127,7 +3114,7 @@
      },
      {
       "playerId": 33224,
-      "lineupSlotId": 15,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3153,7 +3140,7 @@
      },
      {
       "playerId": 37498,
-      "lineupSlotId": 1,
+      "lineupSlotId": 12,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3192,7 +3179,7 @@
      },
      {
       "playerId": 30193,
-      "lineupSlotId": 12,
+      "lineupSlotId": 1,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3218,7 +3205,7 @@
      },
      {
       "playerId": 32082,
-      "lineupSlotId": 14,
+      "lineupSlotId": 13,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3244,7 +3231,7 @@
      },
      {
       "playerId": 41273,
-      "lineupSlotId": 17,
+      "lineupSlotId": 4,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3282,8 +3269,34 @@
       }
      },
      {
+      "playerId": 4424862,
+      "lineupSlotId": 17,
+      "injuryStatus": "NORMAL",
+      "acquisitionType": null,
+      "playerPoolEntry": {
+       "player": {
+        "fullName": "Spencer Schwellenbach",
+        "defaultPositionId": 1,
+        "proTeamId": 15
+       }
+      }
+     },
+     {
+      "playerId": 4916269,
+      "lineupSlotId": 17,
+      "injuryStatus": "NORMAL",
+      "acquisitionType": null,
+      "playerPoolEntry": {
+       "player": {
+        "fullName": "Ryne Nelson",
+        "defaultPositionId": 1,
+        "proTeamId": 29
+       }
+      }
+     },
+     {
       "playerId": 34873,
-      "lineupSlotId": 16,
+      "lineupSlotId": 14,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3309,7 +3322,7 @@
      },
      {
       "playerId": 4725251,
-      "lineupSlotId": 16,
+      "lineupSlotId": 17,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3322,7 +3335,7 @@
      },
      {
       "playerId": 36056,
-      "lineupSlotId": 16,
+      "lineupSlotId": 15,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3374,7 +3387,7 @@
      },
      {
       "playerId": 32675,
-      "lineupSlotId": 14,
+      "lineupSlotId": 13,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3387,7 +3400,7 @@
      },
      {
       "playerId": 35241,
-      "lineupSlotId": 13,
+      "lineupSlotId": 14,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3400,7 +3413,7 @@
      },
      {
       "playerId": 39898,
-      "lineupSlotId": 14,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3804,7 +3817,7 @@
      },
      {
       "playerId": 38904,
-      "lineupSlotId": 3,
+      "lineupSlotId": 4,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3843,7 +3856,7 @@
      },
      {
       "playerId": 41292,
-      "lineupSlotId": 0,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3856,7 +3869,7 @@
      },
      {
       "playerId": 4717803,
-      "lineupSlotId": 13,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3869,7 +3882,7 @@
      },
      {
       "playerId": 34982,
-      "lineupSlotId": 16,
+      "lineupSlotId": 3,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3947,7 +3960,7 @@
      },
      {
       "playerId": 4917889,
-      "lineupSlotId": 5,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3960,7 +3973,7 @@
      },
      {
       "playerId": 4417208,
-      "lineupSlotId": 16,
+      "lineupSlotId": 14,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -3986,7 +3999,7 @@
      },
      {
       "playerId": 41509,
-      "lineupSlotId": 15,
+      "lineupSlotId": 13,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -4012,7 +4025,7 @@
      },
      {
       "playerId": 4345404,
-      "lineupSlotId": 14,
+      "lineupSlotId": 13,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -4025,7 +4038,7 @@
      },
      {
       "playerId": 37729,
-      "lineupSlotId": 4,
+      "lineupSlotId": 16,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -4038,7 +4051,7 @@
      },
      {
       "playerId": 4917812,
-      "lineupSlotId": 16,
+      "lineupSlotId": 0,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -4064,7 +4077,7 @@
      },
      {
       "playerId": 41455,
-      "lineupSlotId": 13,
+      "lineupSlotId": 15,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {
@@ -4077,7 +4090,7 @@
      },
      {
       "playerId": 5137200,
-      "lineupSlotId": 16,
+      "lineupSlotId": 5,
       "injuryStatus": "NORMAL",
       "acquisitionType": null,
       "playerPoolEntry": {

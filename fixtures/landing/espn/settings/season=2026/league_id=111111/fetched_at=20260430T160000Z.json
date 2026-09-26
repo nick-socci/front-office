@@ -1,7 +1,7 @@
 {
  "id": "111111",
  "seasonId": 2026,
- "scoringPeriodId": 186,
+ "scoringPeriodId": 2,
  "settings": {
   "name": "Fixture League",
   "size": 12,
@@ -101,8 +101,8 @@
  },
  "status": {
   "currentMatchupPeriod": 24,
-  "latestScoringPeriod": 186,
-  "finalScoringPeriod": 180,
+  "latestScoringPeriod": 2,
+  "finalScoringPeriod": 2,
   "isActive": true
  }
 }

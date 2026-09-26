@@ -72,6 +72,44 @@ models:
           arguments:
             combination_of_columns: [league_id, season, scoring_period, team_id, espn_player_id]
 
+  - name: stg_espn__scoring_periods
+    description: >
+      One row per scoring period, mapping it to the calendar date it scored on
+      (US/Eastern boundary). The bridge between ESPN rosters and MLB game logs.
+    columns:
+      - name: scoring_period
+        data_tests: [not_null, unique]
+      - name: scoring_date
+        data_tests: [not_null, unique]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, scoring_period]
+
+unit_tests:
+  - name: scoring_period_dates_use_the_eastern_day_boundary
+    description: >
+      A settings snapshot taken at 02:52 UTC belongs to the PREVIOUS Eastern day. If the
+      anchor used the UTC date instead, every period -- and therefore every roster --
+      would shift forward by one day.
+    model: stg_espn__scoring_periods
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - league_id: "1"
+            season: 2026
+            latest_scoring_period: 180
+            final_scoring_period: 3
+            fetched_at: "2026-09-21 02:52:12"
+    expect:
+      rows:
+        - scoring_period: 1
+          scoring_date: "2026-03-25"
+        - scoring_period: 2
+          scoring_date: "2026-03-26"
+        - scoring_period: 3
+          scoring_date: "2026-03-27"
+
 seeds:
   - name: espn_stat_ids
     description: >
