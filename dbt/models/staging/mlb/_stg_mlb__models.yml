@@ -1,0 +1,49 @@
+version: 2
+
+models:
+  - name: stg_mlb__games
+    description: >
+      One row per MLB regular-season game, newest snapshot wins. The entry point for
+      the MLB side: boxscore ingestion walks this model's game_pk list.
+    columns:
+      - name: game_pk
+        description: MLB's stable game identifier; the grain of this model.
+        data_tests:
+          - not_null
+          - unique
+      - name: game_guid
+        data_tests:
+          - not_null
+      - name: game_type
+        description: Always 'R' here; other game types are filtered out.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["R"]
+      - name: season
+        data_tests:
+          - not_null
+      - name: official_date
+        description: The date MLB assigns the game, which is what ESPN scoring aligns to.
+        data_tests:
+          - not_null
+      - name: game_state
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["Final", "Preview", "Live"]
+      - name: home_team_id
+        data_tests:
+          - not_null
+      - name: away_team_id
+        data_tests:
+          - not_null
+      - name: fetched_at
+        data_tests:
+          - not_null
+    data_tests:
+      - dbt_utils.expression_is_true:
+          name: stg_mlb__games_home_and_away_differ
+          arguments:
+            expression: "home_team_id != away_team_id"

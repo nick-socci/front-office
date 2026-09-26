@@ -1,0 +1,32 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Raw API responses, one row per response, loaded by `front-office load`.
+      dbt did not create this table; declaring it as a source is how dbt knows which
+      models depend on it. Note that dbt renders these descriptions as Jinja, so
+      curly braces here would be executed rather than displayed.
+    schema: raw
+    tables:
+      - name: api_responses
+        description: Append-only landing-zone mirror; payload holds the untouched JSON.
+        # Freshness is configured but deliberately not enforced in CI: fixtures are
+        # stale by design. It becomes meaningful when daily runs start in 2027.
+        loaded_at_field: "strptime(fetched_at, '%Y%m%dT%H%M%SZ')"
+        freshness:
+          warn_after: {count: 36, period: hour}
+          error_after: {count: 7, period: day}
+        columns:
+          - name: source
+            description: mlb / espn / idmap.
+          - name: endpoint
+            description: Which endpoint produced the response, e.g. schedule, boxscore.
+          - name: request_key
+            description: Canonical (sorted) request parameters.
+          - name: fetched_at
+            description: UTC stamp, matching the landing filename.
+          - name: payload
+            description: The response body, unmodified.
+          - name: file_path
+            description: Landing-zone path, for tracing a row back to its file.

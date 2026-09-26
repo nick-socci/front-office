@@ -18,6 +18,8 @@ dev = [
     "pytest>=8.3",
     "ruff>=0.8",
     "mypy>=1.13",
+    "dbt-core>=1.12.5",
+    "dbt-duckdb>=1.11.0",
 ]
 
 [build-system]
@@ -45,5 +47,5 @@ disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["ingestion/tests"]
-pythonpath = ["ingestion/src"]
+pythonpath = ["ingestion/src", "scripts"]
 addopts = "-q"

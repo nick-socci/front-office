@@ -31,3 +31,18 @@ jobs:
 
       - name: Tests (pytest)
         run: uv run pytest
+
+      - name: Build fixture warehouse
+        run: uv run front-office load --raw-root fixtures/landing --db dbt/ci.duckdb
+
+      - name: dbt deps
+        run: uv run dbt deps
+        working-directory: dbt
+        env:
+          DBT_PROFILES_DIR: .
+
+      - name: dbt build (fixtures)
+        run: uv run dbt build --target ci
+        working-directory: dbt
+        env:
+          DBT_PROFILES_DIR: .
