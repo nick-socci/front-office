@@ -1,0 +1,236 @@
+version: 2
+
+models:
+  # ---------------------------------------------------------------------------
+  # The platform seam.
+  #
+  # These four carry `contract: enforced`. dbt checks the built relation against
+  # the declared columns and types and fails the build on any mismatch, so
+  # "a second platform slots in behind this layer" is something CI verifies
+  # rather than something the README asserts.
+  #
+  # Contracts are not supported on ephemeral models, which is why these are
+  # views and int_fantasy__player_crosswalk is the ephemeral one.
+  # ---------------------------------------------------------------------------
+
+  - name: int_fantasy__teams
+    description: One row per fantasy team, in platform-neutral terms.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: league_id
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: season
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: fantasy_team_id
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: team_name
+        data_type: varchar
+      - name: team_abbrev
+        data_type: varchar
+      - name: playoff_seed
+        data_type: bigint
+      - name: wins
+        data_type: bigint
+      - name: losses
+        data_type: bigint
+      - name: ties
+        data_type: bigint
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, fantasy_team_id]
+
+  - name: int_fantasy__categories
+    description: >
+      One row per scored category. is_lower_better renames ESPN's is_reverse, because
+      "reverse" means nothing outside ESPN; ERA and WHIP are won by the smaller number.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: league_id
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: season
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: category_key
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: category_label
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: category_unit
+        data_type: varchar
+      - name: is_lower_better
+        data_type: boolean
+        constraints: [{type: not_null}]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, category_key]
+
+  - name: int_fantasy__matchup_periods
+    description: >
+      One row per (matchup period, calendar date). Periods are not a uniform length --
+      12, 14 and 7 days all occur -- so consumers take the span from here.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: league_id
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: season
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: matchup_period
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: scoring_period
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: scoring_date
+        data_type: date
+        constraints: [{type: not_null}]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, scoring_date]
+
+  - name: int_fantasy__roster_days
+    description: >
+      One row per (fantasy team, player, date). Every roster day, not just the starts --
+      the bench is the point of the lineup marts. mlbam_player_id is nullable by design
+      even though nothing is null in 2026: the crosswalk lags for late call-ups, so an
+      unresolved player must surface as a gap rather than be dropped.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: league_id
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: season
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: scoring_date
+        data_type: date
+        constraints: [{type: not_null}]
+      - name: scoring_period
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: fantasy_team_id
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: platform_player_id
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: mlbam_player_id
+        data_type: bigint
+      - name: player_resolution
+        data_type: varchar
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["crosswalk_id", "unambiguous_name", "unresolved"]
+      - name: player_name
+        data_type: varchar
+      - name: roster_slot_id
+        data_type: bigint
+      - name: roster_slot
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: is_started
+        data_type: boolean
+        constraints: [{type: not_null}]
+      - name: default_position
+        data_type: varchar
+      - name: injury_status
+        data_type: varchar
+      - name: acquisition_type
+        data_type: varchar
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              [platform, league_id, season, scoring_date, fantasy_team_id, platform_player_id]
+
+  # ---------------------------------------------------------------------------
+  # Not part of the seam: MLB facts and the attribution grain.
+  # ---------------------------------------------------------------------------
+
+  - name: int_mlb__player_game_days
+    description: >
+      One row per (player, date). Doubleheaders summed; a player who both batted and
+      pitched is one row with both sides populated. Components only, never rates.
+    columns:
+      - name: mlbam_player_id
+        data_tests: [not_null]
+      - name: game_date
+        data_tests: [not_null]
+      - name: at_bats
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, inclusive: true}
+      - name: outs_recorded
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, inclusive: true}
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [mlbam_player_id, game_date]
+      - dbt_utils.expression_is_true:
+          name: int_mlb__player_game_days_hits_within_at_bats
+          arguments:
+            expression: "hits <= at_bats"
+      - dbt_utils.expression_is_true:
+          name: int_mlb__player_game_days_played_at_least_once
+          arguments:
+            expression: "games_batted + games_pitched >= 1"
+
+  - name: int_fantasy__started_player_days
+    description: >
+      The attribution grain: one row per started player-day with that day's MLB
+      production. A started player who did not play yields zeroes, not a missing row --
+      "started nobody" and "started someone who did nothing" are different mistakes.
+    columns:
+      - name: scoring_date
+        data_tests: [not_null]
+      - name: fantasy_team_id
+        data_tests: [not_null]
+      - name: platform_player_id
+        data_tests: [not_null]
+      - name: played
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              [platform, league_id, season, scoring_date, fantasy_team_id, platform_player_id]
+      - dbt_utils.expression_is_true:
+          name: int_fantasy__started_player_days_no_stats_without_a_game
+          arguments:
+            expression: "at_bats = 0 and outs_recorded = 0"
+            config:
+              where: "not played"

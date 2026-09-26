@@ -18,6 +18,13 @@ models:
       +materialized: view
       +schema: staging
 
+    intermediate:
+      # The layer between staging (shaped like the API) and marts (shaped like a
+      # question). Views by default; the two models that do real aggregation
+      # override to table.
+      +materialized: view
+      +schema: intermediate
+
 vars:
   # When true, league- and team-identifying text is replaced with stable aliases.
   # League members did not opt into appearing in a public repo, so CI (and anything
