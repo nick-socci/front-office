@@ -62,6 +62,7 @@ class HttpClient:
         cookies: Mapping[str, str] | None = None,
         headers: Mapping[str, str] | None = None,
         timeout: float = 30.0,
+        follow_redirects: bool = True,
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
@@ -75,6 +76,9 @@ class HttpClient:
             cookies=dict(cookies or {}),
             headers={"User-Agent": USER_AGENT, **dict(headers or {})},
             timeout=timeout,
+            # Redirects are followed by default: the SFBB id map is served through one,
+            # and httpx would otherwise hand back a 307 as if it were the answer.
+            follow_redirects=follow_redirects,
         )
 
     def __enter__(self) -> HttpClient:

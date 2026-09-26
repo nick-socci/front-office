@@ -1,6 +1,16 @@
 # Handover — Fantasy Baseball Analytics
 
-**Status:** Planning complete, not yet started. This doc captures the full plan from a 2026-09-16/17 conversation with Claude Code (career-ops session) so it can be picked back up cold.
+**Status (updated 2026-09-26):** Sub-project 1 is complete — ingestion, DuckDB warehouse,
+dbt staging layer and CI are built and running on the full 2026 season. The project is
+named **Front Office** and lives at https://github.com/nick-socci/front-office.
+
+The design that was actually built is in
+[`docs/superpowers/specs/2026-09-20-ingestion-and-staging-design.md`](docs/superpowers/specs/2026-09-20-ingestion-and-staging-design.md);
+see the README for what exists today and what comes next. The open decisions below are
+resolved: DuckDB now with BigQuery to follow, marts confirmed against a 17-category
+league, the AI-assisted write-up lives in the README, and the project has a name.
+
+Everything below is the original planning record from 2026-09-16/17, kept as written.
 
 ## Why this project exists
 

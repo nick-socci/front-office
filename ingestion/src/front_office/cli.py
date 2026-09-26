@@ -12,11 +12,14 @@ from typing import Annotated
 
 import typer
 
+from front_office.espn import matchups as espn_matchups
 from front_office.espn import rosters as espn_rosters
 from front_office.espn import settings as espn_settings
 from front_office.espn import teams as espn_teams
+from front_office.espn import transactions as espn_transactions
 from front_office.espn.client import EspnCredentials, espn_client, load_env_file
 from front_office.http_client import HttpClient
+from front_office.idmap import sfbb
 from front_office.landing import LandingZone
 from front_office.load import connect, load_landing_zone
 from front_office.mlb import boxscore as mlb_boxscore
@@ -123,6 +126,24 @@ def backfill_espn(
         )
         typer.echo(f"landed teams -> {teams_path}")
 
+        matchups_path = espn_matchups.backfill_matchups(
+            zone=zone,
+            client=client,
+            season=season,
+            league_id=credentials.league_id,
+            fetched_at=fetched_at,
+        )
+        typer.echo(f"landed matchups -> {matchups_path}")
+
+        transactions_path = espn_transactions.backfill_transactions(
+            zone=zone,
+            client=client,
+            season=season,
+            league_id=credentials.league_id,
+            fetched_at=fetched_at,
+        )
+        typer.echo(f"landed transactions -> {transactions_path}")
+
         status = settings_payload.get("status", {})
         typer.echo(
             f"scoring periods: latest={status.get('latestScoringPeriod')} "
@@ -143,6 +164,15 @@ def backfill_espn(
         if summary.failed:
             typer.echo(f"failed scoring periods: {summary.failed_periods}", err=True)
             raise typer.Exit(code=1)
+
+
+@backfill_app.command("idmap")
+def backfill_idmap(raw_root: RawRoot = DEFAULT_RAW_ROOT) -> None:
+    """Fetch the SFBB player id map: the ESPN <-> MLBAM crosswalk."""
+    zone = LandingZone(root=raw_root)
+    with HttpClient("idmap") as client:
+        path, rows = sfbb.backfill_player_id_map(zone=zone, client=client, fetched_at=utc_stamp())
+    typer.echo(f"landed {rows} id-map rows -> {path}")
 
 
 @app.command("load")

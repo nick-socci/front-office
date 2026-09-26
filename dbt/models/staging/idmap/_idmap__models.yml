@@ -1,0 +1,14 @@
+version: 2
+
+models:
+  - name: stg_idmap__players
+    description: >
+      ESPN player id to MLBAM player id, from Smart Fantasy Baseball's public map. This
+      is what lets a fantasy roster join to MLB game logs. Matching on name instead
+      works for most players but silently merges the three names shared by two major
+      leaguers each (Jose Fermin, Max Muncy, Yunior Marte).
+    columns:
+      - name: espn_player_id
+        data_tests: [not_null, unique]
+      - name: mlbam_player_id
+        data_tests: [not_null]
