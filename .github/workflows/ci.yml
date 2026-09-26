@@ -42,7 +42,9 @@ jobs:
           DBT_PROFILES_DIR: .
 
       - name: dbt build (fixtures, anonymised)
-        run: uv run dbt build --target ci --vars '{anonymize: true}'
+        # Quoted: the colon inside --vars '{anonymize: true}' makes YAML try to
+        # parse a nested mapping, which stops the workflow from starting at all.
+        run: "uv run dbt build --target ci --vars '{anonymize: true}'"
         working-directory: dbt
         env:
           DBT_PROFILES_DIR: .
