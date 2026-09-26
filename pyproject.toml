@@ -1,0 +1,49 @@
+[project]
+name = "front-office"
+version = "0.1.0"
+description = "Fantasy baseball analytics: MLB + ESPN ingestion, dbt transforms, DuckDB warehouse"
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.28",
+    "typer>=0.15",
+    "duckdb>=1.1",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+front-office = "front_office.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ingestion/src/front_office"]
+
+[tool.ruff]
+line-length = 100
+src = ["ingestion/src", "ingestion/tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "PTH"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["ingestion/src"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["ingestion/tests"]
+pythonpath = ["ingestion/src"]
+addopts = "-q"
