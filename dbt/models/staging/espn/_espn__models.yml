@@ -72,6 +72,36 @@ models:
           arguments:
             combination_of_columns: [league_id, season, scoring_period, team_id, espn_player_id]
 
+  - name: stg_espn__roster_entry_slots
+    description: >
+      One row per (scoring period, team, player, eligible slot): where a player COULD
+      have been started that day. Eligibility is a daily snapshot -- a player gains
+      second-base eligibility mid-season once he has played enough games there -- so
+      consumers must use the day's own row, not a season-wide set.
+    columns:
+      - name: scoring_period
+        data_tests: [not_null]
+      - name: espn_player_id
+        data_tests: [not_null]
+      - name: team_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_espn__teams')
+                field: team_id
+      - name: lineup_slot_id
+        data_tests: [not_null]
+      - name: lineup_slot
+        data_tests: [not_null]
+      - name: is_starting_slot
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              [league_id, season, scoring_period, team_id, espn_player_id, lineup_slot_id]
+
   - name: stg_espn__scoring_periods
     description: >
       One row per scoring period, mapping it to the calendar date it scored on
@@ -110,6 +140,56 @@ models:
           name: stg_espn__matchups_teams_differ
           arguments:
             expression: "home_team_id != away_team_id"
+
+  - name: stg_espn__matchup_periods
+    description: >
+      One row per (matchup period, scoring period): the days a head-to-head matchup was
+      scored over. Periods are not a uniform length in this league -- 12, 14 and 7 days
+      all occur -- so consumers must take the span from here rather than assume a week.
+    columns:
+      - name: matchup_period
+        data_tests: [not_null]
+      - name: scoring_period
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_espn__scoring_periods')
+                field: scoring_period
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, matchup_period, scoring_period]
+
+  - name: stg_espn__lineup_slot_limits
+    description: >
+      One row per lineup slot with how many a team fills each day -- the shape of a legal
+      lineup, read from settings rather than hardcoded. Slots this league does not use
+      are kept with slot_count = 0.
+    columns:
+      - name: lineup_slot_id
+        data_tests: [not_null]
+      - name: slot_count
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, lineup_slot_id]
+      # Only slots the league actually fills have to be named. ESPN enumerates a slot 18
+      # that espn-api does not name and that no league here uses (slot_count 0, and no
+      # player is ever eligible for it); inventing a name for it would be a guess. A
+      # slot with players in it and no name is a real gap in the seed.
+      - dbt_utils.expression_is_true:
+          name: stg_espn__lineup_slot_limits_used_slots_are_named
+          arguments:
+            expression: "lineup_slot is not null"
+            config:
+              where: "slot_count > 0"
 
   - name: stg_espn__matchup_category_results
     description: >
@@ -190,10 +270,15 @@ seeds:
       - name: message_type_id
         data_tests: [not_null, unique]
   - name: espn_lineup_slots
-    description: ESPN lineupSlotId -> slot abbreviation (C, 1B, BE, IL...).
+    description: >
+      ESPN lineupSlotId -> slot abbreviation (C, 1B, BE, IL...). is_starting_slot is
+      false for exactly bench and injured list: a benched player's real game still
+      happens, it is just not credited to the fantasy team.
     columns:
       - name: lineup_slot_id
         data_tests: [not_null, unique]
+      - name: is_starting_slot
+        data_tests: [not_null]
   - name: espn_player_positions
     description: ESPN defaultPositionId -> position abbreviation.
     columns:

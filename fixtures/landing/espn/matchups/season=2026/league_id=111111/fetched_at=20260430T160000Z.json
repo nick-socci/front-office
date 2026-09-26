@@ -159,6 +159,10 @@
        "score": 0.0
       }
      }
+    },
+    "pointsByScoringPeriod": {
+     "1": 0.0,
+     "2": 0.0
     }
    },
    "away": {
@@ -313,6 +317,10 @@
        "score": 0.0
       }
      }
+    },
+    "pointsByScoringPeriod": {
+     "1": 0.0,
+     "2": 0.0
     }
    }
   },
@@ -473,6 +481,10 @@
        "score": 6.0
       }
      }
+    },
+    "pointsByScoringPeriod": {
+     "1": 0.0,
+     "2": 0.0
     }
    },
    "away": {
@@ -627,6 +639,10 @@
        "score": 2.0
       }
      }
+    },
+    "pointsByScoringPeriod": {
+     "1": 0.0,
+     "2": 0.0
     }
    }
   }

@@ -16,7 +16,16 @@
        "player": {
         "fullName": "Jose Ramirez",
         "defaultPositionId": 5,
-        "proTeamId": 5
+        "proTeamId": 5,
+        "eligibleSlots": [
+         3,
+         7,
+         19,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -29,7 +38,13 @@
        "player": {
         "fullName": "Yoshinobu Yamamoto",
         "defaultPositionId": 1,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -42,7 +57,15 @@
        "player": {
         "fullName": "Wyatt Langford",
         "defaultPositionId": 7,
-        "proTeamId": 13
+        "proTeamId": 13,
+        "eligibleSlots": [
+         8,
+         9,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -55,7 +78,14 @@
        "player": {
         "fullName": "Julio Rodriguez",
         "defaultPositionId": 8,
-        "proTeamId": 12
+        "proTeamId": 12,
+        "eligibleSlots": [
+         9,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -68,7 +98,15 @@
        "player": {
         "fullName": "Nick Kurtz",
         "defaultPositionId": 3,
-        "proTeamId": 11
+        "proTeamId": 11,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -81,7 +119,16 @@
        "player": {
         "fullName": "James Wood",
         "defaultPositionId": 7,
-        "proTeamId": 20
+        "proTeamId": 20,
+        "eligibleSlots": [
+         8,
+         5,
+         11,
+         12,
+         16,
+         17,
+         10
+        ]
        }
       }
      },
@@ -94,7 +141,15 @@
        "player": {
         "fullName": "Trea Turner",
         "defaultPositionId": 6,
-        "proTeamId": 22
+        "proTeamId": 22,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -107,7 +162,15 @@
        "player": {
         "fullName": "Konnor Griffin",
         "defaultPositionId": 6,
-        "proTeamId": 23
+        "proTeamId": 23,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -120,7 +183,13 @@
        "player": {
         "fullName": "Eury Perez",
         "defaultPositionId": 1,
-        "proTeamId": 28
+        "proTeamId": 28,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -133,7 +202,13 @@
        "player": {
         "fullName": "Emmet Sheehan",
         "defaultPositionId": 1,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -146,7 +221,13 @@
        "player": {
         "fullName": "Brandon Woodruff",
         "defaultPositionId": 1,
-        "proTeamId": 8
+        "proTeamId": 8,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -159,7 +240,13 @@
        "player": {
         "fullName": "Blake Snell",
         "defaultPositionId": 1,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -172,7 +259,13 @@
        "player": {
         "fullName": "Josh Hader",
         "defaultPositionId": 11,
-        "proTeamId": 18
+        "proTeamId": 18,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -185,7 +278,13 @@
        "player": {
         "fullName": "Ryan Weathers",
         "defaultPositionId": 1,
-        "proTeamId": 10
+        "proTeamId": 10,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -198,7 +297,13 @@
        "player": {
         "fullName": "Max Meyer",
         "defaultPositionId": 1,
-        "proTeamId": 28
+        "proTeamId": 28,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -211,7 +316,13 @@
        "player": {
         "fullName": "Gregory Soto",
         "defaultPositionId": 11,
-        "proTeamId": 23
+        "proTeamId": 23,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -224,7 +335,13 @@
        "player": {
         "fullName": "Aaron Ashby",
         "defaultPositionId": 11,
-        "proTeamId": 8
+        "proTeamId": 8,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -237,7 +354,16 @@
        "player": {
         "fullName": "Travis Bazzana",
         "defaultPositionId": 4,
-        "proTeamId": 5
+        "proTeamId": 5,
+        "eligibleSlots": [
+         2,
+         6,
+         19,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -250,7 +376,13 @@
        "player": {
         "fullName": "Kyle Harrison",
         "defaultPositionId": 1,
-        "proTeamId": 8
+        "proTeamId": 8,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -263,7 +395,15 @@
        "player": {
         "fullName": "Josh Jung",
         "defaultPositionId": 5,
-        "proTeamId": 13
+        "proTeamId": 13,
+        "eligibleSlots": [
+         3,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -276,7 +416,17 @@
        "player": {
         "fullName": "Samuel Basallo",
         "defaultPositionId": 2,
-        "proTeamId": 1
+        "proTeamId": 1,
+        "eligibleSlots": [
+         0,
+         12,
+         16,
+         17,
+         11,
+         1,
+         7,
+         19
+        ]
        }
       }
      },
@@ -289,7 +439,13 @@
        "player": {
         "fullName": "Abner Uribe",
         "defaultPositionId": 11,
-        "proTeamId": 8
+        "proTeamId": 8,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -302,7 +458,15 @@
        "player": {
         "fullName": "Jackson Holliday",
         "defaultPositionId": 4,
-        "proTeamId": 1
+        "proTeamId": 1,
+        "eligibleSlots": [
+         2,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -315,7 +479,16 @@
        "player": {
         "fullName": "Bryce Eldridge",
         "defaultPositionId": 10,
-        "proTeamId": 26
+        "proTeamId": 26,
+        "eligibleSlots": [
+         11,
+         12,
+         16,
+         17,
+         1,
+         7,
+         19
+        ]
        }
       }
      },
@@ -328,7 +501,13 @@
        "player": {
         "fullName": "Kyle Teel",
         "defaultPositionId": 2,
-        "proTeamId": 4
+        "proTeamId": 4,
+        "eligibleSlots": [
+         0,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -341,7 +520,18 @@
        "player": {
         "fullName": "Tommy Edman",
         "defaultPositionId": 4,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         2,
+         6,
+         19,
+         9,
+         5,
+         12,
+         16,
+         17,
+         8
+        ]
        }
       }
      }
@@ -361,7 +551,16 @@
        "player": {
         "fullName": "Roman Anthony",
         "defaultPositionId": 9,
-        "proTeamId": 2
+        "proTeamId": 2,
+        "eligibleSlots": [
+         8,
+         10,
+         5,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -374,7 +573,13 @@
        "player": {
         "fullName": "Jhoan Duran",
         "defaultPositionId": 11,
-        "proTeamId": 22
+        "proTeamId": 22,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -387,7 +592,14 @@
        "player": {
         "fullName": "Shea Langeliers",
         "defaultPositionId": 2,
-        "proTeamId": 11
+        "proTeamId": 11,
+        "eligibleSlots": [
+         0,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -400,7 +612,13 @@
        "player": {
         "fullName": "George Kirby",
         "defaultPositionId": 1,
-        "proTeamId": 12
+        "proTeamId": 12,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -413,7 +631,15 @@
        "player": {
         "fullName": "Aaron Judge",
         "defaultPositionId": 9,
-        "proTeamId": 10
+        "proTeamId": 10,
+        "eligibleSlots": [
+         10,
+         5,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -426,7 +652,15 @@
        "player": {
         "fullName": "Ronald Acuna Jr.",
         "defaultPositionId": 9,
-        "proTeamId": 15
+        "proTeamId": 15,
+        "eligibleSlots": [
+         10,
+         5,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -439,7 +673,13 @@
        "player": {
         "fullName": "Kevin Gausman",
         "defaultPositionId": 1,
-        "proTeamId": 16
+        "proTeamId": 16,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -452,7 +692,16 @@
        "player": {
         "fullName": "Josh Naylor",
         "defaultPositionId": 3,
-        "proTeamId": 12
+        "proTeamId": 12,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -465,7 +714,15 @@
        "player": {
         "fullName": "Corey Seager",
         "defaultPositionId": 6,
-        "proTeamId": 13
+        "proTeamId": 13,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -478,7 +735,13 @@
        "player": {
         "fullName": "Bryan Abreu",
         "defaultPositionId": 11,
-        "proTeamId": 18
+        "proTeamId": 18,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -491,7 +754,16 @@
        "player": {
         "fullName": "Mike Trout",
         "defaultPositionId": 10,
-        "proTeamId": 3
+        "proTeamId": 3,
+        "eligibleSlots": [
+         10,
+         5,
+         11,
+         12,
+         16,
+         17,
+         9
+        ]
        }
       }
      },
@@ -504,7 +776,13 @@
        "player": {
         "fullName": "Hunter Greene",
         "defaultPositionId": 1,
-        "proTeamId": 17
+        "proTeamId": 17,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -517,7 +795,16 @@
        "player": {
         "fullName": "JJ Wetherholt",
         "defaultPositionId": 6,
-        "proTeamId": 24
+        "proTeamId": 24,
+        "eligibleSlots": [
+         2,
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -530,7 +817,13 @@
        "player": {
         "fullName": "Brad Keller",
         "defaultPositionId": 11,
-        "proTeamId": 22
+        "proTeamId": 22,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -543,7 +836,13 @@
        "player": {
         "fullName": "Casey Mize",
         "defaultPositionId": 1,
-        "proTeamId": 25
+        "proTeamId": 25,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -556,7 +855,14 @@
        "player": {
         "fullName": "Wilyer Abreu",
         "defaultPositionId": 9,
-        "proTeamId": 2
+        "proTeamId": 2,
+        "eligibleSlots": [
+         10,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -569,7 +875,13 @@
        "player": {
         "fullName": "Connelly Early",
         "defaultPositionId": 1,
-        "proTeamId": 20
+        "proTeamId": 20,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -582,7 +894,13 @@
        "player": {
         "fullName": "Tanner Scott",
         "defaultPositionId": 11,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -595,7 +913,13 @@
        "player": {
         "fullName": "Foster Griffin",
         "defaultPositionId": 1,
-        "proTeamId": 5
+        "proTeamId": 5,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -608,7 +932,13 @@
        "player": {
         "fullName": "Gage Jump",
         "defaultPositionId": 1,
-        "proTeamId": 11
+        "proTeamId": 11,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -621,7 +951,16 @@
        "player": {
         "fullName": "Braden Montgomery",
         "defaultPositionId": 8,
-        "proTeamId": 4
+        "proTeamId": 4,
+        "eligibleSlots": [
+         9,
+         10,
+         5,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -634,7 +973,13 @@
        "player": {
         "fullName": "Eduard Bazardo",
         "defaultPositionId": 11,
-        "proTeamId": 12
+        "proTeamId": 12,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -647,7 +992,16 @@
        "player": {
         "fullName": "Nasim Nunez",
         "defaultPositionId": 6,
-        "proTeamId": 20
+        "proTeamId": 20,
+        "eligibleSlots": [
+         2,
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -660,7 +1014,13 @@
        "player": {
         "fullName": "Trevor Rogers",
         "defaultPositionId": 1,
-        "proTeamId": 1
+        "proTeamId": 1,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -673,7 +1033,17 @@
        "player": {
         "fullName": "TJ Rumfield",
         "defaultPositionId": 5,
-        "proTeamId": 27
+        "proTeamId": 27,
+        "eligibleSlots": [
+         3,
+         7,
+         19,
+         12,
+         16,
+         17,
+         1,
+         11
+        ]
        }
       }
      },
@@ -686,7 +1056,21 @@
        "player": {
         "fullName": "Kody Clemens",
         "defaultPositionId": 3,
-        "proTeamId": 9
+        "proTeamId": 9,
+        "eligibleSlots": [
+         1,
+         2,
+         6,
+         7,
+         19,
+         12,
+         16,
+         17,
+         5,
+         8,
+         10,
+         9
+        ]
        }
       }
      },
@@ -699,7 +1083,13 @@
        "player": {
         "fullName": "Christian Scott",
         "defaultPositionId": 1,
-        "proTeamId": 21
+        "proTeamId": 21,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      }
@@ -719,7 +1109,13 @@
        "player": {
         "fullName": "Trevor Megill",
         "defaultPositionId": 11,
-        "proTeamId": 8
+        "proTeamId": 8,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -732,7 +1128,15 @@
        "player": {
         "fullName": "Francisco Lindor",
         "defaultPositionId": 6,
-        "proTeamId": 21
+        "proTeamId": 21,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -745,7 +1149,13 @@
        "player": {
         "fullName": "Edwin Diaz",
         "defaultPositionId": 11,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -758,7 +1168,13 @@
        "player": {
         "fullName": "Framber Valdez",
         "defaultPositionId": 1,
-        "proTeamId": 6
+        "proTeamId": 6,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -771,7 +1187,14 @@
        "player": {
         "fullName": "William Contreras",
         "defaultPositionId": 2,
-        "proTeamId": 8
+        "proTeamId": 8,
+        "eligibleSlots": [
+         0,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -784,7 +1207,13 @@
        "player": {
         "fullName": "Drew Rasmussen",
         "defaultPositionId": 1,
-        "proTeamId": 30
+        "proTeamId": 30,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -797,7 +1226,15 @@
        "player": {
         "fullName": "Brice Turang",
         "defaultPositionId": 4,
-        "proTeamId": 8
+        "proTeamId": 8,
+        "eligibleSlots": [
+         2,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -810,7 +1247,13 @@
        "player": {
         "fullName": "Jesus Luzardo",
         "defaultPositionId": 1,
-        "proTeamId": 22
+        "proTeamId": 22,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -823,7 +1266,15 @@
        "player": {
         "fullName": "Byron Buxton",
         "defaultPositionId": 8,
-        "proTeamId": 9
+        "proTeamId": 9,
+        "eligibleSlots": [
+         9,
+         5,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -836,7 +1287,16 @@
        "player": {
         "fullName": "Eugenio Suarez",
         "defaultPositionId": 5,
-        "proTeamId": 17
+        "proTeamId": 17,
+        "eligibleSlots": [
+         3,
+         7,
+         19,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -849,7 +1309,14 @@
        "player": {
         "fullName": "Luis Castillo",
         "defaultPositionId": 1,
-        "proTeamId": 4
+        "proTeamId": 4,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17,
+         15
+        ]
        }
       }
      },
@@ -862,7 +1329,14 @@
        "player": {
         "fullName": "Oneil Cruz",
         "defaultPositionId": 8,
-        "proTeamId": 23
+        "proTeamId": 23,
+        "eligibleSlots": [
+         9,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -875,7 +1349,19 @@
        "player": {
         "fullName": "Alec Burleson",
         "defaultPositionId": 7,
-        "proTeamId": 24
+        "proTeamId": 24,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         8,
+         10,
+         5,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -888,7 +1374,13 @@
        "player": {
         "fullName": "Nick Lodolo",
         "defaultPositionId": 1,
-        "proTeamId": 17
+        "proTeamId": 17,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -901,7 +1393,13 @@
        "player": {
         "fullName": "Aaron Nola",
         "defaultPositionId": 1,
-        "proTeamId": 22
+        "proTeamId": 22,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -914,7 +1412,15 @@
        "player": {
         "fullName": "Dansby Swanson",
         "defaultPositionId": 6,
-        "proTeamId": 16
+        "proTeamId": 16,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -927,7 +1433,17 @@
        "player": {
         "fullName": "Colson Montgomery",
         "defaultPositionId": 6,
-        "proTeamId": 4
+        "proTeamId": 4,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17,
+         3,
+         7
+        ]
        }
       }
      },
@@ -940,7 +1456,15 @@
        "player": {
         "fullName": "Jordan Westburg",
         "defaultPositionId": 5,
-        "proTeamId": 1
+        "proTeamId": 1,
+        "eligibleSlots": [
+         3,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -953,7 +1477,15 @@
        "player": {
         "fullName": "Masyn Winn",
         "defaultPositionId": 6,
-        "proTeamId": 24
+        "proTeamId": 24,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -966,7 +1498,15 @@
        "player": {
         "fullName": "Xander Bogaerts",
         "defaultPositionId": 6,
-        "proTeamId": 25
+        "proTeamId": 25,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -979,7 +1519,13 @@
        "player": {
         "fullName": "Michael Soroka",
         "defaultPositionId": 1,
-        "proTeamId": 29
+        "proTeamId": 29,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -992,7 +1538,16 @@
        "player": {
         "fullName": "Jake McCarthy",
         "defaultPositionId": 7,
-        "proTeamId": 27
+        "proTeamId": 27,
+        "eligibleSlots": [
+         8,
+         5,
+         12,
+         16,
+         17,
+         9,
+         10
+        ]
        }
       }
      },
@@ -1005,7 +1560,15 @@
        "player": {
         "fullName": "Steven Kwan",
         "defaultPositionId": 7,
-        "proTeamId": 5
+        "proTeamId": 5,
+        "eligibleSlots": [
+         8,
+         5,
+         12,
+         16,
+         17,
+         9
+        ]
        }
       }
      }
@@ -1025,7 +1588,15 @@
        "player": {
         "fullName": "Bobby Witt Jr.",
         "defaultPositionId": 6,
-        "proTeamId": 7
+        "proTeamId": 7,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1038,7 +1609,18 @@
        "player": {
         "fullName": "Bryce Harper",
         "defaultPositionId": 3,
-        "proTeamId": 22
+        "proTeamId": 22,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         12,
+         16,
+         17,
+         10,
+         5,
+         11
+        ]
        }
       }
      },
@@ -1051,7 +1633,13 @@
        "player": {
         "fullName": "Bryan Woo",
         "defaultPositionId": 1,
-        "proTeamId": 12
+        "proTeamId": 12,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1064,7 +1652,16 @@
        "player": {
         "fullName": "Juan Soto",
         "defaultPositionId": 9,
-        "proTeamId": 21
+        "proTeamId": 21,
+        "eligibleSlots": [
+         10,
+         5,
+         12,
+         16,
+         17,
+         11,
+         8
+        ]
        }
       }
      },
@@ -1077,7 +1674,15 @@
        "player": {
         "fullName": "Junior Caminero",
         "defaultPositionId": 5,
-        "proTeamId": 30
+        "proTeamId": 30,
+        "eligibleSlots": [
+         3,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1090,7 +1695,16 @@
        "player": {
         "fullName": "Vinnie Pasquantino",
         "defaultPositionId": 3,
-        "proTeamId": 7
+        "proTeamId": 7,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1103,7 +1717,13 @@
        "player": {
         "fullName": "Cam Schlittler",
         "defaultPositionId": 1,
-        "proTeamId": 10
+        "proTeamId": 10,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1116,7 +1736,13 @@
        "player": {
         "fullName": "Chase Burns",
         "defaultPositionId": 1,
-        "proTeamId": 17
+        "proTeamId": 17,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1129,7 +1755,15 @@
        "player": {
         "fullName": "Teoscar Hernandez",
         "defaultPositionId": 9,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         10,
+         5,
+         12,
+         16,
+         17,
+         8
+        ]
        }
       }
      },
@@ -1142,7 +1776,13 @@
        "player": {
         "fullName": "Alex Vesia",
         "defaultPositionId": 11,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1155,7 +1795,13 @@
        "player": {
         "fullName": "Garrett Whitlock",
         "defaultPositionId": 11,
-        "proTeamId": 2
+        "proTeamId": 2,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1168,7 +1814,17 @@
        "player": {
         "fullName": "Kevin McGonigle",
         "defaultPositionId": 6,
-        "proTeamId": 6
+        "proTeamId": 6,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17,
+         3,
+         7
+        ]
        }
       }
      },
@@ -1181,7 +1837,16 @@
        "player": {
         "fullName": "Otto Lopez",
         "defaultPositionId": 6,
-        "proTeamId": 28
+        "proTeamId": 28,
+        "eligibleSlots": [
+         2,
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1194,7 +1859,14 @@
        "player": {
         "fullName": "Jordan Walker",
         "defaultPositionId": 9,
-        "proTeamId": 24
+        "proTeamId": 24,
+        "eligibleSlots": [
+         10,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1207,7 +1879,13 @@
        "player": {
         "fullName": "Payton Tolle",
         "defaultPositionId": 1,
-        "proTeamId": 2
+        "proTeamId": 2,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1220,7 +1898,14 @@
        "player": {
         "fullName": "Ivan Herrera",
         "defaultPositionId": 10,
-        "proTeamId": 24
+        "proTeamId": 24,
+        "eligibleSlots": [
+         11,
+         12,
+         16,
+         17,
+         0
+        ]
        }
       }
      },
@@ -1233,7 +1918,19 @@
        "player": {
         "fullName": "Sam Antonacci",
         "defaultPositionId": 4,
-        "proTeamId": 4
+        "proTeamId": 4,
+        "eligibleSlots": [
+         2,
+         3,
+         6,
+         7,
+         19,
+         12,
+         16,
+         17,
+         8,
+         5
+        ]
        }
       }
      },
@@ -1246,7 +1943,13 @@
        "player": {
         "fullName": "Logan Henderson",
         "defaultPositionId": 1,
-        "proTeamId": 8
+        "proTeamId": 8,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1259,7 +1962,14 @@
        "player": {
         "fullName": "Grant Taylor",
         "defaultPositionId": 11,
-        "proTeamId": 4
+        "proTeamId": 4,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17,
+         14
+        ]
        }
       }
      },
@@ -1272,7 +1982,13 @@
        "player": {
         "fullName": "Cade Cavalli",
         "defaultPositionId": 1,
-        "proTeamId": 20
+        "proTeamId": 20,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1285,7 +2001,14 @@
        "player": {
         "fullName": "Troy Melton",
         "defaultPositionId": 11,
-        "proTeamId": 6
+        "proTeamId": 6,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17,
+         14
+        ]
        }
       }
      },
@@ -1298,7 +2021,18 @@
        "player": {
         "fullName": "Jac Caglianone",
         "defaultPositionId": 9,
-        "proTeamId": 7
+        "proTeamId": 7,
+        "eligibleSlots": [
+         10,
+         5,
+         12,
+         16,
+         17,
+         1,
+         7,
+         19,
+         11
+        ]
        }
       }
      },
@@ -1311,7 +2045,19 @@
        "player": {
         "fullName": "Blaze Alexander",
         "defaultPositionId": 5,
-        "proTeamId": 1
+        "proTeamId": 1,
+        "eligibleSlots": [
+         3,
+         7,
+         19,
+         12,
+         16,
+         17,
+         2,
+         6,
+         5,
+         4
+        ]
        }
       }
      },
@@ -1324,7 +2070,13 @@
        "player": {
         "fullName": "Erik Sabrowski",
         "defaultPositionId": 11,
-        "proTeamId": 5
+        "proTeamId": 5,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1337,7 +2089,15 @@
        "player": {
         "fullName": "Jonathan Aranda",
         "defaultPositionId": 3,
-        "proTeamId": 30
+        "proTeamId": 30,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1350,7 +2110,14 @@
        "player": {
         "fullName": "Tatsuya Imai",
         "defaultPositionId": 1,
-        "proTeamId": 18
+        "proTeamId": 18,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17,
+         15
+        ]
        }
       }
      }
@@ -1370,7 +2137,13 @@
        "player": {
         "fullName": "Kyle Schwarber",
         "defaultPositionId": 10,
-        "proTeamId": 22
+        "proTeamId": 22,
+        "eligibleSlots": [
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1383,7 +2156,13 @@
        "player": {
         "fullName": "Carlos Rodon",
         "defaultPositionId": 1,
-        "proTeamId": 10
+        "proTeamId": 10,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1396,7 +2175,17 @@
        "player": {
         "fullName": "Salvador Perez",
         "defaultPositionId": 2,
-        "proTeamId": 7
+        "proTeamId": 7,
+        "eligibleSlots": [
+         0,
+         1,
+         7,
+         19,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1409,7 +2198,17 @@
        "player": {
         "fullName": "Jazz Chisholm Jr.",
         "defaultPositionId": 4,
-        "proTeamId": 10
+        "proTeamId": 10,
+        "eligibleSlots": [
+         2,
+         3,
+         6,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1422,7 +2221,14 @@
        "player": {
         "fullName": "Jackson Merrill",
         "defaultPositionId": 8,
-        "proTeamId": 25
+        "proTeamId": 25,
+        "eligibleSlots": [
+         9,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1435,7 +2241,14 @@
        "player": {
         "fullName": "Pete Crow-Armstrong",
         "defaultPositionId": 8,
-        "proTeamId": 16
+        "proTeamId": 16,
+        "eligibleSlots": [
+         9,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1448,7 +2261,13 @@
        "player": {
         "fullName": "Dylan Cease",
         "defaultPositionId": 1,
-        "proTeamId": 14
+        "proTeamId": 14,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1461,7 +2280,15 @@
        "player": {
         "fullName": "Zach Neto",
         "defaultPositionId": 6,
-        "proTeamId": 3
+        "proTeamId": 3,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1474,7 +2301,13 @@
        "player": {
         "fullName": "Zack Wheeler",
         "defaultPositionId": 1,
-        "proTeamId": 22
+        "proTeamId": 22,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1487,7 +2320,13 @@
        "player": {
         "fullName": "David Bednar",
         "defaultPositionId": 11,
-        "proTeamId": 10
+        "proTeamId": 10,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1500,7 +2339,15 @@
        "player": {
         "fullName": "Seiya Suzuki",
         "defaultPositionId": 10,
-        "proTeamId": 16
+        "proTeamId": 16,
+        "eligibleSlots": [
+         10,
+         5,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1513,7 +2360,15 @@
        "player": {
         "fullName": "Michael Busch",
         "defaultPositionId": 3,
-        "proTeamId": 16
+        "proTeamId": 16,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1526,7 +2381,13 @@
        "player": {
         "fullName": "Carlos Estevez",
         "defaultPositionId": 11,
-        "proTeamId": 7
+        "proTeamId": 7,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1539,7 +2400,13 @@
        "player": {
         "fullName": "Jason Adam",
         "defaultPositionId": 11,
-        "proTeamId": 25
+        "proTeamId": 25,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1552,7 +2419,13 @@
        "player": {
         "fullName": "Kenley Jansen",
         "defaultPositionId": 11,
-        "proTeamId": 6
+        "proTeamId": 6,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1565,7 +2438,13 @@
        "player": {
         "fullName": "Daniel Palencia",
         "defaultPositionId": 11,
-        "proTeamId": 16
+        "proTeamId": 16,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1578,7 +2457,16 @@
        "player": {
         "fullName": "Brandon Lowe",
         "defaultPositionId": 4,
-        "proTeamId": 23
+        "proTeamId": 23,
+        "eligibleSlots": [
+         2,
+         6,
+         19,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -1591,7 +2479,14 @@
        "player": {
         "fullName": "Trent Grisham",
         "defaultPositionId": 8,
-        "proTeamId": 10
+        "proTeamId": 10,
+        "eligibleSlots": [
+         9,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1604,7 +2499,15 @@
        "player": {
         "fullName": "Marcus Semien",
         "defaultPositionId": 4,
-        "proTeamId": 21
+        "proTeamId": 21,
+        "eligibleSlots": [
+         2,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1617,7 +2520,16 @@
        "player": {
         "fullName": "Kazuma Okamoto",
         "defaultPositionId": 5,
-        "proTeamId": 14
+        "proTeamId": 14,
+        "eligibleSlots": [
+         3,
+         7,
+         19,
+         12,
+         16,
+         17,
+         1
+        ]
        }
       }
      },
@@ -1630,7 +2542,13 @@
        "player": {
         "fullName": "Merrill Kelly",
         "defaultPositionId": 1,
-        "proTeamId": 29
+        "proTeamId": 29,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1643,7 +2561,13 @@
        "player": {
         "fullName": "Yusei Kikuchi",
         "defaultPositionId": 1,
-        "proTeamId": 3
+        "proTeamId": 3,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1656,7 +2580,13 @@
        "player": {
         "fullName": "Mitch Keller",
         "defaultPositionId": 1,
-        "proTeamId": 23
+        "proTeamId": 23,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1669,7 +2599,13 @@
        "player": {
         "fullName": "Michael Wacha",
         "defaultPositionId": 1,
-        "proTeamId": 7
+        "proTeamId": 7,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1682,7 +2618,14 @@
        "player": {
         "fullName": "Joey Cantillo",
         "defaultPositionId": 11,
-        "proTeamId": 5
+        "proTeamId": 5,
+        "eligibleSlots": [
+         13,
+         14,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1695,7 +2638,13 @@
        "player": {
         "fullName": "Taj Bradley",
         "defaultPositionId": 1,
-        "proTeamId": 9
+        "proTeamId": 9,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      }
@@ -1715,7 +2664,16 @@
        "player": {
         "fullName": "Bryan Reynolds",
         "defaultPositionId": 9,
-        "proTeamId": 23
+        "proTeamId": 23,
+        "eligibleSlots": [
+         10,
+         5,
+         11,
+         12,
+         16,
+         17,
+         8
+        ]
        }
       }
      },
@@ -1728,7 +2686,16 @@
        "player": {
         "fullName": "Elly De La Cruz",
         "defaultPositionId": 6,
-        "proTeamId": 17
+        "proTeamId": 17,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -1741,7 +2708,14 @@
        "player": {
         "fullName": "Michael Harris II",
         "defaultPositionId": 8,
-        "proTeamId": 15
+        "proTeamId": 15,
+        "eligibleSlots": [
+         9,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1754,7 +2728,13 @@
        "player": {
         "fullName": "Gavin Williams",
         "defaultPositionId": 1,
-        "proTeamId": 5
+        "proTeamId": 5,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1767,7 +2747,13 @@
        "player": {
         "fullName": "Cade Smith",
         "defaultPositionId": 11,
-        "proTeamId": 5
+        "proTeamId": 5,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1780,7 +2766,13 @@
        "player": {
         "fullName": "Shota Imanaga",
         "defaultPositionId": 1,
-        "proTeamId": 16
+        "proTeamId": 16,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1793,7 +2785,13 @@
        "player": {
         "fullName": "Garrett Crochet",
         "defaultPositionId": 1,
-        "proTeamId": 2
+        "proTeamId": 2,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1806,7 +2804,13 @@
        "player": {
         "fullName": "Chris Sale",
         "defaultPositionId": 1,
-        "proTeamId": 15
+        "proTeamId": 15,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1819,7 +2823,13 @@
        "player": {
         "fullName": "Aroldis Chapman",
         "defaultPositionId": 11,
-        "proTeamId": 2
+        "proTeamId": 2,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1832,7 +2842,16 @@
        "player": {
         "fullName": "Yandy Diaz",
         "defaultPositionId": 10,
-        "proTeamId": 30
+        "proTeamId": 30,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1845,7 +2864,13 @@
        "player": {
         "fullName": "Jeff Hoffman",
         "defaultPositionId": 11,
-        "proTeamId": 9
+        "proTeamId": 9,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1858,7 +2883,14 @@
        "player": {
         "fullName": "Adley Rutschman",
         "defaultPositionId": 2,
-        "proTeamId": 2
+        "proTeamId": 2,
+        "eligibleSlots": [
+         0,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -1871,7 +2903,13 @@
        "player": {
         "fullName": "Shane McClanahan",
         "defaultPositionId": 1,
-        "proTeamId": 30
+        "proTeamId": 30,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1884,7 +2922,14 @@
        "player": {
         "fullName": "Ian Happ",
         "defaultPositionId": 7,
-        "proTeamId": 16
+        "proTeamId": 16,
+        "eligibleSlots": [
+         8,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1897,7 +2942,13 @@
        "player": {
         "fullName": "Joe Musgrove",
         "defaultPositionId": 1,
-        "proTeamId": 25
+        "proTeamId": 25,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1910,7 +2961,13 @@
        "player": {
         "fullName": "Jared Jones",
         "defaultPositionId": 1,
-        "proTeamId": 23
+        "proTeamId": 23,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1923,7 +2980,14 @@
        "player": {
         "fullName": "Braxton Ashcraft",
         "defaultPositionId": 11,
-        "proTeamId": 23
+        "proTeamId": 23,
+        "eligibleSlots": [
+         13,
+         14,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1936,7 +3000,13 @@
        "player": {
         "fullName": "Louis Varland",
         "defaultPositionId": 11,
-        "proTeamId": 14
+        "proTeamId": 14,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1949,7 +3019,13 @@
        "player": {
         "fullName": "Nathan Eovaldi",
         "defaultPositionId": 1,
-        "proTeamId": 13
+        "proTeamId": 13,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1962,7 +3038,14 @@
        "player": {
         "fullName": "Reid Detmers",
         "defaultPositionId": 11,
-        "proTeamId": 3
+        "proTeamId": 3,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17,
+         14
+        ]
        }
       }
      },
@@ -1975,7 +3058,16 @@
        "player": {
         "fullName": "Miguel Vargas",
         "defaultPositionId": 5,
-        "proTeamId": 4
+        "proTeamId": 4,
+        "eligibleSlots": [
+         1,
+         3,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -1988,7 +3080,20 @@
        "player": {
         "fullName": "Spencer Steer",
         "defaultPositionId": 3,
-        "proTeamId": 17
+        "proTeamId": 17,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         12,
+         16,
+         17,
+         5,
+         8,
+         10,
+         2,
+         6
+        ]
        }
       }
      },
@@ -2001,7 +3106,14 @@
        "player": {
         "fullName": "Gabriel Moreno",
         "defaultPositionId": 2,
-        "proTeamId": 29
+        "proTeamId": 29,
+        "eligibleSlots": [
+         0,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -2014,7 +3126,15 @@
        "player": {
         "fullName": "Jung Hoo Lee",
         "defaultPositionId": 8,
-        "proTeamId": 26
+        "proTeamId": 26,
+        "eligibleSlots": [
+         9,
+         5,
+         12,
+         16,
+         17,
+         10
+        ]
        }
       }
      },
@@ -2027,7 +3147,18 @@
        "player": {
         "fullName": "Luis Garcia Jr.",
         "defaultPositionId": 4,
-        "proTeamId": 10
+        "proTeamId": 10,
+        "eligibleSlots": [
+         2,
+         6,
+         19,
+         12,
+         16,
+         17,
+         1,
+         7,
+         11
+        ]
        }
       }
      }
@@ -2047,7 +3178,13 @@
        "player": {
         "fullName": "Spencer Strider",
         "defaultPositionId": 1,
-        "proTeamId": 15
+        "proTeamId": 15,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2060,7 +3197,15 @@
        "player": {
         "fullName": "Yordan Alvarez",
         "defaultPositionId": 10,
-        "proTeamId": 18
+        "proTeamId": 18,
+        "eligibleSlots": [
+         8,
+         5,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2073,7 +3218,16 @@
        "player": {
         "fullName": "Nico Hoerner",
         "defaultPositionId": 4,
-        "proTeamId": 16
+        "proTeamId": 16,
+        "eligibleSlots": [
+         2,
+         6,
+         19,
+         12,
+         16,
+         17,
+         4
+        ]
        }
       }
      },
@@ -2086,7 +3240,14 @@
        "player": {
         "fullName": "Corbin Carroll",
         "defaultPositionId": 9,
-        "proTeamId": 29
+        "proTeamId": 29,
+        "eligibleSlots": [
+         10,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2099,7 +3260,13 @@
        "player": {
         "fullName": "Tyler Glasnow",
         "defaultPositionId": 1,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2112,7 +3279,13 @@
        "player": {
         "fullName": "Jacob deGrom",
         "defaultPositionId": 1,
-        "proTeamId": 13
+        "proTeamId": 13,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2125,7 +3298,13 @@
        "player": {
         "fullName": "Max Fried",
         "defaultPositionId": 1,
-        "proTeamId": 10
+        "proTeamId": 10,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2138,7 +3317,17 @@
        "player": {
         "fullName": "CJ Abrams",
         "defaultPositionId": 6,
-        "proTeamId": 20
+        "proTeamId": 20,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17,
+         11,
+         2
+        ]
        }
       }
      },
@@ -2151,7 +3340,14 @@
        "player": {
         "fullName": "Randy Arozarena",
         "defaultPositionId": 7,
-        "proTeamId": 12
+        "proTeamId": 12,
+        "eligibleSlots": [
+         8,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2164,7 +3360,13 @@
        "player": {
         "fullName": "Jacob Misiorowski",
         "defaultPositionId": 1,
-        "proTeamId": 8
+        "proTeamId": 8,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2177,7 +3379,13 @@
        "player": {
         "fullName": "Raisel Iglesias",
         "defaultPositionId": 11,
-        "proTeamId": 15
+        "proTeamId": 15,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2190,7 +3398,15 @@
        "player": {
         "fullName": "Chandler Simpson",
         "defaultPositionId": 8,
-        "proTeamId": 30
+        "proTeamId": 30,
+        "eligibleSlots": [
+         8,
+         9,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2203,7 +3419,13 @@
        "player": {
         "fullName": "Robert Suarez",
         "defaultPositionId": 11,
-        "proTeamId": 15
+        "proTeamId": 15,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2216,7 +3438,15 @@
        "player": {
         "fullName": "Christian Walker",
         "defaultPositionId": 3,
-        "proTeamId": 18
+        "proTeamId": 18,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2229,7 +3459,18 @@
        "player": {
         "fullName": "Ernie Clement",
         "defaultPositionId": 5,
-        "proTeamId": 14
+        "proTeamId": 14,
+        "eligibleSlots": [
+         2,
+         3,
+         4,
+         6,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2242,7 +3483,18 @@
        "player": {
         "fullName": "Luis Arraez",
         "defaultPositionId": 3,
-        "proTeamId": 22
+        "proTeamId": 22,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         11,
+         12,
+         16,
+         17,
+         2,
+         6
+        ]
        }
       }
      },
@@ -2255,7 +3507,13 @@
        "player": {
         "fullName": "Will Warren",
         "defaultPositionId": 1,
-        "proTeamId": 10
+        "proTeamId": 10,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2268,7 +3526,13 @@
        "player": {
         "fullName": "Hogan Harris",
         "defaultPositionId": 11,
-        "proTeamId": 11
+        "proTeamId": 11,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2281,7 +3545,13 @@
        "player": {
         "fullName": "Fernando Cruz",
         "defaultPositionId": 11,
-        "proTeamId": 10
+        "proTeamId": 10,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2294,7 +3564,14 @@
        "player": {
         "fullName": "Justin Wrobleski",
         "defaultPositionId": 11,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17,
+         14
+        ]
        }
       }
      },
@@ -2307,7 +3584,14 @@
        "player": {
         "fullName": "Dillon Dingler",
         "defaultPositionId": 2,
-        "proTeamId": 6
+        "proTeamId": 6,
+        "eligibleSlots": [
+         0,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -2320,7 +3604,13 @@
        "player": {
         "fullName": "Adrian Morejon",
         "defaultPositionId": 11,
-        "proTeamId": 25
+        "proTeamId": 25,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2333,7 +3623,13 @@
        "player": {
         "fullName": "Grant Holmes",
         "defaultPositionId": 1,
-        "proTeamId": 15
+        "proTeamId": 15,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2346,7 +3642,13 @@
        "player": {
         "fullName": "Dustin May",
         "defaultPositionId": 1,
-        "proTeamId": 8
+        "proTeamId": 8,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2359,7 +3661,13 @@
        "player": {
         "fullName": "Michael Petersen",
         "defaultPositionId": 11,
-        "proTeamId": 28
+        "proTeamId": 28,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2372,7 +3680,14 @@
        "player": {
         "fullName": "Aaron Civale",
         "defaultPositionId": 1,
-        "proTeamId": 16
+        "proTeamId": 16,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17,
+         15
+        ]
        }
       }
      },
@@ -2385,7 +3700,14 @@
        "player": {
         "fullName": "Spencer Arrighetti",
         "defaultPositionId": 1,
-        "proTeamId": 14
+        "proTeamId": 14,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17,
+         15
+        ]
        }
       }
      }
@@ -2405,7 +3727,13 @@
        "player": {
         "fullName": "Logan Webb",
         "defaultPositionId": 1,
-        "proTeamId": 26
+        "proTeamId": 26,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2418,7 +3746,13 @@
        "player": {
         "fullName": "Gerrit Cole",
         "defaultPositionId": 1,
-        "proTeamId": 10
+        "proTeamId": 10,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2431,7 +3765,13 @@
        "player": {
         "fullName": "Will Smith",
         "defaultPositionId": 2,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         0,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2444,7 +3784,13 @@
        "player": {
         "fullName": "Tarik Skubal",
         "defaultPositionId": 1,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2457,7 +3803,15 @@
        "player": {
         "fullName": "George Springer",
         "defaultPositionId": 10,
-        "proTeamId": 14
+        "proTeamId": 14,
+        "eligibleSlots": [
+         10,
+         5,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2470,7 +3824,15 @@
        "player": {
         "fullName": "Geraldo Perdomo",
         "defaultPositionId": 6,
-        "proTeamId": 29
+        "proTeamId": 29,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2483,7 +3845,13 @@
        "player": {
         "fullName": "Christian Yelich",
         "defaultPositionId": 10,
-        "proTeamId": 8
+        "proTeamId": 8,
+        "eligibleSlots": [
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2496,7 +3864,13 @@
        "player": {
         "fullName": "Tanner Bibee",
         "defaultPositionId": 1,
-        "proTeamId": 5
+        "proTeamId": 5,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2509,7 +3883,13 @@
        "player": {
         "fullName": "Matthew Boyd",
         "defaultPositionId": 1,
-        "proTeamId": 16
+        "proTeamId": 16,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2522,7 +3902,15 @@
        "player": {
         "fullName": "Willson Contreras",
         "defaultPositionId": 3,
-        "proTeamId": 2
+        "proTeamId": 2,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2535,7 +3923,13 @@
        "player": {
         "fullName": "JoJo Romero",
         "defaultPositionId": 11,
-        "proTeamId": 8
+        "proTeamId": 8,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2548,7 +3942,13 @@
        "player": {
         "fullName": "Lucas Erceg",
         "defaultPositionId": 11,
-        "proTeamId": 7
+        "proTeamId": 7,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2561,7 +3961,15 @@
        "player": {
         "fullName": "Max Muncy",
         "defaultPositionId": 5,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         3,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2574,7 +3982,14 @@
        "player": {
         "fullName": "Nick Martinez",
         "defaultPositionId": 1,
-        "proTeamId": 30
+        "proTeamId": 30,
+        "eligibleSlots": [
+         13,
+         14,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2587,7 +4002,21 @@
        "player": {
         "fullName": "Casey Schmitt",
         "defaultPositionId": 4,
-        "proTeamId": 26
+        "proTeamId": 26,
+        "eligibleSlots": [
+         2,
+         3,
+         6,
+         7,
+         19,
+         12,
+         16,
+         17,
+         11,
+         1,
+         8,
+         5
+        ]
        }
       }
      },
@@ -2600,7 +4029,14 @@
        "player": {
         "fullName": "Jacob Latz",
         "defaultPositionId": 11,
-        "proTeamId": 13
+        "proTeamId": 13,
+        "eligibleSlots": [
+         13,
+         14,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2613,7 +4049,13 @@
        "player": {
         "fullName": "Kevin Kelly",
         "defaultPositionId": 11,
-        "proTeamId": 30
+        "proTeamId": 30,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2626,7 +4068,13 @@
        "player": {
         "fullName": "Taylor Clarke",
         "defaultPositionId": 11,
-        "proTeamId": 29
+        "proTeamId": 29,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2639,7 +4087,13 @@
        "player": {
         "fullName": "Bryan King",
         "defaultPositionId": 11,
-        "proTeamId": 18
+        "proTeamId": 18,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2652,7 +4106,13 @@
        "player": {
         "fullName": "Martin Perez",
         "defaultPositionId": 1,
-        "proTeamId": 15
+        "proTeamId": 15,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2665,7 +4125,17 @@
        "player": {
         "fullName": "Tyler Soderstrom",
         "defaultPositionId": 7,
-        "proTeamId": 11
+        "proTeamId": 11,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         8,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2678,7 +4148,13 @@
        "player": {
         "fullName": "Dalton Rushing",
         "defaultPositionId": 2,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         0,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2691,7 +4167,16 @@
        "player": {
         "fullName": "Brandon Marsh",
         "defaultPositionId": 8,
-        "proTeamId": 22
+        "proTeamId": 22,
+        "eligibleSlots": [
+         8,
+         9,
+         5,
+         12,
+         16,
+         17,
+         10
+        ]
        }
       }
      },
@@ -2704,7 +4189,16 @@
        "player": {
         "fullName": "Chase DeLauter",
         "defaultPositionId": 9,
-        "proTeamId": 5
+        "proTeamId": 5,
+        "eligibleSlots": [
+         8,
+         10,
+         5,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -2717,7 +4211,13 @@
        "player": {
         "fullName": "Emilio Pagan",
         "defaultPositionId": 11,
-        "proTeamId": 17
+        "proTeamId": 17,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2730,7 +4230,17 @@
        "player": {
         "fullName": "Mickey Moniak",
         "defaultPositionId": 9,
-        "proTeamId": 27
+        "proTeamId": 27,
+        "eligibleSlots": [
+         9,
+         10,
+         5,
+         12,
+         16,
+         17,
+         8,
+         11
+        ]
        }
       }
      }
@@ -2750,7 +4260,16 @@
        "player": {
         "fullName": "Ketel Marte",
         "defaultPositionId": 4,
-        "proTeamId": 29
+        "proTeamId": 29,
+        "eligibleSlots": [
+         2,
+         6,
+         19,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2763,7 +4282,13 @@
        "player": {
         "fullName": "Freddy Peralta",
         "defaultPositionId": 1,
-        "proTeamId": 30
+        "proTeamId": 30,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2776,7 +4301,13 @@
        "player": {
         "fullName": "Nolan McLean",
         "defaultPositionId": 1,
-        "proTeamId": 21
+        "proTeamId": 21,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2789,7 +4320,17 @@
        "player": {
         "fullName": "Ben Rice",
         "defaultPositionId": 3,
-        "proTeamId": 10
+        "proTeamId": 10,
+        "eligibleSlots": [
+         0,
+         1,
+         7,
+         19,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2802,7 +4343,15 @@
        "player": {
         "fullName": "Gunnar Henderson",
         "defaultPositionId": 6,
-        "proTeamId": 1
+        "proTeamId": 1,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2815,7 +4364,13 @@
        "player": {
         "fullName": "Paul Skenes",
         "defaultPositionId": 1,
-        "proTeamId": 23
+        "proTeamId": 23,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2828,7 +4383,15 @@
        "player": {
         "fullName": "Matt Olson",
         "defaultPositionId": 3,
-        "proTeamId": 15
+        "proTeamId": 15,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2841,7 +4404,13 @@
        "player": {
         "fullName": "Andres Munoz",
         "defaultPositionId": 11,
-        "proTeamId": 12
+        "proTeamId": 12,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2854,7 +4423,15 @@
        "player": {
         "fullName": "Maikel Garcia",
         "defaultPositionId": 5,
-        "proTeamId": 7
+        "proTeamId": 7,
+        "eligibleSlots": [
+         3,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2867,7 +4444,15 @@
        "player": {
         "fullName": "Riley Greene",
         "defaultPositionId": 7,
-        "proTeamId": 6
+        "proTeamId": 6,
+        "eligibleSlots": [
+         8,
+         5,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2880,7 +4465,13 @@
        "player": {
         "fullName": "Michael King",
         "defaultPositionId": 1,
-        "proTeamId": 25
+        "proTeamId": 25,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2893,7 +4484,14 @@
        "player": {
         "fullName": "Luis Robert Jr.",
         "defaultPositionId": 8,
-        "proTeamId": 1
+        "proTeamId": 1,
+        "eligibleSlots": [
+         9,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2906,7 +4504,13 @@
        "player": {
         "fullName": "Ranger Suarez",
         "defaultPositionId": 1,
-        "proTeamId": 2
+        "proTeamId": 2,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2919,7 +4523,13 @@
        "player": {
         "fullName": "Ryan Helsley",
         "defaultPositionId": 11,
-        "proTeamId": 1
+        "proTeamId": 1,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2932,7 +4542,13 @@
        "player": {
         "fullName": "Alejandro Kirk",
         "defaultPositionId": 2,
-        "proTeamId": 14
+        "proTeamId": 14,
+        "eligibleSlots": [
+         0,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2945,7 +4561,14 @@
        "player": {
         "fullName": "Sal Frelick",
         "defaultPositionId": 9,
-        "proTeamId": 8
+        "proTeamId": 8,
+        "eligibleSlots": [
+         10,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2958,7 +4581,13 @@
        "player": {
         "fullName": "Roki Sasaki",
         "defaultPositionId": 1,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2971,7 +4600,21 @@
        "player": {
         "fullName": "Jose Caballero",
         "defaultPositionId": 9,
-        "proTeamId": 10
+        "proTeamId": 10,
+        "eligibleSlots": [
+         2,
+         3,
+         4,
+         6,
+         7,
+         19,
+         10,
+         5,
+         12,
+         16,
+         17,
+         8
+        ]
        }
       }
      },
@@ -2984,7 +4627,13 @@
        "player": {
         "fullName": "Luis Severino",
         "defaultPositionId": 1,
-        "proTeamId": 11
+        "proTeamId": 11,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -2997,7 +4646,16 @@
        "player": {
         "fullName": "Carson Benge",
         "defaultPositionId": 8,
-        "proTeamId": 21
+        "proTeamId": 21,
+        "eligibleSlots": [
+         8,
+         9,
+         10,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3010,7 +4668,13 @@
        "player": {
         "fullName": "Emerson Hancock",
         "defaultPositionId": 1,
-        "proTeamId": 12
+        "proTeamId": 12,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3023,7 +4687,21 @@
        "player": {
         "fullName": "Mauricio Dubon",
         "defaultPositionId": 7,
-        "proTeamId": 15
+        "proTeamId": 15,
+        "eligibleSlots": [
+         2,
+         3,
+         4,
+         6,
+         7,
+         19,
+         8,
+         5,
+         12,
+         16,
+         17,
+         9
+        ]
        }
       }
      },
@@ -3036,7 +4714,13 @@
        "player": {
         "fullName": "Parker Messick",
         "defaultPositionId": 1,
-        "proTeamId": 5
+        "proTeamId": 5,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3049,7 +4733,13 @@
        "player": {
         "fullName": "Shane Baz",
         "defaultPositionId": 1,
-        "proTeamId": 1
+        "proTeamId": 1,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3062,7 +4752,13 @@
        "player": {
         "fullName": "J.T. Ginn",
         "defaultPositionId": 1,
-        "proTeamId": 11
+        "proTeamId": 11,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3075,7 +4771,14 @@
        "player": {
         "fullName": "Griffin Jax",
         "defaultPositionId": 11,
-        "proTeamId": 30
+        "proTeamId": 30,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17,
+         14
+        ]
        }
       }
      }
@@ -3095,7 +4798,13 @@
        "player": {
         "fullName": "Logan Gilbert",
         "defaultPositionId": 1,
-        "proTeamId": 12
+        "proTeamId": 12,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3108,7 +4817,16 @@
        "player": {
         "fullName": "Jackson Chourio",
         "defaultPositionId": 8,
-        "proTeamId": 8
+        "proTeamId": 8,
+        "eligibleSlots": [
+         8,
+         9,
+         10,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3121,7 +4839,13 @@
        "player": {
         "fullName": "Nick Pivetta",
         "defaultPositionId": 1,
-        "proTeamId": 25
+        "proTeamId": 25,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3134,7 +4858,13 @@
        "player": {
         "fullName": "Devin Williams",
         "defaultPositionId": 11,
-        "proTeamId": 21
+        "proTeamId": 21,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3147,7 +4877,16 @@
        "player": {
         "fullName": "Manny Machado",
         "defaultPositionId": 5,
-        "proTeamId": 25
+        "proTeamId": 25,
+        "eligibleSlots": [
+         3,
+         7,
+         19,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -3160,7 +4899,16 @@
        "player": {
         "fullName": "Pete Alonso",
         "defaultPositionId": 3,
-        "proTeamId": 1
+        "proTeamId": 1,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -3173,7 +4921,18 @@
        "player": {
         "fullName": "Jose Altuve",
         "defaultPositionId": 4,
-        "proTeamId": 18
+        "proTeamId": 18,
+        "eligibleSlots": [
+         2,
+         6,
+         19,
+         8,
+         5,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3186,7 +4945,15 @@
        "player": {
         "fullName": "Jarren Duran",
         "defaultPositionId": 7,
-        "proTeamId": 2
+        "proTeamId": 2,
+        "eligibleSlots": [
+         8,
+         9,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3199,7 +4966,15 @@
        "player": {
         "fullName": "Freddie Freeman",
         "defaultPositionId": 3,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3212,7 +4987,15 @@
        "player": {
         "fullName": "Willy Adames",
         "defaultPositionId": 6,
-        "proTeamId": 26
+        "proTeamId": 26,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3225,7 +5008,13 @@
        "player": {
         "fullName": "Sonny Gray",
         "defaultPositionId": 1,
-        "proTeamId": 2
+        "proTeamId": 2,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3238,7 +5027,14 @@
        "player": {
         "fullName": "Drake Baldwin",
         "defaultPositionId": 2,
-        "proTeamId": 15
+        "proTeamId": 15,
+        "eligibleSlots": [
+         0,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -3251,7 +5047,15 @@
        "player": {
         "fullName": "Jeremy Pena",
         "defaultPositionId": 6,
-        "proTeamId": 18
+        "proTeamId": 18,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3264,7 +5068,16 @@
        "player": {
         "fullName": "Xavier Edwards",
         "defaultPositionId": 4,
-        "proTeamId": 28
+        "proTeamId": 28,
+        "eligibleSlots": [
+         2,
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3277,7 +5090,13 @@
        "player": {
         "fullName": "Bryce Miller",
         "defaultPositionId": 1,
-        "proTeamId": 12
+        "proTeamId": 12,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3290,7 +5109,13 @@
        "player": {
         "fullName": "Seth Lugo",
         "defaultPositionId": 1,
-        "proTeamId": 7
+        "proTeamId": 7,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3303,7 +5128,18 @@
        "player": {
         "fullName": "Ryan O'Hearn",
         "defaultPositionId": 3,
-        "proTeamId": 23
+        "proTeamId": 23,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         10,
+         5,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3316,7 +5152,17 @@
        "player": {
         "fullName": "Liam Hicks",
         "defaultPositionId": 2,
-        "proTeamId": 30
+        "proTeamId": 30,
+        "eligibleSlots": [
+         0,
+         1,
+         7,
+         19,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3329,7 +5175,13 @@
        "player": {
         "fullName": "Jakob Junis",
         "defaultPositionId": 11,
-        "proTeamId": 13
+        "proTeamId": 13,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3342,7 +5194,13 @@
        "player": {
         "fullName": "Rico Garcia",
         "defaultPositionId": 11,
-        "proTeamId": 1
+        "proTeamId": 1,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3355,7 +5213,14 @@
        "player": {
         "fullName": "Ian Seymour",
         "defaultPositionId": 11,
-        "proTeamId": 30
+        "proTeamId": 30,
+        "eligibleSlots": [
+         13,
+         14,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3368,7 +5233,13 @@
        "player": {
         "fullName": "Zac Gallen",
         "defaultPositionId": 1,
-        "proTeamId": 29
+        "proTeamId": 29,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3381,7 +5252,13 @@
        "player": {
         "fullName": "Eduardo Rodriguez",
         "defaultPositionId": 1,
-        "proTeamId": 29
+        "proTeamId": 29,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3394,7 +5271,13 @@
        "player": {
         "fullName": "Sandy Alcantara",
         "defaultPositionId": 1,
-        "proTeamId": 28
+        "proTeamId": 28,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3407,7 +5290,14 @@
        "player": {
         "fullName": "Peter Lambert",
         "defaultPositionId": 11,
-        "proTeamId": 18
+        "proTeamId": 18,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17,
+         14
+        ]
        }
       }
      }
@@ -3427,7 +5317,16 @@
        "player": {
         "fullName": "Rafael Devers",
         "defaultPositionId": 10,
-        "proTeamId": 26
+        "proTeamId": 26,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3440,7 +5339,13 @@
        "player": {
         "fullName": "Cristopher Sanchez",
         "defaultPositionId": 1,
-        "proTeamId": 22
+        "proTeamId": 22,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3453,7 +5358,16 @@
        "player": {
         "fullName": "Cody Bellinger",
         "defaultPositionId": 7,
-        "proTeamId": 10
+        "proTeamId": 10,
+        "eligibleSlots": [
+         8,
+         9,
+         10,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3466,7 +5380,16 @@
        "player": {
         "fullName": "Vladimir Guerrero Jr.",
         "defaultPositionId": 3,
-        "proTeamId": 14
+        "proTeamId": 14,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3479,7 +5402,13 @@
        "player": {
         "fullName": "Bubba Chandler",
         "defaultPositionId": 1,
-        "proTeamId": 23
+        "proTeamId": 23,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3492,7 +5421,14 @@
        "player": {
         "fullName": "Hunter Goodman",
         "defaultPositionId": 2,
-        "proTeamId": 27
+        "proTeamId": 27,
+        "eligibleSlots": [
+         0,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3505,7 +5441,17 @@
        "player": {
         "fullName": "Fernando Tatis Jr.",
         "defaultPositionId": 9,
-        "proTeamId": 25
+        "proTeamId": 25,
+        "eligibleSlots": [
+         10,
+         5,
+         12,
+         16,
+         17,
+         2,
+         6,
+         19
+        ]
        }
       }
      },
@@ -3518,7 +5464,15 @@
        "player": {
         "fullName": "Mookie Betts",
         "defaultPositionId": 6,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3531,7 +5485,15 @@
        "player": {
         "fullName": "Ozzie Albies",
         "defaultPositionId": 4,
-        "proTeamId": 15
+        "proTeamId": 15,
+        "eligibleSlots": [
+         2,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3544,7 +5506,13 @@
        "player": {
         "fullName": "MacKenzie Gore",
         "defaultPositionId": 1,
-        "proTeamId": 13
+        "proTeamId": 13,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3557,7 +5525,17 @@
        "player": {
         "fullName": "Jo Adell",
         "defaultPositionId": 8,
-        "proTeamId": 5
+        "proTeamId": 5,
+        "eligibleSlots": [
+         9,
+         10,
+         5,
+         12,
+         16,
+         17,
+         8,
+         11
+        ]
        }
       }
      },
@@ -3570,7 +5548,13 @@
        "player": {
         "fullName": "Trey Yesavage",
         "defaultPositionId": 1,
-        "proTeamId": 14
+        "proTeamId": 14,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3583,7 +5567,13 @@
        "player": {
         "fullName": "Pete Fairbanks",
         "defaultPositionId": 11,
-        "proTeamId": 28
+        "proTeamId": 28,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3596,7 +5586,16 @@
        "player": {
         "fullName": "Taylor Ward",
         "defaultPositionId": 7,
-        "proTeamId": 12
+        "proTeamId": 12,
+        "eligibleSlots": [
+         8,
+         5,
+         12,
+         16,
+         17,
+         11,
+         10
+        ]
        }
       }
      },
@@ -3609,7 +5608,15 @@
        "player": {
         "fullName": "Jacob Wilson",
         "defaultPositionId": 6,
-        "proTeamId": 11
+        "proTeamId": 11,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3622,7 +5629,13 @@
        "player": {
         "fullName": "Kris Bubic",
         "defaultPositionId": 1,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3635,7 +5648,17 @@
        "player": {
         "fullName": "Brendan Donovan",
         "defaultPositionId": 4,
-        "proTeamId": 12
+        "proTeamId": 12,
+        "eligibleSlots": [
+         2,
+         6,
+         19,
+         12,
+         16,
+         17,
+         3,
+         7
+        ]
        }
       }
      },
@@ -3648,7 +5671,13 @@
        "player": {
         "fullName": "Seranthony Dominguez",
         "defaultPositionId": 11,
-        "proTeamId": 12
+        "proTeamId": 12,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3661,7 +5690,16 @@
        "player": {
         "fullName": "Munetaka Murakami",
         "defaultPositionId": 5,
-        "proTeamId": 4
+        "proTeamId": 4,
+        "eligibleSlots": [
+         3,
+         7,
+         19,
+         12,
+         16,
+         17,
+         1
+        ]
        }
       }
      },
@@ -3674,7 +5712,13 @@
        "player": {
         "fullName": "Jose Soriano",
         "defaultPositionId": 1,
-        "proTeamId": 14
+        "proTeamId": 14,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3687,7 +5731,13 @@
        "player": {
         "fullName": "Paul Sewald",
         "defaultPositionId": 11,
-        "proTeamId": 14
+        "proTeamId": 14,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3700,7 +5750,13 @@
        "player": {
         "fullName": "Davis Martin",
         "defaultPositionId": 1,
-        "proTeamId": 4
+        "proTeamId": 4,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3713,7 +5769,13 @@
        "player": {
         "fullName": "Tyler Rogers",
         "defaultPositionId": 11,
-        "proTeamId": 14
+        "proTeamId": 14,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3726,7 +5788,14 @@
        "player": {
         "fullName": "Ben Brown",
         "defaultPositionId": 1,
-        "proTeamId": 16
+        "proTeamId": 16,
+        "eligibleSlots": [
+         13,
+         14,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3739,7 +5808,18 @@
        "player": {
         "fullName": "Jake Bauers",
         "defaultPositionId": 3,
-        "proTeamId": 8
+        "proTeamId": 8,
+        "eligibleSlots": [
+         1,
+         7,
+         19,
+         8,
+         5,
+         12,
+         16,
+         17,
+         10
+        ]
        }
       }
      },
@@ -3752,7 +5832,23 @@
        "player": {
         "fullName": "Ezequiel Duran",
         "defaultPositionId": 6,
-        "proTeamId": 13
+        "proTeamId": 13,
+        "eligibleSlots": [
+         1,
+         4,
+         6,
+         7,
+         19,
+         12,
+         16,
+         17,
+         5,
+         2,
+         8,
+         3,
+         10,
+         9
+        ]
        }
       }
      },
@@ -3765,7 +5861,13 @@
        "player": {
         "fullName": "Robbie Ray",
         "defaultPositionId": 1,
-        "proTeamId": 25
+        "proTeamId": 25,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      }
@@ -3785,7 +5887,13 @@
        "player": {
         "fullName": "Joe Ryan",
         "defaultPositionId": 1,
-        "proTeamId": 9
+        "proTeamId": 9,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3798,7 +5906,14 @@
        "player": {
         "fullName": "Kyle Tucker",
         "defaultPositionId": 9,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         10,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3811,7 +5926,17 @@
        "player": {
         "fullName": "Bo Bichette",
         "defaultPositionId": 6,
-        "proTeamId": 21
+        "proTeamId": 21,
+        "eligibleSlots": [
+         4,
+         6,
+         19,
+         12,
+         16,
+         17,
+         3,
+         7
+        ]
        }
       }
      },
@@ -3824,7 +5949,15 @@
        "player": {
         "fullName": "Shohei Ohtani",
         "defaultPositionId": 10,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         11,
+         12,
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3837,7 +5970,13 @@
        "player": {
         "fullName": "Mason Miller",
         "defaultPositionId": 11,
-        "proTeamId": 25
+        "proTeamId": 25,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3850,7 +5989,14 @@
        "player": {
         "fullName": "Cal Raleigh",
         "defaultPositionId": 2,
-        "proTeamId": 12
+        "proTeamId": 12,
+        "eligibleSlots": [
+         0,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3863,7 +6009,13 @@
        "player": {
         "fullName": "Hunter Brown",
         "defaultPositionId": 1,
-        "proTeamId": 18
+        "proTeamId": 18,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3876,7 +6028,15 @@
        "player": {
         "fullName": "Austin Riley",
         "defaultPositionId": 5,
-        "proTeamId": 15
+        "proTeamId": 15,
+        "eligibleSlots": [
+         3,
+         7,
+         19,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3889,7 +6049,13 @@
        "player": {
         "fullName": "Kyle Bradish",
         "defaultPositionId": 1,
-        "proTeamId": 1
+        "proTeamId": 1,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3902,7 +6068,16 @@
        "player": {
         "fullName": "Andy Pages",
         "defaultPositionId": 8,
-        "proTeamId": 19
+        "proTeamId": 19,
+        "eligibleSlots": [
+         8,
+         9,
+         10,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3915,7 +6090,17 @@
        "player": {
         "fullName": "Ceddanne Rafaela",
         "defaultPositionId": 8,
-        "proTeamId": 2
+        "proTeamId": 2,
+        "eligibleSlots": [
+         2,
+         6,
+         19,
+         9,
+         5,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3928,7 +6113,13 @@
        "player": {
         "fullName": "Jack Leiter",
         "defaultPositionId": 1,
-        "proTeamId": 13
+        "proTeamId": 13,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3941,7 +6132,17 @@
        "player": {
         "fullName": "Sal Stewart",
         "defaultPositionId": 3,
-        "proTeamId": 17
+        "proTeamId": 17,
+        "eligibleSlots": [
+         1,
+         3,
+         7,
+         19,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -3954,7 +6155,16 @@
        "player": {
         "fullName": "Daylen Lile",
         "defaultPositionId": 9,
-        "proTeamId": 20
+        "proTeamId": 20,
+        "eligibleSlots": [
+         8,
+         10,
+         5,
+         12,
+         16,
+         17,
+         11
+        ]
        }
       }
      },
@@ -3967,7 +6177,13 @@
        "player": {
         "fullName": "Noah Cameron",
         "defaultPositionId": 1,
-        "proTeamId": 7
+        "proTeamId": 7,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3980,7 +6196,13 @@
        "player": {
         "fullName": "Bryce Elder",
         "defaultPositionId": 1,
-        "proTeamId": 15
+        "proTeamId": 15,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -3993,7 +6215,13 @@
        "player": {
         "fullName": "Riley O'Brien",
         "defaultPositionId": 11,
-        "proTeamId": 24
+        "proTeamId": 24,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -4006,7 +6234,13 @@
        "player": {
         "fullName": "Bryan Baker",
         "defaultPositionId": 11,
-        "proTeamId": 30
+        "proTeamId": 30,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -4019,7 +6253,13 @@
        "player": {
         "fullName": "Landen Roupp",
         "defaultPositionId": 1,
-        "proTeamId": 26
+        "proTeamId": 26,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -4032,7 +6272,16 @@
        "player": {
         "fullName": "Andres Gimenez",
         "defaultPositionId": 4,
-        "proTeamId": 14
+        "proTeamId": 14,
+        "eligibleSlots": [
+         2,
+         6,
+         19,
+         12,
+         16,
+         17,
+         4
+        ]
        }
       }
      },
@@ -4045,7 +6294,14 @@
        "player": {
         "fullName": "Carter Jensen",
         "defaultPositionId": 2,
-        "proTeamId": 7
+        "proTeamId": 7,
+        "eligibleSlots": [
+         0,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      },
@@ -4058,7 +6314,13 @@
        "player": {
         "fullName": "Andre Pallante",
         "defaultPositionId": 1,
-        "proTeamId": 24
+        "proTeamId": 24,
+        "eligibleSlots": [
+         13,
+         14,
+         16,
+         17
+        ]
        }
       }
      },
@@ -4071,7 +6333,13 @@
        "player": {
         "fullName": "Dylan Lee",
         "defaultPositionId": 11,
-        "proTeamId": 15
+        "proTeamId": 15,
+        "eligibleSlots": [
+         13,
+         15,
+         16,
+         17
+        ]
        }
       }
      },
@@ -4084,7 +6352,15 @@
        "player": {
         "fullName": "Esmerlyn Valdez",
         "defaultPositionId": 9,
-        "proTeamId": 23
+        "proTeamId": 23,
+        "eligibleSlots": [
+         10,
+         5,
+         11,
+         12,
+         16,
+         17
+        ]
        }
       }
      }

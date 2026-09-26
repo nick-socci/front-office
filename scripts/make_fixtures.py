@@ -145,6 +145,8 @@ ESPN_SETTINGS_FIELDS = (
     "status.latestScoringPeriod",
     "status.finalScoringPeriod",
     "status.isActive",
+    # Slot id -> roster spot count. Read by stg_espn__lineup_slot_limits.
+    "settings.rosterSettings.lineupSlotCounts",
 )
 ESPN_SCORING_ITEM_FIELDS = ("statId", "isReverseItem", "points")
 ESPN_TEAM_FIELDS = (
@@ -175,6 +177,10 @@ ESPN_MATCHUP_FIELDS = (
     "away.cumulativeScore.losses",
     "away.cumulativeScore.ties",
     "away.cumulativeScore.scoreByStat",
+    # Scoring period -> points, keyed by scoring period id. The KEYS, not the point
+    # values, are what stg_espn__matchup_periods reads: they are the period-to-day map.
+    "home.pointsByScoringPeriod",
+    "away.pointsByScoringPeriod",
 )
 FIXTURE_MATCHUPS = 2
 
@@ -194,6 +200,8 @@ ESPN_ROSTER_ENTRY_FIELDS = (
     "playerPoolEntry.player.fullName",
     "playerPoolEntry.player.defaultPositionId",
     "playerPoolEntry.player.proTeamId",
+    # Slot ids a player is eligible for. Read by stg_espn__roster_entry_slots.
+    "playerPoolEntry.player.eligibleSlots",
 )
 
 
@@ -453,10 +461,32 @@ def build_espn_rosters() -> list[Path]:
     return written
 
 
+def trim_scoring_periods(matchup: dict[str, Any]) -> dict[str, Any]:
+    """Cut each side's pointsByScoringPeriod down to the fixture's own scoring periods.
+
+    The real matchup this is copied from spans twelve days; the fixture season is two.
+    Left whole, stg_espn__matchup_periods would claim days 3-12 exist and the
+    relationships test against stg_espn__scoring_periods would fail on ten phantom days.
+
+    The fixture already renumbers scoring periods (see FIXTURE_SOURCE_SCORING_PERIODS),
+    so this is the same fiction applied consistently: one coherent slice, not a real
+    matchup with a real matchup's span.
+    """
+    keep = {str(period) for period in range(1, len(FIXTURE_SOURCE_SCORING_PERIODS) + 1)}
+    for side in ("home", "away"):
+        points = matchup.get(side, {}).get("pointsByScoringPeriod")
+        if points:
+            matchup[side]["pointsByScoringPeriod"] = {
+                period: value for period, value in points.items() if period in keep
+            }
+    return matchup
+
+
 def build_espn_matchups() -> Path:
     payload = latest_espn("matchups")
     schedule = [
-        rebuild(matchup, ESPN_MATCHUP_FIELDS) for matchup in payload["schedule"][:FIXTURE_MATCHUPS]
+        trim_scoring_periods(rebuild(matchup, ESPN_MATCHUP_FIELDS))
+        for matchup in payload["schedule"][:FIXTURE_MATCHUPS]
     ]
     fixture = {"id": FIXTURE_LEAGUE_ID, "seasonId": payload.get("seasonId"), "schedule": schedule}
     path = write_fixture(
