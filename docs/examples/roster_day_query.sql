@@ -7,17 +7,35 @@
 -- Run with:
 --   duckdb data/warehouse.duckdb < docs/examples/roster_day_query.sql
 --
--- PROVISIONAL JOIN: players are matched on accent-normalised name, because the
--- ESPN <-> MLBAM id crosswalk arrives in milestone 6. On the 2026 season this matches
--- 100% of started entries (38,665) -- but three names are shared by two different MLB
--- players each (Jose Fermin, Max Muncy, Yunior Marte), affecting 150 rostered entries,
--- so a name join can silently merge two people. That is exactly why the crosswalk
--- exists; until it lands, treat those rows with suspicion.
+-- Players are resolved in two steps, in this order:
+--
+--   1. the ESPN <-> MLBAM crosswalk (stg_idmap__players), which resolves 99.41% of
+--      started entries and correctly separates the two different major leaguers named
+--      Max Muncy;
+--   2. failing that, an accent-normalised name match -- but ONLY for names belonging to
+--      exactly one MLB player. ESPN strips accents ("Teoscar Hernandez") while MLB does
+--      not ("Hernández"), and the crosswalk lags for players called up late, so the
+--      fallback earns its place; restricting it to unambiguous names keeps it from
+--      silently merging two people.
 
 .mode box
 
 with params as (
     select 'Wonder Wharf Wonderdogs' as team_name, date '2026-07-02' as on_date
+),
+
+unambiguous_names as (
+    -- Names that belong to exactly one MLB player, so a name match cannot merge two.
+    select match_name
+    from (
+        select strip_accents(player_name) as match_name, mlbam_player_id
+        from staging.stg_mlb__batting_game_logs
+        union
+        select strip_accents(player_name), mlbam_player_id
+        from staging.stg_mlb__pitching_game_logs
+    )
+    group by match_name
+    having count(distinct mlbam_player_id) = 1
 ),
 
 roster as (
@@ -27,7 +45,13 @@ roster as (
         entries.player_name,
         entries.lineup_slot,
         entries.default_position,
-        strip_accents(entries.player_name) as match_name
+        coalesce(
+            crosswalk.mlbam_player_id,
+            case
+                when unambiguous_names.match_name is not null
+                    then name_fallback.mlbam_player_id
+            end
+        ) as mlbam_player_id
     from staging.stg_espn__roster_entries as entries
     inner join staging.stg_espn__scoring_periods as periods
         on periods.league_id = entries.league_id
@@ -37,6 +61,18 @@ roster as (
         on teams.league_id = entries.league_id
         and teams.season = entries.season
         and teams.team_id = entries.team_id
+    left join staging.stg_idmap__players as crosswalk
+        on crosswalk.espn_player_id = entries.espn_player_id
+    left join unambiguous_names
+        on unambiguous_names.match_name = strip_accents(entries.player_name)
+    left join (
+        select distinct strip_accents(player_name) as match_name, mlbam_player_id
+        from staging.stg_mlb__batting_game_logs
+        union
+        select distinct strip_accents(player_name), mlbam_player_id
+        from staging.stg_mlb__pitching_game_logs
+    ) as name_fallback
+        on name_fallback.match_name = strip_accents(entries.player_name)
     inner join params
         on params.team_name = teams.team_name
         and params.on_date = periods.scoring_date
@@ -46,7 +82,7 @@ roster as (
 
 batting as (
     select
-        strip_accents(logs.player_name) as match_name,
+        logs.mlbam_player_id,
         sum(logs.at_bats) as at_bats,
         sum(logs.hits) as hits,
         sum(logs.home_runs) as home_runs,
@@ -55,12 +91,12 @@ batting as (
     from staging.stg_mlb__batting_game_logs as logs
     inner join staging.stg_mlb__games as games on games.game_pk = logs.game_pk
     inner join params on params.on_date = games.official_date
-    group by 1
+    group by logs.mlbam_player_id
 ),
 
 pitching as (
     select
-        strip_accents(logs.player_name) as match_name,
+        logs.mlbam_player_id,
         sum(logs.outs_recorded) as outs_recorded,
         sum(logs.strikeouts) as strikeouts,
         sum(logs.earned_runs) as earned_runs,
@@ -69,7 +105,7 @@ pitching as (
     from staging.stg_mlb__pitching_game_logs as logs
     inner join staging.stg_mlb__games as games on games.game_pk = logs.game_pk
     inner join params on params.on_date = games.official_date
-    group by 1
+    group by logs.mlbam_player_id
 )
 
 select
@@ -88,9 +124,11 @@ select
     pitching.wins,
     pitching.saves,
     case
-        when batting.match_name is null and pitching.match_name is null then 'did not play'
+        when roster.mlbam_player_id is null then 'unresolved player'
+        when batting.mlbam_player_id is null and pitching.mlbam_player_id is null
+            then 'did not play'
     end as note
 from roster
-left join batting on batting.match_name = roster.match_name
-left join pitching on pitching.match_name = roster.match_name
+left join batting on batting.mlbam_player_id = roster.mlbam_player_id
+left join pitching on pitching.mlbam_player_id = roster.mlbam_player_id
 order by roster.lineup_slot, roster.player_name;

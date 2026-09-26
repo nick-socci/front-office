@@ -1,0 +1,15 @@
+{
+  "source": "espn",
+  "endpoint": "transactions",
+  "partitions": {
+    "season": 2026,
+    "league_id": "111111"
+  },
+  "url": "https://lm-api-reads.fantasy.espn.com/",
+  "params": {
+    "view": "kona_league_communication",
+    "limit": 2000
+  },
+  "request_key": "limit=2000&view=kona_league_communication",
+  "fetched_at": "20260430T160000Z"
+}

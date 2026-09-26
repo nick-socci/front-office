@@ -159,6 +159,33 @@ ESPN_TEAM_FIELDS = (
     "record.overall.streakLength",
     "record.overall.streakType",
 )
+# Matchup numbers only. scoreByStat is copied wholesale: it is stat ids and numbers.
+ESPN_MATCHUP_FIELDS = (
+    "id",
+    "matchupPeriodId",
+    "winner",
+    "playoffTierType",
+    "home.teamId",
+    "home.cumulativeScore.wins",
+    "home.cumulativeScore.losses",
+    "home.cumulativeScore.ties",
+    "home.cumulativeScore.scoreByStat",
+    "away.teamId",
+    "away.cumulativeScore.wins",
+    "away.cumulativeScore.losses",
+    "away.cumulativeScore.ties",
+    "away.cumulativeScore.scoreByStat",
+)
+FIXTURE_MATCHUPS = 2
+
+# Transaction messages: what moved, where to. Never `author`, which is the ESPN account
+# GUID of the member who made the move.
+ESPN_TRANSACTION_MESSAGE_FIELDS = ("date", "messageTypeId", "targetId", "to", "from")
+FIXTURE_TRANSACTION_TOPICS = 6
+
+# SFBB crosswalk columns. Player names here are public major leaguers.
+IDMAP_FIELDS = ("PLAYERNAME", "MLBID", "ESPNID", "TEAM", "POS", "IDFANGRAPHS")
+
 ESPN_ROSTER_ENTRY_FIELDS = (
     "playerId",
     "lineupSlotId",
@@ -426,6 +453,94 @@ def build_espn_rosters() -> list[Path]:
     return written
 
 
+def build_espn_matchups() -> Path:
+    payload = latest_espn("matchups")
+    schedule = [
+        rebuild(matchup, ESPN_MATCHUP_FIELDS) for matchup in payload["schedule"][:FIXTURE_MATCHUPS]
+    ]
+    fixture = {"id": FIXTURE_LEAGUE_ID, "seasonId": payload.get("seasonId"), "schedule": schedule}
+    path = write_fixture(
+        source="espn",
+        endpoint="matchups",
+        partitions={"season": 2026, "league_id": FIXTURE_LEAGUE_ID},
+        payload=fixture,
+        request={
+            "url": "https://lm-api-reads.fantasy.espn.com/",
+            "params": {"view": "mMatchupScore,mScoreboard"},
+        },
+    )
+    print(f"espn/matchups: {len(schedule)} matchups -> {path.relative_to(REPO_ROOT)}")
+    return path
+
+
+def build_espn_transactions() -> Path:
+    payload = latest_espn("transactions")
+    topics = []
+    for index, topic in enumerate(payload["topics"][:FIXTURE_TRANSACTION_TOPICS], start=1):
+        # Topic and message ids are themselves GUIDs. They identify transactions rather
+        # than people, but synthesising them keeps the fixture privacy check free to
+        # reject every GUID-shaped string without exceptions.
+        topics.append(
+            {
+                "id": f"topic-{index:03d}",
+                "date": topic["date"],
+                "messages": [
+                    {"id": f"message-{index:03d}-{position:02d}"}
+                    | rebuild(message, ESPN_TRANSACTION_MESSAGE_FIELDS)
+                    for position, message in enumerate(topic["messages"], start=1)
+                ],
+            }
+        )
+    path = write_fixture(
+        source="espn",
+        endpoint="transactions",
+        partitions={"season": 2026, "league_id": FIXTURE_LEAGUE_ID},
+        payload={"topics": topics},
+        request={
+            "url": "https://lm-api-reads.fantasy.espn.com/",
+            "params": {"view": "kona_league_communication", "limit": 2000},
+        },
+    )
+    messages = sum(len(t["messages"]) for t in topics)
+    print(
+        f"espn/transactions: {len(topics)} topics, {messages} messages "
+        f"-> {path.relative_to(REPO_ROOT)}"
+    )
+    return path
+
+
+def build_idmap(fixture_paths: list[Path]) -> Path:
+    """Crosswalk rows for exactly the players in the ESPN roster fixtures."""
+    wanted: set[str] = set()
+    for path in fixture_paths:
+        payload = json.loads(path.read_text())
+        for team in payload["teams"]:
+            for entry in team["roster"]["entries"]:
+                wanted.add(str(entry["playerId"]))
+
+    source = latest_landed("idmap", "player_id_map")
+    rows = [
+        rebuild(row, IDMAP_FIELDS)
+        for row in json.loads(source.read_text())
+        if row.get("ESPNID") in wanted
+    ]
+    path = write_fixture(
+        source="idmap",
+        endpoint="player_id_map",
+        partitions={"provider": "sfbb"},
+        payload=rows,
+        request={
+            "url": "https://www.smartfantasybaseball.com/PLAYERIDMAPCSV",
+            "params": {"provider": "sfbb"},
+        },
+    )
+    print(
+        f"idmap/player_id_map: {len(rows)} of {len(wanted)} fixture players "
+        f"-> {path.relative_to(REPO_ROOT)}"
+    )
+    return path
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -439,7 +554,10 @@ def main() -> None:
     build_mlb_boxscores(tuple(args.dates))
     build_espn_settings()
     build_espn_teams()
-    build_espn_rosters()
+    roster_paths = build_espn_rosters()
+    build_espn_matchups()
+    build_espn_transactions()
+    build_idmap(roster_paths)
 
 
 if __name__ == "__main__":

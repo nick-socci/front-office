@@ -86,6 +86,70 @@ models:
           arguments:
             combination_of_columns: [league_id, season, scoring_period]
 
+  - name: stg_espn__matchups
+    description: One row per head-to-head matchup, with the category win/loss/tie tally.
+    columns:
+      - name: matchup_id
+        data_tests: [not_null]
+      - name: matchup_period
+        data_tests: [not_null]
+      - name: home_team_id
+        data_tests: [not_null]
+      - name: away_team_id
+        data_tests: [not_null]
+      - name: winner
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["HOME", "AWAY", "TIE", "UNDECIDED"]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, matchup_id]
+      - dbt_utils.expression_is_true:
+          name: stg_espn__matchups_teams_differ
+          arguments:
+            expression: "home_team_id != away_team_id"
+
+  - name: stg_espn__matchup_category_results
+    description: >
+      One row per (matchup, team, stat). Includes the component stats ESPN reports
+      alongside ratio categories; is_scored_category separates them from the categories
+      the league actually scores.
+    columns:
+      - name: stat_id
+        data_tests: [not_null]
+      - name: team_id
+        data_tests: [not_null]
+      - name: result
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["WIN", "LOSS", "TIE"]
+                where: "is_scored_category"
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, matchup_id, team_id, stat_id]
+
+  - name: stg_espn__transactions
+    description: >
+      One row per player movement (add, drop, waiver claim, trade). Excludes the ESPN
+      account GUID of the member who made the move.
+    columns:
+      - name: transaction_id
+        data_tests: [not_null, unique]
+      - name: espn_player_id
+        data_tests: [not_null]
+      - name: transaction_date
+        data_tests: [not_null]
+      - name: activity
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["FA ADDED", "WAIVER ADDED", "DROPPED", "TRADED"]
+
 unit_tests:
   - name: scoring_period_dates_use_the_eastern_day_boundary
     description: >
@@ -120,6 +184,11 @@ seeds:
         data_tests: [not_null, unique]
       - name: display_label
         data_tests: [not_null]
+  - name: espn_activity_types
+    description: ESPN messageTypeId -> transaction kind (FA ADDED, DROPPED, TRADED...).
+    columns:
+      - name: message_type_id
+        data_tests: [not_null, unique]
   - name: espn_lineup_slots
     description: ESPN lineupSlotId -> slot abbreviation (C, 1B, BE, IL...).
     columns:

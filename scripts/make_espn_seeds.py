@@ -13,7 +13,12 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from espn_api.baseball.constant import DEFAULT_POSITION_MAP, POSITION_MAP, STATS_MAP
+from espn_api.baseball.constant import (
+    ACTIVITY_MAP,
+    DEFAULT_POSITION_MAP,
+    POSITION_MAP,
+    STATS_MAP,
+)
 
 SEED_DIR = Path(__file__).resolve().parent.parent / "dbt/seeds"
 
@@ -56,6 +61,13 @@ def main() -> None:
         "espn_lineup_slots",
         ("lineup_slot_id", "slot_abbrev"),
         [(key, slots[key]) for key in sorted(slots)],
+    )
+
+    activities = numeric_only(ACTIVITY_MAP)
+    write_seed(
+        "espn_activity_types",
+        ("message_type_id", "activity"),
+        [(key, activities[key]) for key in sorted(activities)],
     )
 
     positions = numeric_only(DEFAULT_POSITION_MAP)

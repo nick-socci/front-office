@@ -136,3 +136,17 @@ def test_interval_accounts_for_time_already_elapsed():
     clock.now += 1.0  # a second of work happened in between
     client.get("https://example.test/b")
     assert clock.slept == [pytest.approx(0.5)]
+
+
+def test_follows_redirects():
+    """The SFBB player id map is served through a 307; not following it yields no data."""
+
+    def handler(request):
+        if request.url.path == "/PLAYERIDMAPCSV":
+            return httpx.Response(307, headers={"Location": "https://example.test/final.csv"})
+        return httpx.Response(200, text="MLBID,ESPNID\n430911,5933\n")
+
+    client, _ = make_client(handler)
+    response = client.get("https://example.test/PLAYERIDMAPCSV")
+    assert response.status_code == 200
+    assert "430911" in response.text

@@ -23,7 +23,16 @@ HEX = "[0-9A-Fa-f]"
 GUID = re.compile(rf"\{{?{HEX}{{8}}-{HEX}{{4}}-{HEX}{{4}}-{HEX}{{4}}-{HEX}{{12}}\}}?")
 
 # Keys whose values identify a person rather than a fantasy team.
-FORBIDDEN_KEYS = {"members", "owners", "primaryOwner", "firstName", "lastName", "displayName"}
+FORBIDDEN_KEYS = {
+    "members",
+    "owners",
+    "primaryOwner",
+    "firstName",
+    "lastName",
+    "displayName",
+    # Every transaction message names the ESPN account that made the move.
+    "author",
+}
 
 FIXTURE_TEAM_NAME = re.compile(r"^Team \d{2}$")
 
