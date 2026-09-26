@@ -1,30 +1,21 @@
-# Handover — Fantasy Baseball Analytics
+# 00 — Project origin
 
-**Status (updated 2026-09-26):** Sub-project 1 is complete — ingestion, DuckDB warehouse,
-dbt staging layer and CI are built and running on the full 2026 season. Sub-project 2
-(intermediate layer and marts) is underway; milestone 7 is merged. The project is named
-**Front Office** and lives at https://github.com/nick-socci/front-office.
+The original planning record, written 2026-09-16/17 before any code existed, kept as
+written. It is here because it is the honest record of what was decided up front and
+what the project later did differently — not because it is current. Where it and the
+code disagree, the code is right.
 
-| Sub-project | Spec | State |
-|---|---|---|
-| 1 — ingestion, staging, CI | [`2026-09-20-ingestion-and-staging-design.md`](docs/superpowers/specs/2026-09-20-ingestion-and-staging-design.md) | Complete (PRs 1–6) |
-| 2 — intermediate layer and marts | [`2026-09-26-intermediate-and-marts-design.md`](docs/superpowers/specs/2026-09-26-intermediate-and-marts-design.md) | In progress (PR 7 merged) |
-| 3 — BigQuery, orchestration, dashboard | not yet written | Not started |
+Superseded in particular:
 
-Each spec carries its own milestone-by-milestone progress table. The README has the
-public-facing view of what exists today and the roadmap.
+- `data_generator/` was renamed `ingestion/`, and it never generated anything.
+- The "open decisions for next session" at the end are all resolved: DuckDB now with
+  BigQuery to follow, marts confirmed against a real 17-category league, the AI-assisted
+  write-up lives in the README, and the project is called **Front Office**.
+- The 20–30 hour, 3–4 week timeline was replaced by a ~35–45 hour estimate across
+  sub-projects, deliberately, to do it properly rather than quickly.
+- Sub-project 1 shipped as six milestones; see [`01-ingestion-and-staging.md`](01-ingestion-and-staging.md).
 
-**Outstanding, not yet done:** the 2026 MLB backfill stopped at 2,402 of 2,430 games,
-because the regular season ran to 2026-09-27. Re-run the backfill after that date and
-again around 2026-10-05 so the 7-day settle window closes, then refresh the NAS backup.
-The fantasy season ended at scoring period 180 (2026-09-20), so no fantasy analysis
-depends on those last 28 games.
-
-The open decisions below are resolved: DuckDB now with BigQuery to follow, marts
-confirmed against a 17-category league, the AI-assisted write-up lives in the README,
-and the project has a name.
-
-Everything below is the original planning record from 2026-09-16/17, kept as written.
+The cost analysis and the source links at the end are still accurate and still useful.
 
 ## Why this project exists
 

@@ -235,8 +235,7 @@ solver is exercised in CI on fixtures; CI green on PR 11.
 source freshness definitions.
 
 **Files:** `.github/workflows/docs.yml` · `dbt/models/marts/_exposures.yml` ·
-`.sqlfluff` · `.github/workflows/ci.yml` · `README.md` · `HANDOVER.md` ·
-`docs/superpowers/specs/2026-09-26-intermediate-and-marts-design.md`
+`.sqlfluff` · `.github/workflows/ci.yml` · `README.md` · `docs/README.md`
 
 - Publish `dbt docs generate` output to GitHub Pages — the DAG from raw JSON to marts is the
   single most legible artifact this project produces for a reviewer.
@@ -247,8 +246,12 @@ source freshness definitions.
 - **Source freshness** thresholds defined on the raw sources and documented as dormant until
   the 2027 daily schedule exists.
 - README: mart table, the reconciliation result stated plainly with its numbers, updated
-  roadmap (`fct_`/`dim_` names), refreshed test counts. HANDOVER marks sub-project 2 complete.
-- Commit this plan as the sub-project 2 spec alongside sub-project 1's.
+  roadmap (`fct_`/`dim_` names), refreshed test counts. `docs/README.md` marks sub-project 2
+  complete and the progress table above is filled in.
+
+> **Resolved.** This doc was committed at the start of milestone 8 rather than here. It had
+> been living in a scratch directory outside the repo — not in git, not backed up, and
+> overwritten by each new planning session.
 
 **Verify:** the docs site loads and the DAG renders; `sqlfluff lint` clean; a fresh clone
 plus fresh backfill builds every model, test and Python model; CI green on PR 12.
