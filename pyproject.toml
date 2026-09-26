@@ -20,6 +20,7 @@ dev = [
     "mypy>=1.13",
     "dbt-core>=1.12.5",
     "dbt-duckdb>=1.11.0",
+    "espn-api>=0.46.0",
 ]
 
 [build-system]

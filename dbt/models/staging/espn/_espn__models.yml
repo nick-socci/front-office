@@ -1,0 +1,94 @@
+version: 2
+
+models:
+  - name: stg_espn__league_settings
+    description: One row per (league, season) with the settings snapshot that was newest at build time.
+    columns:
+      - name: league_id
+        data_tests: [not_null]
+      - name: season
+        data_tests: [not_null]
+      - name: scoring_type
+        data_tests:
+          - not_null
+      - name: team_count
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season]
+
+  - name: stg_espn__scoring_categories
+    description: >
+      One row per scored category. is_reverse marks lower-is-better categories such as
+      ERA and WHIP. display_label is what ESPN shows a human; stat_abbrev names the unit
+      actually stored (stat 34 displays as IP but holds outs).
+    columns:
+      - name: stat_id
+        data_tests: [not_null]
+      - name: display_label
+        data_tests: [not_null]
+      - name: is_reverse
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, stat_id]
+
+  - name: stg_espn__teams
+    description: >
+      One row per fantasy team. Deliberately excludes members, owners and primaryOwner:
+      those identify real people who did not opt into a public repo.
+    columns:
+      - name: team_id
+        data_tests: [not_null]
+      - name: wins
+        data_tests: [not_null]
+      - name: playoff_seed
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, team_id]
+
+  - name: stg_espn__roster_entries
+    description: One row per (league, season, scoring period, team, player).
+    columns:
+      - name: scoring_period
+        data_tests: [not_null]
+      - name: espn_player_id
+        data_tests: [not_null]
+      - name: team_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_espn__teams')
+                field: team_id
+      - name: lineup_slot_id
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, scoring_period, team_id, espn_player_id]
+
+seeds:
+  - name: espn_stat_ids
+    description: >
+      ESPN statId -> name, generated from espn-api's STATS_MAP (MIT) by
+      scripts/make_espn_seeds.py. Regenerate rather than edit by hand.
+    columns:
+      - name: stat_id
+        data_tests: [not_null, unique]
+      - name: display_label
+        data_tests: [not_null]
+  - name: espn_lineup_slots
+    description: ESPN lineupSlotId -> slot abbreviation (C, 1B, BE, IL...).
+    columns:
+      - name: lineup_slot_id
+        data_tests: [not_null, unique]
+  - name: espn_player_positions
+    description: ESPN defaultPositionId -> position abbreviation.
+    columns:
+      - name: position_id
+        data_tests: [not_null, unique]

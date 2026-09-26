@@ -12,6 +12,10 @@ from typing import Annotated
 
 import typer
 
+from front_office.espn import rosters as espn_rosters
+from front_office.espn import settings as espn_settings
+from front_office.espn import teams as espn_teams
+from front_office.espn.client import EspnCredentials, espn_client, load_env_file
 from front_office.http_client import HttpClient
 from front_office.landing import LandingZone
 from front_office.load import connect, load_landing_zone
@@ -84,6 +88,61 @@ def backfill_mlb(
             if summary.failed:
                 typer.echo(f"failed game_pks: {summary.failed_game_pks}", err=True)
                 raise typer.Exit(code=1)
+
+
+@backfill_app.command("espn")
+def backfill_espn(
+    season: Annotated[int, typer.Option("--season", help="Season year, e.g. 2026.")],
+    raw_root: RawRoot = DEFAULT_RAW_ROOT,
+    refresh: Annotated[
+        bool, typer.Option("--refresh", help="Re-fetch even settled scoring periods.")
+    ] = False,
+) -> None:
+    """Back-fill ESPN league data: settings, teams, then one roster per scoring period."""
+    load_env_file()
+    credentials = EspnCredentials.from_env()
+    zone = LandingZone(root=raw_root)
+    fetched_at = utc_stamp()
+
+    with espn_client(credentials) as client:
+        settings_path, settings_payload = espn_settings.backfill_settings(
+            zone=zone,
+            client=client,
+            season=season,
+            league_id=credentials.league_id,
+            fetched_at=fetched_at,
+        )
+        typer.echo(f"landed settings -> {settings_path}")
+
+        teams_path = espn_teams.backfill_teams(
+            zone=zone,
+            client=client,
+            season=season,
+            league_id=credentials.league_id,
+            fetched_at=fetched_at,
+        )
+        typer.echo(f"landed teams -> {teams_path}")
+
+        status = settings_payload.get("status", {})
+        typer.echo(
+            f"scoring periods: latest={status.get('latestScoringPeriod')} "
+            f"final={status.get('finalScoringPeriod')}"
+        )
+        summary = espn_rosters.backfill_rosters(
+            zone=zone,
+            client=client,
+            season=season,
+            league_id=credentials.league_id,
+            status=status,
+            fetched_at=fetched_at,
+            refresh=refresh,
+        )
+        typer.echo(
+            f"rosters: fetched={summary.fetched} skipped={summary.skipped} failed={summary.failed}"
+        )
+        if summary.failed:
+            typer.echo(f"failed scoring periods: {summary.failed_periods}", err=True)
+            raise typer.Exit(code=1)
 
 
 @app.command("load")
