@@ -1,0 +1,14 @@
+{
+  "source": "espn",
+  "endpoint": "teams",
+  "partitions": {
+    "season": 2026,
+    "league_id": "111111"
+  },
+  "url": "https://lm-api-reads.fantasy.espn.com/",
+  "params": {
+    "view": "mTeam"
+  },
+  "request_key": "view=mTeam",
+  "fetched_at": "20260101T000000Z"
+}

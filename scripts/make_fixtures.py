@@ -115,6 +115,52 @@ BOXSCORE_PLAYER_FIELDS = (
 # pitchers and the relationship back to stg_mlb__games.
 FIXTURE_BOXSCORE_GAMES = 2
 
+# ESPN fixtures are committed to a public repo, so identifying text is replaced at
+# GENERATION time, not at query time. dbt's anonymize var protects query output; it
+# cannot protect a file. League members never agreed to appear here.
+FIXTURE_LEAGUE_ID = "111111"
+FIXTURE_LEAGUE_NAME = "Fixture League"
+
+# Two adjacent scoring periods: enough for the roster model and the scoring-period
+# tests, small enough to read in a diff.
+FIXTURE_SCORING_PERIODS = (100, 101)
+
+ESPN_SETTINGS_FIELDS = (
+    "id",
+    "seasonId",
+    "scoringPeriodId",
+    "settings.name",
+    "settings.size",
+    "settings.scoringSettings.scoringType",
+    "settings.scheduleSettings.playoffTeamCount",
+    "status.currentMatchupPeriod",
+    "status.latestScoringPeriod",
+    "status.finalScoringPeriod",
+    "status.isActive",
+)
+ESPN_SCORING_ITEM_FIELDS = ("statId", "isReverseItem", "points")
+ESPN_TEAM_FIELDS = (
+    "id",
+    "abbrev",
+    "name",
+    "playoffSeed",
+    "eliminated",
+    "record.overall.wins",
+    "record.overall.losses",
+    "record.overall.ties",
+    "record.overall.streakLength",
+    "record.overall.streakType",
+)
+ESPN_ROSTER_ENTRY_FIELDS = (
+    "playerId",
+    "lineupSlotId",
+    "injuryStatus",
+    "acquisitionType",
+    "playerPoolEntry.player.fullName",
+    "playerPoolEntry.player.defaultPositionId",
+    "playerPoolEntry.player.proTeamId",
+)
+
 
 def pick(source: dict[str, Any], dotted: str) -> tuple[list[str], Any] | None:
     """Return (path, value) for a dotted path, or None when absent."""
@@ -262,6 +308,109 @@ def build_mlb_boxscores(dates: tuple[str, ...]) -> list[Path]:
     return written
 
 
+def espn_team_alias(team_id: int) -> dict[str, str]:
+    """Stable, meaningless names for a fixture team."""
+    return {"name": f"Team {team_id:02d}", "abbrev": f"T{team_id}"}
+
+
+def latest_espn(endpoint: str, scoring_period: int | None = None) -> dict[str, Any]:
+    base = RAW_ROOT / "espn" / endpoint
+    candidates = [
+        path
+        for path in base.rglob("*.json")
+        if not path.name.endswith(".meta.json")
+        and (scoring_period is None or f"scoring_period={scoring_period}/" in str(path))
+        # Spike backups have no metadata sidecar and a different layout; ignore them.
+        and path.with_suffix(".meta.json").exists()
+    ]
+    if not candidates:
+        raise SystemExit(f"no landed espn/{endpoint} response (period={scoring_period})")
+    return json.loads(sorted(candidates)[-1].read_text())
+
+
+def build_espn_settings() -> Path:
+    payload = latest_espn("settings")
+    fixture = rebuild(payload, ESPN_SETTINGS_FIELDS)
+    fixture["id"] = FIXTURE_LEAGUE_ID
+    fixture["settings"]["name"] = FIXTURE_LEAGUE_NAME
+    fixture["settings"]["scoringSettings"]["scoringItems"] = [
+        rebuild(item, ESPN_SCORING_ITEM_FIELDS)
+        for item in payload["settings"]["scoringSettings"]["scoringItems"]
+    ]
+    path = write_fixture(
+        source="espn",
+        endpoint="settings",
+        partitions={"season": 2026, "league_id": FIXTURE_LEAGUE_ID},
+        payload=fixture,
+        request={
+            "url": "https://lm-api-reads.fantasy.espn.com/",
+            "params": {"view": "mSettings,mStatus"},
+        },
+    )
+    items = len(fixture["settings"]["scoringSettings"]["scoringItems"])
+    print(f"espn/settings: {items} scoring categories -> {path.relative_to(REPO_ROOT)}")
+    return path
+
+
+def build_espn_teams() -> Path:
+    payload = latest_espn("teams")
+    fixture = {"id": FIXTURE_LEAGUE_ID, "seasonId": payload.get("seasonId"), "teams": []}
+    for team in payload["teams"]:
+        rebuilt = rebuild(team, ESPN_TEAM_FIELDS)
+        rebuilt.update(espn_team_alias(int(team["id"])))
+        fixture["teams"].append(rebuilt)
+    path = write_fixture(
+        source="espn",
+        endpoint="teams",
+        partitions={"season": 2026, "league_id": FIXTURE_LEAGUE_ID},
+        payload=fixture,
+        request={"url": "https://lm-api-reads.fantasy.espn.com/", "params": {"view": "mTeam"}},
+    )
+    print(f"espn/teams: {len(fixture['teams'])} teams (aliased) -> {path.relative_to(REPO_ROOT)}")
+    return path
+
+
+def build_espn_rosters() -> list[Path]:
+    written: list[Path] = []
+    for period in FIXTURE_SCORING_PERIODS:
+        payload = latest_espn("roster", scoring_period=period)
+        fixture = {
+            "id": FIXTURE_LEAGUE_ID,
+            "seasonId": payload.get("seasonId"),
+            "scoringPeriodId": period,
+            "teams": [
+                {
+                    "id": team["id"],
+                    "roster": {
+                        "entries": [
+                            rebuild(entry, ESPN_ROSTER_ENTRY_FIELDS)
+                            for entry in team["roster"]["entries"]
+                        ]
+                    },
+                }
+                for team in payload["teams"]
+            ],
+        }
+        path = write_fixture(
+            source="espn",
+            endpoint="roster",
+            partitions={
+                "season": 2026,
+                "league_id": FIXTURE_LEAGUE_ID,
+                "scoring_period": period,
+            },
+            payload=fixture,
+            request={
+                "url": "https://lm-api-reads.fantasy.espn.com/",
+                "params": {"view": "mRoster", "scoringPeriodId": period},
+            },
+        )
+        entries = sum(len(t["roster"]["entries"]) for t in fixture["teams"])
+        print(f"espn/roster period {period}: {entries} entries -> {path.relative_to(REPO_ROOT)}")
+        written.append(path)
+    return written
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -273,6 +422,9 @@ def main() -> None:
     args = parser.parse_args()
     build_mlb_schedule(tuple(args.dates))
     build_mlb_boxscores(tuple(args.dates))
+    build_espn_settings()
+    build_espn_teams()
+    build_espn_rosters()
 
 
 if __name__ == "__main__":

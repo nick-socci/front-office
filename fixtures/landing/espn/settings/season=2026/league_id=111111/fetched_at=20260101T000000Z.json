@@ -1,0 +1,108 @@
+{
+ "id": "111111",
+ "seasonId": 2026,
+ "scoringPeriodId": 186,
+ "settings": {
+  "name": "Fixture League",
+  "size": 12,
+  "scoringSettings": {
+   "scoringType": "H2H_MOST_CATEGORIES",
+   "scoringItems": [
+    {
+     "statId": 5,
+     "isReverseItem": false,
+     "points": 1.0
+    },
+    {
+     "statId": 8,
+     "isReverseItem": false,
+     "points": 1.0
+    },
+    {
+     "statId": 10,
+     "isReverseItem": false,
+     "points": 1.0
+    },
+    {
+     "statId": 41,
+     "isReverseItem": true,
+     "points": 1.0
+    },
+    {
+     "statId": 48,
+     "isReverseItem": false,
+     "points": 1.0
+    },
+    {
+     "statId": 49,
+     "isReverseItem": false,
+     "points": 1.0
+    },
+    {
+     "statId": 83,
+     "isReverseItem": false,
+     "points": 1.0
+    },
+    {
+     "statId": 20,
+     "isReverseItem": false,
+     "points": 1.0
+    },
+    {
+     "statId": 21,
+     "isReverseItem": false,
+     "points": 1.0
+    },
+    {
+     "statId": 53,
+     "isReverseItem": false,
+     "points": 1.0
+    },
+    {
+     "statId": 47,
+     "isReverseItem": true,
+     "points": 1.0
+    },
+    {
+     "statId": 23,
+     "isReverseItem": false,
+     "points": 1.0
+    },
+    {
+     "statId": 54,
+     "isReverseItem": true,
+     "points": 1.0
+    },
+    {
+     "statId": 1,
+     "isReverseItem": false,
+     "points": 1.0
+    },
+    {
+     "statId": 2,
+     "isReverseItem": false,
+     "points": 1.0
+    },
+    {
+     "statId": 27,
+     "isReverseItem": true,
+     "points": 1.0
+    },
+    {
+     "statId": 34,
+     "isReverseItem": false,
+     "points": 1.0
+    }
+   ]
+  },
+  "scheduleSettings": {
+   "playoffTeamCount": 6
+  }
+ },
+ "status": {
+  "currentMatchupPeriod": 24,
+  "latestScoringPeriod": 186,
+  "finalScoringPeriod": 180,
+  "isActive": true
+ }
+}

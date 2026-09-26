@@ -17,3 +17,9 @@ models:
       # to `table` (see milestone 3).
       +materialized: view
       +schema: staging
+
+vars:
+  # When true, league- and team-identifying text is replaced with stable aliases.
+  # League members did not opt into appearing in a public repo, so CI (and anything
+  # published) runs with this on; local dev defaults to real names.
+  anonymize: false

@@ -41,8 +41,8 @@ jobs:
         env:
           DBT_PROFILES_DIR: .
 
-      - name: dbt build (fixtures)
-        run: uv run dbt build --target ci
+      - name: dbt build (fixtures, anonymised)
+        run: uv run dbt build --target ci --vars '{anonymize: true}'
         working-directory: dbt
         env:
           DBT_PROFILES_DIR: .

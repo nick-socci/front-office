@@ -9,13 +9,15 @@ that behaviour needs a socket or a real wait to verify.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, cast
 
 import httpx
 
-ParamsType = Mapping[str, str | int] | list[tuple[str, str | int]] | None
+# Sequence (covariant) rather than list (invariant), so callers can pass a
+# list[tuple[str, str]] without a type error; the values are normalised below.
+ParamsType = Mapping[str, str | int] | Sequence[tuple[str, str | int]] | None
 
 RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
 AUTH_STATUSES = frozenset({401, 403})
