@@ -45,5 +45,9 @@ select
     {{ fo_json_int('matchup', '$.home.cumulativeScore.ties') }} as home_category_ties,
     {{ fo_parse_fetched_at() }} as fetched_at
 from matchups
+-- Two of the 145 schedule entries are playoff BYES: the away side is an empty object and
+-- the home team advances without playing. They are dropped because this model's grain is
+-- "who played whom", and a bye has no opponent and no category results. The team's
+-- advancement is still visible in the bracket via playoff_tier on its next matchup.
 where {{ fo_json_int('matchup', '$.away.teamId') }} is not null
 {{ fo_latest_by_entity(['league_id', 'season', "matchup ->> '$.id'"]) }}

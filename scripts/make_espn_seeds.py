@@ -31,6 +31,12 @@ SEED_DIR = Path(__file__).resolve().parent.parent / "dbt/seeds"
 # 2.8125 * (144/3) / 9 = exactly 15 earned runs, so 144 is outs (48.0 IP).
 DISPLAY_LABELS = {34: "IP"}
 
+# A roster slot either counts toward the day's scoring or it does not. Bench and injured
+# list are the two that do not, in every ESPN league: a benched player's real-life game
+# happens, it just is not credited to the fantasy team. This is a property of the slot,
+# not of a particular league's settings, so it lives in the seed rather than in a model.
+NON_STARTING_SLOTS = {"BE", "IL"}
+
 
 def numeric_only(mapping: dict[object, object]) -> dict[int, str]:
     """Keep the id -> name direction; some espn-api maps are bidirectional."""
@@ -59,8 +65,8 @@ def main() -> None:
     slots = numeric_only(POSITION_MAP)
     write_seed(
         "espn_lineup_slots",
-        ("lineup_slot_id", "slot_abbrev"),
-        [(key, slots[key]) for key in sorted(slots)],
+        ("lineup_slot_id", "slot_abbrev", "is_starting_slot"),
+        [(key, slots[key], slots[key] not in NON_STARTING_SLOTS) for key in sorted(slots)],
     )
 
     activities = numeric_only(ACTIVITY_MAP)
