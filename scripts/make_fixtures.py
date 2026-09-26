@@ -57,6 +57,65 @@ SCHEDULE_GAME_FIELDS = (
 )
 
 
+# Per-player fields read by stg_mlb__batting_game_logs / stg_mlb__pitching_game_logs.
+BOXSCORE_PLAYER_FIELDS = (
+    "person.id",
+    "person.fullName",
+    "position.abbreviation",
+    "battingOrder",
+    "gameStatus.isSubstitute",
+    "stats.batting.gamesPlayed",
+    "stats.batting.plateAppearances",
+    "stats.batting.atBats",
+    "stats.batting.hits",
+    "stats.batting.doubles",
+    "stats.batting.triples",
+    "stats.batting.homeRuns",
+    "stats.batting.runs",
+    "stats.batting.rbi",
+    "stats.batting.baseOnBalls",
+    "stats.batting.intentionalWalks",
+    "stats.batting.strikeOuts",
+    "stats.batting.stolenBases",
+    "stats.batting.caughtStealing",
+    "stats.batting.hitByPitch",
+    "stats.batting.sacFlies",
+    "stats.batting.sacBunts",
+    "stats.batting.totalBases",
+    "stats.batting.groundIntoDoublePlay",
+    "stats.batting.catchersInterference",
+    "stats.pitching.gamesPitched",
+    "stats.pitching.gamesStarted",
+    "stats.pitching.outs",
+    "stats.pitching.inningsPitched",
+    "stats.pitching.battersFaced",
+    "stats.pitching.hits",
+    "stats.pitching.runs",
+    "stats.pitching.earnedRuns",
+    "stats.pitching.homeRuns",
+    "stats.pitching.baseOnBalls",
+    "stats.pitching.intentionalWalks",
+    "stats.pitching.strikeOuts",
+    "stats.pitching.hitBatsmen",
+    "stats.pitching.balks",
+    "stats.pitching.wildPitches",
+    "stats.pitching.pitchesThrown",
+    "stats.pitching.inheritedRunners",
+    "stats.pitching.wins",
+    "stats.pitching.losses",
+    "stats.pitching.saves",
+    "stats.pitching.saveOpportunities",
+    "stats.pitching.holds",
+    "stats.pitching.blownSaves",
+    "stats.pitching.completeGames",
+    "stats.pitching.shutouts",
+)
+
+# Two games keep the committed fixture small while still covering both sides, batters,
+# pitchers and the relationship back to stg_mlb__games.
+FIXTURE_BOXSCORE_GAMES = 2
+
+
 def pick(source: dict[str, Any], dotted: str) -> tuple[list[str], Any] | None:
     """Return (path, value) for a dotted path, or None when absent."""
     parts = dotted.split(".")
@@ -155,6 +214,54 @@ def build_mlb_schedule(dates: tuple[str, ...]) -> Path:
     return path
 
 
+def build_mlb_boxscores(dates: tuple[str, ...]) -> list[Path]:
+    """Boxscores for the first few played games on the fixture dates."""
+    schedule = json.loads(latest_landed("mlb", "schedule").read_text())
+    game_pks = [
+        game["gamePk"]
+        for day in schedule["dates"]
+        if day["date"] in dates
+        for game in day["games"]
+        if game["status"]["detailedState"] == "Final"
+    ]
+    written: list[Path] = []
+    for game_pk in sorted(set(game_pks))[:FIXTURE_BOXSCORE_GAMES]:
+        landed = RAW_ROOT / "mlb/boxscore" / "season=2026" / f"game_pk={game_pk}"
+        payloads = sorted(p for p in landed.glob("*.json") if not p.name.endswith(".meta.json"))
+        if not payloads:
+            print(f"mlb/boxscore: game_pk={game_pk} not landed yet, skipping")
+            continue
+        payload = json.loads(payloads[-1].read_text())
+        fixture = {
+            "teams": {
+                side: {
+                    "team": {"id": payload["teams"][side]["team"]["id"]},
+                    "players": {
+                        key: rebuild(player, BOXSCORE_PLAYER_FIELDS)
+                        for key, player in payload["teams"][side]["players"].items()
+                    },
+                }
+                for side in ("home", "away")
+            }
+        }
+        path = write_fixture(
+            source="mlb",
+            endpoint="boxscore",
+            partitions={"season": 2026, "game_pk": game_pk},
+            payload=fixture,
+            request={
+                "url": f"https://statsapi.mlb.com/api/v1/game/{game_pk}/boxscore",
+                "params": {"gamePk": game_pk},
+            },
+        )
+        players = sum(len(fixture["teams"][s]["players"]) for s in ("home", "away"))
+        print(
+            f"mlb/boxscore: game_pk={game_pk}, {players} players -> {path.relative_to(REPO_ROOT)}"
+        )
+        written.append(path)
+    return written
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -165,6 +272,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     build_mlb_schedule(tuple(args.dates))
+    build_mlb_boxscores(tuple(args.dates))
 
 
 if __name__ == "__main__":

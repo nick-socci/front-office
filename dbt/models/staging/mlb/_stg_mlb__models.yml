@@ -47,3 +47,142 @@ models:
           name: stg_mlb__games_home_and_away_differ
           arguments:
             expression: "home_team_id != away_team_id"
+
+  - name: stg_mlb__batting_game_logs
+    description: >
+      One row per (game, batter) with component counts only. Rate stats such as AVG are
+      deliberately absent: they are ratios of these columns and must be computed from
+      summed components downstream, never averaged per game.
+    columns:
+      - name: game_pk
+        description: Recovered from the request metadata; the boxscore payload has no gamePk.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_mlb__games')
+                field: game_pk
+      - name: mlbam_player_id
+        data_tests:
+          - not_null
+      - name: side
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["home", "away"]
+      - name: team_id
+        data_tests:
+          - not_null
+      - name: at_bats
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [game_pk, mlbam_player_id]
+      - dbt_utils.expression_is_true:
+          name: stg_mlb__batting_hits_cannot_exceed_at_bats
+          arguments:
+            expression: "hits <= at_bats"
+      - dbt_utils.expression_is_true:
+          name: stg_mlb__batting_extra_base_hits_cannot_exceed_hits
+          arguments:
+            expression: "doubles + triples + home_runs <= hits"
+
+  - name: stg_mlb__pitching_game_logs
+    description: >
+      One row per (game, pitcher) with component counts only. Innings are stored as
+      outs_recorded; innings_pitched keeps MLB's original notation purely so a test can
+      cross-check the two.
+    columns:
+      - name: game_pk
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_mlb__games')
+                field: game_pk
+      - name: mlbam_player_id
+        data_tests:
+          - not_null
+      - name: outs_recorded
+        description: The honest unit for innings. "6.1" innings is 19 outs.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+      - name: team_id
+        data_tests:
+          - not_null
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [game_pk, mlbam_player_id]
+      - dbt_utils.expression_is_true:
+          name: stg_mlb__pitching_earned_runs_cannot_exceed_runs
+          arguments:
+            expression: "earned_runs <= runs_allowed"
+
+unit_tests:
+  - name: pitching_keeps_the_newest_snapshot_per_pitcher
+    description: >
+      A boxscore refetched inside the settle window supersedes the earlier copy. Here an
+      official scoring change turns an earned run into an unearned one; the model must
+      report the corrected value, not the original.
+    model: stg_mlb__pitching_game_logs
+    given:
+      - input: source('raw', 'api_responses')
+        rows:
+          - source: mlb
+            endpoint: boxscore
+            request_key: "gamePk=1"
+            fetched_at: "20260401T000000Z"
+            file_path: first.json
+            payload: '{"teams":{"home":{"team":{"id":10},"players":{"ID100":{"person":{"id":100,"fullName":"P One"},"stats":{"pitching":{"gamesPitched":1,"gamesStarted":1,"outs":19,"inningsPitched":"6.1","earnedRuns":3,"runs":3}}}}},"away":{"team":{"id":20},"players":{}}}}'
+          - source: mlb
+            endpoint: boxscore
+            request_key: "gamePk=1"
+            fetched_at: "20260405T000000Z"
+            file_path: second.json
+            payload: '{"teams":{"home":{"team":{"id":10},"players":{"ID100":{"person":{"id":100,"fullName":"P One"},"stats":{"pitching":{"gamesPitched":1,"gamesStarted":1,"outs":19,"inningsPitched":"6.1","earnedRuns":2,"runs":3}}}}},"away":{"team":{"id":20},"players":{}}}}'
+    expect:
+      rows:
+        - game_pk: 1
+          mlbam_player_id: 100
+          outs_recorded: 19
+          innings_pitched: "6.1"
+          earned_runs: 2
+          runs_allowed: 3
+
+  - name: batting_includes_appearances_without_plate_appearances
+    description: >
+      A bench player who never entered must be excluded, but a pinch runner with zero
+      plate appearances who steals a base must be included. Filtering on plate
+      appearances rather than gamesPlayed would silently drop real stolen bases.
+    model: stg_mlb__batting_game_logs
+    given:
+      - input: source('raw', 'api_responses')
+        rows:
+          - source: mlb
+            endpoint: boxscore
+            request_key: "gamePk=2"
+            fetched_at: "20260401T000000Z"
+            file_path: bat.json
+            payload: '{"teams":{"home":{"team":{"id":10},"players":{"ID200":{"person":{"id":200,"fullName":"Starter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":2,"doubles":1,"triples":0,"homeRuns":0,"stolenBases":0}}},"ID201":{"person":{"id":201,"fullName":"Bench"},"stats":{"batting":{}}},"ID202":{"person":{"id":202,"fullName":"Pinch Runner"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":0,"atBats":0,"hits":0,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":1}}}}},"away":{"team":{"id":20},"players":{}}}}'
+    expect:
+      rows:
+        - game_pk: 2
+          mlbam_player_id: 200
+          at_bats: 4
+          hits: 2
+          stolen_bases: 0
+        - game_pk: 2
+          mlbam_player_id: 202
+          at_bats: 0
+          hits: 0
+          stolen_bases: 1

@@ -15,6 +15,7 @@ import typer
 from front_office.http_client import HttpClient
 from front_office.landing import LandingZone
 from front_office.load import connect, load_landing_zone
+from front_office.mlb import boxscore as mlb_boxscore
 from front_office.mlb import schedule as mlb_schedule
 
 DEFAULT_RAW_ROOT = Path("data/raw")
@@ -42,10 +43,23 @@ def backfill_mlb(
     season: Annotated[int, typer.Option("--season", help="Season year, e.g. 2026.")],
     raw_root: RawRoot = DEFAULT_RAW_ROOT,
     only: Annotated[
-        str | None, typer.Option("--only", help="Limit to one endpoint: schedule.")
+        str | None,
+        typer.Option("--only", help="Limit to one endpoint: schedule or boxscore."),
     ] = None,
+    limit: Annotated[
+        int | None, typer.Option("--limit", help="Stop after this many boxscore fetches.")
+    ] = None,
+    refresh: Annotated[
+        bool, typer.Option("--refresh", help="Re-fetch even settled boxscores.")
+    ] = False,
 ) -> None:
     """Back-fill MLB Stats API data for a season."""
+    endpoints = ("schedule", "boxscore")
+    if only is not None and only not in endpoints:
+        raise typer.BadParameter(
+            f"unknown endpoint: {only} (expected one of {', '.join(endpoints)})"
+        )
+
     zone = LandingZone(root=raw_root)
     fetched_at = utc_stamp()
     with HttpClient("mlb") as client:
@@ -54,8 +68,22 @@ def backfill_mlb(
                 zone=zone, client=client, season=season, fetched_at=fetched_at
             )
             typer.echo(f"landed schedule -> {path}")
-        if only not in (None, "schedule"):
-            raise typer.BadParameter(f"unknown endpoint: {only}")
+        if only in (None, "boxscore"):
+            summary = mlb_boxscore.backfill_boxscores(
+                zone=zone,
+                client=client,
+                season=season,
+                fetched_at=fetched_at,
+                limit=limit,
+                refresh=refresh,
+            )
+            typer.echo(
+                f"boxscores: fetched={summary.fetched} skipped={summary.skipped} "
+                f"failed={summary.failed}"
+            )
+            if summary.failed:
+                typer.echo(f"failed game_pks: {summary.failed_game_pks}", err=True)
+                raise typer.Exit(code=1)
 
 
 @app.command("load")
