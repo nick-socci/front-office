@@ -1,0 +1,19 @@
+name: front_office
+version: 0.1.0
+profile: front_office
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+target-path: target
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  front_office:
+    staging:
+      # Staging models are views by default: a view is just stored SQL, so it costs
+      # nothing until queried. Models that parse large JSON payloads override this
+      # to `table` (see milestone 3).
+      +materialized: view
+      +schema: staging

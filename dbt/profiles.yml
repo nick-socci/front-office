@@ -1,0 +1,17 @@
+# Connection settings. dbt looks for this in ~/.dbt by default, so the repo sets
+# DBT_PROFILES_DIR=. (see README / CI) to use this file instead.
+front_office:
+  target: dev
+  outputs:
+    # Your real warehouse, built from the full landed season.
+    dev:
+      type: duckdb
+      path: "{{ env_var('FO_DUCKDB_PATH', '../data/warehouse.duckdb') }}"
+      threads: 4
+
+    # CI: a throwaway database built from the committed fixture landing zone.
+    # Same SQL, tiny anonymised data, no credentials.
+    ci:
+      type: duckdb
+      path: ci.duckdb
+      threads: 4
