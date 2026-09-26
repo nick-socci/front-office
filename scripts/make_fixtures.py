@@ -21,7 +21,13 @@ FIXTURE_ROOT = REPO_ROOT / "fixtures/landing"
 
 # A fixed stamp: fixtures are regenerated on purpose, and a moving fetched_at would
 # churn the committed diff on every run.
-FIXTURE_FETCHED_AT = "20260101T000000Z"
+#
+# The value matters for more than tidiness. stg_espn__scoring_periods anchors the
+# period -> date mapping on the settings snapshot's fetched_at (converted to US/Eastern),
+# so this stamp is the Eastern afternoon of the LAST fixture game date. Together with the
+# renumbered scoring periods below, that makes the fixture a coherent two-day season:
+# period 1 = 2026-04-29, period 2 = 2026-04-30, matching the MLB fixture games.
+FIXTURE_FETCHED_AT = "20260430T160000Z"
 
 # Game 823471 was postponed on 2026-04-29 and made up on 2026-04-30. The schedule files
 # the postponed copy under the ORIGINAL calendar date and the makeup under the new one,
@@ -121,9 +127,11 @@ FIXTURE_BOXSCORE_GAMES = 2
 FIXTURE_LEAGUE_ID = "111111"
 FIXTURE_LEAGUE_NAME = "Fixture League"
 
-# Two adjacent scoring periods: enough for the roster model and the scoring-period
-# tests, small enough to read in a diff.
-FIXTURE_SCORING_PERIODS = (100, 101)
+# Two adjacent scoring periods, taken from mid-season (real rosters) but RENUMBERED to
+# 1 and 2 so the fixture season is self-consistent: two scoring periods covering the two
+# MLB fixture dates. Without that, the cross-source "period 1 is opening day" test could
+# not run in CI.
+FIXTURE_SOURCE_SCORING_PERIODS = (100, 101)
 
 ESPN_SETTINGS_FIELDS = (
     "id",
@@ -333,6 +341,10 @@ def build_espn_settings() -> Path:
     fixture = rebuild(payload, ESPN_SETTINGS_FIELDS)
     fixture["id"] = FIXTURE_LEAGUE_ID
     fixture["settings"]["name"] = FIXTURE_LEAGUE_NAME
+    # The fixture season is two days long; see FIXTURE_FETCHED_AT.
+    fixture["scoringPeriodId"] = len(FIXTURE_SOURCE_SCORING_PERIODS)
+    fixture["status"]["latestScoringPeriod"] = len(FIXTURE_SOURCE_SCORING_PERIODS)
+    fixture["status"]["finalScoringPeriod"] = len(FIXTURE_SOURCE_SCORING_PERIODS)
     fixture["settings"]["scoringSettings"]["scoringItems"] = [
         rebuild(item, ESPN_SCORING_ITEM_FIELDS)
         for item in payload["settings"]["scoringSettings"]["scoringItems"]
@@ -372,12 +384,12 @@ def build_espn_teams() -> Path:
 
 def build_espn_rosters() -> list[Path]:
     written: list[Path] = []
-    for period in FIXTURE_SCORING_PERIODS:
-        payload = latest_espn("roster", scoring_period=period)
+    for fixture_period, source_period in enumerate(FIXTURE_SOURCE_SCORING_PERIODS, start=1):
+        payload = latest_espn("roster", scoring_period=source_period)
         fixture = {
             "id": FIXTURE_LEAGUE_ID,
             "seasonId": payload.get("seasonId"),
-            "scoringPeriodId": period,
+            "scoringPeriodId": fixture_period,
             "teams": [
                 {
                     "id": team["id"],
@@ -397,16 +409,19 @@ def build_espn_rosters() -> list[Path]:
             partitions={
                 "season": 2026,
                 "league_id": FIXTURE_LEAGUE_ID,
-                "scoring_period": period,
+                "scoring_period": fixture_period,
             },
             payload=fixture,
             request={
                 "url": "https://lm-api-reads.fantasy.espn.com/",
-                "params": {"view": "mRoster", "scoringPeriodId": period},
+                "params": {"view": "mRoster", "scoringPeriodId": fixture_period},
             },
         )
         entries = sum(len(t["roster"]["entries"]) for t in fixture["teams"])
-        print(f"espn/roster period {period}: {entries} entries -> {path.relative_to(REPO_ROOT)}")
+        print(
+            f"espn/roster period {fixture_period} (from {source_period}): "
+            f"{entries} entries -> {path.relative_to(REPO_ROOT)}"
+        )
         written.append(path)
     return written
 

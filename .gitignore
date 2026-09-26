@@ -19,6 +19,8 @@ dbt/ci.duckdb
 
 # Data / warehouse
 *.duckdb
+*.duckdb.wal
+*.duckdb.tmp/
 data/raw/
 data/*.csv
 data/*.json
