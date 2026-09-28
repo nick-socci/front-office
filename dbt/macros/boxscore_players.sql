@@ -6,6 +6,9 @@
     are listed with json_keys and joined back onto the payload.
   * the payload has no gamePk, so it comes from the request metadata.
 
+  Only each game's latest snapshot is read (fo_latest_boxscore_responses). Deduplicating
+  per player instead would keep an older row for a player a correction removed.
+
   Both batting and pitching models build on this; each then reads its own stats block.
 #}
 
@@ -13,13 +16,7 @@
 
 with responses as (
 
-    select
-        payload,
-        fetched_at,
-        request_key
-    from {{ source('raw', 'api_responses') }}
-    where source = 'mlb'
-      and endpoint = 'boxscore'
+    {{ fo_latest_boxscore_responses() }}
 
 ),
 

@@ -4,6 +4,13 @@
    "team": {
     "id": 141
    },
+   "teamStats": {
+    "batting": {
+     "hits": 10,
+     "runs": 8,
+     "atBats": 32
+    }
+   },
    "players": {
     "ID693686": {
      "person": {
@@ -717,6 +724,13 @@
   "away": {
    "team": {
     "id": 111
+   },
+   "teamStats": {
+    "batting": {
+     "hits": 9,
+     "runs": 1,
+     "atBats": 35
+    }
    },
    "players": {
     "ID701350": {

@@ -19,8 +19,13 @@ mlb_opening_day as (
 
 )
 
+-- Driven from the MLB side, which always has one row: a missing period 1 or an empty
+-- schedule is a failure, not a comparison against nothing.
 select
     fantasy_day_one.scoring_date,
     mlb_opening_day.official_date
-from fantasy_day_one, mlb_opening_day
-where fantasy_day_one.scoring_date != mlb_opening_day.official_date
+from mlb_opening_day
+left join fantasy_day_one on true
+where fantasy_day_one.scoring_date is null
+   or mlb_opening_day.official_date is null
+   or fantasy_day_one.scoring_date != mlb_opening_day.official_date
