@@ -9,7 +9,7 @@ behind it.
 **Updated 2026-09-27.** Sub-project 1 implementation is complete and running on the landed 2026 data.
 Sub-project 2 is underway.
 
-| Sub-project | Design | State |
+| Sub-project | Design | Tracker |
 |---|---|---|
 | 1 — ingestion, staging, CI | [`01-ingestion-and-staging.md`](design/01-ingestion-and-staging.md) | Complete, PRs 1–6 |
 | 2 — intermediate layer and marts | [`02-intermediate-and-marts.md`](design/02-intermediate-and-marts.md) | In progress; milestones 7–8 merged (PRs #7, #14) |

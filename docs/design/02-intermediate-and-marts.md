@@ -1,9 +1,8 @@
 # Front Office — Sub-project 2: intermediate layer and marts
 
-Approved 2026-09-26. Kept as written except for the progress table below and notes marked
-**Resolved**, which record what the data said once a milestone actually ran. The original
-plan's wording is left alone even where reality corrected it — the corrections are the
-interesting part.
+Approved 2026-09-26. Kept as written except for notes marked **Resolved**, which record
+what the data said once a milestone actually ran. The original plan's wording is left
+alone even where reality corrected it — the corrections are the interesting part.
 
 ## Progress
 
