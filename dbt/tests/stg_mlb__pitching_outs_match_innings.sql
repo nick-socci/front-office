@@ -11,5 +11,5 @@ select
     outs_recorded,
     {{ fo_innings_to_outs('innings_pitched') }} as outs_from_innings
 from {{ ref('stg_mlb__pitching_game_logs') }}
-where innings_pitched is not null
-  and {{ fo_innings_to_outs('innings_pitched') }} != outs_recorded
+-- `is distinct from`, so one side missing is a failure rather than a null comparison.
+where {{ fo_innings_to_outs('innings_pitched') }} is distinct from outs_recorded
