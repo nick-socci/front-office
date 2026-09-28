@@ -210,18 +210,23 @@ No full-season ESPN score/winner reconciliation exists yet; it is milestone 9 wo
 ## Recommended remediation sequence
 
 Sequence revised after the [implementer's response](2026-09-27-review-response.md)
-and [reviewer follow-up](2026-09-27-reviewer-follow-up.md). All remediation remains
-**not started**. This table owns remediation status; design tables own milestone status.
+and [reviewer follow-up](2026-09-27-reviewer-follow-up.md).
 
-| Order | Work | Acceptance gate |
-|---|---|---|
-| 0 | Historical input audit; time-bound step 0 backfill/refresh and backup | Required roster captures proven final; played-game set covered by readable, loaded pairs; unknowns explicit; operational evidence recorded |
-| 1 | R5, R6, R7 | Reconciliation mutations fail; name variants preserve grain deterministically; auth stops immediately |
-| 2 | Intermediate unit tests and completeness diagnostics | Doubleheaders, two-way days, rates' components, off-day vs missing/unresolved inputs exercised |
-| 3 | Milestone 9 reconciliation | Validated calendar; relevant sides/categories compared; attribution rules checked; residuals explained |
-| 4 | R2: source identity and rebuild | Before any second league/season load; two leagues × two seasons survive raw load and full build |
-| 5 | R1, R3, R4: general capture lifecycle fixes | Before scheduled daily ingestion or 2027 opening day, whichever comes first; transition/fault tests pass |
-| 6 | Performance/portability work | Measured need, representative adapter proof, full/incremental equivalence |
+**Status lives in GitHub issues, not here.** Each item below is an issue carrying its
+agreed fix and acceptance criteria; ordering is encoded as issue dependencies and the
+[milestones](https://github.com/nick-socci/front-office/milestones). An issue closes with
+the PR that satisfies it, and operational evidence is recorded as issue comments. This
+table maps the agreed order to those issues and is not updated per fix.
+
+| Order | Work | Issues | Acceptance gate |
+|---|---|---|---|
+| 0 | Historical input audit; time-bound step 0 backfill/refresh and backup | [#8](https://github.com/nick-socci/front-office/issues/8), [#18](https://github.com/nick-socci/front-office/issues/18), [#19](https://github.com/nick-socci/front-office/issues/19), [#20](https://github.com/nick-socci/front-office/issues/20), [#21](https://github.com/nick-socci/front-office/issues/21); audit in [#17](https://github.com/nick-socci/front-office/pull/17) | Required roster captures proven final; played-game set covered by readable, loaded pairs; unknowns explicit; operational evidence recorded |
+| 1 | R5, R6, R7 | [#22](https://github.com/nick-socci/front-office/issues/22), [#23](https://github.com/nick-socci/front-office/issues/23), [#24](https://github.com/nick-socci/front-office/issues/24) | Reconciliation mutations fail; name variants preserve grain deterministically; auth stops immediately |
+| 2 | Intermediate unit tests and completeness diagnostics | [#25](https://github.com/nick-socci/front-office/issues/25) | Doubleheaders, two-way days, rates' components, off-day vs missing/unresolved inputs exercised |
+| 3 | Milestone 9 reconciliation | [#10](https://github.com/nick-socci/front-office/issues/10) | Validated calendar; relevant sides/categories compared; attribution rules checked; residuals explained |
+| 4 | R2: source identity and rebuild | [#28](https://github.com/nick-socci/front-office/issues/28) | Before any second league/season load; two leagues × two seasons survive raw load and full build |
+| 5 | R1, R3, R4: general capture lifecycle fixes | [#27](https://github.com/nick-socci/front-office/issues/27), [#29](https://github.com/nick-socci/front-office/issues/29), [#30](https://github.com/nick-socci/front-office/issues/30), [#31](https://github.com/nick-socci/front-office/issues/31), [#32](https://github.com/nick-socci/front-office/issues/32) | Before scheduled daily ingestion or 2027 opening day, whichever comes first; transition/fault tests pass |
+| 6 | Performance/portability work | — | Measured need, representative adapter proof, full/incremental equivalence |
 
 Step 0 proceeds on its calendar schedule; milestone 9 development need not wait for the
 October refresh, but completion must satisfy the existing step 0 requirement. Deferring
