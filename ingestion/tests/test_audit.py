@@ -36,7 +36,10 @@ def land(zone, source, endpoint, partitions, payload, *, fetched_at=RUN, params=
 
 
 def schedule_game(pk, date, detailed="Final", **extra):
-    state = "Final" if detailed in ("Final", "Postponed") else "Preview"
+    # As MLB reports them: over-but-unplayed games are abstractGameState Final too.
+    state = (
+        "Final" if detailed in ("Final", "Completed Early", "Postponed", "Cancelled") else "Preview"
+    )
     return {
         "gamePk": pk,
         "season": str(SEASON),
@@ -236,10 +239,11 @@ def test_unplayed_games_are_given_a_disposition(zone):
             schedule_game(1, "2026-03-25"),
             schedule_game(2, "2026-03-26", detailed="Postponed"),
             schedule_game(3, "2026-09-27", detailed="Scheduled"),
+            schedule_game(4, "2026-09-27", detailed="Cancelled"),
         ],
     )
     findings = audit(zone)
-    assert "3 scheduled, 1 played; not played: Postponed 1, Scheduled 1" in details(
+    assert "4 scheduled, 1 played; not played: Cancelled 1, Postponed 1, Scheduled 1" in details(
         findings, Severity.INFO
     )
     assert problems(findings) == [], "a never-made-up postponement is not a played game"

@@ -32,6 +32,9 @@ SCHEDULE_ENDPOINT = "schedule"
 SETTLE_WINDOW = dt.timedelta(days=7)
 PLAYED_STATE = "Final"
 POSTPONED = "Postponed"
+# MLB files these under abstractGameState "Final" too: the game is over, but was never
+# played. A cancelled game still has a boxscore (rosters, no stats); it is not wanted.
+NOT_PLAYED = frozenset({POSTPONED, "Cancelled"})
 
 
 @dataclass(frozen=True)
@@ -58,8 +61,8 @@ def games_from_landed_schedule(zone: LandingZone, *, season: int) -> list[Schedu
 
     Postponed entries are dropped in favour of the game that was actually played: the
     two share a game_pk and only the played one has a boxscore. This mirrors the
-    tie-break in stg_mlb__games. A postponed game with no makeup in the schedule was
-    never played, so it is dropped too rather than fetched on every run.
+    tie-break in stg_mlb__games. A postponed game with no makeup, or a cancelled game,
+    was never played, so it is dropped too rather than fetched on every run.
     """
     responses = [
         landed
@@ -81,10 +84,11 @@ def games_from_landed_schedule(zone: LandingZone, *, season: int) -> list[Schedu
                 continue
             incumbent = best.get(scheduled.game_pk)
             if incumbent is None or (
-                incumbent.detailed_state == POSTPONED and scheduled.detailed_state != POSTPONED
+                incumbent.detailed_state in NOT_PLAYED
+                and scheduled.detailed_state not in NOT_PLAYED
             ):
                 best[scheduled.game_pk] = scheduled
-    return [best[pk] for pk in sorted(best) if best[pk].detailed_state != POSTPONED]
+    return [best[pk] for pk in sorted(best) if best[pk].detailed_state not in NOT_PLAYED]
 
 
 def needs_fetch(

@@ -83,6 +83,12 @@ def test_drops_a_postponed_game_that_was_never_made_up(zone):
     assert [g.game_pk for g in games_from_landed_schedule(zone, season=2026)] == [8]
 
 
+def test_drops_a_cancelled_game(zone):
+    """MLB marks a cancelled game Final; it was never played (2026: game 823490)."""
+    land_schedule(zone, [game(7, detailed="Cancelled"), game(8, detailed="Completed Early")])
+    assert [g.game_pk for g in games_from_landed_schedule(zone, season=2026)] == [8]
+
+
 def test_fetches_a_game_that_has_never_been_landed(zone):
     g = ScheduledGame(
         game_pk=1,
