@@ -8,11 +8,13 @@ import json
 
 import httpx
 import pytest
+from typer.testing import CliRunner
 
+from front_office import cli
 from front_office.espn import rosters as espn_rosters
 from front_office.espn import settings as espn_settings
 from front_office.espn.client import EspnCredentials, MissingCredentials
-from front_office.http_client import HttpClient, SourceLimits
+from front_office.http_client import AuthExpired, HttpClient, SourceLimits
 from front_office.landing import LandingZone
 
 LEAGUE_ID = "73677"
@@ -211,3 +213,52 @@ def test_roster_backfill_continues_after_one_period_fails(zone):
     )
     assert (summary.fetched, summary.failed) == (2, 1)
     assert summary.failed_periods == [2]
+
+
+def expires_after_period_one(requested):
+    """A handler whose cookies stop working after the first roster request."""
+
+    def handler(request):
+        period = request.url.params.get("scoringPeriodId")
+        if period is None:  # settings, teams, matchups, transactions
+            return httpx.Response(200, json={"status": {"latestScoringPeriod": 5}})
+        requested.append(period)
+        return httpx.Response(200 if period == "1" else 401, json={"teams": []})
+
+    return handler
+
+
+def test_roster_backfill_stops_when_authentication_expires(zone):
+    requested = []
+    with pytest.raises(AuthExpired):
+        espn_rosters.backfill_rosters(
+            zone=zone,
+            client=make_client(expires_after_period_one(requested)),
+            season=SEASON,
+            league_id=LEAGUE_ID,
+            status={"latestScoringPeriod": 5, "finalScoringPeriod": 180},
+            fetched_at="20260101T000000Z",
+        )
+    assert requested == ["1", "2"], "no period after the rejected one is requested"
+    assert len(list(zone.iter_landed(source="espn", endpoint="roster"))) == 1
+
+
+def test_backfill_espn_exits_non_zero_when_authentication_expires(tmp_path, monkeypatch):
+    monkeypatch.setenv("ESPN_S2", "s2-cookie-value")
+    monkeypatch.setenv("SWID", "{swid-cookie-value}")
+    monkeypatch.setenv("LEAGUE_ID", LEAGUE_ID)
+    monkeypatch.setattr(cli, "load_env_file", lambda: None)
+    requested = []
+    monkeypatch.setattr(
+        cli, "espn_client", lambda _credentials: make_client(expires_after_period_one(requested))
+    )
+
+    result = CliRunner().invoke(
+        cli.app, ["backfill", "espn", "--season", str(SEASON), "--raw-root", str(tmp_path)]
+    )
+
+    assert result.exit_code == 1
+    assert "cookies expired" in result.output
+    assert "Traceback" not in result.output
+    assert "cookie-value" not in result.output
+    assert requested == ["1", "2"]

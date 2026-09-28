@@ -11,7 +11,7 @@ import json
 import httpx
 import pytest
 
-from front_office.http_client import HttpClient, SourceLimits
+from front_office.http_client import AuthExpired, HttpClient, SourceLimits
 from front_office.landing import LandingZone
 from front_office.mlb.boxscore import (
     ScheduledGame,
@@ -212,6 +212,25 @@ def test_backfill_continues_after_one_game_fails(zone):
     )
     assert (summary.fetched, summary.failed) == (2, 1)
     assert summary.failed_game_pks == [12]
+
+
+def test_backfill_stops_when_credentials_are_rejected(zone):
+    land_schedule(zone, [game(11), game(12), game(13)])
+    requested = []
+
+    def handler(request):
+        requested.append(request.url.path)
+        return httpx.Response(403 if "/12/" in request.url.path else 200, json={"teams": {}})
+
+    with pytest.raises(AuthExpired):
+        backfill_boxscores(
+            zone=zone,
+            client=make_client(handler),
+            season=2026,
+            fetched_at="20260926T120000Z",
+            today=TODAY,
+        )
+    assert len(requested) == 2, "no game after the rejected one is requested"
 
 
 def test_backfill_honours_a_limit(zone):

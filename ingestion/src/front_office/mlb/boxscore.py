@@ -20,7 +20,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from front_office.http_client import HttpClient
+from front_office.http_client import AuthExpired, HttpClient
 from front_office.landing import LandingZone
 
 logger = logging.getLogger(__name__)
@@ -114,7 +114,8 @@ def backfill_boxscores(
     limit: int | None = None,
     refresh: bool = False,
 ) -> BackfillSummary:
-    """Fetch and land boxscores for a season. One game's failure never stops the run."""
+    """Fetch and land boxscores for a season. One game's failure never stops the run;
+    rejected credentials do, because no later request can succeed either."""
     today = today or dt.datetime.now(dt.UTC).date()
     summary = BackfillSummary()
     for scheduled in games_from_landed_schedule(zone, season=season):
@@ -125,6 +126,8 @@ def backfill_boxscores(
             continue
         try:
             _fetch_one(zone=zone, client=client, scheduled=scheduled, fetched_at=fetched_at)
+        except AuthExpired:
+            raise
         except Exception:
             logger.exception("boxscore fetch failed for game_pk=%s", scheduled.game_pk)
             summary.failed += 1
