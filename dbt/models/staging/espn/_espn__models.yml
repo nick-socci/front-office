@@ -214,8 +214,10 @@ models:
 
   - name: stg_espn__transactions
     description: >
-      One row per player movement (add, drop, waiver claim, trade). Excludes the ESPN
-      account GUID of the member who made the move.
+      One row per player movement (add, drop, waiver claim, trade), from every page of
+      the newest capture. Lineup moves are excluded; a message type missing from
+      espn_activity_types surfaces as a null activity and fails its not_null test.
+      Excludes the ESPN account GUID of the member who made the move.
     columns:
       - name: transaction_id
         data_tests: [not_null, unique]
@@ -265,10 +267,15 @@ seeds:
       - name: display_label
         data_tests: [not_null]
   - name: espn_activity_types
-    description: ESPN messageTypeId -> transaction kind (FA ADDED, DROPPED, TRADED...).
+    description: >
+      ESPN messageTypeId -> activity (FA ADDED, DROPPED, TRADED...). is_transaction is
+      false for lineup moves (188), which the unfiltered activity log also carries (#26):
+      they rearrange a roster but move no player between teams.
     columns:
       - name: message_type_id
         data_tests: [not_null, unique]
+      - name: is_transaction
+        data_tests: [not_null]
   - name: espn_lineup_slots
     description: >
       ESPN lineupSlotId -> slot abbreviation (C, 1B, BE, IL...). is_starting_slot is

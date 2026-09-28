@@ -1,7 +1,8 @@
-message_type_id,activity
-178,FA ADDED
-179,DROPPED
-180,WAIVER ADDED
-181,DROPPED
-239,DROPPED
-244,TRADED
+message_type_id,activity,is_transaction
+178,FA ADDED,true
+179,DROPPED,true
+180,WAIVER ADDED,true
+181,DROPPED,true
+188,LINEUP MOVED,false
+239,DROPPED,true
+244,TRADED,true

@@ -137,14 +137,22 @@ def backfill_espn(
         )
         typer.echo(f"landed matchups -> {matchups_path}")
 
-        transactions_path = espn_transactions.backfill_transactions(
-            zone=zone,
-            client=client,
-            season=season,
-            league_id=credentials.league_id,
-            fetched_at=fetched_at,
-        )
-        typer.echo(f"landed transactions -> {transactions_path}")
+        # An incomplete log still lands its pages and does not stop the rosters; the run
+        # exits non-zero at the end instead.
+        transactions_error = None
+        try:
+            transaction_paths = espn_transactions.backfill_transactions(
+                zone=zone,
+                client=client,
+                season=season,
+                league_id=credentials.league_id,
+                fetched_at=fetched_at,
+            )
+        except espn_transactions.TransactionLogIncomplete as error:
+            transactions_error = error
+            typer.echo(f"transactions: {error}", err=True)
+        else:
+            typer.echo(f"landed transactions: {len(transaction_paths)} page(s), complete")
 
         status = settings_payload.get("status", {})
         typer.echo(
@@ -165,6 +173,7 @@ def backfill_espn(
         )
         if summary.failed:
             typer.echo(f"failed scoring periods: {summary.failed_periods}", err=True)
+        if summary.failed or transactions_error is not None:
             raise typer.Exit(code=1)
 
 

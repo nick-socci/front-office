@@ -48,44 +48,74 @@ def test_matchups_are_fetched_once_not_per_period(zone):
     assert "scoringPeriodId" not in str(requests[0])
 
 
-def test_transactions_send_the_activity_filter_header(zone):
-    """ESPN filters this endpoint through a header, not query parameters."""
-    seen = {}
+def topics(count, *, start=0, short=False):
+    return [
+        {
+            "id": f"t{n}",
+            "messages": [{"id": f"m{n}"}],
+            "totalMessageCount": 2 if short and n == start else 1,
+        }
+        for n in range(start, start + count)
+    ]
+
+
+def paged_log(pages, seen):
+    """A handler serving `pages` by the offset in the filter header."""
 
     def handler(request):
-        seen["filter"] = request.headers.get("x-fantasy-filter")
-        seen["url"] = str(request.url)
-        return httpx.Response(200, json={"topics": []})
+        sent = json.loads(request.headers["x-fantasy-filter"])["topics"]
+        seen.append(sent)
+        return httpx.Response(200, json={"topics": pages.get(sent["offset"], [])})
 
-    espn_transactions.backfill_transactions(
+    return handler
+
+
+def backfill(zone, handler, limit=3):
+    return espn_transactions.backfill_transactions(
         zone=zone,
         client=make_client(handler),
         season=SEASON,
         league_id=LEAGUE_ID,
         fetched_at="20260101T000000Z",
-        limit=50,
+        limit=limit,
     )
-    sent = json.loads(seen["filter"])
-    assert sent["topics"]["filterType"]["value"] == ["ACTIVITY_TRANSACTIONS"]
-    assert sent["topics"]["limit"] == 50
-    assert sent["topics"]["filterIncludeMessageTypeIds"]["value"] == list(
-        espn_transactions.MESSAGE_TYPE_IDS
-    )
-    assert seen["url"].endswith("communication/?view=kona_league_communication")
 
 
-def test_transactions_land_the_payload(zone):
-    payload = {"topics": [{"id": "abc", "date": 1789921020086, "messages": []}]}
-    espn_transactions.backfill_transactions(
-        zone=zone,
-        client=make_client(lambda r: httpx.Response(200, json=payload)),
-        season=SEASON,
-        league_id=LEAGUE_ID,
-        fetched_at="20260101T000000Z",
+def test_transactions_send_an_unfiltered_activity_header(zone):
+    """ESPN filters this endpoint through a header; no message-type filter (#26)."""
+    seen = []
+    backfill(zone, paged_log({0: topics(1)}, seen), limit=50)
+    assert seen[0]["filterType"]["value"] == ["ACTIVITY_TRANSACTIONS"]
+    assert (seen[0]["limit"], seen[0]["offset"]) == (50, 0)
+    assert "filterIncludeMessageTypeIds" not in seen[0]
+
+
+def test_transactions_page_until_a_short_page_and_land_each(zone):
+    seen = []
+    pages = {0: topics(3), 3: topics(3, start=3), 6: topics(1, start=6)}
+    paths = backfill(zone, paged_log(pages, seen))
+    assert [sent["offset"] for sent in seen] == [0, 3, 6]
+    assert len(paths) == 3
+    landed = sorted(
+        zone.iter_landed(source="espn", endpoint="transactions"),
+        key=lambda r: r.meta["partitions"]["offset"],
     )
-    landed = list(zone.iter_landed(source="espn", endpoint="transactions"))
-    assert len(landed) == 1
-    assert landed[0].payload == payload
+    assert [r.meta["partitions"]["offset"] for r in landed] == [0, 3, 6]
+    assert {r.meta["fetched_at"] for r in landed} == {"20260101T000000Z"}
+    assert [len(r.payload["topics"]) for r in landed] == [3, 3, 1]
+
+
+def test_a_full_last_page_is_followed_by_an_empty_one(zone):
+    seen = []
+    backfill(zone, paged_log({0: topics(3)}, seen))
+    assert [sent["offset"] for sent in seen] == [0, 3]
+
+
+def test_an_incomplete_topic_fails_after_landing_every_page(zone):
+    pages = {0: topics(3), 3: topics(1, start=3, short=True)}
+    with pytest.raises(espn_transactions.TransactionLogIncomplete, match="1 transaction topic"):
+        backfill(zone, paged_log(pages, []))
+    assert len(list(zone.iter_landed(source="espn", endpoint="transactions"))) == 2
 
 
 def test_id_map_csv_becomes_json_rows(zone):

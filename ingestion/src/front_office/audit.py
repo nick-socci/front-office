@@ -564,58 +564,75 @@ def _check_league(
 
     transactions = _newest(league, "espn", "transactions")
     if transactions is not None:
-        findings += _check_transactions(transactions, subject)
+        run = [
+            capture
+            for capture in league
+            if (capture.source, capture.endpoint) == ("espn", "transactions")
+            and capture.fetched_at == transactions.fetched_at
+        ]
+        findings += _check_transactions(run, subject)
     return findings
 
 
-def _check_transactions(capture: Capture, subject: str) -> list[Finding]:
+def _check_transactions(run: list[Capture], subject: str) -> list[Finding]:
     """Completeness evidence for the transaction log, which milestone 10 depends on.
 
-    ESPN caps topics per request and messages per topic, and either cap truncates
-    silently. Separately, a topic can hold fewer messages than its totalMessageCount:
-    the message-type filter may exclude the rest, or they may be missing. The payload
-    cannot tell those apart, so that case is reported rather than excused.
+    `run` is every page landed by the newest run. The log is fetched unfiltered and
+    paged (#26), so each topic must hold exactly totalMessageCount messages and the last
+    page must come back short; anything else is a missing message or a truncated log.
+    A capture without an offset predates that, used a message-type filter, and cannot
+    be shown complete: a topic short by a filtered-out lineup move looks exactly like
+    one short by a lost transaction.
     """
-    topics = capture.payload().get("topics", [])
-    limit = int(capture.meta.get("params", {}).get("limit", espn_transactions.DEFAULT_LIMIT))
-    capped = [
-        str(topic.get("id"))
-        for topic in topics
-        if len(topic.get("messages", [])) >= espn_transactions.MESSAGES_PER_TOPIC
-    ]
-    short = [
-        str(topic.get("id"))
-        for topic in topics
-        if len(topic.get("messages", [])) < int(topic.get("totalMessageCount", 0))
-    ]
+    run = sorted(run, key=lambda capture: int(capture.partition("offset") or 0))
+    stamp = run[0].fetched_at
+    topics = [topic for capture in run for topic in capture.payload().get("topics", [])]
+    distinct = len({str(topic.get("id")) for topic in topics})
     findings = [
         Finding(
             Severity.INFO,
             "espn",
             subject,
-            f"transactions {capture.fetched_at}: {len(topics)} topic(s), request limit {limit}",
+            f"transactions {stamp}: {len(run)} page(s), {distinct} topic(s)"
+            + (
+                f" ({len(topics) - distinct} repeated across pages)"
+                if len(topics) > distinct
+                else ""
+            ),
         )
     ]
-    if len(topics) >= limit or capped:
+    if run[-1].partition("offset") is None:
         findings.append(
             Finding(
                 Severity.WARN,
                 "espn",
                 subject,
-                f"transaction log hit a request cap: {len(topics)} topic(s) against a limit of "
-                f"{limit}; {len(capped)} topic(s) at {espn_transactions.MESSAGES_PER_TOPIC} "
-                "messages",
+                f"transactions {stamp} predates the paged, unfiltered capture (#26), so its "
+                "completeness cannot be shown; run `front-office backfill espn`",
             )
         )
+        return findings
+
+    limit = int(run[-1].meta.get("params", {}).get("limit", espn_transactions.DEFAULT_LIMIT))
+    if len(run[-1].payload().get("topics", [])) >= limit:
+        findings.append(
+            Finding(
+                Severity.ERROR,
+                "espn",
+                subject,
+                f"transactions {stamp}: the last page is full ({limit} topics), so the log "
+                "may be truncated",
+            )
+        )
+    short = espn_transactions.incomplete_topics(topics)
     if short:
         findings.append(
             Finding(
-                Severity.WARN,
+                Severity.ERROR,
                 "espn",
                 subject,
-                f"{len(short)} topic(s) returned fewer messages than totalMessageCount: "
-                "excluded by the type filter, or missing; completeness unproven "
-                f"(needed by milestone 10); {_sample(short)}",
+                f"transactions {stamp}: {len(short)} topic(s) hold fewer messages than "
+                f"totalMessageCount; {_sample(short)}",
             )
         )
     return findings
