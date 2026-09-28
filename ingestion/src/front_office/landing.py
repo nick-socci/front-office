@@ -28,6 +28,23 @@ class LandedResponse:
     meta: Mapping[str, Any]
 
 
+@dataclass(frozen=True)
+class ScannedFile:
+    """One file found in the landing zone, classified without reading it.
+
+    kind is one of:
+      committed     a payload with its sidecar beside it
+      payload_only  a payload with no sidecar: landed outside the ingestion package, or
+                    a write interrupted between the two renames
+      sidecar_only  a sidecar whose payload is missing
+      temp          a temporary file left behind by an interrupted write
+      other         anything else: nothing the ingestion package writes
+    """
+
+    kind: str
+    path: Path
+
+
 class LandingZone:
     """Reads and writes the raw landing zone under a root directory."""
 
@@ -117,6 +134,27 @@ class LandingZone:
                 json.loads(meta_path.read_text()) if meta_path.exists() else {}
             )
             yield LandedResponse(path=path, payload=json.loads(path.read_text()), meta=meta)
+
+    def scan(self, *, source: str | None = None) -> Iterator[ScannedFile]:
+        """Classify every file under the root (or one source) by name alone, sorted by path.
+
+        For a payload, `path` is the payload; for a sidecar-only entry, the sidecar.
+        """
+        base = self.root if source is None else self.root / source
+        if not base.exists():
+            return
+        for path in sorted(p for p in base.rglob("*") if p.is_file()):
+            if ".json.tmp-" in path.name:
+                yield ScannedFile(kind="temp", path=path)
+            elif path.name.endswith(".meta.json"):
+                payload = path.with_name(path.name.removesuffix(".meta.json") + ".json")
+                if not payload.exists():
+                    yield ScannedFile(kind="sidecar_only", path=path)
+            elif path.suffix == ".json":
+                paired = path.with_suffix(".meta.json").exists()
+                yield ScannedFile(kind="committed" if paired else "payload_only", path=path)
+            else:
+                yield ScannedFile(kind="other", path=path)
 
     @staticmethod
     def _atomic_write(path: Path, text: str) -> None:
