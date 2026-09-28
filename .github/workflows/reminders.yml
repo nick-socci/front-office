@@ -1,0 +1,48 @@
+name: Issue reminders
+
+# GitHub has no issue reminders, and milestone due dates notify nobody. This comments on
+# every open issue whose body contains a line "Remind: YYYY-MM-DD" for today's Eastern
+# date, mentioning the repository owner so it arrives as a notification. A hidden marker
+# makes reruns on the same day a no-op.
+
+on:
+  schedule:
+    - cron: "0 13 * * *"  # 09:00 EDT / 08:00 EST
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Remind for this date (YYYY-MM-DD) instead of today, Eastern"
+        required: false
+
+permissions:
+  issues: write
+
+jobs:
+  remind:
+    name: comment on issues due today
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment on issues due today
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          INPUT_DATE: ${{ inputs.date }}
+        run: |
+          set -euo pipefail
+          day="${INPUT_DATE:-$(TZ=America/New_York date +%F)}"
+          [[ "$day" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "bad date: $day"; exit 1; }
+          marker="<!-- reminder:${day} -->"
+          numbers=$(gh issue list --state open --limit 500 --json number,body \
+            --jq ".[] | select(.body | contains(\"Remind: ${day}\")) | .number")
+          for number in $numbers; do
+            if gh issue view "$number" --json comments --jq '.comments[].body' \
+              | grep -qF "$marker"; then
+              echo "#${number}: already reminded for ${day}"
+              continue
+            fi
+            body=$(printf '@%s reminder: this is due today (%s).\n\n%s' "$OWNER" "$day" "$marker")
+            gh issue comment "$number" --body "$body"
+            echo "#${number}: reminded"
+          done
+          echo "done: ${day}"
