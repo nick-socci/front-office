@@ -21,10 +21,18 @@ ParamsType = Mapping[str, str | int] | Sequence[tuple[str, str | int]] | None
 
 RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
 AUTH_STATUSES = frozenset({401, 403})
+# Failures where no usable response arrived but a retry may succeed: timeouts, dropped or
+# refused connections, and a server hanging up mid-response. Not included: errors a retry
+# cannot fix, such as an unsupported URL scheme or a misconfigured proxy.
+RETRYABLE_TRANSPORT_ERRORS: tuple[type[httpx.TransportError], ...] = (
+    httpx.TimeoutException,
+    httpx.NetworkError,
+    httpx.RemoteProtocolError,
+)
 
 
 class RequestFailed(RuntimeError):
-    """A request kept failing with a retryable status until attempts ran out."""
+    """A request kept failing retryably (status or transport) until attempts ran out."""
 
 
 class AuthExpired(RuntimeError):
@@ -101,16 +109,24 @@ class HttpClient:
         # httpx's param types are invariant in their element types, so normalise here
         # rather than fight the annotation at every call site.
         query = None if params is None else httpx.QueryParams(cast("Any", params))
-        last_status: int | None = None
+        last_failure = "none"
+        last_error: httpx.TransportError | None = None
         for attempt in range(1, self.limits.max_attempts + 1):
             self._wait_for_slot()
-            response = self._client.get(url, params=query, headers=dict(headers or {}))
+            try:
+                response = self._client.get(url, params=query, headers=dict(headers or {}))
+            except RETRYABLE_TRANSPORT_ERRORS as error:
+                self._last_request_at = self._monotonic()
+                last_failure, last_error = type(error).__name__, error
+                if attempt < self.limits.max_attempts:
+                    self._sleep(self._backoff(attempt))
+                continue
             self._last_request_at = self._monotonic()
 
             if response.status_code in AUTH_STATUSES:
                 raise AuthExpired(self._auth_message(response.status_code))
             if response.status_code in RETRYABLE_STATUSES:
-                last_status = response.status_code
+                last_failure, last_error = f"status {response.status_code}", None
                 if attempt < self.limits.max_attempts:
                     self._sleep(self._retry_delay(response, attempt))
                 continue
@@ -119,8 +135,8 @@ class HttpClient:
 
         raise RequestFailed(
             f"{self.source}: gave up on {url} after {self.limits.max_attempts} attempts "
-            f"(last status {last_status})"
-        )
+            f"(last failure: {last_failure})"
+        ) from last_error
 
     def _auth_message(self, status: int) -> str:
         if self.source == "espn":
@@ -138,6 +154,9 @@ class HttpClient:
                 return float(retry_after)
             except ValueError:
                 pass  # a HTTP-date form we don't parse; fall back to backoff
+        return self._backoff(attempt)
+
+    def _backoff(self, attempt: int) -> float:
         return self.limits.backoff_base_s * (2.0 ** (attempt - 1))
 
     def _wait_for_slot(self) -> None:
