@@ -10,8 +10,10 @@ import datetime as dt
 from pathlib import Path
 from typing import Annotated
 
+import duckdb
 import typer
 
+from front_office import audit as landing_audit
 from front_office.espn import matchups as espn_matchups
 from front_office.espn import rosters as espn_rosters
 from front_office.espn import settings as espn_settings
@@ -182,6 +184,29 @@ def load(raw_root: RawRoot = DEFAULT_RAW_ROOT, db: DbPath = DEFAULT_DB) -> None:
     with connect(db) as con:
         inserted = load_landing_zone(con, zone)
     typer.echo(f"loaded {inserted} new response(s) into {db}")
+
+
+@app.command("audit")
+def audit(
+    season: Annotated[int, typer.Option("--season", help="Season year, e.g. 2026.")],
+    raw_root: RawRoot = DEFAULT_RAW_ROOT,
+    db: DbPath = DEFAULT_DB,
+    today: Annotated[
+        str | None,
+        typer.Option("--today", help="Eastern date to judge settle windows by (YYYY-MM-DD)."),
+    ] = None,
+) -> None:
+    """Check that landed data is complete, loaded and final. Exits 1 on any ERROR."""
+    zone = LandingZone(root=raw_root)
+    as_of = dt.date.fromisoformat(today) if today else dt.datetime.now(landing_audit.EASTERN).date()
+    if db.exists():
+        with duckdb.connect(str(db), read_only=True) as con:
+            findings = landing_audit.run_audit(zone, con, season=season, today=as_of)
+    else:
+        findings = landing_audit.run_audit(zone, None, season=season, today=as_of)
+    typer.echo(landing_audit.format_report(findings))
+    if any(finding.severity == landing_audit.Severity.ERROR for finding in findings):
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":

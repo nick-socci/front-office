@@ -1,0 +1,653 @@
+"""Audit the landing zone and warehouse before treating them as historical evidence.
+
+Passing dbt tests cannot show that an input is complete: a missing boxscore becomes a
+player-day of zeros, not a failure. So before a reconciliation result is believed, this
+checks the files themselves:
+
+  landing  every file is a readable payload/sidecar pair that agrees with its path
+  loaded   every committed capture is a row in raw.api_responses, with no key collisions
+  mlb      every played game in the newest schedule has a boxscore, and one was captured
+           after the game's settle window closed
+  espn     every scoring period has a roster captured after the period closed; the
+           scoring-date anchor is stable across snapshots and lands on MLB opening day;
+           league snapshots postdate the season; the transaction log is not truncated
+
+ERROR means the data cannot be relied on as it stands. WARN means the evidence that it
+is final or complete is missing, though the data may be fine. INFO records the facts
+worth keeping with the audit output.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import json
+from collections import Counter, defaultdict
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
+from enum import StrEnum
+from pathlib import Path
+from typing import Any
+from zoneinfo import ZoneInfo
+
+import duckdb
+
+from front_office.espn import transactions as espn_transactions
+from front_office.landing import LandingZone
+from front_office.load import QUALIFIED, SCHEMA, TABLE
+from front_office.mlb import boxscore as mlb_boxscore
+
+# ESPN's scoring day rolls over at midnight Eastern; see the fo_eastern_date dbt macro.
+EASTERN = ZoneInfo("America/New_York")
+EXAMPLES = 3
+REQUIRED_META = ("source", "endpoint", "partitions", "request_key", "fetched_at")
+LEAGUE_SNAPSHOTS = ("settings", "teams", "matchups", "transactions")
+
+
+class Severity(StrEnum):
+    ERROR = "ERROR"
+    WARN = "WARN"
+    INFO = "INFO"
+
+
+@dataclass(frozen=True)
+class Finding:
+    severity: Severity
+    check: str
+    subject: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class Capture:
+    """A committed payload/sidecar pair whose sidecar has been read."""
+
+    path: Path
+    meta: Mapping[str, Any]
+
+    @property
+    def source(self) -> str:
+        return str(self.meta["source"])
+
+    @property
+    def endpoint(self) -> str:
+        return str(self.meta["endpoint"])
+
+    @property
+    def fetched_at(self) -> str:
+        return str(self.meta["fetched_at"])
+
+    def partition(self, key: str) -> str | None:
+        value = self.meta["partitions"].get(key)
+        return None if value is None else str(value)
+
+    def payload(self) -> Any:
+        return json.loads(self.path.read_text())
+
+
+def eastern_date(fetched_at: str) -> dt.date:
+    """The Eastern calendar date of a compact UTC stamp like 20260926T162307Z."""
+    instant = dt.datetime.strptime(fetched_at, "%Y%m%dT%H%M%SZ").replace(tzinfo=dt.UTC)
+    return instant.astimezone(EASTERN).date()
+
+
+def run_audit(
+    zone: LandingZone,
+    con: duckdb.DuckDBPyConnection | None,
+    *,
+    season: int,
+    today: dt.date,
+) -> list[Finding]:
+    """Every check, in order. `con` is None when there is no warehouse to check."""
+    findings, captures = check_landing(zone)
+    if con is None:
+        findings.append(
+            Finding(Severity.ERROR, "loaded", QUALIFIED, "no warehouse; run `front-office load`")
+        )
+    else:
+        findings += check_loaded(zone, captures, con)
+    mlb_findings, opening_day = check_mlb(zone, captures, season=season, today=today)
+    findings += mlb_findings
+    findings += check_espn(captures, season=season, opening_day=opening_day)
+    return findings
+
+
+# -- landing ---------------------------------------------------------------------------
+
+_FILE_PROBLEMS = {
+    "payload_only": (
+        Severity.ERROR,
+        "payload(s) with no sidecar: never loaded, but roster and boxscore skip logic "
+        "would count them as landed",
+    ),
+    "sidecar_only": (Severity.ERROR, "sidecar(s) whose payload is missing"),
+    "temp": (Severity.ERROR, "temporary file(s) left by an interrupted write"),
+    "other": (Severity.WARN, "file(s) the ingestion package never writes"),
+    "unreadable": (Severity.ERROR, "capture(s) whose payload or sidecar is not valid JSON"),
+    "inconsistent": (Severity.ERROR, "sidecar(s) that disagree with their file's path"),
+}
+
+
+def check_landing(zone: LandingZone) -> tuple[list[Finding], list[Capture]]:
+    """Classify and parse every file. Returns findings and the usable committed captures."""
+    problems: dict[tuple[str, str], list[str]] = defaultdict(list)
+    committed: Counter[str] = Counter()
+    captures: list[Capture] = []
+
+    for scanned in zone.scan():
+        group = _group(zone, scanned.path)
+        example = str(scanned.path.relative_to(zone.root))
+        if scanned.kind != "committed":
+            problems[(scanned.kind, group)].append(example)
+            continue
+        try:
+            meta = json.loads(scanned.path.with_suffix(".meta.json").read_text())
+            json.loads(scanned.path.read_text())
+        except (OSError, ValueError):
+            problems[("unreadable", group)].append(example)
+            continue
+        reason = _sidecar_disagreement(zone, scanned.path, meta)
+        if reason:
+            problems[("inconsistent", group)].append(f"{example} ({reason})")
+            continue
+        committed[group] += 1
+        captures.append(Capture(path=scanned.path, meta=meta))
+
+    findings = [
+        Finding(Severity.INFO, "landing", group, f"{count} committed capture(s)")
+        for group, count in sorted(committed.items())
+    ]
+    for (kind, group), examples in sorted(problems.items()):
+        severity, message = _FILE_PROBLEMS[kind]
+        findings.append(
+            Finding(severity, "landing", group, f"{len(examples)} {message}; {_sample(examples)}")
+        )
+    return findings, captures
+
+
+def _group(zone: LandingZone, path: Path) -> str:
+    return "/".join(path.relative_to(zone.root).parts[:2])
+
+
+def _sidecar_disagreement(zone: LandingZone, path: Path, meta: Any) -> str | None:
+    if not isinstance(meta, dict):
+        return "sidecar is not an object"
+    missing = [key for key in REQUIRED_META if key not in meta]
+    if missing:
+        return f"missing {', '.join(missing)}"
+    expected = zone.path_for(
+        source=meta["source"],
+        endpoint=meta["endpoint"],
+        partitions=meta["partitions"],
+        name=f"fetched_at={meta['fetched_at']}",
+    )
+    if expected != path:
+        return f"sidecar describes {expected.relative_to(zone.root)}"
+    return None
+
+
+# -- loaded ----------------------------------------------------------------------------
+
+
+def check_loaded(
+    zone: LandingZone, captures: list[Capture], con: duckdb.DuckDBPyConnection
+) -> list[Finding]:
+    """Every committed capture is a raw row, and no two captures compete for one row."""
+    row = con.execute(
+        "select count(*) from information_schema.tables where table_schema = ? and table_name = ?",
+        [SCHEMA, TABLE],
+    ).fetchone()
+    if not row or not row[0]:
+        return [
+            Finding(Severity.ERROR, "loaded", QUALIFIED, "table missing; run `front-office load`")
+        ]
+    loaded = {
+        tuple(map(str, key))
+        for key in con.execute(
+            f"select source, endpoint, request_key, fetched_at from {QUALIFIED}"
+        ).fetchall()
+    }
+
+    # The raw table's primary key.
+    by_key: dict[tuple[str, ...], list[Capture]] = defaultdict(list)
+    for capture in captures:
+        raw_key = (
+            capture.source,
+            capture.endpoint,
+            str(capture.meta["request_key"]),
+            capture.fetched_at,
+        )
+        by_key[raw_key].append(capture)
+
+    findings = []
+    not_loaded: dict[str, list[str]] = defaultdict(list)
+    for key, group in by_key.items():
+        if key not in loaded:
+            not_loaded[f"{key[0]}/{key[1]}"].append(str(group[0].path.relative_to(zone.root)))
+        if len(group) > 1:
+            findings.append(
+                Finding(
+                    Severity.ERROR,
+                    "loaded",
+                    f"{key[0]}/{key[1]}",
+                    f"{len(group)} captures share raw key {key}; only one can be loaded "
+                    f"(review R2); {_sample([str(c.path.relative_to(zone.root)) for c in group])}",
+                )
+            )
+    for group_name, examples in sorted(not_loaded.items()):
+        findings.append(
+            Finding(
+                Severity.ERROR,
+                "loaded",
+                group_name,
+                f"{len(examples)} committed capture(s) not in {QUALIFIED}; "
+                f"run `front-office load`; {_sample(examples)}",
+            )
+        )
+    orphan_rows = loaded - by_key.keys()
+    if orphan_rows:
+        findings.append(
+            Finding(
+                Severity.WARN,
+                "loaded",
+                QUALIFIED,
+                f"{len(orphan_rows)} row(s) with no committed capture on disk",
+            )
+        )
+    if not findings:
+        findings.append(
+            Finding(
+                Severity.INFO, "loaded", QUALIFIED, f"all {len(by_key)} committed capture(s) loaded"
+            )
+        )
+    return findings
+
+
+# -- mlb -------------------------------------------------------------------------------
+
+
+def check_mlb(
+    zone: LandingZone, captures: list[Capture], *, season: int, today: dt.date
+) -> tuple[list[Finding], dt.date | None]:
+    """Boxscore coverage and settle evidence. Also returns opening day, for the ESPN check.
+
+    Played games come from the same function the backfill uses, so "expected" here means
+    exactly what ingestion would have fetched.
+    """
+    subject = f"mlb {season}"
+    schedule = _newest(captures, "mlb", "schedule", season=str(season))
+    if schedule is None:
+        return [Finding(Severity.ERROR, "mlb", subject, "no committed schedule capture")], None
+    # The backfill keeps a Postponed entry when no makeup exists, so a game postponed and
+    # never made up would count as played. It has no boxscore to expect.
+    candidates = mlb_boxscore.games_from_landed_schedule(zone, season=season)
+    played = [g for g in candidates if g.detailed_state != mlb_boxscore.POSTPONED]
+    abandoned = sorted(g.game_pk for g in candidates if g.detailed_state == mlb_boxscore.POSTPONED)
+    played_pks = {game.game_pk for game in played}
+    findings = []
+    if abandoned:
+        findings.append(
+            Finding(
+                Severity.WARN,
+                "mlb",
+                subject,
+                f"{len(abandoned)} game(s) postponed with no makeup in the schedule, which the "
+                f"backfill still treats as played; {_sample(map(str, abandoned))}",
+            )
+        )
+
+    # Unplayed games need an explicit disposition, not silence. Resumed games finished
+    # after their official date, so their settle window runs from the resume date.
+    last_state: dict[int, str] = {}
+    completed = {game.game_pk: game.official_date for game in played}
+    resumed = set()
+    for day in schedule.payload().get("dates", []):
+        for entry in day.get("games", []):
+            pk = int(entry["gamePk"])
+            last_state[pk] = entry.get("status", {}).get("detailedState", "")
+            resume = entry.get("resumeGameDate")
+            if resume and pk in completed:
+                completed[pk] = max(completed[pk], dt.date.fromisoformat(resume))
+                resumed.add(pk)
+    unplayed = Counter(state for pk, state in last_state.items() if pk not in played_pks)
+    dispositions = ", ".join(f"{state} {n}" for state, n in sorted(unplayed.items()))
+    findings.append(
+        Finding(
+            Severity.INFO,
+            "mlb",
+            subject,
+            f"newest schedule {schedule.fetched_at}: {len(last_state)} scheduled, "
+            f"{len(played)} played" + (f"; not played: {dispositions}" if dispositions else ""),
+        )
+    )
+
+    boxscores: dict[int, list[str]] = defaultdict(list)
+    for capture in captures:
+        if (capture.source, capture.endpoint) == ("mlb", "boxscore") and capture.partition(
+            "season"
+        ) == str(season):
+            boxscores[int(capture.partition("game_pk") or 0)].append(capture.fetched_at)
+
+    missing = sorted(played_pks - boxscores.keys())
+    if missing:
+        findings.append(
+            Finding(
+                Severity.ERROR,
+                "mlb",
+                subject,
+                f"{len(missing)} played game(s) with no boxscore; {_sample(map(str, missing))}",
+            )
+        )
+    extra = sorted(boxscores.keys() - played_pks)
+    if extra:
+        findings.append(
+            Finding(
+                Severity.WARN,
+                "mlb",
+                subject,
+                f"{len(extra)} boxscore(s) for games the newest schedule does not list as "
+                f"played; {_sample(map(str, extra))}",
+            )
+        )
+
+    # Settled: some capture was taken on a later Eastern day than the window's last day.
+    unsettled, pending = [], 0
+    for pk in sorted(played_pks & boxscores.keys()):
+        window_closes = completed[pk] + mlb_boxscore.SETTLE_WINDOW
+        if any(eastern_date(stamp) > window_closes for stamp in boxscores[pk]):
+            continue
+        if today > window_closes:
+            unsettled.append(pk)
+        else:
+            pending += 1
+    if unsettled:
+        findings.append(
+            Finding(
+                Severity.WARN,
+                "mlb",
+                subject,
+                f"{len(unsettled)} game(s) captured only inside their settle window, which has "
+                f"closed; a late correction may be missing (review R4). Run "
+                f"`front-office backfill mlb --season {season} --refresh`; "
+                f"{_sample(map(str, unsettled))}",
+            )
+        )
+    if pending:
+        findings.append(
+            Finding(Severity.INFO, "mlb", subject, f"{pending} game(s) still in settle window")
+        )
+    if resumed:
+        findings.append(
+            Finding(
+                Severity.INFO,
+                "mlb",
+                subject,
+                f"{len(resumed)} resumed game(s) settle from their resume date, taken as the "
+                f"completion date; {_sample(map(str, sorted(resumed)))}",
+            )
+        )
+    opening_day = min((game.official_date for game in played), default=None)
+    return findings, opening_day
+
+
+# -- espn ------------------------------------------------------------------------------
+
+
+def check_espn(
+    captures: list[Capture], *, season: int, opening_day: dt.date | None
+) -> list[Finding]:
+    """Roster finality, calendar anchor and league-snapshot completeness, per league."""
+    leagues = sorted(
+        {
+            capture.partition("league_id") or ""
+            for capture in captures
+            if (capture.source, capture.endpoint) == ("espn", "settings")
+            and capture.partition("season") == str(season)
+        }
+    )
+    if not leagues:
+        return [Finding(Severity.ERROR, "espn", f"espn {season}", "no committed settings capture")]
+    findings = []
+    for league_id in leagues:
+        findings += _check_league(
+            captures, season=season, league_id=league_id, opening_day=opening_day
+        )
+    return findings
+
+
+def _check_league(
+    captures: list[Capture], *, season: int, league_id: str, opening_day: dt.date | None
+) -> list[Finding]:
+    subject = f"espn {season} league {league_id}"
+    league = [
+        capture
+        for capture in captures
+        if capture.source == "espn"
+        and capture.partition("season") == str(season)
+        and capture.partition("league_id") == league_id
+    ]
+    # Every run lands settings first under the run's fetched_at, so the status a settings
+    # capture records is what ESPN reported when that run's other captures were taken.
+    # Status only moves forward, so it is a conservative bound for anything fetched later
+    # in the same run.
+    status_by_run = {
+        capture.fetched_at: capture.payload().get("status", {})
+        for capture in league
+        if capture.endpoint == "settings"
+    }
+    findings = []
+
+    # The scoring-date anchor: each snapshot implies a date for period 1. They must agree
+    # with each other and with MLB opening day, or stg_espn__scoring_periods shifts.
+    implied = {
+        run: eastern_date(run) - dt.timedelta(days=int(status["latestScoringPeriod"]) - 1)
+        for run, status in status_by_run.items()
+        if "latestScoringPeriod" in status
+    }
+    anchors = sorted(set(implied.values()))
+    if len(anchors) > 1:
+        detail = ", ".join(f"{run} -> {date}" for run, date in sorted(implied.items()))
+        findings.append(
+            Finding(
+                Severity.ERROR,
+                "espn",
+                subject,
+                f"settings snapshots imply different dates for period 1: {detail}",
+            )
+        )
+    elif anchors and opening_day is None:
+        findings.append(
+            Finding(
+                Severity.WARN,
+                "espn",
+                subject,
+                f"period 1 = {anchors[0]} per {len(implied)} snapshot(s); no MLB schedule "
+                "to confirm it against",
+            )
+        )
+    elif anchors and anchors[0] != opening_day:
+        findings.append(
+            Finding(
+                Severity.ERROR,
+                "espn",
+                subject,
+                f"period 1 = {anchors[0]} per settings, but MLB opening day is {opening_day}",
+            )
+        )
+    elif anchors:
+        findings.append(
+            Finding(
+                Severity.INFO,
+                "espn",
+                subject,
+                f"period 1 = {anchors[0]}: all {len(implied)} settings snapshot(s) agree, "
+                "and it is MLB opening day",
+            )
+        )
+
+    newest_status = status_by_run[max(status_by_run)]
+    latest = int(newest_status.get("latestScoringPeriod", 0))
+    final = int(newest_status.get("finalScoringPeriod", latest))
+    first = int(newest_status.get("firstScoringPeriod", 1))
+    season_over = latest > final
+
+    def closed_at_run(run: str, period: int) -> bool:
+        status = status_by_run.get(run)
+        return status is not None and int(status.get("latestScoringPeriod", 0)) > period
+
+    rosters: dict[int, list[str]] = defaultdict(list)
+    for capture in league:
+        if capture.endpoint == "roster":
+            rosters[int(capture.partition("scoring_period") or 0)].append(capture.fetched_at)
+    required = range(first, min(latest, final) + 1)
+    missing = [period for period in required if period not in rosters]
+    unproven = [
+        period
+        for period in required
+        if period in rosters and not any(closed_at_run(run, period) for run in rosters[period])
+    ]
+    findings.append(
+        Finding(
+            Severity.INFO,
+            "espn",
+            subject,
+            f"scoring periods {first}-{final}, latest {latest}; "
+            f"{len(required) - len(missing) - len(unproven)} of {len(required)} rosters "
+            "captured after their period closed",
+        )
+    )
+    if missing:
+        findings.append(
+            Finding(
+                Severity.ERROR,
+                "espn",
+                subject,
+                f"{len(missing)} scoring period(s) with no roster; {_sample(map(str, missing))}",
+            )
+        )
+    if unproven:
+        findings.append(
+            Finding(
+                Severity.WARN,
+                "espn",
+                subject,
+                f"{len(unproven)} roster(s) with no capture shown final by same-run settings "
+                f"(review R1); {_sample(map(str, unproven))}",
+            )
+        )
+
+    if not season_over:
+        findings.append(
+            Finding(
+                Severity.INFO,
+                "espn",
+                subject,
+                "season in progress: league snapshots are not final yet",
+            )
+        )
+    else:
+        for endpoint in LEAGUE_SNAPSHOTS:
+            newest = _newest(league, "espn", endpoint)
+            if newest is None:
+                findings.append(
+                    Finding(Severity.ERROR, "espn", subject, f"no committed {endpoint} capture")
+                )
+            elif not closed_at_run(newest.fetched_at, final):
+                findings.append(
+                    Finding(
+                        Severity.WARN,
+                        "espn",
+                        subject,
+                        f"newest {endpoint} capture ({newest.fetched_at}) is not shown to "
+                        "postdate the final scoring period",
+                    )
+                )
+
+    transactions = _newest(league, "espn", "transactions")
+    if transactions is not None:
+        findings += _check_transactions(transactions, subject)
+    return findings
+
+
+def _check_transactions(capture: Capture, subject: str) -> list[Finding]:
+    """Completeness evidence for the transaction log, which milestone 10 depends on.
+
+    ESPN caps topics per request and messages per topic, and either cap truncates
+    silently. Separately, a topic can hold fewer messages than its totalMessageCount:
+    the message-type filter may exclude the rest, or they may be missing. The payload
+    cannot tell those apart, so that case is reported rather than excused.
+    """
+    topics = capture.payload().get("topics", [])
+    limit = int(capture.meta.get("params", {}).get("limit", espn_transactions.DEFAULT_LIMIT))
+    capped = [
+        str(topic.get("id"))
+        for topic in topics
+        if len(topic.get("messages", [])) >= espn_transactions.MESSAGES_PER_TOPIC
+    ]
+    short = [
+        str(topic.get("id"))
+        for topic in topics
+        if len(topic.get("messages", [])) < int(topic.get("totalMessageCount", 0))
+    ]
+    findings = [
+        Finding(
+            Severity.INFO,
+            "espn",
+            subject,
+            f"transactions {capture.fetched_at}: {len(topics)} topic(s), request limit {limit}",
+        )
+    ]
+    if len(topics) >= limit or capped:
+        findings.append(
+            Finding(
+                Severity.WARN,
+                "espn",
+                subject,
+                f"transaction log hit a request cap: {len(topics)} topic(s) against a limit of "
+                f"{limit}; {len(capped)} topic(s) at {espn_transactions.MESSAGES_PER_TOPIC} "
+                "messages",
+            )
+        )
+    if short:
+        findings.append(
+            Finding(
+                Severity.WARN,
+                "espn",
+                subject,
+                f"{len(short)} topic(s) returned fewer messages than totalMessageCount: "
+                "excluded by the type filter, or missing; completeness unproven "
+                f"(needed by milestone 10); {_sample(short)}",
+            )
+        )
+    return findings
+
+
+# -- helpers ---------------------------------------------------------------------------
+
+
+def _newest(
+    captures: Iterable[Capture], source: str, endpoint: str, **partitions: str
+) -> Capture | None:
+    matching = [
+        capture
+        for capture in captures
+        if (capture.source, capture.endpoint) == (source, endpoint)
+        and all(capture.partition(key) == value for key, value in partitions.items())
+    ]
+    return max(matching, key=lambda capture: capture.fetched_at, default=None)
+
+
+def _sample(examples: Iterable[str]) -> str:
+    listed = list(examples)
+    more = f" and {len(listed) - EXAMPLES} more" if len(listed) > EXAMPLES else ""
+    return f"e.g. {', '.join(listed[:EXAMPLES])}{more}"
+
+
+def format_report(findings: list[Finding]) -> str:
+    """Findings grouped by check, then a one-line tally."""
+    lines = []
+    for check in dict.fromkeys(finding.check for finding in findings):
+        lines.append(f"== {check} ==")
+        lines += [f"{f.severity:<5}  {f.subject}: {f.detail}" for f in findings if f.check == check]
+    tally = Counter(finding.severity for finding in findings)
+    lines.append(f"{tally[Severity.ERROR]} error(s), {tally[Severity.WARN]} warning(s)")
+    return "\n".join(lines)

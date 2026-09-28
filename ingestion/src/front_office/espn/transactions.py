@@ -24,6 +24,7 @@ VIEW = "kona_league_communication"
 # Add, waiver add, drop (three variants ESPN uses), and trade.
 MESSAGE_TYPE_IDS = (178, 179, 180, 181, 239, 244)
 DEFAULT_LIMIT = 2000
+MESSAGES_PER_TOPIC = 25
 
 
 def activity_filter(limit: int = DEFAULT_LIMIT) -> str:
@@ -33,7 +34,7 @@ def activity_filter(limit: int = DEFAULT_LIMIT) -> str:
             "topics": {
                 "filterType": {"value": ["ACTIVITY_TRANSACTIONS"]},
                 "limit": limit,
-                "limitPerMessageSet": {"value": 25},
+                "limitPerMessageSet": {"value": MESSAGES_PER_TOPIC},
                 "offset": 0,
                 "sortMessageDate": {"sortPriority": 1, "sortAsc": False},
                 "sortFor": {"sortPriority": 2, "sortAsc": False},

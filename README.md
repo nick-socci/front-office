@@ -42,10 +42,15 @@ uv run front-office backfill mlb --season 2026     # schedule + ~2,400 boxscores
 uv run front-office backfill espn --season 2026    # needs ESPN cookies, see below
 uv run front-office backfill idmap
 uv run front-office load
+uv run front-office audit --season 2026            # complete, loaded and final?
 
 cd dbt && DBT_PROFILES_DIR=. uv run dbt deps && uv run dbt build
 duckdb ../data/warehouse.duckdb < ../docs/examples/roster_day_query.sql
 ```
+
+The audit checks the files rather than the models: that every played game and scoring
+period was captured, loaded, and captured late enough to be final. It exits non-zero on
+anything that makes the data unreliable, and is rerun after every backfill.
 
 That last query is the project's definition of done: *who was on team X's roster on date
 D, and what did each of them do in MLB that day?*
