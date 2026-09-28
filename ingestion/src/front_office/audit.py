@@ -277,23 +277,9 @@ def check_mlb(
     schedule = _newest(captures, "mlb", "schedule", season=str(season))
     if schedule is None:
         return [Finding(Severity.ERROR, "mlb", subject, "no committed schedule capture")], None
-    # The backfill keeps a Postponed entry when no makeup exists, so a game postponed and
-    # never made up would count as played. It has no boxscore to expect.
-    candidates = mlb_boxscore.games_from_landed_schedule(zone, season=season)
-    played = [g for g in candidates if g.detailed_state != mlb_boxscore.POSTPONED]
-    abandoned = sorted(g.game_pk for g in candidates if g.detailed_state == mlb_boxscore.POSTPONED)
+    played = mlb_boxscore.games_from_landed_schedule(zone, season=season)
     played_pks = {game.game_pk for game in played}
     findings = []
-    if abandoned:
-        findings.append(
-            Finding(
-                Severity.WARN,
-                "mlb",
-                subject,
-                f"{len(abandoned)} game(s) postponed with no makeup in the schedule, which the "
-                f"backfill still treats as played; {_sample(map(str, abandoned))}",
-            )
-        )
 
     # Unplayed games need an explicit disposition, not silence. Resumed games finished
     # after their official date, so their settle window runs from the resume date.
