@@ -3,7 +3,7 @@
 [![CI](https://github.com/nick-socci/front-office/actions/workflows/ci.yml/badge.svg)](https://github.com/nick-socci/front-office/actions/workflows/ci.yml)
 
 A code-first analytics engineering project: real MLB and ESPN fantasy data, ingested as
-raw JSON, transformed with dbt, stored in DuckDB (BigQuery next), and tested in CI.
+raw JSON, transformed with dbt, stored in DuckDB (BigQuery planned), and tested in CI.
 
 It exists because I play in a 17-category head-to-head fantasy baseball league and
 wanted to answer questions the ESPN app will not: who was actually on a roster on a
@@ -22,6 +22,10 @@ SFBB id map    ─┘    (landing zone)        (one row per         (one row per
 unchanged, with a metadata sidecar recording the request, then loaded into a single
 append-only table. A parsing mistake costs a rebuild, not a re-download of the season.
 
+The intermediate layer now builds platform-facing interfaces, roster days, MLB player
+days (including doubleheader aggregation), and started-player attribution. Marts and
+full-season matchup reconciliation are still pending.
+
 **Transformation (dbt)** does everything that requires knowing what the data means:
 flattening JSON, deduplicating at the entity grain, and converting to honest units.
 
@@ -31,8 +35,10 @@ flattening JSON, deduplicating at the entity grain, and converting to honest uni
 | ESPN | `stg_espn__league_settings`, `stg_espn__scoring_categories`, `stg_espn__scoring_periods`, `stg_espn__teams`, `stg_espn__roster_entries`, `stg_espn__matchups`, `stg_espn__matchup_category_results`, `stg_espn__transactions` |
 | Crosswalk | `stg_idmap__players` (ESPN ↔ MLBAM player ids) |
 
-The 2026 season, loaded: 2,430 games, 51,129 batting lines, 20,542 pitching lines,
-55,653 roster-days across 180 scoring periods, 737 transactions.
+The recorded 2026 snapshot (2026-09-26): 2,430 scheduled games, 51,129 batting lines,
+20,542 pitching lines, 55,653 roster-days across 180 scoring periods, 737 transactions.
+Only 2,402 games were Final; the remaining backfill and correction refresh are
+[outstanding](docs/README.md#outstanding).
 
 ## Try it
 
@@ -99,15 +105,21 @@ Written with Claude Code, deliberately and openly. What that meant in practice:
 - **I corrected the model too.** Stat 34 was labelled OUTS from the upstream library; in
   my league ESPN displays it as IP. The seed now carries both.
 
-Tests: 96 pytest, 107 dbt nodes (models, generic tests, unit tests, singular tests), all
-run in CI on every push.
+Local validation on 2026-09-27: 100 pytest tests passed; dbt executed 159 nodes
+(158 passed, one player-ID coverage warning). CI runs these checks on main pushes and
+pull requests.
+
+**Known gaps.** A [code review](docs/reviews/2026-09-27-code-review.md) on 2026-09-27
+found defects that these passing checks do not cover: the skip logic does not yet
+guarantee a final capture, raw keys do not yet separate leagues and seasons, and one
+reconciliation test cannot fail on the fixtures. The fixes are sequenced there.
 
 ## Roadmap
 
 1. **Marts** — player value, weekly matchup projections, waiver-wire recommendations,
-   plus the platform-neutral intermediate layer the marts will sit on.
-2. **BigQuery migration** — the JSON macros gain `adapter.dispatch` variants; everything
-   else is designed to be portable.
+   built on the merged intermediate layer; full-season reconciliation comes first.
+2. **BigQuery migration** — adapter-specific JSON and SQL need a representative
+   migration spike; portability is not yet verified.
 3. **Orchestration** — Dagster asset definitions locally, Cloud Scheduler + Cloud Run in
    production.
 4. **Dashboard** — Streamlit: standings, projections, waiver targets, player trends.
@@ -115,9 +127,9 @@ run in CI on every push.
    freshness tests and the settle window stop being theoretical.
 
 Not planned: a multi-user portal. It would mean holding other people's ESPN session
-cookies, which is a security problem I have no interest in owning. The data model is
-league-agnostic anyway (`league_id` + `season` on every row, scoring rules read as data),
-so a second league or platform would slot in behind the existing seam.
+cookies, which is a security problem I have no interest in owning. The intermediate
+interfaces carry league and season identity and read scoring rules as data, but raw
+loading does not yet (see known gaps), and no second platform has tested the interface.
 
 The design docs behind each of these, written before the work and annotated afterwards
 where reality disagreed, are in [`docs/`](docs/).

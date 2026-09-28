@@ -6,10 +6,44 @@ alone even where reality corrected it — the corrections are the interesting pa
 
 ## Progress
 
-Tracked in the [Sub-project 2 milestone](https://github.com/nick-socci/front-office/milestone/1),
-not here. This document is the design and the record of what it got wrong; a status
-column in it would be a second place to keep the same facts current, and the second
-place is always the stale one.
+| # | Milestone | State | PR |
+|---|---|---|---|
+| 7 | Matchup periods, slot eligibility, lineup shape | Merged 2026-09-26 | [#7](https://github.com/nick-socci/front-office/pull/7) |
+| 8 | Platform-neutral intermediate layer | Merged; local fixture verification 2026-09-27 | [#14](https://github.com/nick-socci/front-office/pull/14) |
+| 9 | `fct_matchup_category_scores`: the reconciliation | Not started | — |
+| 10 | Player value and transaction impact | Not started | — |
+| 11 | `fct_lineup_decisions`: points left on the bench | Not started | — |
+| 12 | Documentation, lint and the record | Not started | — |
+
+Step 0 (finish the 2026 MLB backfill after 2026-09-27, settle-window refresh around
+2026-10-05, NAS backup) is **outstanding** and must run before milestone 9.
+
+## Review amendments — 2026-09-27
+
+The [code review](../reviews/2026-09-27-code-review.md) is the record of open defects,
+coverage gaps and recommended remediation. These amendments supersede conflicting
+execution guidance below while preserving the original plan as history.
+
+- Milestone 8 implementation is merged in PR #14 (`8484d06`). Its interface models are
+  tables to enforce constraints, the crosswalk is ephemeral, and MLB day aggregation
+  uses a full outer join. Local fixture validation passed with one ID-map warning;
+  full-season reconciliation remains unproven.
+- Step 0's October 5 run needs `backfill mlb --season 2026 --refresh` under the current
+  implementation. An ordinary rerun skips already-landed games older than seven days.
+  Snapshot mode also refetches recent games, so it is not a no-op for every landed game.
+- **Resequencing decision, 2026-09-27:** before accepting milestone 9, audit historical
+  capture finality/completeness, repair the reconciliation test and add intermediate
+  expected-output tests. General lifecycle fixes may follow under the conditions in the
+  [reviewer follow-up](../reviews/2026-09-27-reviewer-follow-up.md); identity fixes must
+  precede any second league/season load.
+- **Design decision taken 2026-09-27:** milestone 9 production marts use the intermediate interfaces, including
+  `int_fantasy__categories.is_lower_better`; source-specific reconciliation can use ESPN
+  staging. Begin with full rebuilds unless incremental correctness is demonstrated.
+- Milestone 11's “never worse” assertion applies only to the defined scalar objective,
+  not every category or actual matchup outcome. Label the output hindsight opportunity.
+- End-to-end validation should create a separate warehouse from preserved landed data.
+  Deleting the existing warehouse and requiring a live historical refetch is unnecessary
+  and contradicts the raw-data recovery design.
 
 ## Context
 

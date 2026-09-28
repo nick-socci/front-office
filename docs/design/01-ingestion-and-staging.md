@@ -1,5 +1,11 @@
 # 01 — Ingestion → DuckDB → dbt staging → CI
 
+> **Review follow-up, 2026-09-27:** Implementation milestones remain complete, but the
+> [code review](../reviews/2026-09-27-code-review.md) identifies open correctness defects
+> in snapshot finalization, atomic-pair recovery, source identity, and reconciliation
+> tests. That report owns remediation status and supersedes unqualified reliability
+> claims in this historical plan.
+
 **Date:** 2026-09-20 · **Status:** Built and merged as PRs 1–6. Kept as written.
 **Context:** [`00-project-origin.md`](00-project-origin.md) holds the overall plan. This spec covers
 the first of several sub-projects. Later ones are marts and the platform-neutral `int_*` layer
