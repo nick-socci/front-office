@@ -75,6 +75,69 @@ def test_gives_up_after_max_attempts():
     assert "503" in str(exc.value)
 
 
+@pytest.mark.parametrize(
+    "error",
+    [httpx.ReadTimeout, httpx.ConnectTimeout, httpx.ConnectError, httpx.RemoteProtocolError],
+)
+def test_retries_transport_errors_then_succeeds(error):
+    attempts = []
+
+    def handler(request):
+        attempts.append(request)
+        if len(attempts) < 3:
+            raise error("simulated", request=request)
+        return httpx.Response(200, json={"ok": True})
+
+    client, clock = make_client(handler)
+    assert client.get("https://example.test/api").json() == {"ok": True}
+    assert len(attempts) == 3
+    assert clock.slept == [0.5, 1.0], "same exponential backoff as a retryable status"
+
+
+def test_gives_up_on_transport_errors_after_max_attempts():
+    attempts = []
+
+    def handler(request):
+        attempts.append(request)
+        raise httpx.ConnectError("simulated", request=request)
+
+    client, _ = make_client(handler)
+    with pytest.raises(RequestFailed) as exc:
+        client.get("https://example.test/api")
+    assert len(attempts) == 5
+    assert "ConnectError" in str(exc.value)
+    assert isinstance(exc.value.__cause__, httpx.ConnectError)
+
+
+def test_status_and_transport_failures_share_one_attempt_budget():
+    attempts = []
+
+    def handler(request):
+        attempts.append(request)
+        if len(attempts) % 2:
+            raise httpx.ReadTimeout("simulated", request=request)
+        return httpx.Response(503)
+
+    client, _ = make_client(handler)
+    with pytest.raises(RequestFailed) as exc:
+        client.get("https://example.test/api")
+    assert len(attempts) == 5
+    assert "ReadTimeout" in str(exc.value), "the last attempt's failure is reported"
+
+
+def test_non_retryable_transport_error_raises_immediately():
+    attempts = []
+
+    def handler(request):
+        attempts.append(request)
+        raise httpx.UnsupportedProtocol("simulated", request=request)
+
+    client, _ = make_client(handler)
+    with pytest.raises(httpx.UnsupportedProtocol):
+        client.get("https://example.test/api")
+    assert len(attempts) == 1
+
+
 def test_honours_retry_after_header():
     attempts = []
 
