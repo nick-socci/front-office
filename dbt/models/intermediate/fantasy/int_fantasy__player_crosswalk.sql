@@ -20,6 +20,15 @@
 --
 -- resolution keeps that decision visible downstream instead of burying it in a
 -- coalesce, so a mart can report how its players were matched.
+--
+-- One row per platform player id, whatever ESPN has called him. ESPN can spell one
+-- player two ways across snapshots (an accent added, a suffix dropped); a row per
+-- (id, name) would double every roster day for him, since the join is on id alone. The
+-- canonical name is the one on his latest roster snapshot: season, then scoring period
+-- (every period in one backfill shares a fetched_at, so the period must decide first),
+-- then fetched_at, with league and name as the final tie-break so the choice never
+-- depends on input order. Roster days keep each entry's own display name; this name is
+-- used only for the fallback match.
 
 {{ config(materialized='ephemeral') }}
 
@@ -50,10 +59,14 @@ unambiguous_names as (
 
 entries as (
 
-    select distinct
+    select
         espn_player_id,
         player_name
     from {{ ref('stg_espn__roster_entries') }}
+    {{ fo_latest_by_entity(
+        ['espn_player_id'],
+        order_by='season desc, scoring_period desc, fetched_at desc, league_id, player_name'
+    ) }}
 
 )
 
