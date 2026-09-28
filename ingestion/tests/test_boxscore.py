@@ -77,6 +77,12 @@ def test_prefers_the_played_copy_of_a_postponed_game(zone):
     assert games[0].detailed_state == "Final"
 
 
+def test_drops_a_postponed_game_that_was_never_made_up(zone):
+    """No makeup shares its game_pk, so it was never played and has no boxscore."""
+    land_schedule(zone, [game(7, detailed="Postponed"), game(8)])
+    assert [g.game_pk for g in games_from_landed_schedule(zone, season=2026)] == [8]
+
+
 def test_fetches_a_game_that_has_never_been_landed(zone):
     g = ScheduledGame(
         game_pk=1,

@@ -58,7 +58,8 @@ def games_from_landed_schedule(zone: LandingZone, *, season: int) -> list[Schedu
 
     Postponed entries are dropped in favour of the game that was actually played: the
     two share a game_pk and only the played one has a boxscore. This mirrors the
-    tie-break in stg_mlb__games.
+    tie-break in stg_mlb__games. A postponed game with no makeup in the schedule was
+    never played, so it is dropped too rather than fetched on every run.
     """
     responses = [
         landed
@@ -83,7 +84,7 @@ def games_from_landed_schedule(zone: LandingZone, *, season: int) -> list[Schedu
                 incumbent.detailed_state == POSTPONED and scheduled.detailed_state != POSTPONED
             ):
                 best[scheduled.game_pk] = scheduled
-    return [best[pk] for pk in sorted(best)]
+    return [best[pk] for pk in sorted(best) if best[pk].detailed_state != POSTPONED]
 
 
 def needs_fetch(

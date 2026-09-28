@@ -242,7 +242,7 @@ def test_unplayed_games_are_given_a_disposition(zone):
     assert "3 scheduled, 1 played; not played: Postponed 1, Scheduled 1" in details(
         findings, Severity.INFO
     )
-    assert "1 game(s) postponed with no makeup" in details(findings, Severity.WARN)
+    assert problems(findings) == [], "a never-made-up postponement is not a played game"
     assert "no boxscore" not in details(findings, Severity.ERROR)
 
 
