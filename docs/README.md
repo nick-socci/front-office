@@ -6,26 +6,18 @@ behind it.
 
 ## Where we are
 
-**Updated 2026-09-26.** Sub-project 1 is complete and running on the full 2026 season.
-Sub-project 2 is underway.
+Sub-project 1 is complete. Sub-project 2 is underway.
 
-| Sub-project | Design | State |
+| Sub-project | Design | Tracker |
 |---|---|---|
 | 1 — ingestion, staging, CI | [`01-ingestion-and-staging.md`](design/01-ingestion-and-staging.md) | Complete, PRs 1–6 |
-| 2 — intermediate layer and marts | [`02-intermediate-and-marts.md`](design/02-intermediate-and-marts.md) | In progress, PR 7 merged |
-| 3 — BigQuery, orchestration, dashboard | not yet written | Not started |
+| 2 — intermediate layer and marts | [`02-intermediate-and-marts.md`](design/02-intermediate-and-marts.md) | [Milestone](https://github.com/nick-socci/front-office/milestone/1) |
+| 3 — BigQuery, orchestration, dashboard | not yet written | — |
 
-Each design doc carries its own milestone-by-milestone progress table, so this page
-stays a pointer rather than a second place to keep the same facts current.
-
-## Outstanding
-
-The 2026 MLB backfill stopped at **2,402 of 2,430 games**, because the regular season
-ran through 2026-09-27. Re-run the backfill after that date, and again around
-2026-10-05 so the seven-day settle window closes on the final games, then refresh the
-NAS backup. The fantasy season ended at scoring period 180 (2026-09-20), so no fantasy
-analysis depends on those last 28 games — but the MLB season is not complete until this
-runs.
+**Live status is in [Issues](https://github.com/nick-socci/front-office/issues), not in
+this repo's markdown.** Design docs say what was decided and what it got wrong; issues
+say what is done. Keeping a status table here as well would mean two places to update
+and one of them going stale.
 
 ## What is here
 
