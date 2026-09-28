@@ -6,17 +6,10 @@ alone even where reality corrected it — the corrections are the interesting pa
 
 ## Progress
 
-| # | Milestone | State | PR |
-|---|---|---|---|
-| 7 | Matchup periods, slot eligibility, lineup shape | Merged 2026-09-26 | [#7](https://github.com/nick-socci/front-office/pull/7) |
-| 8 | Platform-neutral intermediate layer | Merged; local fixture verification 2026-09-27 | [#14](https://github.com/nick-socci/front-office/pull/14) |
-| 9 | `fct_matchup_category_scores`: the reconciliation | Not started | — |
-| 10 | Player value and transaction impact | Not started | — |
-| 11 | `fct_lineup_decisions`: points left on the bench | Not started | — |
-| 12 | Documentation, lint and the record | Not started | — |
-
-Step 0 (finish the 2026 MLB backfill after 2026-09-27, settle-window refresh around
-2026-10-05, NAS backup) is **outstanding** and must run before milestone 9.
+Tracked in the [Sub-project 2 milestone](https://github.com/nick-socci/front-office/milestone/1),
+not here. This document is the design and the record of what it got wrong; a status
+column in it would be a second place to keep the same facts current, and the second
+place is always the stale one.
 
 ## Review amendments — 2026-09-27
 

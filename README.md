@@ -38,7 +38,7 @@ flattening JSON, deduplicating at the entity grain, and converting to honest uni
 The recorded 2026 snapshot (2026-09-26): 2,430 scheduled games, 51,129 batting lines,
 20,542 pitching lines, 55,653 roster-days across 180 scoring periods, 737 transactions.
 Only 2,402 games were Final; the remaining backfill and correction refresh are
-[outstanding](docs/README.md#outstanding).
+[tracked in #8](https://github.com/nick-socci/front-office/issues/8).
 
 ## Try it
 
