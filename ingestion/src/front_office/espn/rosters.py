@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from front_office.espn.client import league_url
-from front_office.http_client import HttpClient
+from front_office.http_client import AuthExpired, HttpClient
 from front_office.landing import LandingZone
 
 logger = logging.getLogger(__name__)
@@ -95,6 +95,9 @@ def backfill_rosters(
                 period=period,
                 fetched_at=fetched_at,
             )
+        except AuthExpired:
+            # Every remaining period would be rejected too: stop, don't log 180 failures.
+            raise
         except Exception:
             logger.exception("roster fetch failed for scoring period %s", period)
             summary.failed += 1

@@ -7,6 +7,8 @@ than importing the package, so scheduling never needs to know how ingestion work
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -20,7 +22,7 @@ from front_office.espn import settings as espn_settings
 from front_office.espn import teams as espn_teams
 from front_office.espn import transactions as espn_transactions
 from front_office.espn.client import EspnCredentials, espn_client, load_env_file
-from front_office.http_client import HttpClient
+from front_office.http_client import AuthExpired, HttpClient
 from front_office.idmap import sfbb
 from front_office.landing import LandingZone
 from front_office.load import connect, load_landing_zone
@@ -47,6 +49,20 @@ def utc_stamp() -> str:
     return dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
+@contextmanager
+def exit_on_expired_auth() -> Iterator[None]:
+    """Turn rejected credentials into a one-line error and exit 1, not a traceback.
+
+    A traceback would be noise (nothing in the stack helps) and, with typer's
+    locals-printing tracebacks, a needless place for session details to surface.
+    """
+    try:
+        yield
+    except AuthExpired as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(code=1) from None
+
+
 @backfill_app.command("mlb")
 def backfill_mlb(
     season: Annotated[int, typer.Option("--season", help="Season year, e.g. 2026.")],
@@ -71,7 +87,7 @@ def backfill_mlb(
 
     zone = LandingZone(root=raw_root)
     fetched_at = utc_stamp()
-    with HttpClient("mlb") as client:
+    with exit_on_expired_auth(), HttpClient("mlb") as client:
         if only in (None, "schedule"):
             path = mlb_schedule.backfill_schedule(
                 zone=zone, client=client, season=season, fetched_at=fetched_at
@@ -109,7 +125,7 @@ def backfill_espn(
     zone = LandingZone(root=raw_root)
     fetched_at = utc_stamp()
 
-    with espn_client(credentials) as client:
+    with exit_on_expired_auth(), espn_client(credentials) as client:
         settings_path, settings_payload = espn_settings.backfill_settings(
             zone=zone,
             client=client,
