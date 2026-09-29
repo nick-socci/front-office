@@ -392,7 +392,7 @@ def clear_transactions(zone):
 def test_a_topic_short_of_its_total_is_an_error(zone):
     clear_transactions(zone)
     land_transactions(zone, [topic(1, total=2)])
-    assert "1 topic(s) hold fewer messages than totalMessageCount" in details(
+    assert "1 topic(s) do not hold exactly totalMessageCount messages" in details(
         audit(zone), Severity.ERROR
     )
 
@@ -401,6 +401,28 @@ def test_a_full_last_page_is_an_error(zone):
     clear_transactions(zone)
     land_transactions(zone, [topic(1, topic_id="a"), topic(1, topic_id="b")], limit=2)
     assert "the last page is full (2 topics)" in details(audit(zone), Severity.ERROR)
+
+
+def test_a_topic_with_no_count_is_an_error(zone):
+    clear_transactions(zone)
+    land_transactions(zone, [{"id": "t", "messages": [{}]}])
+    assert "1 topic(s) do not hold exactly totalMessageCount messages" in details(
+        audit(zone), Severity.ERROR
+    )
+
+
+def test_a_missing_middle_page_is_an_error(zone):
+    """The review's probe: a full page 0 and a short page at offset 4; offset 2 missing."""
+    clear_transactions(zone)
+    land_transactions(zone, [topic(1, topic_id="a"), topic(1, topic_id="b")], limit=2)
+    land_transactions(zone, [topic(1, topic_id="c")], offset=4, limit=2)
+    assert "missing [2]" in details(audit(zone), Severity.ERROR)
+
+
+def test_a_missing_first_page_is_an_error(zone):
+    clear_transactions(zone)
+    land_transactions(zone, [topic(1)], offset=2, limit=2)
+    assert "missing [0]" in details(audit(zone), Severity.ERROR)
 
 
 def test_pages_of_one_run_are_judged_together(zone):

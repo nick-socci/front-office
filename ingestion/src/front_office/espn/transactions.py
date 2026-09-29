@@ -62,12 +62,59 @@ def activity_filter(limit: int = DEFAULT_LIMIT, offset: int = 0) -> str:
 
 
 def incomplete_topics(topics: list[dict[str, Any]]) -> list[str]:
-    """Topic ids holding fewer messages than ESPN says they have."""
-    return [
-        str(topic.get("id"))
-        for topic in topics
-        if len(topic.get("messages", [])) < int(topic.get("totalMessageCount", 0))
-    ]
+    """Topic ids that cannot be shown complete.
+
+    Complete means ESPN states a totalMessageCount -- present, an integer, not negative
+    -- and the topic holds exactly that many messages. A missing or malformed count
+    proves nothing, so it is not complete (review of #41); neither is a topic holding
+    more messages than it claims.
+    """
+    return [str(topic.get("id")) for topic in topics if not _is_complete(topic)]
+
+
+def _is_complete(topic: dict[str, Any]) -> bool:
+    count = topic.get("totalMessageCount")
+    messages = topic.get("messages")
+    # bool is an int subclass; a true/false count is malformed, not 1/0.
+    if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+        return False
+    return isinstance(messages, list) and len(messages) == count
+
+
+def page_sequence_problems(pages: list[tuple[Any, Any, int]]) -> list[str]:
+    """Why a run's pages do not add up to the whole log; empty when they do.
+
+    `pages` holds (offset, limit, topic count) per landed page. The whole log is
+    exactly: one limit throughout, offsets 0, limit, 2 x limit, ... with none missing or
+    repeated, every page but the last full, and the last one short. A short last page
+    alone proves nothing if page 0, or one in the middle, never landed (review of #41).
+    """
+    if not pages:
+        return ["no pages"]
+    limits = {limit for _, limit, _ in pages}
+    if len(limits) != 1:
+        return [f"pages disagree on the limit: {sorted(map(str, limits))}"]
+    limit = limits.pop()
+    if not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0:
+        return [f"invalid page limit {limit!r}"]
+    if any(not isinstance(offset, int) or isinstance(offset, bool) for offset, _, _ in pages):
+        return ["a page has no integer offset"]
+
+    problems = []
+    offsets = sorted(offset for offset, _, _ in pages)
+    expected = [n * limit for n in range(len(pages))]
+    if offsets != expected:
+        missing = sorted(set(range(0, max(offsets) + 1, limit)) - set(offsets))
+        problems.append(
+            f"page offsets {offsets} are not 0, {limit}, ... contiguous"
+            + (f"; missing {missing}" if missing else "")
+        )
+    counts = [count for _, _, count in sorted(pages, key=lambda page: page[0])]
+    if any(count != limit for count in counts[:-1]):
+        problems.append(f"a page before the last is not full ({limit} topics): {counts}")
+    if counts[-1] >= limit:
+        problems.append(f"the last page is full ({limit} topics), so the log may be truncated")
+    return problems
 
 
 def backfill_transactions(
@@ -116,7 +163,8 @@ def backfill_transactions(
     short = incomplete_topics(topics)
     if short:
         raise TransactionLogIncomplete(
-            f"{len(short)} transaction topic(s) hold fewer messages than totalMessageCount "
-            f"(e.g. {short[0]}); pages landed, but the log is not complete"
+            f"{len(short)} transaction topic(s) do not hold exactly totalMessageCount "
+            f"messages, or state no valid count (e.g. {short[0]}); pages landed, but the log "
+            "is not shown complete"
         )
     return paths

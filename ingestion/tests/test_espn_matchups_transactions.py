@@ -118,6 +118,62 @@ def test_an_incomplete_topic_fails_after_landing_every_page(zone):
     assert len(list(zone.iter_landed(source="espn", endpoint="transactions"))) == 2
 
 
+@pytest.mark.parametrize(
+    "topic",
+    [
+        {"id": "t", "messages": [{"id": "m"}]},  # no count: the review's reproduction
+        {"id": "t", "messages": [{"id": "m"}], "totalMessageCount": None},
+        {"id": "t", "messages": [{"id": "m"}], "totalMessageCount": "1"},
+        {"id": "t", "messages": [{"id": "m"}], "totalMessageCount": True},
+        {"id": "t", "messages": [], "totalMessageCount": -1},
+        {"id": "t", "messages": [{"id": "m"}], "totalMessageCount": 2},  # short
+        {"id": "t", "messages": [{"id": "m"}, {"id": "n"}], "totalMessageCount": 1},  # over
+        {"id": "t", "totalMessageCount": 0},  # no messages list
+    ],
+)
+def test_a_topic_without_an_exactly_matching_valid_count_is_incomplete(topic):
+    assert espn_transactions.incomplete_topics([topic]) == ["t"]
+
+
+def test_a_topic_holding_exactly_its_count_is_complete():
+    topics = [
+        {"id": "a", "messages": [{"id": "m"}], "totalMessageCount": 1},
+        {"id": "b", "messages": [], "totalMessageCount": 0},
+    ]
+    assert espn_transactions.incomplete_topics(topics) == []
+
+
+def test_a_topic_with_no_count_fails_the_backfill(zone):
+    page = [{"id": "t", "messages": [{"id": "m"}]}]
+    with pytest.raises(espn_transactions.TransactionLogIncomplete):
+        backfill(zone, paged_log({0: page}, []))
+
+
+@pytest.mark.parametrize(
+    ("pages", "problem"),
+    [
+        ([(0, 2, 2), (2, 2, 1)], None),
+        ([(0, 2, 1)], None),
+        ([(0, 2, 2), (2, 2, 2), (4, 2, 0)], None),
+        ([(0, 2, 2), (4, 2, 1)], "missing [2]"),  # the review's reproduction
+        ([(2, 2, 1)], "missing [0]"),
+        ([(0, 2, 2), (0, 2, 1)], "not 0, 2, ... contiguous"),
+        ([(0, 2, 1), (2, 2, 1)], "a page before the last is not full"),
+        ([(0, 2, 2), (2, 2, 2)], "the last page is full"),
+        ([(0, 2, 2), (2, 3, 1)], "disagree on the limit"),
+        ([(None, 2, 1)], "no integer offset"),
+        ([(0, None, 1)], "invalid page limit"),
+        ([], "no pages"),
+    ],
+)
+def test_page_sequence(pages, problem):
+    problems = espn_transactions.page_sequence_problems(pages)
+    if problem is None:
+        assert problems == []
+    else:
+        assert any(problem in found for found in problems), problems
+
+
 def test_id_map_csv_becomes_json_rows(zone):
     csv_text = "IDPLAYER,PLAYERNAME,MLBID,ESPNID\nabc01,Some Player,430911,5933\n"
     path, count = sfbb.backfill_player_id_map(

@@ -554,8 +554,9 @@ def _check_transactions(run: list[Capture], subject: str) -> list[Finding]:
     """Completeness evidence for the transaction log, which milestone 10 depends on.
 
     `run` is every page landed by the newest run. The log is fetched unfiltered and
-    paged (#26), so each topic must hold exactly totalMessageCount messages and the last
-    page must come back short; anything else is a missing message or a truncated log.
+    paged (#26), so the pages must form the whole sequence (page_sequence_problems) and
+    each topic must hold exactly its stated totalMessageCount; anything else is a
+    missing page, a missing message or a truncated log.
     A capture without an offset predates that, used a message-type filter, and cannot
     be shown complete: a topic short by a filtered-out lineup move looks exactly like
     one short by a lost transaction.
@@ -577,7 +578,8 @@ def _check_transactions(run: list[Capture], subject: str) -> list[Finding]:
             ),
         )
     ]
-    if run[-1].partition("offset") is None:
+    unpaged = [capture for capture in run if capture.partition("offset") is None]
+    if len(unpaged) == len(run):
         findings.append(
             Finding(
                 Severity.WARN,
@@ -589,16 +591,20 @@ def _check_transactions(run: list[Capture], subject: str) -> list[Finding]:
         )
         return findings
 
-    limit = int(run[-1].meta.get("params", {}).get("limit", espn_transactions.DEFAULT_LIMIT))
-    if len(run[-1].payload().get("topics", [])) >= limit:
+    pages = [
+        (
+            capture.meta.get("params", {}).get("offset"),
+            capture.meta.get("params", {}).get("limit"),
+            len(capture.payload().get("topics", [])),
+        )
+        for capture in run
+    ]
+    problems = espn_transactions.page_sequence_problems(pages)
+    if unpaged:
+        problems.append(f"{len(unpaged)} page(s) of the run carry no offset")
+    for problem in problems:
         findings.append(
-            Finding(
-                Severity.ERROR,
-                "espn",
-                subject,
-                f"transactions {stamp}: the last page is full ({limit} topics), so the log "
-                "may be truncated",
-            )
+            Finding(Severity.ERROR, "espn", subject, f"transactions {stamp}: {problem}")
         )
     short = espn_transactions.incomplete_topics(topics)
     if short:
@@ -607,8 +613,8 @@ def _check_transactions(run: list[Capture], subject: str) -> list[Finding]:
                 Severity.ERROR,
                 "espn",
                 subject,
-                f"transactions {stamp}: {len(short)} topic(s) hold fewer messages than "
-                f"totalMessageCount; {_sample(short)}",
+                f"transactions {stamp}: {len(short)} topic(s) do not hold exactly "
+                f"totalMessageCount messages, or state no valid count; {_sample(short)}",
             )
         )
     return findings
