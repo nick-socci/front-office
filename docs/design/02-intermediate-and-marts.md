@@ -38,6 +38,89 @@ execution guidance below while preserving the original plan as history.
   Deleting the existing warehouse and requiring a live historical refetch is unnecessary
   and contradicts the raw-data recovery design.
 
+## Input completeness per player-day — design, 2026-09-28 ([#25](https://github.com/nick-socci/front-office/issues/25))
+
+**The problem.** `int_fantasy__started_player_days` left-joins MLB production, so a
+started player with no stats that day becomes a row of zeroes with `played = false`.
+That is right when he didn't play. It is wrong, and indistinguishable, when his game's
+boxscore never landed or his ESPN id didn't resolve to an MLBAM id. A missing input
+would score as a real zero.
+
+**The status.** Each started player-day gets `input_status`, decided in this order:
+
+| `input_status` | Rule | 2026 |
+|---|---|---|
+| `unresolved_player` | `mlbam_player_id` is null | 0 |
+| `played` | he appears in `int_mlb__player_game_days` on that date | 21,120 |
+| `missing_boxscore` | the date has at least one played game whose boxscore is not loaded | 0 |
+| `verified_off` | otherwise: every played game that date is loaded (or there were none) | 17,545 |
+
+`verified_off` covers both a team off day and a player his manager didn't use. Both
+are real zeroes for fantasy scoring, so the design does not separate them. 641 of the
+17,545 fall on dates with no MLB games at all, such as the All-Star break.
+
+**Why the rule needs no player-to-team mapping.** If every played game on a date is
+loaded, then a resolved player who appears in none of them did not play. There is no
+game he could be missing from. His team only matters on a date with a missing
+boxscore, and there the rule is conservative: every non-appearing player that day is
+flagged. That over-flags, which is the safe direction. The audit gates missing
+boxscores to zero before data is trusted, so in practice the flag should never fire.
+
+**Rejected: ESPN's `proTeamId`,** which #25 originally proposed. A roster snapshot
+fetched after the season reports each player's *current* team for every historical
+period: no player has more than one `proTeamId` across 2026's 180 snapshots, despite
+trades during the season. On days players actually played, the mapped team matched
+their real MLB team only 95.8% of the time (24,095 of 25,163), and the misses are
+traded players' pre-trade days. If per-player precision is ever needed, the source is
+MLB's transactions endpoint, not ESPN. Nothing needs it now.
+
+**What "played game" means.** The not-played set moves to a seed, `mlb_game_states`
+(`detailed_state`, `is_played`). `stg_mlb__games` gets `is_played` from it. A test fails
+the build on any `detailed_state` the seed doesn't list, so a new MLB state (a forfeit,
+say) forces a decision rather than defaulting either way. It matches ingestion's
+`NOT_PLAYED` set (#36): 2026 has Final, Completed Early, Postponed and Cancelled.
+
+**Models.**
+- `int_mlb__game_dates`: one row per `official_date` with `played_games`,
+  `loaded_games` (played games that have batting logs; every played game has batters
+  on both sides) and `is_complete`. A table, because it is small and joined per
+  roster day.
+- `int_fantasy__started_player_days`: adds `input_status` and keeps `played`, with a
+  test that `played = (input_status = 'played')`.
+- Marts (milestone 9) report non-verified player-days per matchup side next to the
+  scores. They never fold them into zeroes. This is the #10 gate "missing or
+  unresolved inputs reported separately from verified zeros".
+
+**Data tests.**
+- `accepted_values` on `input_status`.
+- A singular test that no batting or pitching log belongs to a game with
+  `is_played = false`. The audit catches the same thing on landed files (#36); this
+  catches it in the warehouse.
+- A warn-level test that `missing_boxscore` and `unresolved_player` counts are zero.
+  It is a warning, not an error, because the CI fixtures load 2 of 24 scheduled games
+  on purpose, so every fixture date is incomplete. The status logic itself is proven
+  by the unit tests below, not by fixture counts.
+
+**Unit tests** (small synthetic dbt unit tests, not bigger fixtures):
+- `int_mlb__player_game_days`:
+  - a doubleheader is summed into one player-day;
+  - batting and pitching on one day are one row with both sides populated.
+- `int_fantasy__started_player_days`, one test per status:
+  - played;
+  - `verified_off` on a complete date;
+  - `verified_off` on a date with no games;
+  - `missing_boxscore` on an incomplete date;
+  - `unresolved_player`, which takes precedence over `missing_boxscore`.
+- Component coverage: every column the 17 scored categories read passes through
+  unchanged. That includes the ratio categories' numerators and denominators: H/AB
+  (AVG); ER and outs (ERA); hits allowed, walks and outs (WHIP); K and outs (K/9); saves
+  plus holds (SVHD).
+
+**Out of scope, noted.** Resumed games are attributed to their `official_date`. 2026
+has one, 824912 (official date 2026-06-16). Whether ESPN credits the resume date is a
+milestone 9 reconciliation question ("slot attribution checked for ... suspended
+games"), not an input-status one.
+
 ## Context
 
 Sub-project 1 is complete and merged (PRs 1–6, `main` green): ingestion → raw JSON →

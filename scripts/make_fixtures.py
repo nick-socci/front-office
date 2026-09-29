@@ -117,6 +117,22 @@ BOXSCORE_PLAYER_FIELDS = (
     "stats.pitching.shutouts",
 )
 
+# Team-side totals read by the stg_mlb__batting_totals_match_team_stats test. Only the
+# totals it compares: the rest of teamStats is not needed, so it is not copied.
+BOXSCORE_TEAM_STATS_FIELDS = (
+    "teamStats.batting.hits",
+    "teamStats.batting.runs",
+    "teamStats.batting.atBats",
+)
+
+# A later snapshot of the first fixture game, shaped like an official scorer's
+# correction: one home batter gains a hit, one away batter's appearance is taken away,
+# and both teams' totals follow. It proves staging reads only the latest snapshot (the
+# removed appearance must not survive from the earlier one) and that the batting totals
+# test judges that snapshot, so a legitimate correction does not fail it. Synthetic by
+# design: a real correction may not exist on the fixture dates.
+CORRECTION_FETCHED_AT = "20260502T160000Z"
+
 # Two games keep the committed fixture small while still covering both sides, batters,
 # pitchers and the relationship back to stg_mlb__games.
 FIXTURE_BOXSCORE_GAMES = 2
@@ -247,13 +263,19 @@ def latest_landed(source: str, endpoint: str) -> Path:
 
 
 def write_fixture(
-    *, source: str, endpoint: str, partitions: dict[str, Any], payload: Any, request: dict[str, Any]
+    *,
+    source: str,
+    endpoint: str,
+    partitions: dict[str, Any],
+    payload: Any,
+    request: dict[str, Any],
+    fetched_at: str = FIXTURE_FETCHED_AT,
 ) -> Path:
     path = FIXTURE_ROOT / source / endpoint
     for key, value in partitions.items():
         path = path / f"{key}={value}"
     path.mkdir(parents=True, exist_ok=True)
-    payload_path = path / f"fetched_at={FIXTURE_FETCHED_AT}.json"
+    payload_path = path / f"fetched_at={fetched_at}.json"
     payload_path.write_text(json.dumps(payload, indent=1) + "\n")
     meta = {
         "source": source,
@@ -262,7 +284,7 @@ def write_fixture(
         "url": request["url"],
         "params": request["params"],
         "request_key": "&".join(f"{k}={request['params'][k]}" for k in sorted(request["params"])),
-        "fetched_at": FIXTURE_FETCHED_AT,
+        "fetched_at": fetched_at,
     }
     payload_path.with_suffix(".meta.json").write_text(json.dumps(meta, indent=2) + "\n")
     return payload_path
@@ -329,6 +351,7 @@ def build_mlb_boxscores(dates: tuple[str, ...]) -> list[Path]:
             "teams": {
                 side: {
                     "team": {"id": payload["teams"][side]["team"]["id"]},
+                    **rebuild(payload["teams"][side], BOXSCORE_TEAM_STATS_FIELDS),
                     "players": {
                         key: rebuild(player, BOXSCORE_PLAYER_FIELDS)
                         for key, player in payload["teams"][side]["players"].items()
@@ -352,7 +375,46 @@ def build_mlb_boxscores(dates: tuple[str, ...]) -> list[Path]:
             f"mlb/boxscore: game_pk={game_pk}, {players} players -> {path.relative_to(REPO_ROOT)}"
         )
         written.append(path)
+    if written:
+        written.append(write_boxscore_correction(written[0]))
     return written
+
+
+def corrected_boxscore(payload: dict[str, Any]) -> dict[str, Any]:
+    """A copy with one home hit added and one away appearance removed, totals adjusted."""
+    corrected = json.loads(json.dumps(payload))
+    home, away = corrected["teams"]["home"], corrected["teams"]["away"]
+    home_batter = first_batter_with_a_hit(home)
+    home_batter["hits"] += 1
+    home["teamStats"]["batting"]["hits"] += 1
+    away_batter = first_batter_with_a_hit(away)
+    for stat in ("hits", "runs", "atBats"):
+        away["teamStats"]["batting"][stat] -= away_batter.get(stat, 0)
+    away_batter.clear()
+    away_batter["gamesPlayed"] = 0
+    return corrected
+
+
+def first_batter_with_a_hit(side: dict[str, Any]) -> dict[str, Any]:
+    for key in sorted(side["players"]):
+        batting: dict[str, Any] = side["players"][key].get("stats", {}).get("batting", {})
+        if batting.get("hits"):
+            return batting
+    raise SystemExit("no batter with a hit to correct in the first fixture boxscore")
+
+
+def write_boxscore_correction(original: Path) -> Path:
+    meta = json.loads(original.with_suffix(".meta.json").read_text())
+    path = write_fixture(
+        source="mlb",
+        endpoint="boxscore",
+        partitions=meta["partitions"],
+        payload=corrected_boxscore(json.loads(original.read_text())),
+        request={"url": meta["url"], "params": meta["params"]},
+        fetched_at=CORRECTION_FETCHED_AT,
+    )
+    print(f"mlb/boxscore: synthetic correction snapshot -> {path.relative_to(REPO_ROOT)}")
+    return path
 
 
 def espn_team_alias(team_id: int) -> dict[str, str]:

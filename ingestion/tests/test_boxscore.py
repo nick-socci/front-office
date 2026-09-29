@@ -11,7 +11,7 @@ import json
 import httpx
 import pytest
 
-from front_office.http_client import HttpClient, SourceLimits
+from front_office.http_client import AuthExpired, HttpClient, SourceLimits
 from front_office.landing import LandingZone
 from front_office.mlb.boxscore import (
     ScheduledGame,
@@ -75,6 +75,18 @@ def test_prefers_the_played_copy_of_a_postponed_game(zone):
     games = games_from_landed_schedule(zone, season=2026)
     assert len(games) == 1
     assert games[0].detailed_state == "Final"
+
+
+def test_drops_a_postponed_game_that_was_never_made_up(zone):
+    """No makeup shares its game_pk, so it was never played and has no boxscore."""
+    land_schedule(zone, [game(7, detailed="Postponed"), game(8)])
+    assert [g.game_pk for g in games_from_landed_schedule(zone, season=2026)] == [8]
+
+
+def test_drops_a_cancelled_game(zone):
+    """MLB marks a cancelled game Final; it was never played (2026: game 823490)."""
+    land_schedule(zone, [game(7, detailed="Cancelled"), game(8, detailed="Completed Early")])
+    assert [g.game_pk for g in games_from_landed_schedule(zone, season=2026)] == [8]
 
 
 def test_fetches_a_game_that_has_never_been_landed(zone):
@@ -212,6 +224,25 @@ def test_backfill_continues_after_one_game_fails(zone):
     )
     assert (summary.fetched, summary.failed) == (2, 1)
     assert summary.failed_game_pks == [12]
+
+
+def test_backfill_stops_when_credentials_are_rejected(zone):
+    land_schedule(zone, [game(11), game(12), game(13)])
+    requested = []
+
+    def handler(request):
+        requested.append(request.url.path)
+        return httpx.Response(403 if "/12/" in request.url.path else 200, json={"teams": {}})
+
+    with pytest.raises(AuthExpired):
+        backfill_boxscores(
+            zone=zone,
+            client=make_client(handler),
+            season=2026,
+            fetched_at="20260926T120000Z",
+            today=TODAY,
+        )
+    assert len(requested) == 2, "no game after the rejected one is requested"
 
 
 def test_backfill_honours_a_limit(zone):

@@ -234,3 +234,120 @@ models:
             expression: "at_bats = 0 and outs_recorded = 0"
             config:
               where: "not played"
+
+# -----------------------------------------------------------------------------
+# Unit tests: int_fantasy__player_crosswalk (review R6).
+#
+# The crosswalk is ephemeral, so it has no relation to query; unit tests are the only way
+# to exercise its rules on their own. Each test states only the columns the model reads.
+# Empty inputs are `rows: []`.
+# -----------------------------------------------------------------------------
+
+unit_tests:
+  - name: crosswalk_one_row_per_id_named_by_the_latest_snapshot
+    description: >
+      One ESPN id spelled two ways is one row, named as on the latest snapshot. Season
+      decides before scoring period; the period decides before fetched_at, because every
+      period in one backfill shares a fetched_at.
+    model: int_fantasy__player_crosswalk
+    given:
+      - input: ref('stg_espn__roster_entries')
+        rows:
+          # id 1: accent added in a later period of the same backfill (tied fetched_at).
+          - {league_id: "1", season: 2026, scoring_period: 5, espn_player_id: 1, player_name: "Jose Ramirez", fetched_at: "2026-09-26 00:00:00"}
+          - {league_id: "1", season: 2026, scoring_period: 6, espn_player_id: 1, player_name: "José Ramírez", fetched_at: "2026-09-26 00:00:00"}
+          # id 2: a later season wins even with an earlier period and an older fetch.
+          - {league_id: "1", season: 2026, scoring_period: 180, espn_player_id: 2, player_name: "Old Spelling", fetched_at: "2026-09-26 00:00:00"}
+          - {league_id: "1", season: 2027, scoring_period: 1, espn_player_id: 2, player_name: "New Spelling", fetched_at: "2026-01-01 00:00:00"}
+      - input: ref('stg_idmap__players')
+        rows:
+          - {espn_player_id: 1, mlbam_player_id: 608070}
+          - {espn_player_id: 2, mlbam_player_id: 700002}
+      - input: ref('stg_mlb__batting_game_logs')
+        rows: []
+      - input: ref('stg_mlb__pitching_game_logs')
+        rows: []
+    expect:
+      rows:
+        - {platform_player_id: 1, player_name: "José Ramírez", mlbam_player_id: 608070, resolution: crosswalk_id}
+        - {platform_player_id: 2, player_name: "New Spelling", mlbam_player_id: 700002, resolution: crosswalk_id}
+
+  - name: crosswalk_exact_ties_break_the_same_way_in_either_input_order
+    description: >
+      Same season, period and fetched_at, three names across two leagues: league, then
+      name, decides. The winner is neither the alphabetically first name nor the first or
+      last row, and the next test gives the rows in reverse; the answer must not change.
+    model: int_fantasy__player_crosswalk
+    given:
+      - input: ref('stg_espn__roster_entries')
+        rows:
+          - {league_id: "2", season: 2026, scoring_period: 9, espn_player_id: 3, player_name: "Abe Name", fetched_at: "2026-09-26 00:00:00"}
+          - {league_id: "1", season: 2026, scoring_period: 9, espn_player_id: 3, player_name: "Yves Name", fetched_at: "2026-09-26 00:00:00"}
+          - {league_id: "1", season: 2026, scoring_period: 9, espn_player_id: 3, player_name: "Zed Name", fetched_at: "2026-09-26 00:00:00"}
+      - input: ref('stg_idmap__players')
+        rows: []
+      - input: ref('stg_mlb__batting_game_logs')
+        rows: []
+      - input: ref('stg_mlb__pitching_game_logs')
+        rows: []
+    expect:
+      rows:
+        - {platform_player_id: 3, player_name: "Yves Name", resolution: unresolved}
+
+  - name: crosswalk_exact_ties_break_the_same_way_in_reverse_input_order
+    model: int_fantasy__player_crosswalk
+    given:
+      - input: ref('stg_espn__roster_entries')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 9, espn_player_id: 3, player_name: "Zed Name", fetched_at: "2026-09-26 00:00:00"}
+          - {league_id: "1", season: 2026, scoring_period: 9, espn_player_id: 3, player_name: "Yves Name", fetched_at: "2026-09-26 00:00:00"}
+          - {league_id: "2", season: 2026, scoring_period: 9, espn_player_id: 3, player_name: "Abe Name", fetched_at: "2026-09-26 00:00:00"}
+      - input: ref('stg_idmap__players')
+        rows: []
+      - input: ref('stg_mlb__batting_game_logs')
+        rows: []
+      - input: ref('stg_mlb__pitching_game_logs')
+        rows: []
+    expect:
+      rows:
+        - {platform_player_id: 3, player_name: "Yves Name", resolution: unresolved}
+
+  - name: crosswalk_resolution_precedence
+    description: >
+      The id crosswalk beats a name match; an accent-stripped name matches only when one
+      MLB player has it; ambiguous and unknown names stay unresolved; and the fallback
+      uses the canonical (latest) name only, never an older spelling.
+    model: int_fantasy__player_crosswalk
+    given:
+      - input: ref('stg_espn__roster_entries')
+        rows:
+          # id over name: the name belongs to a different MLB player.
+          - {league_id: "1", season: 2026, scoring_period: 1, espn_player_id: 10, player_name: "Will Smith", fetched_at: "2026-09-26 00:00:00"}
+          # accent variant: ESPN strips accents, MLB keeps them.
+          - {league_id: "1", season: 2026, scoring_period: 1, espn_player_id: 11, player_name: "Andres Gimenez", fetched_at: "2026-09-26 00:00:00"}
+          # ambiguous: two MLB players share the name.
+          - {league_id: "1", season: 2026, scoring_period: 1, espn_player_id: 12, player_name: "Max Muncy", fetched_at: "2026-09-26 00:00:00"}
+          # unknown everywhere.
+          - {league_id: "1", season: 2026, scoring_period: 1, espn_player_id: 13, player_name: "Nobody Known", fetched_at: "2026-09-26 00:00:00"}
+          # the older spelling would match; the canonical one does not.
+          - {league_id: "1", season: 2026, scoring_period: 1, espn_player_id: 14, player_name: "Matched Once", fetched_at: "2026-09-26 00:00:00"}
+          - {league_id: "1", season: 2026, scoring_period: 2, espn_player_id: 14, player_name: "Renamed Since", fetched_at: "2026-09-26 00:00:00"}
+      - input: ref('stg_idmap__players')
+        rows:
+          - {espn_player_id: 10, mlbam_player_id: 669257}
+      - input: ref('stg_mlb__batting_game_logs')
+        rows:
+          - {mlbam_player_id: 519299, player_name: "Will Smith"}
+          - {mlbam_player_id: 641313, player_name: "Andrés Giménez"}
+          - {mlbam_player_id: 571970, player_name: "Max Muncy"}
+          - {mlbam_player_id: 691777, player_name: "Max Muncy"}
+          - {mlbam_player_id: 700014, player_name: "Matched Once"}
+      - input: ref('stg_mlb__pitching_game_logs')
+        rows: []
+    expect:
+      rows:
+        - {platform_player_id: 10, mlbam_player_id: 669257, resolution: crosswalk_id}
+        - {platform_player_id: 11, mlbam_player_id: 641313, resolution: unambiguous_name}
+        - {platform_player_id: 12, mlbam_player_id: null, resolution: unresolved}
+        - {platform_player_id: 13, mlbam_player_id: null, resolution: unresolved}
+        - {platform_player_id: 14, mlbam_player_id: null, resolution: unresolved}

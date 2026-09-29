@@ -36,7 +36,10 @@ def land(zone, source, endpoint, partitions, payload, *, fetched_at=RUN, params=
 
 
 def schedule_game(pk, date, detailed="Final", **extra):
-    state = "Final" if detailed in ("Final", "Postponed") else "Preview"
+    # As MLB reports them: over-but-unplayed games are abstractGameState Final too.
+    state = (
+        "Final" if detailed in ("Final", "Completed Early", "Postponed", "Cancelled") else "Preview"
+    )
     return {
         "gamePk": pk,
         "season": str(SEASON),
@@ -57,13 +60,13 @@ def land_schedule(zone, games):
     )
 
 
-def land_boxscore(zone, pk, fetched_at):
+def land_boxscore(zone, pk, fetched_at, payload=None):
     land(
         zone,
         "mlb",
         "boxscore",
         {"season": SEASON, "game_pk": pk},
-        {},
+        payload or {},
         fetched_at=fetched_at,
         params={"gamePk": pk},
     )
@@ -234,14 +237,50 @@ def test_unplayed_games_are_given_a_disposition(zone):
             schedule_game(1, "2026-03-25"),
             schedule_game(2, "2026-03-26", detailed="Postponed"),
             schedule_game(3, "2026-09-27", detailed="Scheduled"),
+            schedule_game(4, "2026-09-27", detailed="Cancelled"),
         ],
     )
     findings = audit(zone)
-    assert "3 scheduled, 1 played; not played: Postponed 1, Scheduled 1" in details(
+    assert "4 scheduled, 1 played; not played: Cancelled 1, Postponed 1, Scheduled 1" in details(
         findings, Severity.INFO
     )
-    assert "1 game(s) postponed with no makeup" in details(findings, Severity.WARN)
+    assert problems(findings) == [], "a never-made-up postponement is not a played game"
     assert "no boxscore" not in details(findings, Severity.ERROR)
+
+
+def rosters_only(*, batted=False):
+    """A boxscore shaped like a cancelled game's: players listed, no appearances."""
+    batting = {"gamesPlayed": 1, "atBats": 3} if batted else {}
+    return {"teams": {"home": {"players": {"ID1": {"stats": {"batting": batting}}}}}}
+
+
+def test_a_cancelled_games_boxscore_without_appearances_is_harmless(zone):
+    land_schedule(
+        zone, [schedule_game(1, "2026-03-25"), schedule_game(5, "2026-03-26", detailed="Cancelled")]
+    )
+    land_boxscore(zone, 5, "20260327T160000Z", rosters_only())
+    findings = audit(zone)
+    assert problems(findings) == []
+    assert "1 boxscore(s) for games not played (Cancelled 1), with no appearances" in details(
+        findings, Severity.INFO
+    )
+
+
+def test_a_not_played_games_boxscore_with_appearances_is_an_error(zone):
+    land_schedule(
+        zone, [schedule_game(1, "2026-03-25"), schedule_game(5, "2026-03-26", detailed="Cancelled")]
+    )
+    land_boxscore(zone, 5, "20260327T160000Z", rosters_only(batted=True))
+    assert "1 boxscore(s) record appearances for games the newest schedule says were not" in (
+        details(audit(zone), Severity.ERROR)
+    )
+
+
+def test_a_boxscore_for_an_unscheduled_game_is_a_warning(zone):
+    land_boxscore(zone, 99, "20260326T160000Z", rosters_only())
+    assert "1 boxscore(s) for games the newest schedule does not list; e.g. 99" in details(
+        audit(zone), Severity.WARN
+    )
 
 
 def test_a_postponed_game_that_was_made_up_is_played(zone):

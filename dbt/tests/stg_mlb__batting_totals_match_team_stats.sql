@@ -5,8 +5,24 @@
 -- flattening the payload: it compares the model back against the source for all ~4,800
 -- team-sides in the season. A filter mistake (say, requiring plate appearances) or a
 -- dedupe mistake (dropping a real player row) shows up here immediately.
+--
+-- Three rules keep it from passing when it should not:
+-- * Only the LATEST snapshot of each game is the claim. Official scorers revise games,
+--   and staging keeps the latest; comparing against an older snapshot would fail on a
+--   legitimate correction, while comparing against all of them passes nothing useful.
+-- * A full outer join on (game_pk, side): player rows with no totals, or totals with no
+--   player rows, are compared rather than silently dropped. A side with no player rows
+--   sums to zero, so it passes only when the boxscore itself claims zero (a cancelled
+--   game's boxscore does: 2026 game 823490).
+-- * A missing (null) total is a failure, never a comparison that quietly yields null.
 
-with claimed as (
+with latest_responses as (
+
+    {{ fo_latest_boxscore_responses() }}
+
+),
+
+claimed as (
 
     select
         {{ fo_request_param('request_key', 'gamePk') }} as game_pk,
@@ -25,9 +41,7 @@ with claimed as (
             payload,
             request_key,
             unnest(['home', 'away']) as side
-        from {{ source('raw', 'api_responses') }}
-        where source = 'mlb'
-          and endpoint = 'boxscore'
+        from latest_responses
     )
 
 ),
@@ -46,18 +60,21 @@ summed as (
 )
 
 select
-    c.game_pk,
-    c.side,
+    coalesce(c.game_pk, s.game_pk) as game_pk,
+    coalesce(c.side, s.side) as side,
     c.team_hits,
-    s.hits,
+    coalesce(s.hits, 0) as hits,
     c.team_runs,
-    s.runs,
+    coalesce(s.runs, 0) as runs,
     c.team_at_bats,
-    s.at_bats
+    coalesce(s.at_bats, 0) as at_bats
 from claimed as c
-inner join summed as s
+full outer join summed as s
     on c.game_pk = s.game_pk
     and c.side = s.side
-where c.team_hits != s.hits
-   or c.team_runs != s.runs
-   or c.team_at_bats != s.at_bats
+where c.team_hits is null
+   or c.team_runs is null
+   or c.team_at_bats is null
+   or c.team_hits != coalesce(s.hits, 0)
+   or c.team_runs != coalesce(s.runs, 0)
+   or c.team_at_bats != coalesce(s.at_bats, 0)

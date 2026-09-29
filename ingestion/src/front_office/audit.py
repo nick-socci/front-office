@@ -277,23 +277,9 @@ def check_mlb(
     schedule = _newest(captures, "mlb", "schedule", season=str(season))
     if schedule is None:
         return [Finding(Severity.ERROR, "mlb", subject, "no committed schedule capture")], None
-    # The backfill keeps a Postponed entry when no makeup exists, so a game postponed and
-    # never made up would count as played. It has no boxscore to expect.
-    candidates = mlb_boxscore.games_from_landed_schedule(zone, season=season)
-    played = [g for g in candidates if g.detailed_state != mlb_boxscore.POSTPONED]
-    abandoned = sorted(g.game_pk for g in candidates if g.detailed_state == mlb_boxscore.POSTPONED)
+    played = mlb_boxscore.games_from_landed_schedule(zone, season=season)
     played_pks = {game.game_pk for game in played}
     findings = []
-    if abandoned:
-        findings.append(
-            Finding(
-                Severity.WARN,
-                "mlb",
-                subject,
-                f"{len(abandoned)} game(s) postponed with no makeup in the schedule, which the "
-                f"backfill still treats as played; {_sample(map(str, abandoned))}",
-            )
-        )
 
     # Unplayed games need an explicit disposition, not silence. Resumed games finished
     # after their official date, so their settle window runs from the resume date.
@@ -337,17 +323,7 @@ def check_mlb(
                 f"{len(missing)} played game(s) with no boxscore; {_sample(map(str, missing))}",
             )
         )
-    extra = sorted(boxscores.keys() - played_pks)
-    if extra:
-        findings.append(
-            Finding(
-                Severity.WARN,
-                "mlb",
-                subject,
-                f"{len(extra)} boxscore(s) for games the newest schedule does not list as "
-                f"played; {_sample(map(str, extra))}",
-            )
-        )
+    findings += _unplayed_boxscores(captures, boxscores.keys() - played_pks, last_state, subject)
 
     # Settled: some capture was taken on a later Eastern day than the window's last day.
     unsettled, pending = [], 0
@@ -639,6 +615,84 @@ def _check_transactions(run: list[Capture], subject: str) -> list[Finding]:
 
 
 # -- helpers ---------------------------------------------------------------------------
+
+
+def _unplayed_boxscores(
+    captures: list[Capture], game_pks: set[int], last_state: Mapping[int, str], subject: str
+) -> list[Finding]:
+    """Classify boxscores landed for games that were not played.
+
+    A game can be fetched and only later cancelled, or fetched by older code that took a
+    cancelled game for a played one (MLB files both under "Final"). The file is raw
+    history and stays. What matters is whether it records appearances: a cancelled
+    game's boxscore lists rosters with no stats, so nothing loads from it; one with
+    appearances would put stats from an unplayed game into staging.
+    """
+    newest: dict[int, Capture] = {}
+    for capture in captures:
+        if (capture.source, capture.endpoint) != ("mlb", "boxscore"):
+            continue
+        pk = int(capture.partition("game_pk") or 0)
+        if pk in game_pks and (pk not in newest or capture.fetched_at > newest[pk].fetched_at):
+            newest[pk] = capture
+
+    harmless: Counter[str] = Counter()
+    harmless_pks, with_stats, unscheduled = [], [], []
+    for pk in sorted(newest):
+        if pk not in last_state:
+            unscheduled.append(pk)
+        elif _has_appearances(newest[pk].payload()):
+            with_stats.append(pk)
+        else:
+            harmless[last_state[pk]] += 1
+            harmless_pks.append(pk)
+
+    findings = []
+    if with_stats:
+        findings.append(
+            Finding(
+                Severity.ERROR,
+                "mlb",
+                subject,
+                f"{len(with_stats)} boxscore(s) record appearances for games the newest "
+                f"schedule says were not played; staging would count them; "
+                f"{_sample(map(str, with_stats))}",
+            )
+        )
+    if unscheduled:
+        findings.append(
+            Finding(
+                Severity.WARN,
+                "mlb",
+                subject,
+                f"{len(unscheduled)} boxscore(s) for games the newest schedule does not list; "
+                f"{_sample(map(str, unscheduled))}",
+            )
+        )
+    if harmless:
+        states = ", ".join(f"{state} {n}" for state, n in sorted(harmless.items()))
+        findings.append(
+            Finding(
+                Severity.INFO,
+                "mlb",
+                subject,
+                f"{len(harmless_pks)} boxscore(s) for games not played ({states}), with no "
+                f"appearances, so nothing loads from them; {_sample(map(str, harmless_pks))}",
+            )
+        )
+    return findings
+
+
+def _has_appearances(payload: Mapping[str, Any]) -> bool:
+    """True when any player batted or pitched: the same markers staging filters on."""
+    for side in payload.get("teams", {}).values():
+        for player in side.get("players", {}).values():
+            stats = player.get("stats", {})
+            if stats.get("batting", {}).get("gamesPlayed") or stats.get("pitching", {}).get(
+                "gamesPitched"
+            ):
+                return True
+    return False
 
 
 def _newest(
