@@ -563,7 +563,13 @@ def _check_transactions(run: list[Capture], subject: str) -> list[Finding]:
     """
     run = sorted(run, key=lambda capture: int(capture.partition("offset") or 0))
     stamp = run[0].fetched_at
-    topics = [topic for capture in run for topic in capture.payload().get("topics", [])]
+    parsed = [espn_transactions.page_topics(capture.payload()) for capture in run]
+    malformed = [
+        capture.partition("offset") or "none"
+        for capture, page in zip(run, parsed, strict=True)
+        if page is None
+    ]
+    topics = [topic for page in parsed if page is not None for topic in page]
     distinct = len({str(topic.get("id")) for topic in topics})
     findings = [
         Finding(
@@ -595,11 +601,16 @@ def _check_transactions(run: list[Capture], subject: str) -> list[Finding]:
         (
             capture.meta.get("params", {}).get("offset"),
             capture.meta.get("params", {}).get("limit"),
-            len(capture.payload().get("topics", [])),
+            None if page is None else len(page),
         )
-        for capture in run
+        for capture, page in zip(run, parsed, strict=True)
     ]
     problems = espn_transactions.page_sequence_problems(pages)
+    if malformed:
+        problems.append(
+            f"{len(malformed)} page(s) carry no valid `topics` list, so their contents are "
+            f"unknown (offset {', '.join(malformed)})"
+        )
     if unpaged:
         problems.append(f"{len(unpaged)} page(s) of the run carry no offset")
     for problem in problems:

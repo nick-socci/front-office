@@ -150,6 +150,30 @@ def test_a_topic_with_no_count_fails_the_backfill(zone):
 
 
 @pytest.mark.parametrize(
+    "body",
+    [
+        "{}",
+        '{"topics": null}',
+        '{"topics": {}}',
+        '{"topics": [1]}',
+        '{"topics": "x"}',
+        "[]",
+        "null",
+    ],
+)
+def test_a_page_without_a_valid_topics_list_fails_the_backfill(zone, body):
+    """The review's reproduction is `{}`: an unknown log must not pass as an empty one."""
+    handler = lambda request: httpx.Response(200, content=body.encode())  # noqa: E731
+    with pytest.raises(espn_transactions.TransactionLogIncomplete, match="no valid `topics`"):
+        backfill(zone, handler)
+    assert len(list(zone.iter_landed(source="espn", endpoint="transactions"))) == 1
+
+
+def test_an_explicitly_empty_topics_list_is_an_empty_log(zone):
+    assert len(backfill(zone, lambda request: httpx.Response(200, json={"topics": []}))) == 1
+
+
+@pytest.mark.parametrize(
     ("pages", "problem"),
     [
         ([(0, 2, 2), (2, 2, 1)], None),
@@ -164,6 +188,8 @@ def test_a_topic_with_no_count_fails_the_backfill(zone):
         ([(None, 2, 1)], "no integer offset"),
         ([(0, None, 1)], "invalid page limit"),
         ([], "no pages"),
+        ([(0, 2, 2), (2, 2, None)], None),  # unknown count: the caller reports that page
+        ([(0, 2, 2), (4, 2, None)], "missing [2]"),  # offsets still judged
     ],
 )
 def test_page_sequence(pages, problem):

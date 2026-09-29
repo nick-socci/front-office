@@ -411,6 +411,22 @@ def test_a_topic_with_no_count_is_an_error(zone):
     )
 
 
+@pytest.mark.parametrize("payload", [{}, {"topics": None}, {"topics": [1]}])
+def test_a_page_without_a_valid_topics_list_is_an_error(zone, payload):
+    """The review's reproduction: a landed `{}` page read as 0 topics and passed as INFO."""
+    clear_transactions(zone)
+    params = {"view": "kona_league_communication", "limit": 2000, "offset": 0}
+    partitions = {"season": SEASON, "league_id": LEAGUE, "offset": 0}
+    land(zone, "espn", "transactions", partitions, payload, params=params)
+    assert "1 page(s) carry no valid `topics` list" in details(audit(zone), Severity.ERROR)
+
+
+def test_an_explicitly_empty_log_is_not_an_error(zone):
+    clear_transactions(zone)
+    land_transactions(zone, [])
+    assert "transactions" not in details(audit(zone), Severity.ERROR)
+
+
 def test_a_missing_middle_page_is_an_error(zone):
     """The review's probe: a full page 0 and a short page at offset 4; offset 2 missing."""
     clear_transactions(zone)

@@ -61,6 +61,21 @@ def activity_filter(limit: int = DEFAULT_LIMIT, offset: int = 0) -> str:
     )
 
 
+def page_topics(payload: Any) -> list[dict[str, Any]] | None:
+    """The page's topics, or None when the response does not carry a valid list.
+
+    A JSON object whose `topics` is a list of objects; an explicit empty list is a valid
+    (empty) page. A missing or malformed field is unknown, never an empty log: reading it
+    as `[]` would accept a changed or broken response as complete (review of #41).
+    """
+    if not isinstance(payload, dict):
+        return None
+    topics = payload.get("topics")
+    if not isinstance(topics, list) or not all(isinstance(topic, dict) for topic in topics):
+        return None
+    return topics
+
+
 def incomplete_topics(topics: list[dict[str, Any]]) -> list[str]:
     """Topic ids that cannot be shown complete.
 
@@ -81,10 +96,12 @@ def _is_complete(topic: dict[str, Any]) -> bool:
     return isinstance(messages, list) and len(messages) == count
 
 
-def page_sequence_problems(pages: list[tuple[Any, Any, int]]) -> list[str]:
+def page_sequence_problems(pages: list[tuple[Any, Any, int | None]]) -> list[str]:
     """Why a run's pages do not add up to the whole log; empty when they do.
 
-    `pages` holds (offset, limit, topic count) per landed page. The whole log is
+    `pages` holds (offset, limit, topic count) per landed page; the count is None for a
+    page with no valid topics list, whose fullness is then unknown and not judged here
+    (the caller reports the page itself). The whole log is
     exactly: one limit throughout, offsets 0, limit, 2 x limit, ... with none missing or
     repeated, every page but the last full, and the last one short. A short last page
     alone proves nothing if page 0, or one in the middle, never landed (review of #41).
@@ -109,7 +126,10 @@ def page_sequence_problems(pages: list[tuple[Any, Any, int]]) -> list[str]:
             f"page offsets {offsets} are not 0, {limit}, ... contiguous"
             + (f"; missing {missing}" if missing else "")
         )
-    counts = [count for _, _, count in sorted(pages, key=lambda page: page[0])]
+    ordered = [count for _, _, count in sorted(pages, key=lambda page: page[0])]
+    counts = [count for count in ordered if count is not None]
+    if len(counts) < len(ordered):
+        return problems
     if any(count != limit for count in counts[:-1]):
         problems.append(f"a page before the last is not full ({limit} topics): {counts}")
     if counts[-1] >= limit:
@@ -151,9 +171,14 @@ def backfill_transactions(
                 fetched_at=fetched_at,
             )
         )
-        page_topics = payload.get("topics", [])
-        topics += page_topics
-        if len(page_topics) < limit:
+        parsed = page_topics(payload)
+        if parsed is None:
+            raise TransactionLogIncomplete(
+                f"the page at offset {offset} has no valid `topics` list; page landed, but "
+                "the log is not shown complete"
+            )
+        topics += parsed
+        if len(parsed) < limit:
             break
     else:
         raise TransactionLogIncomplete(
