@@ -97,19 +97,17 @@ def land_roster(zone, period, fetched_at=RUN):
     )
 
 
-def land_transactions(zone, topics):
-    land(
-        zone,
-        "espn",
-        "transactions",
-        {"season": SEASON, "league_id": LEAGUE},
-        {"topics": topics},
-        params={"view": "kona_league_communication", "limit": 2000},
-    )
+def land_transactions(zone, topics, *, offset=0, limit=2000, paged=True):
+    partitions = {"season": SEASON, "league_id": LEAGUE}
+    params = {"view": "kona_league_communication", "limit": limit}
+    if paged:
+        partitions["offset"] = offset
+        params["offset"] = offset
+    land(zone, "espn", "transactions", partitions, {"topics": topics}, params=params)
 
 
-def topic(messages, total=None):
-    return {"id": "t", "messages": [{}] * messages, "totalMessageCount": total or messages}
+def topic(messages, total=None, topic_id="t"):
+    return {"id": topic_id, "messages": [{}] * messages, "totalMessageCount": total or messages}
 
 
 @pytest.fixture
@@ -385,19 +383,78 @@ def test_league_snapshots_taken_before_the_season_ended_are_flagged(zone):
     assert f"newest teams capture ({early})" in details(audit(zone), Severity.WARN)
 
 
-@pytest.mark.parametrize(
-    ("topics", "expected"),
-    [
-        ([topic(25)], "hit a request cap"),
-        ([topic(1, total=2)], "1 topic(s) returned fewer messages than totalMessageCount"),
-    ],
-)
-def test_a_possibly_incomplete_transaction_log_is_flagged(zone, topics, expected):
+def clear_transactions(zone):
     for path in zone.root.glob("espn/transactions/**/*"):
         if path.is_file():
             path.unlink()
-    land_transactions(zone, topics)
-    assert expected in details(audit(zone), Severity.WARN)
+
+
+def test_a_topic_short_of_its_total_is_an_error(zone):
+    clear_transactions(zone)
+    land_transactions(zone, [topic(1, total=2)])
+    assert "1 topic(s) do not hold exactly totalMessageCount messages" in details(
+        audit(zone), Severity.ERROR
+    )
+
+
+def test_a_full_last_page_is_an_error(zone):
+    clear_transactions(zone)
+    land_transactions(zone, [topic(1, topic_id="a"), topic(1, topic_id="b")], limit=2)
+    assert "the last page is full (2 topics)" in details(audit(zone), Severity.ERROR)
+
+
+def test_a_topic_with_no_count_is_an_error(zone):
+    clear_transactions(zone)
+    land_transactions(zone, [{"id": "t", "messages": [{}]}])
+    assert "1 topic(s) do not hold exactly totalMessageCount messages" in details(
+        audit(zone), Severity.ERROR
+    )
+
+
+@pytest.mark.parametrize("payload", [{}, {"topics": None}, {"topics": [1]}])
+def test_a_page_without_a_valid_topics_list_is_an_error(zone, payload):
+    """The review's reproduction: a landed `{}` page read as 0 topics and passed as INFO."""
+    clear_transactions(zone)
+    params = {"view": "kona_league_communication", "limit": 2000, "offset": 0}
+    partitions = {"season": SEASON, "league_id": LEAGUE, "offset": 0}
+    land(zone, "espn", "transactions", partitions, payload, params=params)
+    assert "1 page(s) carry no valid `topics` list" in details(audit(zone), Severity.ERROR)
+
+
+def test_an_explicitly_empty_log_is_not_an_error(zone):
+    clear_transactions(zone)
+    land_transactions(zone, [])
+    assert "transactions" not in details(audit(zone), Severity.ERROR)
+
+
+def test_a_missing_middle_page_is_an_error(zone):
+    """The review's probe: a full page 0 and a short page at offset 4; offset 2 missing."""
+    clear_transactions(zone)
+    land_transactions(zone, [topic(1, topic_id="a"), topic(1, topic_id="b")], limit=2)
+    land_transactions(zone, [topic(1, topic_id="c")], offset=4, limit=2)
+    assert "missing [2]" in details(audit(zone), Severity.ERROR)
+
+
+def test_a_missing_first_page_is_an_error(zone):
+    clear_transactions(zone)
+    land_transactions(zone, [topic(1)], offset=2, limit=2)
+    assert "missing [0]" in details(audit(zone), Severity.ERROR)
+
+
+def test_pages_of_one_run_are_judged_together(zone):
+    """A topic repeated across pages (activity between requests) is not a problem."""
+    clear_transactions(zone)
+    land_transactions(zone, [topic(1, topic_id="a"), topic(1, topic_id="b")], limit=2)
+    land_transactions(zone, [topic(1, topic_id="b")], offset=2, limit=2)
+    findings = audit(zone)
+    assert "2 page(s), 2 topic(s) (1 repeated across pages)" in details(findings, Severity.INFO)
+    assert problems(findings) == []
+
+
+def test_a_filtered_legacy_capture_cannot_be_shown_complete(zone):
+    clear_transactions(zone)
+    land_transactions(zone, [topic(1)], paged=False)
+    assert "predates the paged, unfiltered capture" in details(audit(zone), Severity.WARN)
 
 
 # -- cli -------------------------------------------------------------------------------

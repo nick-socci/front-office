@@ -48,44 +48,156 @@ def test_matchups_are_fetched_once_not_per_period(zone):
     assert "scoringPeriodId" not in str(requests[0])
 
 
-def test_transactions_send_the_activity_filter_header(zone):
-    """ESPN filters this endpoint through a header, not query parameters."""
-    seen = {}
+def topics(count, *, start=0, short=False):
+    return [
+        {
+            "id": f"t{n}",
+            "messages": [{"id": f"m{n}"}],
+            "totalMessageCount": 2 if short and n == start else 1,
+        }
+        for n in range(start, start + count)
+    ]
+
+
+def paged_log(pages, seen):
+    """A handler serving `pages` by the offset in the filter header."""
 
     def handler(request):
-        seen["filter"] = request.headers.get("x-fantasy-filter")
-        seen["url"] = str(request.url)
-        return httpx.Response(200, json={"topics": []})
+        sent = json.loads(request.headers["x-fantasy-filter"])["topics"]
+        seen.append(sent)
+        return httpx.Response(200, json={"topics": pages.get(sent["offset"], [])})
 
-    espn_transactions.backfill_transactions(
+    return handler
+
+
+def backfill(zone, handler, limit=3):
+    return espn_transactions.backfill_transactions(
         zone=zone,
         client=make_client(handler),
         season=SEASON,
         league_id=LEAGUE_ID,
         fetched_at="20260101T000000Z",
-        limit=50,
+        limit=limit,
     )
-    sent = json.loads(seen["filter"])
-    assert sent["topics"]["filterType"]["value"] == ["ACTIVITY_TRANSACTIONS"]
-    assert sent["topics"]["limit"] == 50
-    assert sent["topics"]["filterIncludeMessageTypeIds"]["value"] == list(
-        espn_transactions.MESSAGE_TYPE_IDS
-    )
-    assert seen["url"].endswith("communication/?view=kona_league_communication")
 
 
-def test_transactions_land_the_payload(zone):
-    payload = {"topics": [{"id": "abc", "date": 1789921020086, "messages": []}]}
-    espn_transactions.backfill_transactions(
-        zone=zone,
-        client=make_client(lambda r: httpx.Response(200, json=payload)),
-        season=SEASON,
-        league_id=LEAGUE_ID,
-        fetched_at="20260101T000000Z",
+def test_transactions_send_an_unfiltered_activity_header(zone):
+    """ESPN filters this endpoint through a header; no message-type filter (#26)."""
+    seen = []
+    backfill(zone, paged_log({0: topics(1)}, seen), limit=50)
+    assert seen[0]["filterType"]["value"] == ["ACTIVITY_TRANSACTIONS"]
+    assert (seen[0]["limit"], seen[0]["offset"]) == (50, 0)
+    assert "filterIncludeMessageTypeIds" not in seen[0]
+
+
+def test_transactions_page_until_a_short_page_and_land_each(zone):
+    seen = []
+    pages = {0: topics(3), 3: topics(3, start=3), 6: topics(1, start=6)}
+    paths = backfill(zone, paged_log(pages, seen))
+    assert [sent["offset"] for sent in seen] == [0, 3, 6]
+    assert len(paths) == 3
+    landed = sorted(
+        zone.iter_landed(source="espn", endpoint="transactions"),
+        key=lambda r: r.meta["partitions"]["offset"],
     )
-    landed = list(zone.iter_landed(source="espn", endpoint="transactions"))
-    assert len(landed) == 1
-    assert landed[0].payload == payload
+    assert [r.meta["partitions"]["offset"] for r in landed] == [0, 3, 6]
+    assert {r.meta["fetched_at"] for r in landed} == {"20260101T000000Z"}
+    assert [len(r.payload["topics"]) for r in landed] == [3, 3, 1]
+
+
+def test_a_full_last_page_is_followed_by_an_empty_one(zone):
+    seen = []
+    backfill(zone, paged_log({0: topics(3)}, seen))
+    assert [sent["offset"] for sent in seen] == [0, 3]
+
+
+def test_an_incomplete_topic_fails_after_landing_every_page(zone):
+    pages = {0: topics(3), 3: topics(1, start=3, short=True)}
+    with pytest.raises(espn_transactions.TransactionLogIncomplete, match="1 transaction topic"):
+        backfill(zone, paged_log(pages, []))
+    assert len(list(zone.iter_landed(source="espn", endpoint="transactions"))) == 2
+
+
+@pytest.mark.parametrize(
+    "topic",
+    [
+        {"id": "t", "messages": [{"id": "m"}]},  # no count: the review's reproduction
+        {"id": "t", "messages": [{"id": "m"}], "totalMessageCount": None},
+        {"id": "t", "messages": [{"id": "m"}], "totalMessageCount": "1"},
+        {"id": "t", "messages": [{"id": "m"}], "totalMessageCount": True},
+        {"id": "t", "messages": [], "totalMessageCount": -1},
+        {"id": "t", "messages": [{"id": "m"}], "totalMessageCount": 2},  # short
+        {"id": "t", "messages": [{"id": "m"}, {"id": "n"}], "totalMessageCount": 1},  # over
+        {"id": "t", "totalMessageCount": 0},  # no messages list
+    ],
+)
+def test_a_topic_without_an_exactly_matching_valid_count_is_incomplete(topic):
+    assert espn_transactions.incomplete_topics([topic]) == ["t"]
+
+
+def test_a_topic_holding_exactly_its_count_is_complete():
+    topics = [
+        {"id": "a", "messages": [{"id": "m"}], "totalMessageCount": 1},
+        {"id": "b", "messages": [], "totalMessageCount": 0},
+    ]
+    assert espn_transactions.incomplete_topics(topics) == []
+
+
+def test_a_topic_with_no_count_fails_the_backfill(zone):
+    page = [{"id": "t", "messages": [{"id": "m"}]}]
+    with pytest.raises(espn_transactions.TransactionLogIncomplete):
+        backfill(zone, paged_log({0: page}, []))
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "{}",
+        '{"topics": null}',
+        '{"topics": {}}',
+        '{"topics": [1]}',
+        '{"topics": "x"}',
+        "[]",
+        "null",
+    ],
+)
+def test_a_page_without_a_valid_topics_list_fails_the_backfill(zone, body):
+    """The review's reproduction is `{}`: an unknown log must not pass as an empty one."""
+    handler = lambda request: httpx.Response(200, content=body.encode())  # noqa: E731
+    with pytest.raises(espn_transactions.TransactionLogIncomplete, match="no valid `topics`"):
+        backfill(zone, handler)
+    assert len(list(zone.iter_landed(source="espn", endpoint="transactions"))) == 1
+
+
+def test_an_explicitly_empty_topics_list_is_an_empty_log(zone):
+    assert len(backfill(zone, lambda request: httpx.Response(200, json={"topics": []}))) == 1
+
+
+@pytest.mark.parametrize(
+    ("pages", "problem"),
+    [
+        ([(0, 2, 2), (2, 2, 1)], None),
+        ([(0, 2, 1)], None),
+        ([(0, 2, 2), (2, 2, 2), (4, 2, 0)], None),
+        ([(0, 2, 2), (4, 2, 1)], "missing [2]"),  # the review's reproduction
+        ([(2, 2, 1)], "missing [0]"),
+        ([(0, 2, 2), (0, 2, 1)], "not 0, 2, ... contiguous"),
+        ([(0, 2, 1), (2, 2, 1)], "a page before the last is not full"),
+        ([(0, 2, 2), (2, 2, 2)], "the last page is full"),
+        ([(0, 2, 2), (2, 3, 1)], "disagree on the limit"),
+        ([(None, 2, 1)], "no integer offset"),
+        ([(0, None, 1)], "invalid page limit"),
+        ([], "no pages"),
+        ([(0, 2, 2), (2, 2, None)], None),  # unknown count: the caller reports that page
+        ([(0, 2, 2), (4, 2, None)], "missing [2]"),  # offsets still judged
+    ],
+)
+def test_page_sequence(pages, problem):
+    problems = espn_transactions.page_sequence_problems(pages)
+    if problem is None:
+        assert problems == []
+    else:
+        assert any(problem in found for found in problems), problems
 
 
 def test_id_map_csv_becomes_json_rows(zone):

@@ -540,58 +540,92 @@ def _check_league(
 
     transactions = _newest(league, "espn", "transactions")
     if transactions is not None:
-        findings += _check_transactions(transactions, subject)
+        run = [
+            capture
+            for capture in league
+            if (capture.source, capture.endpoint) == ("espn", "transactions")
+            and capture.fetched_at == transactions.fetched_at
+        ]
+        findings += _check_transactions(run, subject)
     return findings
 
 
-def _check_transactions(capture: Capture, subject: str) -> list[Finding]:
+def _check_transactions(run: list[Capture], subject: str) -> list[Finding]:
     """Completeness evidence for the transaction log, which milestone 10 depends on.
 
-    ESPN caps topics per request and messages per topic, and either cap truncates
-    silently. Separately, a topic can hold fewer messages than its totalMessageCount:
-    the message-type filter may exclude the rest, or they may be missing. The payload
-    cannot tell those apart, so that case is reported rather than excused.
+    `run` is every page landed by the newest run. The log is fetched unfiltered and
+    paged (#26), so the pages must form the whole sequence (page_sequence_problems) and
+    each topic must hold exactly its stated totalMessageCount; anything else is a
+    missing page, a missing message or a truncated log.
+    A capture without an offset predates that, used a message-type filter, and cannot
+    be shown complete: a topic short by a filtered-out lineup move looks exactly like
+    one short by a lost transaction.
     """
-    topics = capture.payload().get("topics", [])
-    limit = int(capture.meta.get("params", {}).get("limit", espn_transactions.DEFAULT_LIMIT))
-    capped = [
-        str(topic.get("id"))
-        for topic in topics
-        if len(topic.get("messages", [])) >= espn_transactions.MESSAGES_PER_TOPIC
+    run = sorted(run, key=lambda capture: int(capture.partition("offset") or 0))
+    stamp = run[0].fetched_at
+    parsed = [espn_transactions.page_topics(capture.payload()) for capture in run]
+    malformed = [
+        capture.partition("offset") or "none"
+        for capture, page in zip(run, parsed, strict=True)
+        if page is None
     ]
-    short = [
-        str(topic.get("id"))
-        for topic in topics
-        if len(topic.get("messages", [])) < int(topic.get("totalMessageCount", 0))
-    ]
+    topics = [topic for page in parsed if page is not None for topic in page]
+    distinct = len({str(topic.get("id")) for topic in topics})
     findings = [
         Finding(
             Severity.INFO,
             "espn",
             subject,
-            f"transactions {capture.fetched_at}: {len(topics)} topic(s), request limit {limit}",
+            f"transactions {stamp}: {len(run)} page(s), {distinct} topic(s)"
+            + (
+                f" ({len(topics) - distinct} repeated across pages)"
+                if len(topics) > distinct
+                else ""
+            ),
         )
     ]
-    if len(topics) >= limit or capped:
+    unpaged = [capture for capture in run if capture.partition("offset") is None]
+    if len(unpaged) == len(run):
         findings.append(
             Finding(
                 Severity.WARN,
                 "espn",
                 subject,
-                f"transaction log hit a request cap: {len(topics)} topic(s) against a limit of "
-                f"{limit}; {len(capped)} topic(s) at {espn_transactions.MESSAGES_PER_TOPIC} "
-                "messages",
+                f"transactions {stamp} predates the paged, unfiltered capture (#26), so its "
+                "completeness cannot be shown; run `front-office backfill espn`",
             )
         )
+        return findings
+
+    pages = [
+        (
+            capture.meta.get("params", {}).get("offset"),
+            capture.meta.get("params", {}).get("limit"),
+            None if page is None else len(page),
+        )
+        for capture, page in zip(run, parsed, strict=True)
+    ]
+    problems = espn_transactions.page_sequence_problems(pages)
+    if malformed:
+        problems.append(
+            f"{len(malformed)} page(s) carry no valid `topics` list, so their contents are "
+            f"unknown (offset {', '.join(malformed)})"
+        )
+    if unpaged:
+        problems.append(f"{len(unpaged)} page(s) of the run carry no offset")
+    for problem in problems:
+        findings.append(
+            Finding(Severity.ERROR, "espn", subject, f"transactions {stamp}: {problem}")
+        )
+    short = espn_transactions.incomplete_topics(topics)
     if short:
         findings.append(
             Finding(
-                Severity.WARN,
+                Severity.ERROR,
                 "espn",
                 subject,
-                f"{len(short)} topic(s) returned fewer messages than totalMessageCount: "
-                "excluded by the type filter, or missing; completeness unproven "
-                f"(needed by milestone 10); {_sample(short)}",
+                f"transactions {stamp}: {len(short)} topic(s) do not hold exactly "
+                f"totalMessageCount messages, or state no valid count; {_sample(short)}",
             )
         )
     return findings

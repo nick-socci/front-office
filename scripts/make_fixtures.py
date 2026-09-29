@@ -204,6 +204,10 @@ FIXTURE_MATCHUPS = 2
 # GUID of the member who made the move.
 ESPN_TRANSACTION_MESSAGE_FIELDS = ("date", "messageTypeId", "targetId", "to", "from")
 FIXTURE_TRANSACTION_TOPICS = 6
+# Message types that move a player, per dbt/seeds/espn_activity_types.csv. The fixture
+# takes topics carrying one of these, plus one topic of lineup moves only (type 188), so
+# CI exercises staging's exclusion of non-transactions from the unfiltered log (#26).
+ESPN_TRANSACTION_TYPES = frozenset({178, 179, 180, 181, 239, 244})
 
 # SFBB crosswalk columns. Player names here are public major leaguers.
 IDMAP_FIELDS = ("PLAYERNAME", "MLBID", "ESPNID", "TEAM", "POS", "IDFANGRAPHS")
@@ -565,10 +569,29 @@ def build_espn_matchups() -> Path:
     return path
 
 
+def newest_transactions_first_page() -> dict[str, Any]:
+    """Page 0 (offset=0) of the newest paged transaction run."""
+    pages = sorted(
+        path
+        for path in (RAW_ROOT / "espn/transactions").rglob("offset=0/*.json")
+        if not path.name.endswith(".meta.json") and path.with_suffix(".meta.json").exists()
+    )
+    if not pages:
+        raise SystemExit("no paged espn/transactions capture: run `front-office backfill espn`")
+    return json.loads(pages[-1].read_text())
+
+
 def build_espn_transactions() -> Path:
-    payload = latest_espn("transactions")
+    payload = newest_transactions_first_page()
+
+    def types(topic: dict[str, Any]) -> set[int]:
+        return {message["messageTypeId"] for message in topic["messages"]}
+
+    moves = [t for t in payload["topics"] if types(t) & ESPN_TRANSACTION_TYPES]
+    lineup_only = [t for t in payload["topics"] if types(t) == {188}]
+    chosen = moves[:FIXTURE_TRANSACTION_TOPICS] + lineup_only[:1]
     topics = []
-    for index, topic in enumerate(payload["topics"][:FIXTURE_TRANSACTION_TOPICS], start=1):
+    for index, topic in enumerate(chosen, start=1):
         # Topic and message ids are themselves GUIDs. They identify transactions rather
         # than people, but synthesising them keeps the fixture privacy check free to
         # reject every GUID-shaped string without exceptions.
@@ -576,6 +599,7 @@ def build_espn_transactions() -> Path:
             {
                 "id": f"topic-{index:03d}",
                 "date": topic["date"],
+                "totalMessageCount": topic["totalMessageCount"],
                 "messages": [
                     {"id": f"message-{index:03d}-{position:02d}"}
                     | rebuild(message, ESPN_TRANSACTION_MESSAGE_FIELDS)
@@ -586,11 +610,11 @@ def build_espn_transactions() -> Path:
     path = write_fixture(
         source="espn",
         endpoint="transactions",
-        partitions={"season": 2026, "league_id": FIXTURE_LEAGUE_ID},
+        partitions={"season": 2026, "league_id": FIXTURE_LEAGUE_ID, "offset": 0},
         payload={"topics": topics},
         request={
             "url": "https://lm-api-reads.fantasy.espn.com/",
-            "params": {"view": "kona_league_communication", "limit": 2000},
+            "params": {"view": "kona_league_communication", "limit": 2000, "offset": 0},
         },
     )
     messages = sum(len(t["messages"]) for t in topics)

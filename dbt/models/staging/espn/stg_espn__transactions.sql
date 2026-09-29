@@ -8,9 +8,24 @@
 -- (topic.author / message.author). Those fields are never selected: they identify a
 -- real person, and this repo is public.
 
+-- The log is landed as pages sharing one fetched_at (#26), so "latest" is every page of
+-- the newest run, not the single newest response. A topic can repeat across pages when
+-- activity lands between two page requests; the dedupe on message id below absorbs it.
 with latest as (
 
-    {{ fo_espn_latest('transactions') }}
+    select
+        payload,
+        request_key,
+        fetched_at
+    from {{ source('raw', 'api_responses') }}
+    where source = 'espn'
+      and endpoint = 'transactions'
+      and fetched_at = (
+          select max(fetched_at)
+          from {{ source('raw', 'api_responses') }}
+          where source = 'espn'
+            and endpoint = 'transactions'
+      )
 
 ),
 
@@ -58,4 +73,6 @@ select
 from messages
 left join {{ ref('espn_activity_types') }} as activities
     on activities.message_type_id = {{ fo_json_int('message', '$.messageTypeId') }}
+-- `is distinct from`, so an unknown type (null) is kept and fails the activity test.
+where activities.is_transaction is distinct from false
 {{ fo_latest_by_entity(["message ->> '$.id'"]) }}
