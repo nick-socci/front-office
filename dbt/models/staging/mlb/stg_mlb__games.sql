@@ -6,8 +6,11 @@
 -- One MLB quirk drives the dedupe tie-break: a postponed game and the makeup game that
 -- replaced it share a game_pk and both appear in a single response, both with
 -- abstractGameState = 'Final'. Recency cannot separate them (same fetched_at), so
--- played games are preferred over postponed placeholders explicitly. In the 2026 season
--- this affects 29 games.
+-- played games are preferred over not-played placeholders explicitly. In the 2026 season
+-- this affects 29 postponed games. A cancelled entry is demoted the same way: "not
+-- played" means the seed's is_played = false, the same set as ingestion's NOT_PLAYED,
+-- so the two pick the same row. A state the seed doesn't list ranks with the played
+-- ones, as in ingestion, and then fails the build on its own.
 
 with responses as (
 
@@ -39,6 +42,10 @@ select
     {{ fo_json_text('game', '$.status.abstractGameState') }} as game_state,
     {{ fo_json_text('game', '$.status.detailedState') }} as game_state_detail,
     {{ fo_json_text('game', '$.status.detailedState') }} = 'Postponed' as is_postponed,
+    -- Whether the game was actually played, from the mlb_game_states seed. Null for a
+    -- state the seed doesn't list, which fails the build: a new MLB state has to be
+    -- classified by hand, not defaulted either way.
+    states.is_played,
     {{ fo_json_int('game', '$.teams.home.team.id') }} as home_team_id,
     {{ fo_json_text('game', '$.teams.home.team.name') }} as home_team_name,
     {{ fo_json_int('game', '$.teams.away.team.id') }} as away_team_id,
@@ -57,8 +64,10 @@ select
     {{ fo_json_timestamp('game', '$.resumedFrom') }} as resumed_from,
     {{ fo_parse_fetched_at() }} as fetched_at
 from games
+left join {{ ref('mlb_game_states') }} as states
+    on states.detailed_state = {{ fo_json_text('game', '$.status.detailedState') }}
 where {{ fo_json_text('game', '$.gameType') }} = 'R'
 {{ fo_latest_by_entity(
     ['game_pk'],
-    order_by="fetched_at desc, case when game ->> '$.status.detailedState' = 'Postponed' then 1 else 0 end"
+    order_by="fetched_at desc, case when states.is_played = false then 1 else 0 end"
 ) }}

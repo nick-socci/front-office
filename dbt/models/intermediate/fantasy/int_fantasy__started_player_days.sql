@@ -11,6 +11,25 @@
 -- The distinction matters: "started nobody" and "started someone who did nothing" look
 -- identical after an inner join, and only one of them is a management mistake.
 --
+-- But a row of zeroes is only a real zero if the inputs were there. input_status says
+-- which it is (#25), checked in this order:
+--   unresolved_player  -- no MLBAM id, so his stats could not be looked up at all;
+--   missing_boxscore   -- a game played that date has no loaded boxscore, so he may be
+--                         in it. That holds even if he appears in another game that
+--                         date: half a doubleheader is not his day's production. Flags
+--                         every resolved player that date, not just the ones on the
+--                         missing game's teams: over-flagging is the safe direction,
+--                         and the audit gates this to zero anyway;
+--   played             -- every game that date is loaded and he appears in one;
+--   verified_off       -- every game played that date is loaded (or there were none),
+--                         and he is in none of them. A team off day and a manager's
+--                         bench are both real zeroes for fantasy scoring, so they share
+--                         a status.
+-- played (the boolean) still says only whether he appears in what is loaded, so it can
+-- be true on a missing_boxscore row. The stat columns are kept for every status.
+-- Consumers decide what to do with the non-verified rows; they must not quietly count
+-- them as complete.
+--
 -- Doubleheaders are already summed one level down, in int_mlb__player_game_days.
 -- Verified against ESPN for matchup period 15, which contains six doubleheader starts.
 
@@ -32,6 +51,13 @@ select
     coalesce(stats.games_batted, 0) as games_batted,
     coalesce(stats.games_pitched, 0) as games_pitched,
     (stats.mlbam_player_id is not null) as played,
+    case
+        when days.mlbam_player_id is null then 'unresolved_player'
+        -- No row in game_dates means no MLB games that date: complete by definition.
+        when not coalesce(game_dates.is_complete, true) then 'missing_boxscore'
+        when stats.mlbam_player_id is not null then 'played'
+        else 'verified_off'
+    end as input_status,
 
     coalesce(stats.plate_appearances, 0) as plate_appearances,
     coalesce(stats.at_bats, 0) as at_bats,
@@ -68,4 +94,6 @@ from {{ ref('int_fantasy__roster_days') }} as days
 left join {{ ref('int_mlb__player_game_days') }} as stats
     on stats.mlbam_player_id = days.mlbam_player_id
     and stats.game_date = days.scoring_date
+left join {{ ref('int_mlb__game_dates') }} as game_dates
+    on game_dates.official_date = days.scoring_date
 where days.is_started
