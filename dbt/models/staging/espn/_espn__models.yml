@@ -301,6 +301,49 @@ seeds:
           name: espn_lineup_slots_bench_is_exactly_the_non_starting_slots
           arguments:
             expression: "is_starting_slot = (slot_role != 'bench')"
+  - name: espn_stat_components
+    description: >
+      How each stat ESPN reports for a matchup side is computed from credited components
+      (#10): value = sum(weight * component) over numerator rows, divided by the same
+      over denominator rows when there are any. Rates carry their scale in the weights
+      (ERA's 27, WHIP's 3, since outs stand in for innings). Covers all 24 stats in
+      scoreByStat, including the 7 that are only components of the 17 scored categories.
+    config:
+      column_types:
+        stat_id: bigint
+        part: varchar
+        component: varchar
+        weight: double
+    columns:
+      - name: stat_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('espn_stat_ids')
+                field: stat_id
+      - name: part
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [numerator, denominator]
+      - name: component
+        description: >
+          A column of int_fantasy__started_player_days (and so of the matchup side
+          totals). Listed exhaustively, because a misspelt component would join to
+          nothing and score a silent zero.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [games_batted, plate_appearances, at_bats, hits, doubles, triples, home_runs, runs, runs_batted_in, batter_walks, batter_strikeouts, stolen_bases, caught_stealing, hit_by_pitch, sacrifice_flies, total_bases, games_pitched, games_started, outs_recorded, batters_faced, hits_allowed, runs_allowed, earned_runs, home_runs_allowed, pitcher_walks, pitcher_strikeouts, hit_batsmen, wins, losses, saves, holds, blown_saves]
+      - name: weight
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [stat_id, part, component]
   - name: espn_player_positions
     description: ESPN defaultPositionId -> position abbreviation.
     columns:
