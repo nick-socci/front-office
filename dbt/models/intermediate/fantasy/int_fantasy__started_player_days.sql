@@ -14,16 +14,21 @@
 -- But a row of zeroes is only a real zero if the inputs were there. input_status says
 -- which it is (#25), checked in this order:
 --   unresolved_player  -- no MLBAM id, so his stats could not be looked up at all;
---   played             -- he appears in that date's MLB production;
 --   missing_boxscore   -- a game played that date has no loaded boxscore, so he may be
---                         in it. Flags every non-appearing player that date, not just
---                         the ones on the missing game's teams: over-flagging is the
---                         safe direction, and the audit gates this to zero anyway;
+--                         in it. That holds even if he appears in another game that
+--                         date: half a doubleheader is not his day's production. Flags
+--                         every resolved player that date, not just the ones on the
+--                         missing game's teams: over-flagging is the safe direction,
+--                         and the audit gates this to zero anyway;
+--   played             -- every game that date is loaded and he appears in one;
 --   verified_off       -- every game played that date is loaded (or there were none),
---                         so he did not play. A team off day and a manager's bench are
---                         both real zeroes for fantasy scoring, so they share a status.
--- The zero-filled columns are kept for every status. Consumers decide what to do with
--- the non-verified rows; they must not quietly count them as zeroes.
+--                         and he is in none of them. A team off day and a manager's
+--                         bench are both real zeroes for fantasy scoring, so they share
+--                         a status.
+-- played (the boolean) still says only whether he appears in what is loaded, so it can
+-- be true on a missing_boxscore row. The stat columns are kept for every status.
+-- Consumers decide what to do with the non-verified rows; they must not quietly count
+-- them as complete.
 --
 -- Doubleheaders are already summed one level down, in int_mlb__player_game_days.
 -- Verified against ESPN for matchup period 15, which contains six doubleheader starts.
@@ -48,9 +53,9 @@ select
     (stats.mlbam_player_id is not null) as played,
     case
         when days.mlbam_player_id is null then 'unresolved_player'
-        when stats.mlbam_player_id is not null then 'played'
         -- No row in game_dates means no MLB games that date: complete by definition.
         when not coalesce(game_dates.is_complete, true) then 'missing_boxscore'
+        when stats.mlbam_player_id is not null then 'played'
         else 'verified_off'
     end as input_status,
 

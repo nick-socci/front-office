@@ -147,6 +147,34 @@ models:
             expression: "earned_runs <= runs_allowed"
 
 unit_tests:
+  - name: games_prefer_the_played_entry_over_a_cancelled_or_postponed_one
+    description: >
+      A not-played placeholder and the played game that replaced it share a game_pk in
+      one response, so recency can't choose. The played entry must win whichever comes
+      first in the payload, for cancelled as well as postponed placeholders, matching
+      ingestion's NOT_PLAYED tie-break (PR #43 review).
+    model: stg_mlb__games
+    given:
+      - input: source('raw', 'api_responses')
+        rows:
+          - source: mlb
+            endpoint: schedule
+            request_key: "season=2026"
+            fetched_at: "20260601T000000Z"
+            file_path: schedule.json
+            payload: '{"dates":[{"games":[{"gamePk":1,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Cancelled"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":1,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":2,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":2,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Cancelled"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Postponed"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Completed Early"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}}]}]}'
+      - input: ref('mlb_game_states')
+        rows:
+          - {detailed_state: Final, is_played: true}
+          - {detailed_state: Completed Early, is_played: true}
+          - {detailed_state: Postponed, is_played: false}
+          - {detailed_state: Cancelled, is_played: false}
+    expect:
+      rows:
+        - {game_pk: 1, game_state_detail: Final, is_played: true}
+        - {game_pk: 2, game_state_detail: Final, is_played: true}
+        - {game_pk: 3, game_state_detail: Completed Early, is_played: true}
+
   - name: pitching_keeps_the_newest_snapshot_per_pitcher
     description: >
       A boxscore refetched inside the settle window supersedes the earlier copy. Here an

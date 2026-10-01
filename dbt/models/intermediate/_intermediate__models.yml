@@ -246,9 +246,11 @@ models:
       - name: input_status
         description: >
           Whether this row's numbers can be trusted (#25). played and verified_off are
-          real: he played, or every game that date is loaded and he is in none of them.
-          missing_boxscore and unresolved_player are zero-filled but unknown, and must
-          be reported separately, never scored as zeroes.
+          complete: every game that date is loaded, and he is in one of them or in none.
+          missing_boxscore and unresolved_player are unknown, possibly partial, and must
+          be reported separately, never scored as complete. The played boolean says
+          only whether he appears in what is loaded, so it can be true on a
+          missing_boxscore row.
         data_tests:
           - not_null
           - accepted_values:
@@ -268,6 +270,8 @@ models:
           name: int_fantasy__started_player_days_played_matches_input_status
           arguments:
             expression: "played = (input_status = 'played')"
+            config:
+              where: "input_status in ('played', 'verified_off')"
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns:
@@ -544,9 +548,9 @@ unit_tests:
 
   - name: started_player_days_status_missing_boxscore_on_an_incomplete_date
     description: >
-      A game played that date has no boxscore, so a player with no stats might be in it.
-      A player who does appear that date is still played: the gap can't hide his
-      production, only add to it.
+      A doubleheader with game 2's boxscore missing. A player with no stats might be in
+      game 2. A player with game 1's stats might be too, so his totals may be partial:
+      he is missing_boxscore as well, with played still true and his game 1 stats kept.
     model: int_fantasy__started_player_days
     given:
       - input: ref('int_fantasy__roster_days')
@@ -562,7 +566,7 @@ unit_tests:
     expect:
       rows:
         - {platform_player_id: 1, input_status: missing_boxscore, played: false, at_bats: 0}
-        - {platform_player_id: 2, input_status: played, played: true, at_bats: 4}
+        - {platform_player_id: 2, input_status: missing_boxscore, played: true, at_bats: 4}
 
   - name: started_player_days_status_unresolved_player_wins_over_missing_boxscore
     description: >
