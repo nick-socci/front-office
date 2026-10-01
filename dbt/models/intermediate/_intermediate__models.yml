@@ -177,6 +177,26 @@ models:
   # Not part of the seam: MLB facts and the attribution grain.
   # ---------------------------------------------------------------------------
 
+  - name: int_mlb__game_dates
+    description: >
+      One row per MLB official date with games scheduled: played games, how many of them
+      have loaded boxscores, and whether that is all of them. What lets a started player
+      with no stats be called a verified day off rather than a missing input (#25).
+    columns:
+      - name: official_date
+        data_tests: [not_null, unique]
+      - name: played_games
+        data_tests: [not_null]
+      - name: loaded_games
+        data_tests: [not_null]
+      - name: is_complete
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.expression_is_true:
+          name: int_mlb__game_dates_complete_means_all_loaded
+          arguments:
+            expression: "is_complete = (loaded_games = played_games)"
+
   - name: int_mlb__player_game_days
     description: >
       One row per (player, date). Doubleheaders summed; a player who both batted and
@@ -223,7 +243,31 @@ models:
         data_tests: [not_null]
       - name: played
         data_tests: [not_null]
+      - name: input_status
+        description: >
+          Whether this row's numbers can be trusted (#25). played and verified_off are
+          real: he played, or every game that date is loaded and he is in none of them.
+          missing_boxscore and unresolved_player are zero-filled but unknown, and must
+          be reported separately, never scored as zeroes.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [played, verified_off, missing_boxscore, unresolved_player]
+          # A warning, not an error: the CI fixtures load 2 of 24 scheduled games on
+          # purpose, so every fixture date is incomplete. On the real warehouse it should
+          # be silent; the audit gates missing boxscores to zero before data is trusted.
+          - accepted_values:
+              name: int_fantasy__started_player_days_inputs_all_verified
+              arguments:
+                values: [played, verified_off]
+              config:
+                severity: warn
     data_tests:
+      - dbt_utils.expression_is_true:
+          name: int_fantasy__started_player_days_played_matches_input_status
+          arguments:
+            expression: "played = (input_status = 'played')"
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns:
@@ -351,3 +395,192 @@ unit_tests:
         - {platform_player_id: 12, mlbam_player_id: null, resolution: unresolved}
         - {platform_player_id: 13, mlbam_player_id: null, resolution: unresolved}
         - {platform_player_id: 14, mlbam_player_id: null, resolution: unresolved}
+
+# -----------------------------------------------------------------------------
+# Unit tests: MLB day aggregation and per player-day input status (#25).
+#
+# The CI fixtures have no doubleheader and no two-way player-day, and the real warehouse
+# can't be checked in, so these synthetic cases are what prove the rules. Ids in the
+# 900000s are made up.
+# -----------------------------------------------------------------------------
+
+  - name: player_game_days_sums_a_doubleheader_into_one_day
+    description: >
+      Two games on one official date are one player-day with both games' production.
+      A game on the next date stays its own day.
+    model: int_mlb__player_game_days
+    given:
+      - input: ref('stg_mlb__games')
+        rows:
+          - {game_pk: 900001, official_date: "2026-06-01"}
+          - {game_pk: 900002, official_date: "2026-06-01"}
+          - {game_pk: 900003, official_date: "2026-06-02"}
+      - input: ref('stg_mlb__batting_game_logs')
+        rows:
+          - {game_pk: 900001, mlbam_player_id: 910001, at_bats: 4, hits: 1, home_runs: 0, total_bases: 1, walks: 0, runs: 0, runs_batted_in: 0, stolen_bases: 0, strikeouts: 2}
+          - {game_pk: 900002, mlbam_player_id: 910001, at_bats: 3, hits: 2, home_runs: 1, total_bases: 5, walks: 1, runs: 1, runs_batted_in: 2, stolen_bases: 1, strikeouts: 0}
+          - {game_pk: 900003, mlbam_player_id: 910001, at_bats: 5, hits: 0, home_runs: 0, total_bases: 0, walks: 0, runs: 0, runs_batted_in: 0, stolen_bases: 0, strikeouts: 1}
+      - input: ref('stg_mlb__pitching_game_logs')
+        rows: []
+    expect:
+      rows:
+        - {mlbam_player_id: 910001, game_date: "2026-06-01", games_batted: 2, games_pitched: 0, at_bats: 7, hits: 3, home_runs: 1, total_bases: 6, batter_walks: 1, runs: 1, runs_batted_in: 2, stolen_bases: 1, batter_strikeouts: 2, outs_recorded: 0}
+        - {mlbam_player_id: 910001, game_date: "2026-06-02", games_batted: 1, games_pitched: 0, at_bats: 5, hits: 0, home_runs: 0, total_bases: 0, batter_walks: 0, runs: 0, runs_batted_in: 0, stolen_bases: 0, batter_strikeouts: 1, outs_recorded: 0}
+
+  - name: player_game_days_batting_and_pitching_on_one_day_are_one_row
+    description: >
+      A player who bats and pitches on the same day is one row with both sides populated;
+      a pitcher who didn't bat still gets a row, with zero batting. Every component a
+      scored category reads gets its own value, so a crossed or dropped column (batter
+      walks into pitcher walks, say) shows up as a wrong number.
+    model: int_mlb__player_game_days
+    given:
+      - input: ref('stg_mlb__games')
+        rows:
+          - {game_pk: 900001, official_date: "2026-06-01"}
+      - input: ref('stg_mlb__batting_game_logs')
+        rows:
+          - {game_pk: 900001, mlbam_player_id: 910001, at_bats: 4, hits: 2, home_runs: 1, total_bases: 5, walks: 1, runs: 1, runs_batted_in: 3, stolen_bases: 1, strikeouts: 1}
+      - input: ref('stg_mlb__pitching_game_logs')
+        rows:
+          - {game_pk: 900001, mlbam_player_id: 910001, outs_recorded: 17, hits_allowed: 4, walks: 2, earned_runs: 3, strikeouts: 9, wins: 1, losses: 0, saves: 0, holds: 0}
+          - {game_pk: 900001, mlbam_player_id: 910002, outs_recorded: 3, hits_allowed: 1, walks: 0, earned_runs: 0, strikeouts: 2, wins: 0, losses: 0, saves: 1, holds: 0}
+    expect:
+      rows:
+        - {mlbam_player_id: 910001, game_date: "2026-06-01", games_batted: 1, games_pitched: 1,
+           at_bats: 4, hits: 2, home_runs: 1, total_bases: 5, batter_walks: 1, runs: 1, runs_batted_in: 3, stolen_bases: 1, batter_strikeouts: 1,
+           outs_recorded: 17, hits_allowed: 4, pitcher_walks: 2, earned_runs: 3, pitcher_strikeouts: 9, wins: 1, losses: 0, saves: 0, holds: 0}
+        - {mlbam_player_id: 910002, game_date: "2026-06-01", games_batted: 0, games_pitched: 1,
+           at_bats: 0, hits: 0, home_runs: 0, total_bases: 0, batter_walks: 0, runs: 0, runs_batted_in: 0, stolen_bases: 0, batter_strikeouts: 0,
+           outs_recorded: 3, hits_allowed: 1, pitcher_walks: 0, earned_runs: 0, pitcher_strikeouts: 2, wins: 0, losses: 0, saves: 1, holds: 0}
+
+  - name: game_dates_counts_only_played_games
+    description: >
+      A cancelled game with no boxscore doesn't make its date incomplete; a played game
+      with no boxscore does. A date whose only game was postponed has nothing to load.
+    model: int_mlb__game_dates
+    given:
+      - input: ref('stg_mlb__games')
+        rows:
+          - {game_pk: 900001, official_date: "2026-06-01", is_played: true}
+          - {game_pk: 900002, official_date: "2026-06-01", is_played: false}
+          - {game_pk: 900003, official_date: "2026-06-02", is_played: true}
+          - {game_pk: 900004, official_date: "2026-06-02", is_played: true}
+          - {game_pk: 900005, official_date: "2026-06-03", is_played: false}
+      - input: ref('stg_mlb__batting_game_logs')
+        rows:
+          # Two batters in one game: loaded counts games, not lines.
+          - {game_pk: 900001, mlbam_player_id: 910001}
+          - {game_pk: 900001, mlbam_player_id: 910002}
+          - {game_pk: 900003, mlbam_player_id: 910001}
+    expect:
+      rows:
+        - {official_date: "2026-06-01", played_games: 1, loaded_games: 1, is_complete: true}
+        - {official_date: "2026-06-02", played_games: 2, loaded_games: 1, is_complete: false}
+        - {official_date: "2026-06-03", played_games: 0, loaded_games: 0, is_complete: true}
+
+  # One test per input_status. The roster-day rows are trimmed to what the model reads.
+
+  - name: started_player_days_status_played
+    description: >
+      A resolved player with production that date is played. Every component a scored
+      category reads passes through unchanged, including the ratio categories' numerators
+      and denominators: H/AB (AVG); ER and outs (ERA); hits allowed, walks and outs
+      (WHIP); K and outs (K/9); saves plus holds (SVHD).
+    model: int_fantasy__started_player_days
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910001, game_date: "2026-06-01", games_batted: 1, games_pitched: 1,
+             at_bats: 11, hits: 12, home_runs: 13, total_bases: 14, batter_walks: 15, runs: 16, runs_batted_in: 17, stolen_bases: 18, batter_strikeouts: 19,
+             outs_recorded: 21, hits_allowed: 22, pitcher_walks: 23, earned_runs: 24, pitcher_strikeouts: 25, wins: 26, losses: 27, saves: 28, holds: 29}
+      - input: ref('int_mlb__game_dates')
+        rows:
+          - {official_date: "2026-06-01", is_complete: true}
+    expect:
+      rows:
+        - {platform_player_id: 1, input_status: played, played: true,
+           at_bats: 11, hits: 12, home_runs: 13, total_bases: 14, batter_walks: 15, runs: 16, runs_batted_in: 17, stolen_bases: 18, batter_strikeouts: 19,
+           outs_recorded: 21, hits_allowed: 22, pitcher_walks: 23, earned_runs: 24, pitcher_strikeouts: 25, wins: 26, losses: 27, saves: 28, holds: 29}
+
+  - name: started_player_days_status_verified_off_on_a_complete_date
+    description: >
+      Every game that date is loaded and he is in none of them: a real zero. A benched
+      roster-day is not a started player-day and has no row at all.
+    model: int_fantasy__started_player_days
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true}
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 910002, is_started: false}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910002, game_date: "2026-06-01", at_bats: 4}
+      - input: ref('int_mlb__game_dates')
+        rows:
+          - {official_date: "2026-06-01", is_complete: true}
+    expect:
+      rows:
+        - {platform_player_id: 1, input_status: verified_off, played: false, at_bats: 0, outs_recorded: 0}
+
+  - name: started_player_days_status_verified_off_on_a_date_with_no_games
+    description: >
+      No MLB games that date (the All-Star break, say) means nothing could be missing.
+    model: int_fantasy__started_player_days
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {scoring_date: "2026-07-14", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true}
+      - input: ref('int_mlb__player_game_days')
+        rows: []
+      - input: ref('int_mlb__game_dates')
+        rows: []
+    expect:
+      rows:
+        - {platform_player_id: 1, input_status: verified_off, played: false}
+
+  - name: started_player_days_status_missing_boxscore_on_an_incomplete_date
+    description: >
+      A game played that date has no boxscore, so a player with no stats might be in it.
+      A player who does appear that date is still played: the gap can't hide his
+      production, only add to it.
+    model: int_fantasy__started_player_days
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true}
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 910002, is_started: true}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910002, game_date: "2026-06-01", at_bats: 4}
+      - input: ref('int_mlb__game_dates')
+        rows:
+          - {official_date: "2026-06-01", is_complete: false}
+    expect:
+      rows:
+        - {platform_player_id: 1, input_status: missing_boxscore, played: false, at_bats: 0}
+        - {platform_player_id: 2, input_status: played, played: true, at_bats: 4}
+
+  - name: started_player_days_status_unresolved_player_wins_over_missing_boxscore
+    description: >
+      With no MLBAM id his stats can't be looked up at all, on any date. That is the
+      more basic failure, so it outranks an incomplete date.
+    model: int_fantasy__started_player_days
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: null, is_started: true}
+          - {scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: null, is_started: true}
+      - input: ref('int_mlb__player_game_days')
+        rows: []
+      - input: ref('int_mlb__game_dates')
+        rows:
+          - {official_date: "2026-06-01", is_complete: false}
+          - {official_date: "2026-06-02", is_complete: true}
+    expect:
+      rows:
+        - {scoring_date: "2026-06-01", platform_player_id: 1, input_status: unresolved_player, played: false}
+        - {scoring_date: "2026-06-02", platform_player_id: 1, input_status: unresolved_player, played: false}

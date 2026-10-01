@@ -116,6 +116,19 @@ say) forces a decision rather than defaulting either way. It matches ingestion's
   (AVG); ER and outs (ERA); hits allowed, walks and outs (WHIP); K and outs (K/9); saves
   plus holds (SVHD).
 
+**Resolved, 2026-09-30 (implementation).** Built as designed. The 2026 warehouse
+reproduces the table above exactly: 21,120 `played`, 17,545 `verified_off` (641 on
+no-game dates), and all 184 game dates complete. One unit test was added beyond the
+list: `int_mlb__game_dates` itself (a cancelled game without a boxscore leaves its date
+complete, and a played game without one does not), since the status tests stub that
+model and would not otherwise exercise it. Three deliberate breaks each failed a unit
+test: checking `missing_boxscore` before `unresolved_player`, feeding pitcher walks from
+batter walks, and counting a cancelled game as one to load. **Before daily runs in 2027:** the seed lists only end-of-game states. An
+in-season schedule carries `Scheduled`, `In Progress` and so on, and those stop the
+build until the seed classifies them. That is intended, but whether a date with an
+unfinished game counts as incomplete needs deciding with the ingestion-hardening
+milestone.
+
 **Out of scope, noted.** Resumed games are attributed to their `official_date`. 2026
 has one, 824912 (official date 2026-06-16). Whether ESPN credits the resume date is a
 milestone 9 reconciliation question ("slot attribution checked for ... suspended

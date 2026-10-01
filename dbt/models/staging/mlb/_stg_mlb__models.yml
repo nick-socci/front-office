@@ -33,6 +33,24 @@ models:
           - accepted_values:
               arguments:
                 values: ["Final", "Preview", "Live"]
+      - name: game_state_detail
+        description: >
+          MLB's detailedState. Every value must be listed in the mlb_game_states seed,
+          so a new state (a forfeit, say) stops the build until someone decides whether
+          it counts as played.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('mlb_game_states')
+                field: detailed_state
+      - name: is_played
+        description: >
+          True when the game was actually played (Final, Completed Early); false for a
+          game that is over without having been played (Postponed, Cancelled). MLB files
+          both kinds under game_state 'Final', so game_state cannot tell them apart.
+        data_tests:
+          - not_null
       - name: home_team_id
         data_tests:
           - not_null
@@ -186,3 +204,20 @@ unit_tests:
           at_bats: 0
           hits: 0
           stolen_bases: 1
+
+seeds:
+  - name: mlb_game_states
+    description: >
+      MLB detailedState -> is_played. Matches ingestion's NOT_PLAYED set (#36): the
+      false rows are games that are over without having been played, which have no
+      boxscore worth loading. A played-or-not decision belongs here, not in SQL, so the
+      warehouse and the audit can't drift apart silently.
+    config:
+      column_types:
+        detailed_state: varchar
+        is_played: boolean
+    columns:
+      - name: detailed_state
+        data_tests: [not_null, unique]
+      - name: is_played
+        data_tests: [not_null]

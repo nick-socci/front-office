@@ -39,6 +39,10 @@ select
     {{ fo_json_text('game', '$.status.abstractGameState') }} as game_state,
     {{ fo_json_text('game', '$.status.detailedState') }} as game_state_detail,
     {{ fo_json_text('game', '$.status.detailedState') }} = 'Postponed' as is_postponed,
+    -- Whether the game was actually played, from the mlb_game_states seed. Null for a
+    -- state the seed doesn't list, which fails the build: a new MLB state has to be
+    -- classified by hand, not defaulted either way.
+    states.is_played,
     {{ fo_json_int('game', '$.teams.home.team.id') }} as home_team_id,
     {{ fo_json_text('game', '$.teams.home.team.name') }} as home_team_name,
     {{ fo_json_int('game', '$.teams.away.team.id') }} as away_team_id,
@@ -57,6 +61,8 @@ select
     {{ fo_json_timestamp('game', '$.resumedFrom') }} as resumed_from,
     {{ fo_parse_fetched_at() }} as fetched_at
 from games
+left join {{ ref('mlb_game_states') }} as states
+    on states.detailed_state = {{ fo_json_text('game', '$.status.detailedState') }}
 where {{ fo_json_text('game', '$.gameType') }} = 'R'
 {{ fo_latest_by_entity(
     ['game_pk'],
