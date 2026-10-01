@@ -305,6 +305,18 @@ float-tolerance singular tests.
 **Verify:** all three reconciliation tests pass on the full season; deliberately break one
 component mapping and confirm the test catches it; CI green on PR 9.
 
+> **Resolved, 2026-10-01: ESPN credits stats by slot role.** The review asked which
+> production the platform counts for each role, since started player-days carried a
+> player's whole day. A full-season probe answered it. Summing every started player's
+> batting and pitching leaves 0–18 of 286 matchup sides off ESPN per stat. Crediting
+> batting only from hitter slots and pitching only from P/SP/RP brings K, outs, GS, BB,
+> SO, R, HR, SB, W, L and SV to exact on every side. What remains is 14 sides, nearly
+> all ±1 H/ER: official scoring changes that ESPN never applied, plus 3 sides still to
+> explain. `slot_role` is now a column of the `espn_lineup_slots` seed, and
+> `int_fantasy__started_player_days` carries credited production only. A player's full
+> day stays in `int_mlb__player_game_days`. Those residuals get an explicit register in
+> the reconciliation, and are never absorbed by a tolerance.
+
 ## Milestone 10 — player value and transaction impact
 
 **New dbt concepts:** window functions over the roster timeline · `dbt_utils.date_spine` ·

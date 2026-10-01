@@ -4,7 +4,8 @@
 -- Every roster day, not just the starts -- the bench is the whole point of the lineup
 -- marts later on. is_started separates them, and comes from the seed rather than a
 -- string comparison against 'BE' and 'IL', because whether a slot scores is a property
--- of the slot.
+-- of the slot. slot_role is the same kind of fact: which side of a player's game the
+-- slot credits (hitter, pitcher, or bench for neither).
 --
 -- mlbam_player_id is left nullable even though nothing is null in 2026. The crosswalk
 -- resolves 55,315 of 55,653 roster days by id and the unambiguous-name fallback covers
@@ -31,6 +32,7 @@ select
     entries.lineup_slot_id as roster_slot_id,
     entries.lineup_slot as roster_slot,
     slots.is_starting_slot as is_started,
+    slots.slot_role,
     entries.default_position,
     entries.injury_status,
     entries.acquisition_type

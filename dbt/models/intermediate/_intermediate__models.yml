@@ -161,6 +161,16 @@ models:
       - name: is_started
         data_type: boolean
         constraints: [{type: not_null}]
+      - name: slot_role
+        description: >
+          Which side of the player's game this slot credits: hitter (batting only),
+          pitcher (pitching only) or bench (neither).
+        data_type: varchar
+        constraints: [{type: not_null}]
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [hitter, pitcher, bench]
       - name: default_position
         data_type: varchar
       - name: injury_status
@@ -231,9 +241,10 @@ models:
 
   - name: int_fantasy__started_player_days
     description: >
-      The attribution grain: one row per started player-day with that day's MLB
-      production. A started player who did not play yields zeroes, not a missing row --
-      "started nobody" and "started someone who did nothing" are different mistakes.
+      The attribution grain: one row per started player-day with the MLB production his
+      slot credits -- batting from a hitter slot, pitching from a pitcher slot, as ESPN
+      scores it (#10). A started player who did not play yields zeroes, not a missing row
+      -- "started nobody" and "started someone who did nothing" are different mistakes.
     columns:
       - name: scoring_date
         data_tests: [not_null]
@@ -243,6 +254,15 @@ models:
         data_tests: [not_null]
       - name: played
         data_tests: [not_null]
+      - name: slot_role
+        description: >
+          Which side of his day the slot credits. Never bench: a benched player is not
+          started.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [hitter, pitcher]
       - name: input_status
         description: >
           Whether this row's numbers can be trusted (#25). played and verified_off are
@@ -266,6 +286,18 @@ models:
               config:
                 severity: warn
     data_tests:
+      - dbt_utils.expression_is_true:
+          name: int_fantasy__started_player_days_hitters_credit_no_pitching
+          arguments:
+            expression: "games_pitched = 0 and outs_recorded = 0 and pitcher_strikeouts = 0 and earned_runs = 0"
+            config:
+              where: "slot_role = 'hitter'"
+      - dbt_utils.expression_is_true:
+          name: int_fantasy__started_player_days_pitchers_credit_no_batting
+          arguments:
+            expression: "games_batted = 0 and at_bats = 0 and hits = 0 and batter_walks = 0"
+            config:
+              where: "slot_role = 'pitcher'"
       - dbt_utils.expression_is_true:
           name: int_fantasy__started_player_days_played_matches_input_status
           arguments:
@@ -485,20 +517,27 @@ unit_tests:
 
   # One test per input_status. The roster-day rows are trimmed to what the model reads.
 
-  - name: started_player_days_status_played
+  - name: started_player_days_status_played_credits_only_the_slot_role
     description: >
-      A resolved player with production that date is played. Every component a scored
-      category reads passes through unchanged, including the ratio categories' numerators
-      and denominators: H/AB (AVG); ER and outs (ERA); hits allowed, walks and outs
-      (WHIP); K and outs (K/9); saves plus holds (SVHD).
+      Two players with the same two-way day: every component a scored category reads
+      has its own value. In a hitter slot (UTIL) only the batting side is credited; in a
+      pitcher slot (SP) only the pitching side. That is ESPN's rule (#10). Every credited
+      component passes through unchanged, including the ratio categories' numerators and
+      denominators: H/AB (AVG); ER and outs (ERA); hits allowed, walks and outs (WHIP);
+      K and outs (K/9); saves plus holds (SVHD). Both are played: input status is about
+      the whole day, not the credited part.
     model: int_fantasy__started_player_days
     given:
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true}
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, roster_slot: UTIL, slot_role: hitter}
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 910002, is_started: true, roster_slot: SP, slot_role: pitcher}
       - input: ref('int_mlb__player_game_days')
         rows:
           - {mlbam_player_id: 910001, game_date: "2026-06-01", games_batted: 1, games_pitched: 1,
+             at_bats: 11, hits: 12, home_runs: 13, total_bases: 14, batter_walks: 15, runs: 16, runs_batted_in: 17, stolen_bases: 18, batter_strikeouts: 19,
+             outs_recorded: 21, hits_allowed: 22, pitcher_walks: 23, earned_runs: 24, pitcher_strikeouts: 25, wins: 26, losses: 27, saves: 28, holds: 29}
+          - {mlbam_player_id: 910002, game_date: "2026-06-01", games_batted: 1, games_pitched: 1,
              at_bats: 11, hits: 12, home_runs: 13, total_bases: 14, batter_walks: 15, runs: 16, runs_batted_in: 17, stolen_bases: 18, batter_strikeouts: 19,
              outs_recorded: 21, hits_allowed: 22, pitcher_walks: 23, earned_runs: 24, pitcher_strikeouts: 25, wins: 26, losses: 27, saves: 28, holds: 29}
       - input: ref('int_mlb__game_dates')
@@ -506,8 +545,11 @@ unit_tests:
           - {official_date: "2026-06-01", is_complete: true}
     expect:
       rows:
-        - {platform_player_id: 1, input_status: played, played: true,
+        - {platform_player_id: 1, input_status: played, played: true, slot_role: hitter, games_batted: 1, games_pitched: 0,
            at_bats: 11, hits: 12, home_runs: 13, total_bases: 14, batter_walks: 15, runs: 16, runs_batted_in: 17, stolen_bases: 18, batter_strikeouts: 19,
+           outs_recorded: 0, hits_allowed: 0, pitcher_walks: 0, earned_runs: 0, pitcher_strikeouts: 0, wins: 0, losses: 0, saves: 0, holds: 0}
+        - {platform_player_id: 2, input_status: played, played: true, slot_role: pitcher, games_batted: 0, games_pitched: 1,
+           at_bats: 0, hits: 0, home_runs: 0, total_bases: 0, batter_walks: 0, runs: 0, runs_batted_in: 0, stolen_bases: 0, batter_strikeouts: 0,
            outs_recorded: 21, hits_allowed: 22, pitcher_walks: 23, earned_runs: 24, pitcher_strikeouts: 25, wins: 26, losses: 27, saves: 28, holds: 29}
 
   - name: started_player_days_status_verified_off_on_a_complete_date
@@ -518,8 +560,8 @@ unit_tests:
     given:
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true}
-          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 910002, is_started: false}
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, slot_role: hitter}
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 910002, is_started: false, slot_role: bench}
       - input: ref('int_mlb__player_game_days')
         rows:
           - {mlbam_player_id: 910002, game_date: "2026-06-01", at_bats: 4}
@@ -537,7 +579,7 @@ unit_tests:
     given:
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {scoring_date: "2026-07-14", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true}
+          - {scoring_date: "2026-07-14", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, slot_role: hitter}
       - input: ref('int_mlb__player_game_days')
         rows: []
       - input: ref('int_mlb__game_dates')
@@ -555,8 +597,8 @@ unit_tests:
     given:
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true}
-          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 910002, is_started: true}
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, slot_role: hitter}
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 910002, is_started: true, slot_role: hitter}
       - input: ref('int_mlb__player_game_days')
         rows:
           - {mlbam_player_id: 910002, game_date: "2026-06-01", at_bats: 4}
@@ -576,8 +618,8 @@ unit_tests:
     given:
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: null, is_started: true}
-          - {scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: null, is_started: true}
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: null, is_started: true, slot_role: hitter}
+          - {scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: null, is_started: true, slot_role: hitter}
       - input: ref('int_mlb__player_game_days')
         rows: []
       - input: ref('int_mlb__game_dates')
