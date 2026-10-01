@@ -1,5 +1,5 @@
--- The attribution grain: one row per started player-day, with what that player
--- actually did in MLB that day.
+-- The attribution grain: one row per started player-day, with the MLB production his
+-- fantasy slot credits that day.
 --
 -- This is the model everything in the mart layer is built on. It answers the only
 -- question that matters for scoring a categories league -- who was in a scoring slot,
@@ -30,10 +30,57 @@
 -- Consumers decide what to do with the non-verified rows; they must not quietly count
 -- them as complete.
 --
+-- Credited, not everything he did (#10). A hitter slot credits only his batting and a
+-- pitcher slot (P, SP, RP) only his pitching -- the slot's slot_role, from the
+-- espn_lineup_slots seed. That is ESPN's rule, measured rather than assumed: summing
+-- every started player's full line leaves up to 18 of 286 matchup sides off ESPN per
+-- stat; crediting by role leaves only official-scoring differences. A pitcher's at-bat
+-- or a position player's mop-up inning is real but scores nothing, and stays visible in
+-- int_mlb__player_game_days. played and input_status describe his whole day, not the
+-- credited part: they say whether the inputs are complete, which crediting can't change.
+--
 -- Doubleheaders are already summed one level down, in int_mlb__player_game_days.
 -- Verified against ESPN for matchup period 15, which contains six doubleheader starts.
 
 {{ config(materialized='table') }}
+
+-- Each list is one side of a player's game, credited only by a slot of that role.
+{%- set batting_columns = [
+    'games_batted',
+    'plate_appearances',
+    'at_bats',
+    'hits',
+    'doubles',
+    'triples',
+    'home_runs',
+    'runs',
+    'runs_batted_in',
+    'batter_walks',
+    'batter_strikeouts',
+    'stolen_bases',
+    'caught_stealing',
+    'hit_by_pitch',
+    'sacrifice_flies',
+    'total_bases'
+] %}
+{%- set pitching_columns = [
+    'games_pitched',
+    'games_started',
+    'outs_recorded',
+    'batters_faced',
+    'hits_allowed',
+    'runs_allowed',
+    'earned_runs',
+    'home_runs_allowed',
+    'pitcher_walks',
+    'pitcher_strikeouts',
+    'hit_batsmen',
+    'wins',
+    'losses',
+    'saves',
+    'holds',
+    'blown_saves'
+] %}
 
 select
     days.platform,
@@ -48,8 +95,6 @@ select
     days.roster_slot,
     days.player_resolution,
 
-    coalesce(stats.games_batted, 0) as games_batted,
-    coalesce(stats.games_pitched, 0) as games_pitched,
     (stats.mlbam_player_id is not null) as played,
     case
         when days.mlbam_player_id is null then 'unresolved_player'
@@ -58,38 +103,15 @@ select
         when stats.mlbam_player_id is not null then 'played'
         else 'verified_off'
     end as input_status,
+    days.slot_role,
 
-    coalesce(stats.plate_appearances, 0) as plate_appearances,
-    coalesce(stats.at_bats, 0) as at_bats,
-    coalesce(stats.hits, 0) as hits,
-    coalesce(stats.doubles, 0) as doubles,
-    coalesce(stats.triples, 0) as triples,
-    coalesce(stats.home_runs, 0) as home_runs,
-    coalesce(stats.runs, 0) as runs,
-    coalesce(stats.runs_batted_in, 0) as runs_batted_in,
-    coalesce(stats.batter_walks, 0) as batter_walks,
-    coalesce(stats.batter_strikeouts, 0) as batter_strikeouts,
-    coalesce(stats.stolen_bases, 0) as stolen_bases,
-    coalesce(stats.caught_stealing, 0) as caught_stealing,
-    coalesce(stats.hit_by_pitch, 0) as hit_by_pitch,
-    coalesce(stats.sacrifice_flies, 0) as sacrifice_flies,
-    coalesce(stats.total_bases, 0) as total_bases,
-
-    coalesce(stats.games_started, 0) as games_started,
-    coalesce(stats.outs_recorded, 0) as outs_recorded,
-    coalesce(stats.batters_faced, 0) as batters_faced,
-    coalesce(stats.hits_allowed, 0) as hits_allowed,
-    coalesce(stats.runs_allowed, 0) as runs_allowed,
-    coalesce(stats.earned_runs, 0) as earned_runs,
-    coalesce(stats.home_runs_allowed, 0) as home_runs_allowed,
-    coalesce(stats.pitcher_walks, 0) as pitcher_walks,
-    coalesce(stats.pitcher_strikeouts, 0) as pitcher_strikeouts,
-    coalesce(stats.hit_batsmen, 0) as hit_batsmen,
-    coalesce(stats.wins, 0) as wins,
-    coalesce(stats.losses, 0) as losses,
-    coalesce(stats.saves, 0) as saves,
-    coalesce(stats.holds, 0) as holds,
-    coalesce(stats.blown_saves, 0) as blown_saves
+    {%- for column in batting_columns %}
+    case when days.slot_role = 'hitter' then coalesce(stats.{{ column }}, 0) else 0 end as {{ column }},
+    {%- endfor %}
+    {%- for column in pitching_columns %}
+    case when days.slot_role = 'pitcher' then coalesce(stats.{{ column }}, 0) else 0 end as {{ column }}
+        {{- ',' if not loop.last }}
+    {%- endfor %}
 from {{ ref('int_fantasy__roster_days') }} as days
 left join {{ ref('int_mlb__player_game_days') }} as stats
     on stats.mlbam_player_id = days.mlbam_player_id

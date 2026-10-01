@@ -280,12 +280,27 @@ seeds:
     description: >
       ESPN lineupSlotId -> slot abbreviation (C, 1B, BE, IL...). is_starting_slot is
       false for exactly bench and injured list: a benched player's real game still
-      happens, it is just not credited to the fantasy team.
+      happens, it is just not credited to the fantasy team. slot_role says which side of a
+      started player's game ESPN credits (#10): batting from hitter slots only, pitching
+      from P/SP/RP only. Measured, not assumed: summing everything a started player did
+      leaves up to 18 of 286 matchup sides off ESPN per stat, crediting by role leaves
+      only official-scoring differences.
     columns:
       - name: lineup_slot_id
         data_tests: [not_null, unique]
       - name: is_starting_slot
         data_tests: [not_null]
+      - name: slot_role
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [hitter, pitcher, bench]
+    data_tests:
+      - dbt_utils.expression_is_true:
+          name: espn_lineup_slots_bench_is_exactly_the_non_starting_slots
+          arguments:
+            expression: "is_starting_slot = (slot_role != 'bench')"
   - name: espn_player_positions
     description: ESPN defaultPositionId -> position abbreviation.
     columns:
