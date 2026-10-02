@@ -1,7 +1,15 @@
--- One row per (matchup side, scored category): our result against ESPN's, and whether a
--- difference is accounted for.
+-- One row per (matchup side, scored category) at either end: our result against
+-- ESPN's, and whether a difference is accounted for.
+--
+-- A full outer join, so a category scored at one end only is a row, not a silence. The
+-- stat reconciliation covers all 24 stats whatever the scored list says, and a dropped
+-- category need not change a winner -- this is the check that would catch our list of
+-- scored categories disagreeing with ESPN's. Byes need no exclusion: ESPN reports their
+-- stats but no results, so they have no scored categories.
 --
 -- status:
+--   missing_ours scored at ESPN, absent from our marts.
+--   missing_espn in our marts, not scored at ESPN.
 --   match        same result.
 --   unverified   the category rests on unverified inputs on either side (#25).
 --   explained    the results differ, and so do the values, by residuals already
@@ -38,15 +46,16 @@ accounted as (
 )
 
 select
-    ours.league_id,
-    ours.season,
-    ours.matchup_id,
-    ours.fantasy_team_id,
-    ours.category_key,
+    coalesce(ours.league_id, espn.league_id) as league_id,
+    coalesce(ours.season, espn.season) as season,
+    coalesce(ours.matchup_id, espn.matchup_id) as matchup_id,
+    coalesce(ours.fantasy_team_id, espn.fantasy_team_id) as fantasy_team_id,
+    coalesce(ours.category_key, espn.category_key) as category_key,
     ours.result as our_result,
     espn.result as espn_result,
     case
-        when espn.result is null then 'unexplained'
+        when ours.category_key is null then 'missing_ours'
+        when espn.category_key is null then 'missing_espn'
         when ours.has_unverified_inputs then 'unverified'
         when ours.result = espn.result then 'match'
         when exists (
@@ -58,7 +67,7 @@ select
         else 'unexplained'
     end as status
 from ours
-left join espn
+full outer join espn
     on espn.league_id = ours.league_id
     and espn.season = ours.season
     and espn.matchup_id = ours.matchup_id

@@ -1,7 +1,7 @@
 -- Every category result and every matchup winner equals ESPN's (#10).
 --
 -- A category result may differ only where the values differ by an accounted-for
--- residual on either side ('explained'). A winner may not differ at all: no 2026
+-- residual on either side ('explained'), and a category scored at one end only fails. A winner may not differ at all: no 2026
 -- residual flips one, and if a future one does, that is worth a person's attention
 -- rather than an automatic pass. Sides with unverified inputs are skipped.
 
@@ -12,7 +12,7 @@ select
     category_key,
     our_result || ' vs ESPN ' || coalesce(espn_result, 'none') as detail
 from {{ ref('rec_espn__category_result_differences') }}
-where status = 'unexplained'
+where status in ('unexplained', 'missing_ours', 'missing_espn')
 
 union all
 

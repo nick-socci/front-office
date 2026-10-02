@@ -18,10 +18,11 @@
 --   match                  within tolerance: exact for counts, 1e-6 for rates.
 --   registered             a count off by exactly the difference recorded in the
 --                          espn_reconciliation_residuals seed, with its cause.
---   explained_by_component a rate off only because one of its components carries a
---                          registered residual on the same side. Rates are never
---                          registered themselves: their difference follows from the
---                          components'.
+--   explained_by_component a rate that differs from ESPN's but equals, within 1e-6, the
+--                          rate the register implies: our rules applied to ESPN's own
+--                          components, each shifted by its registered difference on
+--                          this side. Rates are never registered themselves; their
+--                          difference must follow exactly from the components'.
 --   unexplained            anything else. The singular test fails on it.
 -- A registered residual that no longer occurs leaves its seed row attached to no
 -- 'registered' row; the test fails on that too, so the register cannot go stale.
@@ -91,7 +92,15 @@ ours as (
 
 ),
 
--- Each rate recomputed from ESPN's own component scores, by our rules.
+register as (
+
+    select * from {{ ref('espn_reconciliation_residuals') }}
+
+),
+
+-- Each rate recomputed by our rules from ESPN's own component scores, twice: as ESPN
+-- reports them (which must reproduce ESPN's rate -- the formula check), and shifted by
+-- this side's registered residuals (the rate the register implies -- what ours must be).
 espn_formula as (
 
     select
@@ -104,7 +113,14 @@ espn_formula as (
         / nullif(
             sum(rules.weight * component_scores.espn_value) filter (where rules.part = 'denominator'),
             0
-        ) as espn_formula_value
+        ) as espn_formula_value,
+        sum(rules.weight * (component_scores.espn_value + coalesce(register.expected_difference, 0)))
+            filter (where rules.part = 'numerator')
+        / nullif(
+            sum(rules.weight * (component_scores.espn_value + coalesce(register.expected_difference, 0)))
+                filter (where rules.part = 'denominator'),
+            0
+        ) as implied_value
     from espn
     inner join rules
         on rules.stat_key = espn.stat_key
@@ -118,23 +134,11 @@ espn_formula as (
         and component_scores.matchup_id = espn.matchup_id
         and component_scores.fantasy_team_id = espn.fantasy_team_id
         and component_scores.stat_key = bridge.stat_key
+    left join register
+        on register.matchup_id = espn.matchup_id
+        and register.team_id = espn.fantasy_team_id
+        and register.stat_id = bridge.stat_key
     group by espn.league_id, espn.season, espn.matchup_id, espn.fantasy_team_id, rules.stat_key
-
-),
-
-register as (
-
-    select * from {{ ref('espn_reconciliation_residuals') }}
-
-),
-
--- Sides carrying a registered residual, per component, for explaining their rates.
-registered_components as (
-
-    select distinct register.matchup_id, register.team_id, bridge.component
-    from register
-    inner join single_component_stats as bridge
-        on bridge.stat_key = register.stat_id
 
 ),
 
@@ -169,18 +173,10 @@ annotated as (
         rate_stats.stat_key is not null as is_rate,
         case when rate_stats.stat_key is not null then 1e-6 else 1e-9 end as tolerance,
         espn_formula.espn_formula_value,
+        espn_formula.implied_value,
         played_matchups.matchup_id is null as is_bye,
         register.expected_difference as registered_difference,
-        register.cause as registered_cause,
-        exists (
-            select 1
-            from rules
-            inner join registered_components
-                on registered_components.component = rules.component
-            where rules.stat_key = compared.stat_key
-              and registered_components.matchup_id = compared.matchup_id
-              and registered_components.team_id = compared.fantasy_team_id
-        ) as has_registered_component
+        register.cause as registered_cause
     from compared
     left join rate_stats
         on rate_stats.stat_key = compared.stat_key
@@ -212,6 +208,7 @@ select
     espn_value,
     difference,
     espn_formula_value,
+    implied_value,
     registered_difference,
     registered_cause,
     case
@@ -227,8 +224,8 @@ select
             and registered_difference is null then 'match'
         when not is_rate and registered_difference is not null
             and abs(difference - registered_difference) <= tolerance then 'registered'
-        when is_rate and our_value is not null and has_registered_component
-            then 'explained_by_component'
+        when is_rate and our_value is not null and implied_value is not null
+            and abs(our_value - implied_value) <= tolerance then 'explained_by_component'
         else 'unexplained'
     end as status
 from annotated
