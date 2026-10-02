@@ -25,6 +25,13 @@ models:
       +materialized: view
       +schema: intermediate
 
+    marts:
+      # Shaped like a question ("who won each category?"), read by people and the
+      # dashboard. Tables, rebuilt in full every run: see fct_matchup_category_scores for
+      # why incremental is deferred.
+      +materialized: table
+      +schema: marts
+
 vars:
   # When true, league- and team-identifying text is replaced with stable aliases.
   # League members did not opt into appearing in a public repo, so CI (and anything

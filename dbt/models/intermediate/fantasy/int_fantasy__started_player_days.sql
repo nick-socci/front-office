@@ -32,55 +32,18 @@
 --
 -- Credited, not everything he did (#10). A hitter slot credits only his batting and a
 -- pitcher slot (P, SP, RP) only his pitching -- the slot's slot_role, from the
--- espn_lineup_slots seed. That is ESPN's rule, measured rather than assumed: summing
--- every started player's full line leaves up to 18 of 286 matchup sides off ESPN per
--- stat; crediting by role leaves only official-scoring differences. A pitcher's at-bat
--- or a position player's mop-up inning is real but scores nothing, and stays visible in
--- int_mlb__player_game_days. played and input_status describe his whole day, not the
--- credited part: they say whether the inputs are complete, which crediting can't change.
+-- espn_lineup_slots seed; the two column lists are the fo_*_columns macros. That is
+-- ESPN's rule, measured rather than assumed: summing every started player's full line
+-- leaves up to 18 of 286 matchup sides off ESPN per stat; crediting by role leaves only
+-- official-scoring differences. A pitcher's at-bat or a position player's mop-up inning
+-- is real but scores nothing, and stays visible in int_mlb__player_game_days. played
+-- and input_status describe his whole day, not the credited part: they say whether the
+-- inputs are complete, which crediting can't change.
 --
 -- Doubleheaders are already summed one level down, in int_mlb__player_game_days.
 -- Verified against ESPN for matchup period 15, which contains six doubleheader starts.
 
 {{ config(materialized='table') }}
-
--- Each list is one side of a player's game, credited only by a slot of that role.
-{%- set batting_columns = [
-    'games_batted',
-    'plate_appearances',
-    'at_bats',
-    'hits',
-    'doubles',
-    'triples',
-    'home_runs',
-    'runs',
-    'runs_batted_in',
-    'batter_walks',
-    'batter_strikeouts',
-    'stolen_bases',
-    'caught_stealing',
-    'hit_by_pitch',
-    'sacrifice_flies',
-    'total_bases'
-] %}
-{%- set pitching_columns = [
-    'games_pitched',
-    'games_started',
-    'outs_recorded',
-    'batters_faced',
-    'hits_allowed',
-    'runs_allowed',
-    'earned_runs',
-    'home_runs_allowed',
-    'pitcher_walks',
-    'pitcher_strikeouts',
-    'hit_batsmen',
-    'wins',
-    'losses',
-    'saves',
-    'holds',
-    'blown_saves'
-] %}
 
 select
     days.platform,
@@ -105,10 +68,10 @@ select
     end as input_status,
     days.slot_role,
 
-    {%- for column in batting_columns %}
+    {%- for column in fo_batting_columns() %}
     case when days.slot_role = 'hitter' then coalesce(stats.{{ column }}, 0) else 0 end as {{ column }},
     {%- endfor %}
-    {%- for column in pitching_columns %}
+    {%- for column in fo_pitching_columns() %}
     case when days.slot_role = 'pitcher' then coalesce(stats.{{ column }}, 0) else 0 end as {{ column }}
         {{- ',' if not loop.last }}
     {%- endfor %}

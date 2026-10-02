@@ -4,7 +4,7 @@ models:
   # ---------------------------------------------------------------------------
   # The platform seam.
   #
-  # These four carry `contract: enforced`. dbt checks the built relation against
+  # These carry `contract: enforced`. dbt checks the built relation against
   # the declared columns and types and fails the build on any mismatch, so
   # "a second platform slots in behind this layer" is something CI verifies
   # rather than something the README asserts.
@@ -68,6 +68,12 @@ models:
       - name: category_key
         data_type: bigint
         constraints: [{type: not_null}]
+        data_tests:
+          # A scored category with no formula would never appear in the marts.
+          - relationships:
+              arguments:
+                to: ref('int_fantasy__stat_components')
+                field: stat_key
       - name: category_label
         data_type: varchar
         constraints: [{type: not_null}]
@@ -111,6 +117,83 @@ models:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns: [platform, league_id, season, scoring_date]
+
+  - name: int_fantasy__matchup_sides
+    description: >
+      One row per side of a played head-to-head matchup: each matchup twice, once from
+      each team's view. Playoff byes are excluded -- they have no opponent and no result.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: league_id
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: season
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: matchup_id
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: matchup_period
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: fantasy_team_id
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: opponent_team_id
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: is_home
+        data_type: boolean
+        constraints: [{type: not_null}]
+      - name: playoff_tier
+        data_type: varchar
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, matchup_id, fantasy_team_id]
+      # A team plays at most one matchup per period.
+      - dbt_utils.unique_combination_of_columns:
+          name: int_fantasy__matchup_sides_one_matchup_per_team_period
+          arguments:
+            combination_of_columns: [platform, league_id, season, matchup_period, fantasy_team_id]
+      - dbt_utils.expression_is_true:
+          name: int_fantasy__matchup_sides_team_is_not_its_own_opponent
+          arguments:
+            expression: "fantasy_team_id != opponent_team_id"
+
+  - name: int_fantasy__stat_components
+    description: >
+      How every platform stat is computed from credited components: value =
+      sum(weight * component) over numerator rows, divided by the same over denominator
+      rows when there are any. The rules behind every score in the marts.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: stat_key
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: part
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: component
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: weight
+        data_type: double
+        constraints: [{type: not_null}]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, stat_key, part, component]
 
   - name: int_fantasy__roster_days
     description: >
@@ -314,6 +397,49 @@ models:
             expression: "at_bats = 0 and outs_recorded = 0"
             config:
               where: "not played"
+
+  # ---------------------------------------------------------------------------
+  # Matchup aggregation (#10): credited components per side, then stat values.
+  # ---------------------------------------------------------------------------
+
+  - name: int_fantasy__matchup_side_totals
+    description: >
+      One row per matchup side: every credited component summed over the matchup
+      period's days, with counts of started player-days by input status. Every side has
+      a row, even one that started nobody.
+    columns:
+      - name: started_player_days
+        data_tests: [not_null]
+      - name: verified_player_days
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, matchup_id, fantasy_team_id]
+      - dbt_utils.expression_is_true:
+          name: int_fantasy__matchup_side_totals_statuses_add_up
+          arguments:
+            expression: >-
+              verified_player_days + missing_boxscore_player_days + unresolved_player_days
+              = started_player_days
+      # Every side of every matchup, no more and no fewer.
+      - dbt_utils.equal_rowcount:
+          arguments:
+            compare_model: ref('int_fantasy__matchup_sides')
+
+  - name: int_fantasy__matchup_stat_values
+    description: >
+      One row per (matchup side, stat): numerator, denominator and value, computed from
+      the side's totals by int_fantasy__stat_components. A zero denominator gives a null
+      value rather than a fake zero.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, matchup_id, fantasy_team_id, stat_key]
+      - dbt_utils.expression_is_true:
+          name: int_fantasy__matchup_stat_values_numerator_present
+          arguments:
+            expression: "numerator is not null"
 
 # -----------------------------------------------------------------------------
 # Unit tests: int_fantasy__player_crosswalk (review R6).
@@ -630,3 +756,70 @@ unit_tests:
       rows:
         - {scoring_date: "2026-06-01", platform_player_id: 1, input_status: unresolved_player, played: false}
         - {scoring_date: "2026-06-02", platform_player_id: 1, input_status: unresolved_player, played: false}
+
+# -----------------------------------------------------------------------------
+# Unit tests: matchup aggregation (#10).
+# -----------------------------------------------------------------------------
+
+  - name: matchup_side_totals_sum_only_the_matchup_days_for_the_team
+    description: >
+      Matchup period 1 covers two dates. Team 1's two started days in it are summed; its
+      day in period 2 and the opponent's day are not. Team 2 started nobody in period 1
+      and still gets a row, of zeroes. A missing-boxscore day counts as started but not
+      verified.
+    model: int_fantasy__matchup_side_totals
+    given:
+      - input: ref('int_fantasy__matchup_sides')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 1, fantasy_team_id: 1, opponent_team_id: 2, is_home: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 1, fantasy_team_id: 2, opponent_team_id: 1, is_home: false}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-02"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-03"}
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, input_status: played, at_bats: 4, hits: 2, outs_recorded: 0}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, input_status: missing_boxscore, at_bats: 3, hits: 1, outs_recorded: 6}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", fantasy_team_id: 1, input_status: played, at_bats: 5, hits: 5, outs_recorded: 9}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", fantasy_team_id: 2, input_status: played, at_bats: 4, hits: 1, outs_recorded: 3}
+    expect:
+      rows:
+        - {fantasy_team_id: 1, started_player_days: 2, verified_player_days: 1, missing_boxscore_player_days: 1, unresolved_player_days: 0, at_bats: 7, hits: 3, outs_recorded: 6}
+        - {fantasy_team_id: 2, started_player_days: 0, verified_player_days: 0, missing_boxscore_player_days: 0, unresolved_player_days: 0, at_bats: 0, hits: 0, outs_recorded: 0}
+
+  - name: matchup_stat_values_follow_the_component_rules
+    description: >
+      One side's totals through four kinds of rule: a count (HR), a sum (SVHD = saves +
+      holds), a scaled rate (ERA = 27 * ER / outs) and a rate with two weighted
+      numerator terms (WHIP = (3 * H + 3 * BB) / outs). The second side has no outs, so
+      its ERA is null, not zero.
+    model: int_fantasy__matchup_stat_values
+    given:
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 1, fantasy_team_id: 1, opponent_team_id: 2, is_home: true,
+             home_runs: 4, saves: 2, holds: 3, earned_runs: 10, outs_recorded: 54, hits_allowed: 15, pitcher_walks: 6}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 1, fantasy_team_id: 2, opponent_team_id: 1, is_home: false,
+             home_runs: 0, saves: 0, holds: 0, earned_runs: 0, outs_recorded: 0, hits_allowed: 0, pitcher_walks: 0}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 5, part: numerator, component: home_runs, weight: 1}
+          - {platform: espn, stat_key: 83, part: numerator, component: saves, weight: 1}
+          - {platform: espn, stat_key: 83, part: numerator, component: holds, weight: 1}
+          - {platform: espn, stat_key: 47, part: numerator, component: earned_runs, weight: 27}
+          - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
+          - {platform: espn, stat_key: 41, part: numerator, component: hits_allowed, weight: 3}
+          - {platform: espn, stat_key: 41, part: numerator, component: pitcher_walks, weight: 3}
+          - {platform: espn, stat_key: 41, part: denominator, component: outs_recorded, weight: 1}
+    expect:
+      rows:
+        - {fantasy_team_id: 1, stat_key: 5, numerator: 4, denominator: null, stat_value: 4}
+        - {fantasy_team_id: 1, stat_key: 83, numerator: 5, denominator: null, stat_value: 5}
+        - {fantasy_team_id: 1, stat_key: 47, numerator: 270, denominator: 54, stat_value: 5}
+        - {fantasy_team_id: 1, stat_key: 41, numerator: 63, denominator: 54, stat_value: 1.1666666666666667}
+        - {fantasy_team_id: 2, stat_key: 5, numerator: 0, denominator: null, stat_value: 0}
+        - {fantasy_team_id: 2, stat_key: 83, numerator: 0, denominator: null, stat_value: 0}
+        - {fantasy_team_id: 2, stat_key: 47, numerator: 0, denominator: 0, stat_value: null}
+        - {fantasy_team_id: 2, stat_key: 41, numerator: 0, denominator: 0, stat_value: null}

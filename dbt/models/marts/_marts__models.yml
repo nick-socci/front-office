@@ -1,0 +1,172 @@
+version: 2
+
+models:
+  - name: fct_matchup_category_scores
+    description: >
+      One row per (matchup, team, scored category): the team's value, its opponent's,
+      and the result. Values are recomputed from MLB boxscores through the slots each
+      team started, by the rules in int_fantasy__stat_components; nothing about the
+      league's categories is hardcoded. has_unverified_inputs marks a category resting on
+      a missing boxscore or an unresolved player on either side -- reported, never
+      silently scored as zero.
+    columns:
+      - name: result
+        description: >
+          WIN, LOSS or TIE for this team, applying is_lower_better, compared at 9
+          decimals. Null only for a rate over a zero denominator. That is expected with
+          unverified inputs and fails the build otherwise: how ESPN scores a verified
+          zero-out or zero-at-bat side is unobserved.
+        data_tests:
+          - not_null:
+              config:
+                where: "not has_unverified_inputs"
+          - accepted_values:
+              arguments:
+                values: [WIN, LOSS, TIE]
+      - name: has_unverified_inputs
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, matchup_id, fantasy_team_id, category_key]
+      # Both sides of every category have a value; a missing one would be a dropped side.
+      - dbt_utils.expression_is_true:
+          name: fct_matchup_category_scores_values_have_a_side
+          arguments:
+            expression: "team_value is not null and opponent_value is not null"
+            config:
+              where: "not has_unverified_inputs"
+
+  - name: fct_matchup_results
+    description: >
+      One row per head-to-head matchup: category wins for each side, ties, and the
+      winner (HOME, AWAY or TIE) by more categories won.
+    columns:
+      - name: matchup_id
+        data_tests: [not_null]
+      - name: winner
+        description: Null when any category is undecided, which needs unverified inputs.
+        data_tests:
+          - not_null:
+              config:
+                where: "not has_unverified_inputs"
+          - accepted_values:
+              arguments:
+                values: [HOME, AWAY, TIE]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, matchup_id]
+      - dbt_utils.expression_is_true:
+          name: fct_matchup_results_every_category_decided
+          arguments:
+            expression: >-
+              home_category_wins + away_category_wins + category_ties + categories_undecided
+              = scored_categories
+      - dbt_utils.expression_is_true:
+          name: fct_matchup_results_scored_categories_present
+          arguments:
+            expression: "scored_categories > 0"
+
+# -----------------------------------------------------------------------------
+# Unit tests (#10). Each gives only the columns the model reads.
+# -----------------------------------------------------------------------------
+
+unit_tests:
+  - name: category_scores_apply_direction_and_tie_rules
+    description: >
+      HR: more wins. ERA: fewer wins (is_lower_better). R: equal is a tie. AVG: values
+      that differ only by float noise (0.1 + 0.2 vs 0.3) tie rather than hand one side a
+      win. Team 1 has a missing boxscore, which marks both sides' categories unverified.
+    model: fct_matchup_category_scores
+    given:
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 5, stat_value: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 5, stat_value: 8}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 47, stat_value: 4.5}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 47, stat_value: 3.25}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 20, stat_value: 30}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 20, stat_value: 30}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 2, stat_value: 0.30000000000000004}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 2, stat_value: 0.3}
+          # Not a scored category: never reaches the mart.
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 0, stat_value: 100}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 0, stat_value: 90}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 2, category_label: AVG, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 20, category_label: R, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true}
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, started_player_days: 10, verified_player_days: 9}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, started_player_days: 10, verified_player_days: 10}
+    expect:
+      rows:
+        - {fantasy_team_id: 1, category_key: 2, result: TIE, has_unverified_inputs: true}
+        - {fantasy_team_id: 2, category_key: 2, result: TIE, has_unverified_inputs: true}
+        - {fantasy_team_id: 1, category_key: 5, result: WIN, has_unverified_inputs: true}
+        - {fantasy_team_id: 2, category_key: 5, result: LOSS, has_unverified_inputs: true}
+        - {fantasy_team_id: 1, category_key: 20, result: TIE, has_unverified_inputs: true}
+        - {fantasy_team_id: 2, category_key: 20, result: TIE, has_unverified_inputs: true}
+        - {fantasy_team_id: 1, category_key: 47, result: LOSS, has_unverified_inputs: true}
+        - {fantasy_team_id: 2, category_key: 47, result: WIN, has_unverified_inputs: true}
+
+  - name: category_scores_leave_a_zero_denominator_undecided
+    description: >
+      A side with no outs has no ERA. Its value is null and the result is null -- which
+      the not_null test then stops -- rather than a guessed win or loss.
+    model: fct_matchup_category_scores
+    given:
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 47, stat_value: null}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 47, stat_value: 3.25}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true}
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, started_player_days: 10, verified_player_days: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, started_player_days: 10, verified_player_days: 10}
+    expect:
+      rows:
+        - {fantasy_team_id: 1, category_key: 47, result: null}
+        - {fantasy_team_id: 2, category_key: 47, result: null}
+
+  - name: matchup_results_winner_is_more_categories_won
+    description: >
+      Matchup 7: home wins 2, loses 1, ties 1 -> HOME. Matchup 8: 1 win each and 2 ties
+      -> TIE. Matchup 9: home leads but one category is undecided -> no winner. One row
+      per matchup, from the home side's view.
+    model: fct_matchup_results
+    given:
+      - input: ref('fct_matchup_category_scores')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, is_home: true, result: WIN, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, is_home: true, result: WIN, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, is_home: true, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, is_home: true, result: TIE, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, is_home: false, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, is_home: false, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, is_home: false, result: WIN, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, is_home: false, result: TIE, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 3, opponent_team_id: 4, is_home: true, result: WIN, has_unverified_inputs: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 3, opponent_team_id: 4, is_home: true, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 3, opponent_team_id: 4, is_home: true, result: TIE, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 3, opponent_team_id: 4, is_home: true, result: TIE, has_unverified_inputs: false}
+          # A null rate on an unverified side: undecided, so no winner even though home leads.
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 5, opponent_team_id: 6, is_home: true, result: WIN, has_unverified_inputs: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 5, opponent_team_id: 6, is_home: true, result: null, has_unverified_inputs: true}
+      - input: ref('int_fantasy__matchup_sides')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, playoff_tier: NONE}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 3, playoff_tier: WINNERS_BRACKET}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 5, playoff_tier: NONE}
+    expect:
+      rows:
+        - {matchup_id: 7, home_team_id: 1, away_team_id: 2, scored_categories: 4, home_category_wins: 2, away_category_wins: 1, category_ties: 1, categories_undecided: 0, winner: HOME, has_unverified_inputs: false, playoff_tier: NONE}
+        - {matchup_id: 8, home_team_id: 3, away_team_id: 4, scored_categories: 4, home_category_wins: 1, away_category_wins: 1, category_ties: 2, categories_undecided: 0, winner: TIE, has_unverified_inputs: true, playoff_tier: WINNERS_BRACKET}
+        - {matchup_id: 9, home_team_id: 5, away_team_id: 6, scored_categories: 2, home_category_wins: 1, away_category_wins: 0, category_ties: 0, categories_undecided: 1, winner: null, has_unverified_inputs: true, playoff_tier: NONE}
