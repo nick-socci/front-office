@@ -316,6 +316,34 @@ component mapping and confirm the test catches it; CI green on PR 9.
 > `int_fantasy__started_player_days` carries credited production only. A player's full
 > day stays in `int_mlb__player_game_days`. Those residuals get an explicit register in
 > the reconciliation, and are never absorbed by a tolerance.
+>
+> **Resolved, 2026-10-02: the reconciliation, before the 10/5 refresh.** These numbers
+> are against boxscores captured before #19 and are provisional until it runs.
+> - **Formulas:** our rules applied to ESPN's own components reproduce all 1,144 of
+>   ESPN's rate values within 1e-6.
+> - **Stats:** 6,816 of 6,864 stat-sides match. The other 48 are accounted for: 31
+>   count rows each sit in the `espn_reconciliation_residuals` register, and 17 rates
+>   follow from those components. The 2 playoff byes are scoped out.
+> - **Results:** 4,856 of 4,862 category results and all 143 winners match. The 6 other
+>   category results flip only because of registered residuals.
+>
+> The register's 31 rows have exactly two causes:
+> - **`official_scoring_change`, 23 rows on 11 sides.** MLB's later boxscore differs
+>   from ESPN's own game line for that player-day, so ESPN never applied the change.
+>   Example: Joe Ryan, 6/30, whose 6 runs MLB now rules unearned. Two pairs share a
+>   game and are one ruling seen from both sides (the hit, and the hit allowed).
+> - **`espn_total_inconsistent`, 8 rows on 4 sides.** ESPN's side total differs by one
+>   from the sum of ESPN's own per-player lines for the matchup, and those lines equal
+>   ours. The planning probe called 3 of these "attribution residuals". They are not
+>   attribution at all. The evidence is `rosterForMatchupPeriod`, which only the
+>   retired spike captures hold, because the pipeline's matchup request doesn't ask
+>   for that view.
+>
+> The register is held both ways. A residual not in it fails
+> `fct_matchup_scores_match_espn`, and so does a register row that no longer matches a
+> live residual, so the register can't grow into a tolerance. After the 10/5 refresh,
+> rerun the build: rows the refresh resolves will fail as stale, and must be removed
+> before #10 closes.
 
 ## Milestone 10 — player value and transaction impact
 

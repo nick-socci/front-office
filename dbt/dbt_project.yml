@@ -32,6 +32,12 @@ models:
       +materialized: table
       +schema: marts
 
+    reconciliation:
+      # The only layer that pairs our numbers with the platform's own (#10). Source-
+      # specific by design: each platform gets a folder, and nothing reads from here.
+      +materialized: table
+      +schema: reconciliation
+
 vars:
   # When true, league- and team-identifying text is replaced with stable aliases.
   # League members did not opt into appearing in a public repo, so CI (and anything
