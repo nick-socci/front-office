@@ -317,7 +317,7 @@ component mapping and confirm the test catches it; CI green on PR 9.
 > day stays in `int_mlb__player_game_days`. Those residuals get an explicit register in
 > the reconciliation, and are never absorbed by a tolerance.
 >
-> **Resolved, 2026-10-02: the reconciliation, before the 10/5 refresh.** These numbers
+> **Resolved, 2026-10-01: the reconciliation, before the 10/5 refresh.** These numbers
 > are against boxscores captured before #19 and are provisional until it runs.
 > - **Formulas:** our rules applied to ESPN's own components reproduce all 1,144 of
 >   ESPN's rate values within 1e-6.
