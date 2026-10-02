@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# The full local gate set: the same steps, in the same order, as .github/workflows/ci.yml,
+# so green here means green in CI. Run from anywhere; stops at the first failure.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+step() { printf '\n== %s\n' "$1"; }
+
+step "lint (ruff)";          uv run ruff check
+step "format (ruff)";        uv run ruff format --check
+step "types (mypy, strict)"; uv run mypy
+step "tests (pytest)";       uv run pytest
+step "fixture warehouse";    uv run front-office load --raw-root fixtures/landing --db dbt/ci.duckdb
+(
+  cd dbt
+  export DBT_PROFILES_DIR=.
+  step "dbt deps";                       uv run dbt deps
+  step "dbt build (fixtures, anonymised)"; uv run dbt build --target ci --vars '{anonymize: true}'
+)
+printf '\nAll gates passed.\n'

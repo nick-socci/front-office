@@ -15,37 +15,12 @@ from pathlib import Path
 
 import pytest
 
+from front_office.privacy import FORBIDDEN_KEYS, GUID, walk
+
 FIXTURE_ROOT = Path(__file__).resolve().parents[2] / "fixtures/landing"
 ESPN_FIXTURES = sorted((FIXTURE_ROOT / "espn").rglob("*.json"))
 
-# ESPN account ids look like {272E019C-48D5-42F3-B289-C48A1B163E19}.
-HEX = "[0-9A-Fa-f]"
-GUID = re.compile(rf"\{{?{HEX}{{8}}-{HEX}{{4}}-{HEX}{{4}}-{HEX}{{4}}-{HEX}{{12}}\}}?")
-
-# Keys whose values identify a person rather than a fantasy team.
-FORBIDDEN_KEYS = {
-    "members",
-    "owners",
-    "primaryOwner",
-    "firstName",
-    "lastName",
-    "displayName",
-    # Every transaction message names the ESPN account that made the move.
-    "author",
-}
-
 FIXTURE_TEAM_NAME = re.compile(r"^Team \d{2}$")
-
-
-def walk(node, path="$"):
-    """Yield (path, key, value) for every key in a nested structure."""
-    if isinstance(node, dict):
-        for key, value in node.items():
-            yield path, key, value
-            yield from walk(value, f"{path}.{key}")
-    elif isinstance(node, list):
-        for index, value in enumerate(node):
-            yield from walk(value, f"{path}[{index}]")
 
 
 def test_espn_fixtures_exist():

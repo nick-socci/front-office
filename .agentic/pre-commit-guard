@@ -1,0 +1,41 @@
+#!/usr/bin/env -S uv run --quiet python
+"""Refuse a commit that stages a league member's identity in an ESPN path.
+
+Called by the user-level commit hook from the repo root. Checks the *staged* content, not
+the working tree, with the same patterns as ingestion/tests/test_fixture_privacy.py.
+Exit 0 = clean; exit 1 = violations, listed on stderr.
+"""
+
+import json
+import subprocess
+import sys
+
+from front_office.privacy import FORBIDDEN_KEYS, GUID, walk
+
+# MLB data is public and its gameGuid is a legitimate GUID, so only ESPN-derived paths
+# are checked.
+ESPN_PATHS = ("fixtures/landing/espn/", "dbt/seeds/espn_", "docs/")
+
+
+def git(*args: str) -> str:
+    return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
+
+
+staged = git("diff", "--cached", "--name-only", "--diff-filter=ACMR").splitlines()
+problems: list[str] = []
+for path in (p for p in staged if p.startswith(ESPN_PATHS)):
+    text = git("show", f":{path}")
+    if match := GUID.search(text):
+        problems.append(f"{path}: looks like an ESPN account id: {match.group()}")
+    if path.endswith(".json"):
+        try:
+            keys = {key for _, key, _ in walk(json.loads(text))}
+        except json.JSONDecodeError:
+            continue
+        for key in sorted(keys & FORBIDDEN_KEYS):
+            problems.append(f"{path}: forbidden key {key!r}")
+
+if problems:
+    print("privacy guard: commit refused — league member data staged:", file=sys.stderr)
+    print("\n".join(f"  {p}" for p in problems), file=sys.stderr)
+    sys.exit(1)

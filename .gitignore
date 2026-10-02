@@ -33,3 +33,6 @@ data/*.json
 
 # Throwaway spike notebooks (outputs contain league member data)
 spikes/
+
+# Agentic review loop scratch (Codex findings per round)
+.review/
