@@ -9,6 +9,7 @@ The checks are scoped to ESPN deliberately: MLB data is public, and MLB's gameGu
 legitimate GUID that would trip the pattern.
 """
 
+import csv
 import json
 import re
 from pathlib import Path
@@ -19,6 +20,8 @@ from front_office.privacy import FORBIDDEN_KEYS, GUID, walk
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[2] / "fixtures/landing"
 ESPN_FIXTURES = sorted((FIXTURE_ROOT / "espn").rglob("*.json"))
+# Seeds are committed too, and the pre-commit guard is opt-in per clone, so CI checks them.
+SEEDS = sorted((Path(__file__).resolve().parents[2] / "dbt/seeds").glob("*.csv"))
 
 FIXTURE_TEAM_NAME = re.compile(r"^Team \d{2}$")
 
@@ -37,6 +40,19 @@ def test_no_person_identifying_keys(path):
 @pytest.mark.parametrize("path", ESPN_FIXTURES, ids=lambda p: p.name)
 def test_no_account_guids(path):
     match = GUID.search(path.read_text())
+    assert match is None, f"{path}: looks like an ESPN account id: {match.group() if match else ''}"
+
+
+def test_seeds_exist():
+    assert SEEDS, "no seeds found under dbt/seeds"
+
+
+@pytest.mark.parametrize("path", SEEDS, ids=lambda p: p.name)
+def test_seeds_carry_no_member_columns_or_guids(path):
+    text = path.read_text()
+    header = next(csv.reader([text.splitlines()[0]]))
+    assert not set(header) & FORBIDDEN_KEYS, f"{path}: forbidden column(s)"
+    match = GUID.search(text)
     assert match is None, f"{path}: looks like an ESPN account id: {match.group() if match else ''}"
 
 
