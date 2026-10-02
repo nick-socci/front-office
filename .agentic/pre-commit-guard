@@ -22,9 +22,10 @@ import sys
 
 from front_office.privacy import FORBIDDEN_KEYS, GUID, walk
 
-# MLB data is public and its gameGuid is a legitimate GUID, so only ESPN-derived paths
-# are checked.
-ESPN_PATHS = ("fixtures/landing/espn/", "dbt/seeds/espn_", "dbt/models/", "docs/")
+# MLB landing data is public and its gameGuid is a legitimate GUID, so fixtures are checked
+# only under espn/. Every seed is checked: none carries a GUID today, and one that ever
+# needs an MLB gameGuid should stop here for a person to look at.
+ESPN_PATHS = ("fixtures/landing/espn/", "dbt/seeds/", "dbt/models/", "docs/")
 
 
 def git(*args: str) -> str:
