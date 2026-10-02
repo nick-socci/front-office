@@ -1,11 +1,21 @@
 #!/usr/bin/env -S uv run --quiet python
 """Refuse a commit that stages a league member's identity in an ESPN path.
 
-Called by the user-level commit hook from the repo root. Checks the *staged* content, not
-the working tree, with the same patterns as ingestion/tests/test_fixture_privacy.py.
+Runs as the git pre-commit hook (.githooks/pre-commit, enabled per clone with
+`git config core.hooksPath .githooks`), so it covers commits from Claude, Codex and people
+alike; Claude Code's user-level commit hook also calls it before the commit starts.
+Checks the *staged* content with the same patterns as test_fixture_privacy.py.
+
+What it catches is structure: account GUIDs anywhere in the paths below, and
+person-identifying keys in JSON payloads and CSV headers. Key names are not checked in
+prose or SQL, where models and docs name them precisely to say they are excluded. A real
+name written as a value is beyond any pattern; the allowlisted fixtures, the fixture
+test and review cover that.
 Exit 0 = clean; exit 1 = violations, listed on stderr.
 """
 
+import csv
+import io
 import json
 import subprocess
 import sys
@@ -14,7 +24,7 @@ from front_office.privacy import FORBIDDEN_KEYS, GUID, walk
 
 # MLB data is public and its gameGuid is a legitimate GUID, so only ESPN-derived paths
 # are checked.
-ESPN_PATHS = ("fixtures/landing/espn/", "dbt/seeds/espn_", "docs/")
+ESPN_PATHS = ("fixtures/landing/espn/", "dbt/seeds/espn_", "dbt/models/", "docs/")
 
 
 def git(*args: str) -> str:
@@ -34,6 +44,10 @@ for path in (p for p in staged if p.startswith(ESPN_PATHS)):
             continue
         for key in sorted(keys & FORBIDDEN_KEYS):
             problems.append(f"{path}: forbidden key {key!r}")
+    elif path.endswith(".csv"):
+        header = next(csv.reader(io.StringIO(text)), [])
+        for column in sorted(set(header) & FORBIDDEN_KEYS):
+            problems.append(f"{path}: forbidden column {column!r}")
 
 if problems:
     print("privacy guard: commit refused — league member data staged:", file=sys.stderr)
