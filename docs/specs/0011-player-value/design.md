@@ -420,5 +420,21 @@ No variant of the pool tried (ranking by at-bats, days or games; never-rostered 
 unrostered-that-date) gives .237 at 12 together with .241 and .242 at 6 and 24, so the
 .237 in requirements.md, the design's alternatives table and ADR 0001 looks like a
 mis-recorded figure, not a different definition. **The definition is unchanged and
-nothing was tuned.** Task 5's box stays unticked until the owner confirms the expected
-value; the header in task 6 states what is measured.
+nothing was tuned.** The owner accepted .2416 as the expected value on 2026-10-03;
+requirements.md and ADR 0001 carry the corrected figure.
+
+### 2026-10-03 — a non-pitcher in a pitcher slot is measured from his own pitching
+
+Found in task 6; decided by the owner. The open question said the only 2026 cases were two
+days on which a `DH`-default player did not pitch. The count is 15 started days in pitcher
+slots (9 `SP`, 6 `P`) by one `DH`-default two-way player, and he pitched on 13 of them,
+every one a start. The spec's flat `RP` fallback would have measured a starter's day
+against a reliever's.
+
+Superseded rule: for pitcher-slot days, a player whose `replacement_group` is `hitter` is
+measured against `SP` if at least half his games pitched in the season were starts, else
+`RP` (the `fo_replacement_group` rule on his pitching alone). A player who never recorded
+an out stays `RP`; he has no pitching day, so the level is never applied. The answer is
+the new column `dim_players.pitcher_slot_replacement_group`, which both value facts read.
+2026: 230 hitters `RP`, 1 hitter `SP`. This refines how ADR 0002's levels are assigned and
+changes no ADR decision.

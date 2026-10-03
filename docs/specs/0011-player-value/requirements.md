@@ -172,7 +172,7 @@ numbers, and are checked against the real season in the last task.
 | `fct_player_category_value` rows | 9,860 = 580 × 17 | row count |
 | Started days | 38,665 = 38,420 inside matchups + 245 outside | R5.2 test |
 | Matchup sides reconcile | exact, all 286 sides and every component; league-wide 15,080 hits and 49,305 outs inside matchups | R5.1 test |
-| Replacement, hitters | pooled AVG .237 at N=12 (.241 at 6, .242 at 24) | query; model header |
+| Replacement, hitters | pooled AVG .2416 at N=12 (.2410 at 6, .2420 at 24); first recorded as .237, corrected 2026-10-03 (design.md, Amendments) | query; model header |
 | Replacement, SP | ERA 5.15, WHIP 1.45 at N=12 (ERA 5.07 / 5.00) | query; model header |
 | Replacement, RP | ERA 4.13, WHIP 1.29 at N=12 (ERA 4.45 / 3.90) | query; model header |
 | The pool is worth zero | pooled value over replacement of each group's own pool = 0 per category | singular test |

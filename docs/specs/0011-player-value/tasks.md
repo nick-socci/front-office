@@ -19,15 +19,15 @@ Ordered. Tests before the code they test. Check a box only when its verification
   - Count unrostered MLB player-days per group in the CI warehouse. If any group is empty,
     extend `scripts/make_fixtures.py` (allowlist) and regenerate.
   - Verify: `.agentic/gates` green; `test_fixture_privacy.py` passes.
-- [ ] 4. Build `dim_players` — `impl` — R1.1, R1.2, R1.3, R1.4
+- [x] 4. Build `dim_players` — `impl` — R1.1, R1.2, R1.3, R1.4
   - Tests first, including the unit test for a transaction-only pitcher's group. Report
     how the five transaction-only players resolve and which group each gets.
   - Verify: 498 rows on the real season; 0 unresolved among rostered players.
-- [ ] 5. Build `int_fantasy__replacement_levels` — `impl` — R3.1, R3.2, R3.4, R3.5
+- [x] 5. Build `int_fantasy__replacement_levels` — `impl` — R3.1, R3.2, R3.4, R3.5
   - Tests first: pool size ≤ N, deterministic tie-break, one-sided played days, and the
     unit test that an empty RP pool still yields null-level RP rows.
   - Verify: real season gives hitters AVG .237, SP ERA 5.15, RP ERA 4.13 at N = 12.
-- [ ] 6. State the replacement definition and sensitivity in the model header — `judgment` — R3.3
+- [x] 6. State the replacement definition and sensitivity in the model header — `judgment` — R3.3
   - Re-measure N/2 and 2N; write the bias statement. Count started days where a
     hitter-default player sits in a pitcher slot, and report before relying on the `RP` rule.
   - Verify: header numbers match a fresh query, recorded on #11.

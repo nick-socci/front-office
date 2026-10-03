@@ -28,7 +28,15 @@
 -- leaves it. Replacement here is therefore the never-owned remainder, and is probably
 -- lower than a replacement a manager could actually have had on the wire.
 --
--- SENSITIVITY: filled in by task 6 (levels measured at N/2, N and 2N).
+-- SENSITIVITY. Measured on the 2026 season (12 teams) at N/2, N and 2N -- pool sizes of
+-- 6, 12 and 24:
+--   hitter  AVG  .2410 / .2416 / .2420
+--   SP      ERA  5.07 / 5.15 / 5.00     WHIP 1.44 / 1.45 / 1.41
+--   RP      ERA  4.45 / 4.13 / 3.90     WHIP 1.32 / 1.29 / 1.26
+-- Started players, for scale: .254 and 3.81. The hitter and SP levels barely move with
+-- the pool size; the RP level does (0.55 of a run across the range), because a few good
+-- unowned relievers are a large share of a small pool. RP values are the ones most
+-- sensitive to the choice of N.
 --
 -- Like int_fantasy__transactions this carries no league_id or season (#28): it assumes
 -- the one league-season loaded.
