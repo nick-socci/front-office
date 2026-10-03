@@ -392,3 +392,16 @@ Found in task 1. All 20 WAIVER ADDED messages carry `for` and `from` (always 0).
 10 in-season claims (the other 10 are pre-season), on the `for` team's for 1 (the one row
 where the two are equal), and each claim's paired drop names the `to` team. What `for`
 means on a 180 is not established and nothing here uses it.
+
+### 2026-10-03 — task 2 and 3 results against the open questions
+
+- *The eleven 179/181 drops*: 7 are pre-season (the spec said 6) and 4 are same-day
+  add-and-drops by the same team. None names a wrong team.
+- Across all types, 33 of 363 drops have the player on no roster the day before, so the
+  rostering-team test covers 330 and passes on all of them. Two type-239 drops are neither
+  pre-season nor same-day: one team's free-agent adds on 2026-04-19 dropped on 04-20,
+  absent from the 04-19 roster snapshot.
+- *Fixtures and the replacement pool* (task 3): the CI warehouse holds unrostered players
+  in every group (22 hitters, 3 SP, 9 RP), so no fixture change was needed for the pool.
+- The seed generator now writes LF line endings, as the hand-edited seeds already had;
+  `espn_stat_ids` and `espn_player_positions` change in line endings only.

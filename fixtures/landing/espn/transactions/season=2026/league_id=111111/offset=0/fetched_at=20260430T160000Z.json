@@ -95,7 +95,8 @@
      "messageTypeId": 239,
      "targetId": 42178,
      "to": -1,
-     "from": 16
+     "from": 16,
+     "for": 6
     },
     {
      "id": "message-005-02",
@@ -103,7 +104,8 @@
      "messageTypeId": 188,
      "targetId": 35591,
      "to": 16,
-     "from": 17
+     "from": 17,
+     "for": 6
     }
    ]
   },
@@ -139,7 +141,8 @@
      "messageTypeId": 188,
      "targetId": 4977664,
      "to": 16,
-     "from": 5
+     "from": 5,
+     "for": 6
     },
     {
      "id": "message-007-02",
@@ -147,7 +150,8 @@
      "messageTypeId": 188,
      "targetId": 41295,
      "to": 5,
-     "from": 16
+     "from": 16,
+     "for": 6
     }
    ]
   }

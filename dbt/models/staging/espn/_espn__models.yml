@@ -319,12 +319,34 @@ seeds:
     description: >
       ESPN messageTypeId -> activity (FA ADDED, DROPPED, TRADED...). is_transaction is
       false for lineup moves (188), which the unfiltered activity log also carries (#26):
-      they rearrange a roster but move no player between teams.
+      they rearrange a roster but move no player between teams. movement, method and
+      team_field say how each transaction type moves a player and which message field
+      names the acting team (#11, ADR 0004); they are empty for types with no rule
+      (a trade, a lineup move), so int_fantasy__transactions fails on a type nobody has
+      ruled on rather than guessing.
     columns:
       - name: message_type_id
         data_tests: [not_null, unique]
       - name: is_transaction
         data_tests: [not_null]
+      - name: movement
+        description: "add (player joins a roster) or drop (player leaves one); empty when the type has no rule."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [add, drop]
+      - name: method
+        description: "How the player moved: free_agent, waiver or drop; empty when the type has no rule."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [free_agent, waiver, drop]
+      - name: team_field
+        description: "Which message field names the acting team: to (adds, drops 179 and 181) or for (drop 239); empty when the type has no rule."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [to, for]
   - name: espn_lineup_slots
     description: >
       ESPN lineupSlotId -> slot abbreviation (C, 1B, BE, IL...). is_starting_slot is

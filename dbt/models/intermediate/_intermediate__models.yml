@@ -266,6 +266,63 @@ models:
             combination_of_columns:
               [platform, league_id, season, scoring_date, fantasy_team_id, platform_player_id]
 
+  - name: int_fantasy__transactions
+    description: >
+      One row per transaction message: a player added or dropped, with the fantasy team
+      that acted. The acting team is `to` or `for` depending on the message type, chosen
+      by the espn_activity_types seed (ADR 0004). Trades are not here: they have no rule,
+      and a type with no rule fails the movement test rather than being guessed. Carries
+      no league_id or season (#28), so it joins to the single league-season on team and
+      player id.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: transaction_id
+        data_type: varchar
+        constraints: [{type: not_null}]
+        data_tests: [unique, not_null]
+      - name: topic_id
+        data_type: varchar
+      - name: transacted_at
+        data_type: timestamp with time zone
+      - name: transaction_date
+        data_type: date
+      - name: platform_player_id
+        data_type: bigint
+      - name: fantasy_team_id
+        description: >
+          The team that acted. A null means the seed's team_field named a message field
+          the message did not carry.
+        data_type: bigint
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_fantasy__teams')
+                field: fantasy_team_id
+      - name: movement
+        data_type: varchar
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [add, drop]
+      - name: method
+        data_type: varchar
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [free_agent, waiver, drop]
+      - name: dropped_from_slot
+        description: >
+          For a type-239 drop, the lineup slot the player left (message_from is a slot
+          id there, not a team); null for every other row.
+        data_type: varchar
+
   # ---------------------------------------------------------------------------
   # Not part of the seam: MLB facts and the attribution grain.
   # ---------------------------------------------------------------------------

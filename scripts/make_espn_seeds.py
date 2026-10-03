@@ -37,6 +37,42 @@ DISPLAY_LABELS = {34: "IP"}
 # not of a particular league's settings, so it lives in the seed rather than in a model.
 NON_STARTING_SLOTS = {"BE", "IL"}
 
+# Which side of a started player's game a slot is credited with (#10): batting from hitter
+# slots only, pitching from pitcher slots only. Bench and injured list credit neither.
+# Every slot not named here is a hitter slot (C, 1B ... UTIL, IF).
+PITCHER_SLOTS = {"P", "SP", "RP"}
+
+# Message types espn-api's ACTIVITY_MAP does not name. 188 is the lineup move the
+# unfiltered activity log also carries (#26); the name is the one the seed already holds.
+EXTRA_ACTIVITIES = {188: "LINEUP MOVED"}
+
+# Activities that rearrange a roster without moving a player between teams, so they are
+# not transactions: a lineup move only changes a slot.
+NON_TRANSACTION_ACTIVITIES = {"LINEUP MOVED"}
+
+# How each transaction type moves a player (#11). One row per message type, so a type this
+# table does not know has empty movement and fails the not_null test downstream instead of
+# being guessed at. Empty on TRADED on purpose: a trade names two teams and moves players
+# both ways, so it needs its own rule, not a place in this one.
+#   movement:   add (player joins a roster) or drop (player leaves one)
+#   method:     how: free_agent, waiver, or drop
+#   team_field: which message field names the acting team (ADR 0004). 'to' on adds and
+#               on drops 179/181; 'for' on drop 239, whose `to` is not the acting team.
+TRANSACTION_RULES = {
+    178: ("add", "free_agent", "to"),
+    180: ("add", "waiver", "to"),
+    179: ("drop", "drop", "to"),
+    181: ("drop", "drop", "to"),
+    239: ("drop", "drop", "for"),
+}
+NO_RULE = ("", "", "")
+
+
+def slot_role(slot_abbrev: str) -> str:
+    if slot_abbrev in NON_STARTING_SLOTS:
+        return "bench"
+    return "pitcher" if slot_abbrev in PITCHER_SLOTS else "hitter"
+
 
 def numeric_only(mapping: dict[object, object]) -> dict[int, str]:
     """Keep the id -> name direction; some espn-api maps are bidirectional."""
@@ -46,7 +82,7 @@ def numeric_only(mapping: dict[object, object]) -> dict[int, str]:
 def write_seed(name: str, header: tuple[str, ...], rows: list[tuple[object, ...]]) -> None:
     path = SEED_DIR / f"{name}.csv"
     with path.open("w", newline="") as handle:
-        writer = csv.writer(handle)
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(header)
         writer.writerows(rows)
     print(f"{path.name}: {len(rows)} rows")
@@ -65,15 +101,33 @@ def main() -> None:
     slots = numeric_only(POSITION_MAP)
     write_seed(
         "espn_lineup_slots",
-        ("lineup_slot_id", "slot_abbrev", "is_starting_slot"),
-        [(key, slots[key], slots[key] not in NON_STARTING_SLOTS) for key in sorted(slots)],
+        ("lineup_slot_id", "slot_abbrev", "is_starting_slot", "slot_role"),
+        [
+            (key, slots[key], slots[key] not in NON_STARTING_SLOTS, slot_role(slots[key]))
+            for key in sorted(slots)
+        ],
     )
 
-    activities = numeric_only(ACTIVITY_MAP)
+    activities = numeric_only(ACTIVITY_MAP) | EXTRA_ACTIVITIES
     write_seed(
         "espn_activity_types",
-        ("message_type_id", "activity"),
-        [(key, activities[key]) for key in sorted(activities)],
+        (
+            "message_type_id",
+            "activity",
+            "is_transaction",
+            "movement",
+            "method",
+            "team_field",
+        ),
+        [
+            (
+                key,
+                activities[key],
+                str(activities[key] not in NON_TRANSACTION_ACTIVITIES).lower(),
+                *TRANSACTION_RULES.get(key, NO_RULE),
+            )
+            for key in sorted(activities)
+        ],
     )
 
     positions = numeric_only(DEFAULT_POSITION_MAP)

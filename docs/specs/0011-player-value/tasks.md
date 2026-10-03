@@ -8,14 +8,14 @@ Ordered. Tests before the code they test. Check a box only when its verification
   - Grep for readers of `to_team_id` / `from_team_id` first; report any outside staging.
     Update the model, its YAML contract and descriptions. `author` stays unselected.
   - Verify: `dbt build --select stg_espn__transactions`; `.agentic/pre-commit-guard` passes.
-- [ ] 2. Extend `espn_activity_types` and build `int_fantasy__transactions` — `impl` — R2.1, R2.2, R2.4, R2.5
+- [x] 2. Extend `espn_activity_types` and build `int_fantasy__transactions` — `impl` — R2.1, R2.2, R2.4, R2.5
   - Seed columns via `scripts/make_espn_seeds.py`, never by hand. Tests first: `unique`,
     `not_null` on `movement` and `fantasy_team_id`, `relationships` to teams, and the
     singular "drop names the rostering team" test.
   - Classify the eleven 179/181 drops not on the named team the day before; report.
   - Verify: `dbt seed --full-refresh && dbt build --select +int_fantasy__transactions`; 737
     rows, 374 adds, 363 drops.
-- [ ] 3. Check the fixtures can feed a replacement pool — `judgment` — R3.4
+- [x] 3. Check the fixtures can feed a replacement pool — `judgment` — R3.4
   - Count unrostered MLB player-days per group in the CI warehouse. If any group is empty,
     extend `scripts/make_fixtures.py` (allowlist) and regenerate.
   - Verify: `.agentic/gates` green; `test_fixture_privacy.py` passes.
