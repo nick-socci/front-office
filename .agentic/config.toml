@@ -7,6 +7,6 @@ tracker = "github-issues"          # status lives in issues, never in docs
 specs_dir = "docs/specs"           # docs/specs/NNNN-slug/{requirements,design,tasks}.md
 adr_dir = "docs/adr"
 legacy_design_dir = "docs/design"  # pre-workflow design docs; historical record, not edited
-implementer = "dbt-implementer"    # .claude/agents/dbt-implementer.md
+implementer = "implementer"        # user-level agent: ~/.claude/agents/implementer.md
 gates = ".agentic/gates"
 review_max_rounds = 3
