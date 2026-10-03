@@ -43,10 +43,10 @@ Ordered. Tests before the code they test. Check a box only when its verification
 - [x] 9. Add the reconciliation tests to #10's totals — `impl` — R5.1, R5.2
   - R5.1 is per matchup side (286 of them), not per team.
   - Verify: both pass on the real season with no tolerance; 38,665 = 38,420 + 245.
-- [ ] 10. Build `fct_transaction_impact` — `impl` — R6.1, R6.2, R6.3, R6.4
+- [x] 10. Build `fct_transaction_impact` — `impl` — R6.1, R6.2, R6.3, R6.4
   - Unit tests first: add-then-drop window, drop-then-re-added window, pre-season start.
   - Verify: 737 rows; 49 windows start on 2026-03-25.
-- [ ] 11. Judge the numbers — `judgment` — R4, R6
+- [x] 11. Judge the numbers — `judgment` — R4, R6
   - Read the top and bottom 20 by `total_value` and the best and worst adds and drops. Do
     they pass the eye test of someone who watched the season? Anything absurd is a
     finding about the definitions, not something to tune away.

@@ -457,3 +457,11 @@ category's side) and `played_days` (on that side), beside the columns the design
 and to read a value in context; the rest identify the row. `fct_player_season_value`
 carries `platform`, `league_id` and `season` likewise. A third reconciliation test checks
 that the category fact's numerators and denominators add back up to the day grain per team.
+
+### 2026-10-03 — transaction windows on the real season
+
+Task 10. The next drop that ends an add's window is found by `transacted_at`, not date
+(five same-day add-and-drops, 26 player-team pairs with several adds), with a self-join
+rather than `lead`. Empty windows are kept with zero counts: one add dropped again before
+the season, and three drops on the last scoring date. 51 windows start on 2026-03-25: the
+49 pre-season transactions and two adds made that day.
