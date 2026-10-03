@@ -405,3 +405,20 @@ means on a 180 is not established and nothing here uses it.
   in every group (22 hitters, 3 SP, 9 RP), so no fixture change was needed for the pool.
 - The seed generator now writes LF line endings, as the hand-edited seeds already had;
   `espn_stat_ids` and `espn_player_positions` change in line endings only.
+
+### 2026-10-03 — the hitter replacement AVG at N = 12 measures .2416, not .237
+
+Found in task 5. Built exactly as designed (unrostered that date, grouped over free-agent
+days, top N by plate appearances, ties by id), the hitter pool is 12 players, 1,690 played
+days, 1,369 H in 5,666 AB: **.2416**. Everything else in the expected-values table
+reproduces to the printed precision: hitters .2410 at N = 6 and .2420 at N = 24; SP ERA
+5.07 / 5.15 / 5.00 and WHIP 1.45; RP ERA 4.45 / 4.13 / 3.90 and WHIP 1.29; 44,217
+free-agent days, 1,266 players, 557 / 148 / 561 per group. The 12/13 cut is not a tie (483
+PA twice, split by id, then 479).
+
+No variant of the pool tried (ranking by at-bats, days or games; never-rostered instead of
+unrostered-that-date) gives .237 at 12 together with .241 and .242 at 6 and 24, so the
+.237 in requirements.md, the design's alternatives table and ADR 0001 looks like a
+mis-recorded figure, not a different definition. **The definition is unchanged and
+nothing was tuned.** Task 5's box stays unticked until the owner confirms the expected
+value; the header in task 6 states what is measured.
