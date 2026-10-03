@@ -51,8 +51,8 @@ Ordered. Tests before the code they test. Check a box only when its verification
     they pass the eye test of someone who watched the season? Anything absurd is a
     finding about the definitions, not something to tune away.
   - Verify: observations recorded on #11.
-- [ ] 12. Spot-check two transactions against the ESPN activity log — `judgment` — R6.2, R6.3
+- [x] 12. Spot-check two transactions against the ESPN activity log — `judgment` — R6.2, R6.3
   - One add, one drop, chosen by the person. No member names in what gets recorded.
   - Verify: recorded on #11.
-- [ ] 13. Verify every acceptance criterion and expected value against real data — `judgment` — all
+- [x] 13. Verify every acceptance criterion and expected value against real data — `judgment` — all
   - Verify: record the queries and results as a comment on #11.
