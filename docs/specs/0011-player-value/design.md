@@ -367,3 +367,28 @@ Read-only queries against `data/warehouse.duckdb` (built 2026-10-01), run 2026-1
 
 ## Amendments
 
+### 2026-10-03 — the seed generator is behind the committed seeds
+
+Found in task 2. `scripts/make_espn_seeds.py` writes `espn_activity_types` with two
+columns and `espn_lineup_slots` with three, but the committed seeds carry
+`is_transaction` (and a row for type 188) and `slot_role`, added in #26 and #10 without
+the generator. Running it as task 2 instructs would have dropped them. Task 2 therefore
+first makes the generator reproduce the committed seeds byte for byte, with the rules for
+`is_transaction` and `slot_role` held as tables in the script, and only then adds
+`movement`, `method` and `team_field`. No decision changes.
+
+### 2026-10-03 — the fixtures must carry the message's `for` field
+
+Found in task 1. `scripts/make_fixtures.py` allowlists `to` and `from` on a transaction
+message but not `for`, and the fixtures hold one type-239 drop. Without `for` its acting
+team is null in CI and R2.5 fails there. Task 2 adds `for` to the allowlist and
+regenerates. `for` is a team id on type 239 (ADR 0004), not member data, and the
+allowlist approach and privacy test are unchanged.
+
+### 2026-10-03 — type 180 also carries `for`, and it is not the acting team
+
+Found in task 1. All 20 WAIVER ADDED messages carry `for` and `from` (always 0). ADR
+0004's rule for 180 stands: the player is on the `to` team's roster the next day for all
+10 in-season claims (the other 10 are pre-season), on the `for` team's for 1 (the one row
+where the two are equal), and each claim's paired drop names the `to` team. What `for`
+means on a 180 is not established and nothing here uses it.
