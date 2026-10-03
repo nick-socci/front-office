@@ -212,6 +212,23 @@ models:
           arguments:
             combination_of_columns: [league_id, season, matchup_id, team_id, stat_id]
 
+  - name: stg_espn__player_game_stats
+    description: >
+      ESPN's own per-game stat lines for rostered players: one row per (scoring period,
+      player, ESPN game, stat), actual stats only, from each period's own roster
+      snapshot. A doubleheader is two game lines. Used by the reconciliation to trace a
+      matchup residual to the player-day that causes it.
+    columns:
+      - name: espn_game_id
+        description: ESPN's game id (externalId), not MLB's game_pk.
+        data_tests: [not_null]
+      - name: stat_id
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, scoring_period, espn_player_id, espn_game_id, stat_id]
+
   - name: stg_espn__transactions
     description: >
       One row per player movement (add, drop, waiver claim, trade), from every page of
@@ -344,6 +361,42 @@ seeds:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns: [stat_id, part, component]
+  - name: espn_reconciliation_residuals
+    description: >
+      Every known difference between our recomputed matchup totals and ESPN's
+      scoreByStat, with its cause and evidence (#10). expected_difference is ours minus
+      ESPN's, for count stats only; a rate's residual follows from its components.
+      fct_matchup_scores_match_espn fails on any residual not listed here AND on any
+      row here that no longer matches a live residual, so the register can't grow into
+      a tolerance. Causes: official_scoring_change (MLB's later boxscore differs from
+      ESPN's own game line for that player-day; ESPN never applied the change) and
+      espn_total_inconsistent (ESPN's side total differs from the sum of ESPN's own
+      per-player lines for the matchup, which equals ours).
+    config:
+      column_types:
+        matchup_id: bigint
+        team_id: bigint
+        stat_id: bigint
+        expected_difference: double
+    columns:
+      - name: expected_difference
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "!= 0"
+      - name: cause
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [official_scoring_change, espn_total_inconsistent]
+      - name: evidence
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [matchup_id, team_id, stat_id]
   - name: espn_player_positions
     description: ESPN defaultPositionId -> position abbreviation.
     columns:
