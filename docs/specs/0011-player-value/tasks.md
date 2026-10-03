@@ -31,16 +31,16 @@ Ordered. Tests before the code they test. Check a box only when its verification
   - Re-measure N/2 and 2N; write the bias statement. Count started days where a
     hitter-default player sits in a pitcher slot, and report before relying on the `RP` rule.
   - Verify: header numbers match a fresh query, recorded on #11.
-- [ ] 7. Write the category-value macro with its unit tests — `impl` — R4.2, R4.3, R4.7, R4.8, R6.5
+- [x] 7. Write the category-value macro with its unit tests — `impl` — R4.2, R4.3, R4.7, R4.8, R6.5
   - Unit tests first: lower-is-better signs (ERA, B_SO), a rate with a zero denominator,
     a pair with no played day on a category's side, a pitcher-slot day with batting
     only, and a category with zero standard deviation.
   - Verify: `dbt test --select test_type:unit`.
-- [ ] 8. Build `fct_player_category_value` and `fct_player_season_value` — `impl` — R4.1, R4.4, R4.5, R4.6
+- [x] 8. Build `fct_player_category_value` and `fct_player_season_value` — `impl` — R4.1, R4.4, R4.5, R4.6
   - Tests first: grain uniqueness, category set equals `int_fantasy__categories`, day-count
     identities, "the pool is worth zero".
   - Verify: 580 and 9,860 rows on the real season.
-- [ ] 9. Add the reconciliation tests to #10's totals — `impl` — R5.1, R5.2
+- [x] 9. Add the reconciliation tests to #10's totals — `impl` — R5.1, R5.2
   - R5.1 is per matchup side (286 of them), not per team.
   - Verify: both pass on the real season with no tolerance; 38,665 = 38,420 + 245.
 - [ ] 10. Build `fct_transaction_impact` — `impl` — R6.1, R6.2, R6.3, R6.4

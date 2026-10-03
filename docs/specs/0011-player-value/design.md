@@ -438,3 +438,22 @@ an out stays `RP`; he has no pitching day, so the level is never applied. The an
 the new column `dim_players.pitcher_slot_replacement_group`, which both value facts read.
 2026: 230 hitters `RP`, 1 hitter `SP`. This refines how ADR 0002's levels are assigned and
 changes no ADR decision.
+
+### 2026-10-03 — "outside any matchup" means the team has no side that period
+
+Found in task 8. Every scoring date belongs to a matchup period, so a started day is never
+outside the matchup calendar. The 245 days are outside because their team has no row in
+`int_fantasy__matchup_sides` for that period (two teams, period 22, a bye). That is what
+`started_days_outside_matchups` counts and what the R5.1 and R5.2 tests treat as outside;
+R4.6 and ADR 0006 read the same way. Measured: 38,665 = 38,420 + 245; R5.1 holds exactly
+on all 286 sides.
+
+### 2026-10-03 — supporting columns on the value facts
+
+`fct_player_category_value` also carries `platform`, `league_id`, `season`,
+`category_label`, `is_lower_better`, `replacement_group` (the group used on the
+category's side) and `played_days` (on that side), beside the columns the design lists.
+`played_days` is needed to recompute the standard deviation for `fct_transaction_impact`
+and to read a value in context; the rest identify the row. `fct_player_season_value`
+carries `platform`, `league_id` and `season` likewise. A third reconciliation test checks
+that the category fact's numerators and denominators add back up to the day grain per team.
