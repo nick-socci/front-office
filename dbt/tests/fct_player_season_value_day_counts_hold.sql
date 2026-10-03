@@ -46,14 +46,28 @@ where fact.played_started_days > fact.started_days
 
 union
 
--- A category's side is its replacement group's: `hitter` is batting, SP and RP pitching.
+-- A category's side comes from its components in int_fantasy__stat_components and the
+-- fo_*_columns lists, NOT from the fact row being checked: a row whose group and played
+-- days were both put on the wrong side would otherwise agree with itself.
 select categories.platform_player_id, categories.fantasy_team_id
 from {{ ref('fct_player_category_value') }} as categories
+inner join (
+    select
+        platform,
+        stat_key as category_key,
+        max(case when component in ('{{ fo_batting_columns() | join("', '") }}') then 'batting' else 'pitching' end)
+            as side
+    from {{ ref('int_fantasy__stat_components') }}
+    group by platform, stat_key
+) as category_sides
+    on category_sides.platform = categories.platform
+    and category_sides.category_key = categories.category_key
 left join recomputed
     on recomputed.platform_player_id = categories.platform_player_id
     and recomputed.fantasy_team_id = categories.fantasy_team_id
 where categories.played_days is distinct from
-    case
-        when categories.replacement_group = 'hitter' then recomputed.hitter_played_days
-        else recomputed.pitcher_played_days
-    end
+        case category_sides.side
+            when 'batting' then recomputed.hitter_played_days
+            else recomputed.pitcher_played_days
+        end
+    or (categories.replacement_group = 'hitter') is distinct from (category_sides.side = 'batting')
