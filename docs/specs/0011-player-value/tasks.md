@@ -54,5 +54,5 @@ Ordered. Tests before the code they test. Check a box only when its verification
 - [ ] 12. Spot-check two transactions against the ESPN activity log — `judgment` — R6.2, R6.3
   - One add, one drop, chosen by the person. No member names in what gets recorded.
   - Verify: recorded on #11.
-- [x] 13. Verify every acceptance criterion and expected value against real data — `judgment` — all
+- [ ] 13. Verify every acceptance criterion and expected value against real data — `judgment` — all
   - Verify: record the queries and results as a comment on #11.

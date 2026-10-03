@@ -1058,3 +1058,45 @@ unit_tests:
         - {replacement_group: RP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
         - {replacement_group: RP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
         - {replacement_group: RP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+
+  - name: replacement_levels_pool_components_before_dividing
+    description: >
+      Two pool hitters with unequal playing time: one day with 4 hits, and three days with
+      1 hit each. The level is the pool's 7 hits over its 4 played days, 1.75 a day. The
+      average of the two players' own per-day rates would be 2.5, so this catches a level
+      built by averaging per-player rates instead of pooling components (R3.2), which the
+      pool-is-worth-zero test cannot see because it reads the level it checks.
+    model: int_fantasy__replacement_levels
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, plate_appearances, hits]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, batters_faced]
+    given:
+      - input: ref('int_fantasy__teams')
+        rows:
+          - {fantasy_team_id: 1}
+          - {fantasy_team_id: 2}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {scoring_date: "2026-06-01", mlbam_player_id: 900009}
+          - {scoring_date: "2026-06-02", mlbam_player_id: 900009}
+          - {scoring_date: "2026-06-03", mlbam_player_id: 900009}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_batted: 1, plate_appearances: 5, hits: 4}
+          - {mlbam_player_id: 900002, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 1}
+          - {mlbam_player_id: 900002, game_date: "2026-06-02", games_batted: 1, plate_appearances: 4, hits: 1}
+          - {mlbam_player_id: 900002, game_date: "2026-06-03", games_batted: 1, plate_appearances: 4, hits: 1}
+    expect:
+      rows:
+        - {replacement_group: hitter, component: games_batted, pool_players: 2, pool_played_days: 4, pool_total: 4, level_per_played_day: 1}
+        - {replacement_group: hitter, component: plate_appearances, pool_players: 2, pool_played_days: 4, pool_total: 17, level_per_played_day: 4.25}
+        - {replacement_group: hitter, component: hits, pool_players: 2, pool_played_days: 4, pool_total: 7, level_per_played_day: 1.75}
+        - {replacement_group: SP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: SP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: SP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: SP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
