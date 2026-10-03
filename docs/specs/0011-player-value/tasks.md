@@ -4,7 +4,7 @@ Issue: #11 · Kind: `impl` = mechanical, delegable · `judgment` = lead agent or
 
 Ordered. Tests before the code they test. Check a box only when its verification passes.
 
-- [ ] 1. Rename the staging message fields and select `for` — `impl` — R2.3
+- [x] 1. Rename the staging message fields and select `for` — `impl` — R2.3
   - Grep for readers of `to_team_id` / `from_team_id` first; report any outside staging.
     Update the model, its YAML contract and descriptions. `author` stays unselected.
   - Verify: `dbt build --select stg_espn__transactions`; `.agentic/pre-commit-guard` passes.

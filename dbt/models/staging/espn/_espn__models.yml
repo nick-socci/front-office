@@ -235,19 +235,51 @@ models:
       the newest capture. Lineup moves are excluded; a message type missing from
       espn_activity_types surfaces as a null activity and fails its not_null test.
       Excludes the ESPN account GUID of the member who made the move.
+    config:
+      contract:
+        enforced: true
     columns:
+      - name: topic_id
+        data_type: varchar
       - name: transaction_id
+        data_type: varchar
         data_tests: [not_null, unique]
-      - name: espn_player_id
-        data_tests: [not_null]
+      - name: transacted_at
+        data_type: timestamp with time zone
       - name: transaction_date
+        data_type: date
         data_tests: [not_null]
+      - name: message_type_id
+        data_type: bigint
       - name: activity
+        data_type: varchar
         data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ["FA ADDED", "WAIVER ADDED", "DROPPED", "TRADED"]
+      - name: espn_player_id
+        data_type: bigint
+        data_tests: [not_null]
+      - name: message_to
+        data_type: bigint
+        description: >
+          ESPN's `to` field, as sent. For message types 178, 180, 179 and 181 it is the
+          acting team. For type 239 it is -1. Not a team id in general.
+      - name: message_from
+        data_type: bigint
+        description: >
+          ESPN's `from` field, as sent. For type 239 it is a lineup slot id (16 is the
+          bench, 17 the injured list), not a team. Not a team id in general.
+      - name: message_for
+        data_type: bigint
+        description: >
+          ESPN's `for` field, as sent. For type 239 it is the acting team. Type 180 also
+          carries it, and there it is NOT the acting team (it matches the claiming roster
+          on 1 of 20 in 2026, where `to` matches every in-season one); its meaning for 180
+          is not established. Null where ESPN omits it.
+      - name: fetched_at
+        data_type: timestamp
 
 unit_tests:
   - name: scoring_period_dates_use_the_eastern_day_boundary
