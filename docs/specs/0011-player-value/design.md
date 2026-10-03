@@ -113,13 +113,13 @@ category values and a narrow fact for the season summary
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0001](../../adr/0001-replacement-level-is-the-free-agent-pool.md) | Replacement level is the top-N free agents per group, N = number of teams | proposed |
-| [0002](../../adr/0002-value-is-measured-per-played-day.md) | Counts compare per played day; rates compare as marginal components | proposed |
-| [0003](../../adr/0003-total-value-is-a-sum-of-standardised-category-values.md) | Total value is the equal-weight sum of standardised category values | proposed |
-| [0004](../../adr/0004-a-transactions-acting-team-depends-on-its-message-type.md) | A transaction's acting team comes from a field chosen by message type, held in a seed | proposed |
-| [0005](../../adr/0005-a-drops-impact-is-the-rest-of-the-season.md) | A drop's impact is the player's MLB production for the rest of the season | proposed |
-| [0006](../../adr/0006-player-value-counts-every-started-day.md) | Value counts every started day; reconciliation covers matchup days only | proposed |
-| [0007](../../adr/0007-category-values-are-a-long-table.md) | Category values are a long fact; the season summary is a separate narrow fact | proposed |
+| [0001](../../adr/0001-replacement-level-is-the-free-agent-pool.md) | Replacement level is the top-N free agents per group, N = number of teams | accepted |
+| [0002](../../adr/0002-value-is-measured-per-played-day.md) | Counts compare per played day; rates compare as marginal components | accepted |
+| [0003](../../adr/0003-total-value-is-a-sum-of-standardised-category-values.md) | Total value is the equal-weight sum of standardised category values | accepted |
+| [0004](../../adr/0004-a-transactions-acting-team-depends-on-its-message-type.md) | A transaction's acting team comes from a field chosen by message type, held in a seed | accepted |
+| [0005](../../adr/0005-a-drops-impact-is-the-rest-of-the-season.md) | A drop's impact is the player's MLB production for the rest of the season | accepted |
+| [0006](../../adr/0006-player-value-counts-every-started-day.md) | Value counts every started day; reconciliation covers matchup days only | accepted |
+| [0007](../../adr/0007-category-values-are-a-long-table.md) | Category values are a long fact; the season summary is a separate narrow fact | accepted |
 
 ## Detailed design
 
