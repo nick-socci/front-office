@@ -1,0 +1,12 @@
+# Per-project adapter for the user-level agentic workflow skills (spec, adr, build,
+# review-loop, triage). Rules for agents live in AGENTS.md; this file holds only the
+# values the skills need to find things.
+
+base_branch = "main"
+tracker = "github-issues"          # status lives in issues, never in docs
+specs_dir = "docs/specs"           # docs/specs/NNNN-slug/{requirements,design,tasks}.md
+adr_dir = "docs/adr"
+legacy_design_dir = "docs/design"  # pre-workflow design docs; historical record, not edited
+implementer = "dbt-implementer"    # .claude/agents/dbt-implementer.md
+gates = ".agentic/gates"
+review_max_rounds = 3

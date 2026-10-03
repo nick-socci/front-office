@@ -9,43 +9,21 @@ The checks are scoped to ESPN deliberately: MLB data is public, and MLB's gameGu
 legitimate GUID that would trip the pattern.
 """
 
+import csv
 import json
 import re
 from pathlib import Path
 
 import pytest
 
+from front_office.privacy import FORBIDDEN_KEYS, GUID, walk
+
 FIXTURE_ROOT = Path(__file__).resolve().parents[2] / "fixtures/landing"
 ESPN_FIXTURES = sorted((FIXTURE_ROOT / "espn").rglob("*.json"))
-
-# ESPN account ids look like {272E019C-48D5-42F3-B289-C48A1B163E19}.
-HEX = "[0-9A-Fa-f]"
-GUID = re.compile(rf"\{{?{HEX}{{8}}-{HEX}{{4}}-{HEX}{{4}}-{HEX}{{4}}-{HEX}{{12}}\}}?")
-
-# Keys whose values identify a person rather than a fantasy team.
-FORBIDDEN_KEYS = {
-    "members",
-    "owners",
-    "primaryOwner",
-    "firstName",
-    "lastName",
-    "displayName",
-    # Every transaction message names the ESPN account that made the move.
-    "author",
-}
+# Seeds are committed too, and the pre-commit guard is opt-in per clone, so CI checks them.
+SEEDS = sorted((Path(__file__).resolve().parents[2] / "dbt/seeds").glob("*.csv"))
 
 FIXTURE_TEAM_NAME = re.compile(r"^Team \d{2}$")
-
-
-def walk(node, path="$"):
-    """Yield (path, key, value) for every key in a nested structure."""
-    if isinstance(node, dict):
-        for key, value in node.items():
-            yield path, key, value
-            yield from walk(value, f"{path}.{key}")
-    elif isinstance(node, list):
-        for index, value in enumerate(node):
-            yield from walk(value, f"{path}[{index}]")
 
 
 def test_espn_fixtures_exist():
@@ -62,6 +40,19 @@ def test_no_person_identifying_keys(path):
 @pytest.mark.parametrize("path", ESPN_FIXTURES, ids=lambda p: p.name)
 def test_no_account_guids(path):
     match = GUID.search(path.read_text())
+    assert match is None, f"{path}: looks like an ESPN account id: {match.group() if match else ''}"
+
+
+def test_seeds_exist():
+    assert SEEDS, "no seeds found under dbt/seeds"
+
+
+@pytest.mark.parametrize("path", SEEDS, ids=lambda p: p.name)
+def test_seeds_carry_no_member_columns_or_guids(path):
+    text = path.read_text()
+    header = next(csv.reader([text.splitlines()[0]]))
+    assert not set(header) & FORBIDDEN_KEYS, f"{path}: forbidden column(s)"
+    match = GUID.search(text)
     assert match is None, f"{path}: looks like an ESPN account id: {match.group() if match else ''}"
 
 

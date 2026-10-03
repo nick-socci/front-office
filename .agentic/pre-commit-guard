@@ -1,0 +1,56 @@
+#!/usr/bin/env -S uv run --quiet python
+"""Refuse a commit that stages a league member's identity in an ESPN path.
+
+Runs as the git pre-commit hook (.githooks/pre-commit, enabled per clone with
+`git config core.hooksPath .githooks`), so it covers commits from Claude, Codex and people
+alike; Claude Code's user-level commit hook also calls it before the commit starts.
+Checks the *staged* content with the same patterns as test_fixture_privacy.py.
+
+What it catches is structure: account GUIDs anywhere in the paths below, and
+person-identifying keys in JSON payloads and CSV headers. Key names are not checked in
+prose or SQL, where models and docs name them precisely to say they are excluded. A real
+name written as a value is beyond any pattern; the allowlisted fixtures, the fixture
+test and review cover that.
+Exit 0 = clean; exit 1 = violations, listed on stderr.
+"""
+
+import csv
+import io
+import json
+import subprocess
+import sys
+
+from front_office.privacy import FORBIDDEN_KEYS, GUID, walk
+
+# MLB landing data is public and its gameGuid is a legitimate GUID, so fixtures are checked
+# only under espn/. Every seed is checked: none carries a GUID today, and one that ever
+# needs an MLB gameGuid should stop here for a person to look at.
+ESPN_PATHS = ("fixtures/landing/espn/", "dbt/seeds/", "dbt/models/", "docs/")
+
+
+def git(*args: str) -> str:
+    return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
+
+
+staged = git("diff", "--cached", "--name-only", "--diff-filter=ACMR").splitlines()
+problems: list[str] = []
+for path in (p for p in staged if p.startswith(ESPN_PATHS)):
+    text = git("show", f":{path}")
+    if match := GUID.search(text):
+        problems.append(f"{path}: looks like an ESPN account id: {match.group()}")
+    if path.endswith(".json"):
+        try:
+            keys = {key for _, key, _ in walk(json.loads(text))}
+        except json.JSONDecodeError:
+            continue
+        for key in sorted(keys & FORBIDDEN_KEYS):
+            problems.append(f"{path}: forbidden key {key!r}")
+    elif path.endswith(".csv"):
+        header = next(csv.reader(io.StringIO(text)), [])
+        for column in sorted(set(header) & FORBIDDEN_KEYS):
+            problems.append(f"{path}: forbidden column {column!r}")
+
+if problems:
+    print("privacy guard: commit refused — league member data staged:", file=sys.stderr)
+    print("\n".join(f"  {p}" for p in problems), file=sys.stderr)
+    sys.exit(1)
