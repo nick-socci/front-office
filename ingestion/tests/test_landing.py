@@ -118,3 +118,34 @@ def test_iter_landed_skips_sidecars(zone):
         fetched_at="20260926T000000Z",
     )
     assert len(list(zone.iter_landed())) == 1, "the .meta.json file is not a landed response"
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        (
+            "https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb/seasons/2026/segments/0"
+            "/leagues/111111?view=mSettings&view=mStatus",
+            "/apis/v3/games/flb/seasons/2026/segments/0/leagues/111111",
+        ),
+        (
+            "https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb/seasons/2026/segments/0"
+            "/leagues/111111/communication/?view=kona_league_communication",
+            "/apis/v3/games/flb/seasons/2026/segments/0/leagues/111111/communication",
+        ),
+        ("https://statsapi.mlb.com/api/v1/schedule?sportId=1&season=2026", "/api/v1/schedule"),
+        ("https://statsapi.mlb.com/api/v1/game/825108/boxscore", "/api/v1/game/825108/boxscore"),
+        ("https://www.smartfantasybaseball.com/PLAYERIDMAPCSV", "/PLAYERIDMAPCSV"),
+        ("https://other.example/api/v1/schedule?x=1", "/api/v1/schedule"),
+        (None, ""),
+        ("", ""),
+        ("https://statsapi.mlb.com", ""),
+    ],
+)
+def test_request_path_is_the_url_path_only(url, expected):
+    """Catches a request_path that keeps the host, the query string or a trailing slash.
+
+    The path is what tells two ESPN leagues apart, so it must be stable across the
+    host and parameters and must not differ by a trailing slash.
+    """
+    assert LandingZone.request_path(url) == expected

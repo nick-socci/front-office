@@ -15,6 +15,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 PayloadType = Mapping[str, Any] | list[Any]
 
@@ -57,6 +58,13 @@ class LandingZone:
         if not params:
             return ""
         return "&".join(f"{key}={params[key]}" for key in sorted(params))
+
+    @staticmethod
+    def request_path(url: str | None) -> str:
+        """The URL's path alone (no scheme, host or query), without a trailing slash."""
+        if not url:
+            return ""
+        return urlsplit(url).path.rstrip("/")
 
     def path_for(
         self,

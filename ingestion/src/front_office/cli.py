@@ -25,7 +25,7 @@ from front_office.espn.client import EspnCredentials, espn_client, load_env_file
 from front_office.http_client import AuthExpired, HttpClient
 from front_office.idmap import sfbb
 from front_office.landing import LandingZone
-from front_office.load import connect, load_landing_zone
+from front_office.load import RawKeyCollision, RawSchemaOutdated, connect, load_landing_zone
 from front_office.mlb import boxscore as mlb_boxscore
 from front_office.mlb import schedule as mlb_schedule
 
@@ -207,7 +207,11 @@ def load(raw_root: RawRoot = DEFAULT_RAW_ROOT, db: DbPath = DEFAULT_DB) -> None:
     """Load landed JSON into raw.api_responses (safe to rerun)."""
     zone = LandingZone(root=raw_root)
     with connect(db) as con:
-        inserted = load_landing_zone(con, zone)
+        try:
+            inserted = load_landing_zone(con, zone)
+        except (RawKeyCollision, RawSchemaOutdated) as error:
+            typer.echo(str(error), err=True)
+            raise typer.Exit(code=1) from None
     typer.echo(f"loaded {inserted} new response(s) into {db}")
 
 
