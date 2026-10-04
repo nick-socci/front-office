@@ -190,7 +190,11 @@ before the models they test.
 
 - **It may not pass the eye test either.** The top 20 becomes 10 and 10, hitters hold 17
   of the bottom 20, and relievers stay out of the top 20. That is the measured outcome,
-  not a target; the owner reads it in the last tasks.
+  not a target. The owner read the top and bottom 20 on 2026-10-04 before approving:
+  "mostly reasonable", to be refined against historical seasons when they are loaded
+  (#57). So this scale is accepted as a working answer, not a final one. Points to watch
+  when refining: batter strikeouts carry the second-largest weight (a 118-day regular
+  falls from 58th worst to 19th worst on it), and no reliever reaches the top 20.
 - **It cannot be shown to be better.** Stated in ADR 0010: 12 teams.
 - **CI fixtures hold two matchups.** A category whose two margins are zero has scale 0
   and every standardised value 0 there. Structure is still tested; R2.3 makes it safe.
