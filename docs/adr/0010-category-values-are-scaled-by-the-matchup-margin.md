@@ -73,10 +73,15 @@ hitter +1.32, SP +1.56, RP +0.89.
   larger than stated.
 - Bad / accepted cost: the scale comes from one season of one league, and includes two
   long matchup periods (12 and 14 days). Without them the scales move by up to 7% (IP).
+- Bad / accepted cost: the league's scoring type is `H2H_MOST_CATEGORIES`: a matchup is
+  won by taking the most categories. This scale treats a margin alike in every category
+  and every week, whether or not that category was the one that decided the matchup. A
+  model of winning the matchup would not.
 - Bad / accepted cost: player value now depends on matchup results, so the value facts
   rebuild whenever a matchup is restated.
 - Supersedes the denominator of ADR 0003. Its plain sum and "no mean subtracted" stand:
   one matchup margin counts the same in every category. A unit of `total_value` is a
   margin, not a category win; the two are not proportional (see option 4). #12 uses this
   scalar.
-- Follow-ups: a fitted win-probability scale when a second season is loaded.
+- Follow-ups: #57 lands earlier seasons' matchup scores (the league has 2009 to 2025) and
+  backtests a fitted win-probability scale; blocked by #28.

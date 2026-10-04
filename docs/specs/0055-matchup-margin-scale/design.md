@@ -204,6 +204,10 @@ before the models they test.
 - **Whether `standardised_value` should be renamed** now that it is not divided by a
   standard deviation of players. Kept: it is still a value on a standard scale, and
   renaming a column across two facts and #12 is churn. The owner may prefer otherwise.
+- **Whether a fitted scale would do better.** Decided by the owner on 2026-10-03: matchup
+  margin for now, and #57 to land earlier seasons' matchup scores and backtest a fitted
+  win-probability scale. The league has 17 earlier seasons; whether ESPN still serves
+  their category totals is not verified.
 - **Why RBI behaves oddly** in the team check (0.26 net wins per margin, correlation
   0.29). Not investigated; it does not affect the scale.
 
