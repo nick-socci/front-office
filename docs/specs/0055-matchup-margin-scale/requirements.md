@@ -1,6 +1,6 @@
 # Total value scaled by the matchup margin — requirements
 
-Issue: #55 · Tier: M · Status: draft
+Issue: #55 · Tier: M · Status: approved 2026-10-04
 
 ## Problem
 

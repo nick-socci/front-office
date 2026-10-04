@@ -83,7 +83,7 @@ Fitting each category's distribution on 143 matchups is a milestone of its own.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0010](../../adr/0010-category-values-are-scaled-by-the-matchup-margin.md) | A category's value is divided by its matchup margin, not by the spread across players | proposed |
+| [0010](../../adr/0010-category-values-are-scaled-by-the-matchup-margin.md) | A category's value is divided by its matchup margin, not by the spread across players | accepted |
 
 It supersedes the denominator of
 [ADR 0003](../../adr/0003-total-value-is-a-sum-of-standardised-category-values.md); the
