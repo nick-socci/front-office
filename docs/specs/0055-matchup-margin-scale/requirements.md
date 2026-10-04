@@ -95,7 +95,9 @@ half for several that hitters fill (evidence in [design.md](design.md#evidence))
 ### R4. The record
 
 - R4.1 THE SYSTEM SHALL state in the scale model's header what the scale is, how a rate is
-  converted, its sample size and its sensitivity to the two long matchup periods.
+  converted, its sample size, its sensitivity to the two long matchup periods, and that
+  it is measured from the same season's matchups (so it moves on a restatement, includes
+  the players it measures, and is noisy early in a season).
 - R4.2 THE SYSTEM SHALL record that the denominator of ADR 0003 is superseded, in ADR
   0003, the ADR index and #12.
 

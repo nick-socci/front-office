@@ -200,6 +200,10 @@ before the models they test.
   and every standardised value 0 there. Structure is still tested; R2.3 makes it safe.
 - **Value now moves when a matchup is restated** (#10's 10/5 refresh, #25, #30). Expected
   values here are as of 2026-10-03 and are re-measured if those land first.
+  Accepted by the owner on 2026-10-04 as designed. Two costs go with it and are stated
+  in the scale model's header: a team's own players help set the scale they are measured
+  against, and early in a season the scale rests on few matchups and is noisy. Whether
+  the scale should come from pooled history, which would remove both, is #57's question.
 - **Unit-test churn.** Every unit test that mocks the spread changes. Mechanical, but the
   largest part of the diff.
 
