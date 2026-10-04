@@ -32,10 +32,20 @@
                          (R3.4)
     a rate with D = 0 -> N (he allowed runs and recorded no outs: all of it is a cost)
 
-  standardised value, ADR 0003: value over replacement / sd, where sd is the population
-  standard deviation over pairs with a played day on the side. 0 when played_days = 0, and
-  0 when sd is 0 or unknown (no spread, no information, R4.8); NULL only when the value
-  itself is NULL.
+  scaled value, ADR 0010: value over replacement in matchup margins, the usual gap between
+  two teams in the category (int_fantasy__category_scales.margin_scale).
+    count  value / margin_scale
+    rate   value / side_denominator / margin_scale
+                          a rate's value is in numerator units over the player's own
+                          denominator; dividing by the typical side's denominator turns it
+                          into the change he makes to a typical side's rate, the unit the
+                          margin is in
+    played_days = 0       -> 0
+    value is NULL         -> NULL, not 0: an unknown level stays unknown
+    margin_scale NULL or 0 -> 0: no measurable margin, no information
+    a rate whose side_denominator is NULL or 0 -> 0, for the same reason
+  Arguments are column expressions, as above; is_rate is true for a category with a
+  denominator part.
 #}
 
 {% macro fo_contribution(numerator, denominator) %}
@@ -62,11 +72,13 @@
     end
 {% endmacro %}
 
-{% macro fo_standardised_value(value_over_replacement, played_days, standard_deviation) %}
+{% macro fo_scaled_value(value_over_replacement, played_days, margin_scale, side_denominator, is_rate) %}
     case
         when {{ played_days }} = 0 then 0
         when {{ value_over_replacement }} is null then null
-        when coalesce({{ standard_deviation }}, 0) = 0 then 0
-        else {{ value_over_replacement }} / {{ standard_deviation }}
+        when coalesce({{ margin_scale }}, 0) = 0 then 0
+        when {{ is_rate }} and coalesce({{ side_denominator }}, 0) = 0 then 0
+        when {{ is_rate }} then {{ value_over_replacement }} / {{ side_denominator }} / {{ margin_scale }}
+        else {{ value_over_replacement }} / {{ margin_scale }}
     end
 {% endmacro %}

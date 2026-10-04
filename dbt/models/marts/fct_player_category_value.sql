@@ -46,13 +46,15 @@
 -- two-way player only batted must charge no pitching replacement (R4.7).
 --
 -- Replacement level comes from int_fantasy__replacement_levels, per played day of the
--- kind. The arithmetic (contribution, value over replacement, standardised value) is in
+-- kind. The arithmetic (contribution, value over replacement, scaled value) is in
 -- the fo_category_value macros, shared with fct_transaction_impact so the two facts cannot
 -- drift; see there for the rules and for what null means.
 --
--- sd is the population standard deviation (stddev_pop) of value_over_replacement for a
--- category across pairs with played_days > 0 on its side. total_value one table over is
--- the sum of the standardised values.
+-- scaled_value (ADR 0010) is value_over_replacement in matchup margins: divided by the
+-- category's margin_scale from int_fantasy__category_scales, the usual gap between two
+-- teams in it, and for a rate first by the typical side denominator. The scales are joined
+-- with a LEFT join, so a category with no scale is worth 0 by the macro's rules rather
+-- than dropping its rows. total_value one table over is the sum of the scaled values.
 
 {{ config(materialized='table') }}
 
@@ -281,6 +283,7 @@ with_value as (
         categories.category_key,
         categories.category_label,
         categories.is_lower_better,
+        category_sides.is_rate,
         coalesce(summed.played_days, 0) as played_days,
         coalesce(summed.numerator, 0) as numerator,
         case
@@ -306,20 +309,6 @@ with_value as (
         and summed.fantasy_team_id = pairs.fantasy_team_id
         and summed.category_key = categories.category_key
 
-),
-
-category_spread as (
-
-    select
-        platform,
-        league_id,
-        season,
-        category_key,
-        stddev_pop(value_over_replacement) as standard_deviation
-    from with_value
-    where played_days > 0
-    group by platform, league_id, season, category_key
-
 )
 
 select
@@ -336,12 +325,13 @@ select
     with_value.denominator,
     {{ fo_contribution('with_value.numerator', 'with_value.denominator') }} as contribution,
     with_value.value_over_replacement,
-    {{ fo_standardised_value(
-        'with_value.value_over_replacement', 'with_value.played_days', 'category_spread.standard_deviation'
-    ) }} as standardised_value
+    {{ fo_scaled_value(
+        'with_value.value_over_replacement', 'with_value.played_days',
+        'scales.margin_scale', 'scales.side_denominator', 'with_value.is_rate'
+    ) }} as scaled_value
 from with_value
-left join category_spread
-    on category_spread.platform = with_value.platform
-    and category_spread.league_id = with_value.league_id
-    and category_spread.season = with_value.season
-    and category_spread.category_key = with_value.category_key
+left join {{ ref('int_fantasy__category_scales') }} as scales
+    on scales.platform = with_value.platform
+    and scales.league_id = with_value.league_id
+    and scales.season = with_value.season
+    and scales.category_key = with_value.category_key

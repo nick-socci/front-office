@@ -19,10 +19,11 @@
 --                                 missing boxscore or an unresolved player, so his zeroes
 --                                 are not known to be real (R4.5).
 --
--- total_value is the sum of the pair's standardised values over every scored category
--- (ADR 0003: equal weights, no mean subtracted). It is NULL if any category's
--- standardised value is NULL, which happens only when a played side faces an empty
--- replacement pool: a partial total would look complete.
+-- total_value is the matchup margins the pair added over a free agent, summed across every
+-- scored category: the sum of its scaled values (ADR 0010; the sum itself, with no mean
+-- subtracted, is ADR 0003). It is NULL if any category's scaled value is NULL, which
+-- happens only when a played side faces an empty replacement pool: a partial total would
+-- look complete.
 
 {{ config(materialized='table') }}
 
@@ -94,8 +95,8 @@ total_values as (
         platform_player_id,
         fantasy_team_id,
         case
-            when count(*) filter (where standardised_value is null) > 0 then null
-            else sum(standardised_value)
+            when count(*) filter (where scaled_value is null) > 0 then null
+            else sum(scaled_value)
         end as total_value
     from {{ ref('fct_player_category_value') }}
     group by platform, league_id, season, platform_player_id, fantasy_team_id
