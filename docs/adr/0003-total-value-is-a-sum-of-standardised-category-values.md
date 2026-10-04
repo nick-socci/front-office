@@ -1,6 +1,6 @@
 # 0003. Total value is a sum of standardised category values
 
-- Status: accepted
+- Status: accepted; its denominator (the standard deviation across players) is superseded by [0010](0010-category-values-are-scaled-by-the-matchup-margin.md). The plain sum over scored categories and "no mean subtracted" stand.
 - Date: 2026-10-03
 - Spec: [0011-player-value](../specs/0011-player-value/design.md) · Issue: #11
 
