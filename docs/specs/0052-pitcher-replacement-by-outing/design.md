@@ -296,7 +296,7 @@ harness reproduces the built `fct_player_season_value.total_value` for all 580 p
 Found in task 5. Against the pre-build snapshot all 5,220 batting rows of
 `fct_player_category_value` have bit-identical `numerator`, `denominator`, `played_days`,
 `contribution` and `value_over_replacement`. `standardised_value` differs on 2,038 of them
-by at most 8.9e-16: DuckDB's `stddev_pop` depends on the order rows reach it, and the
+by about 1e-15 (the largest seen is 1.8e-15, and it varies from build to build): DuckDB's `stddev_pop` depends on the order rows reach it, and the
 spine changes that order, so the standard deviation moves in its last bit. The expected
 value "identical in `standardised_value`" is read as equal within 1e-12; R2.5's intent,
 that nothing about hitters changes, holds. No decision changes.
