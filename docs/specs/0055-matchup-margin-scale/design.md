@@ -258,3 +258,24 @@ Read-only queries against `data/warehouse.duckdb`, run 2026-10-03 after #54.
 
 ## Amendments
 
+### 2026-10-04 — unit-test inputs chosen to be exact in binary
+
+Found in tasks 2 and 4. dbt unit tests compare doubles exactly, so two of the test
+strategy's examples were re-chosen without changing what they prove. The scale test uses
+margins +1 and −7 (root mean square exactly 5; a deviation about the mean would give 4)
+instead of +3 and −4, whose answer is `sqrt(12.5)`. The rate test uses value 54, side
+denominator 108 and margin scale 0.25 (exactly 2) instead of 54 / 180 / 0.1, which
+evaluates to 2.9999999999999996. No expectation was loosened.
+
+### 2026-10-04 — the scale model has an enforced contract
+
+Task 2. `int_fantasy__category_scales` declares its column types and not-null
+constraints (a dbt *contract*: the build fails if the model's columns or types differ
+from the YAML), as its sibling intermediate models do. The design did not ask for it.
+
+### 2026-10-04 — the transaction fact no longer reads the season fact
+
+Task 5. With the scales read from `int_fantasy__category_scales`, nothing in
+`fct_transaction_impact` needs `fct_player_category_value`, so that dependency is gone.
+The two are tied by `value_facts_share_the_category_scales` and the whole-season-add
+test, as designed.
