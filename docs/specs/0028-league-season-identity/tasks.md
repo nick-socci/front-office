@@ -22,22 +22,33 @@ them.
    - Scope `stg_espn__scoring_periods_start_on_opening_day` to each season's own first
      MLB game.
    - Verify: fixture build green; uniqueness tests on full keys pass.
-5. Carry league and season through the three models; split the player dimension — `impl` — R4.1–R4.3, R4.6–R4.10
+5. Resolve players per league-season — `impl` — R4.11, R4.12, R4.6
+   - dbt unit tests first: the three crosswalk cases (a name ambiguous only in a later
+     season; a player matched only in a later season; two spellings in two leagues).
+     `int_mlb__player_game_days` gains `season`; the crosswalk's grain gains league and
+     season; `int_fantasy__roster_days` joins on them.
+   - Verify: fixture build green; on the fixture every roster day's `mlbam_player_id`
+     and `player_resolution` unchanged.
+5b. Carry league and season through the three models; split the player dimension — `impl` — R4.1–R4.3, R4.6–R4.10, R4.12
    - dbt unit tests first: two leagues of different sizes for the pools; a short season
      for the window; a position-less player whose role differs between two seasons; a
-     player in two leagues and two seasons with one `dim_players` row. Uniqueness on full
-     keys; the relationships test. Grep for every reader of the five moved columns and
+     player in two leagues and two seasons with one `dim_players` row equal to his
+     latest league-season's; a 2026 drop of a player resolved only in 2027. Uniqueness on
+     full keys; relationships both ways; `dim_players_equal_their_latest_league_season`.
+     Grep for every reader of the moved columns and of `dim_players.mlbam_player_id` and
      point each at `dim_player_league_seasons`. Move the two singular `dim_players_*`
      tests that are about league-season attributes. Add the warn-level
-     `dim_players_rostered_players_are_resolved` (R4.10).
+     `dim_player_league_seasons_rostered_players_are_resolved` (R4.10).
    - Verify: fixture build green; fixture row counts unchanged.
 6. Generate the combined fixture — `impl` — R5.1, R5.2
    - `scripts/make_multi_fixtures.py` from `fixtures/landing/` only; pytest that it
-     reproduces the committed tree; the privacy test scans the new root.
+     reproduces the committed tree; the privacy test scans the new root. One rostered
+     player is respelled in league `222222`.
    - Verify: `uv run pytest`; `.agentic/pre-commit-guard` passes.
 7. Build the isolation check and the warehouse comparison — `impl` — R5.3, R6.1
    - pytest first for the diff function (changed value, missing row, added column,
-     missing relation, equal counts with different duplicates). Make the `ci` target's
+     missing relation, equal counts with different duplicates). `dim_players` is the
+     one named exemption from the row comparison. Make the `ci` target's
      path `env_var('FO_CI_DUCKDB_PATH', 'ci.duckdb')`. Single builds load only their
      own season's MLB folders.
    - Verify: the check runs and prints a per-relation, per-league-season report.
@@ -52,9 +63,9 @@ them.
    - Verify: `.agentic/gates` green.
 10. Rebuild the real warehouse beside the old one and compare — `judgment` — R6.2
     - Run the three commands. Do not rename, replace or delete either file.
-    - Verify: 2,688 raw rows; 0 relations differing in a shared column; the five columns
-      of `dim_player_league_seasons` equal today's `dim_players` columns for all 498
-      players; results on #28.
+    - Verify: 2,688 raw rows; 0 relations differing in a shared column; the seven
+      attribute columns of `dim_player_league_seasons` equal today's `dim_players` columns
+      for all 498 players; results on #28.
 11. Verify every acceptance criterion and expected value against real data — `judgment` — all
     - Verify: record the queries and results as a comment on #28. The owner swaps the
       warehouse files.

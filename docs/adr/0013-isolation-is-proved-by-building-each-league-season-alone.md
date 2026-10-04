@@ -54,7 +54,8 @@ pool or a window used the right league.
 - Bad / accepted cost: the extra league-seasons are copies, so the check proves isolation
   and nothing about whether a real second league's data is handled.
 - Bad / accepted cost: a second fixture root to keep generated, never hand-edited.
-- Bad / accepted cost: the conformed `dim_players` (ADR 0012) is meant to depend on
-  everything loaded, so on real data it is not the same alone as combined. The gate
-  passes for it on the fixture only because the league-seasons are copies.
+- Bad / accepted cost: one model is exempt. The conformed `dim_players` (ADR 0012) is
+  defined over everything loaded, so it is excluded from the comparison by name and held
+  to its own invariants. The fixture respells one player in the second league so that
+  the exemption is exercised, not assumed.
 - Follow-ups: none.

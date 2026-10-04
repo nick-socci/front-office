@@ -42,13 +42,21 @@ and never in another. Choosing a grain is the owner's decision.
 
 Chosen by the owner on 2026-10-04: **option 2**.
 
-- `dim_players` stays one row per (`platform`, `platform_player_id`), its key unchanged,
-  and keeps `mlbam_player_id`, `player_resolution` and `player_name`. It is a *conformed
-  dimension*: it means the same thing to every fact that joins it, in any league or
-  season.
 - `dim_player_league_seasons` (new) has one row per (`platform`, `league_id`, `season`,
-  `platform_player_id`) and holds `default_position`, `replacement_group`,
-  `first_rostered_date`, `last_rostered_date` and `is_transaction_only`.
+  `platform_player_id`). It holds how the player was resolved **in that league-season**
+  (`mlbam_player_id`, `player_resolution`, `player_name`) and `default_position`,
+  `replacement_group`, `first_rostered_date`, `last_rostered_date` and
+  `is_transaction_only`. Every league-season model takes its MLBAM id from here.
+- `dim_players` stays one row per (`platform`, `platform_player_id`), its key unchanged,
+  with `mlbam_player_id`, `player_resolution` and `player_name` copied from the player's
+  latest league-season row. It is a *conformed dimension*: one thing to refer to a player
+  by, in any league or season. It is a reference; no league-season number reads from it.
+
+Resolution is per league-season because a design review of the first version found that
+a global match lets a later season change an earlier one: a player unresolved in 2026
+and matched by name in 2027 would have had his 2026 transactions valued in a combined
+build and not in a 2026 build. The name fallback therefore asks whether a name is unique
+among the MLB players **of that season**.
 
 Option 1 was the recommendation: every column true at its grain with one model. The
 owner chose option 2 because the intent is known. Several seasons and leagues are
@@ -63,12 +71,14 @@ fact. Option 3 is wrong as soon as a role changes between seasons.
 - Good: nothing league-specific is borrowed from another league or year.
 - Bad / accepted cost: `dim_players` loses five columns, which move to the new model with
   the same values. A reader of `replacement_group` joins the new model.
-- Bad / accepted cost: `dim_players` depends on everything loaded. `player_name` is the
-  spelling on his latest roster day in any league, and the name-match resolution judges
-  uniqueness over every MLB player loaded, so its rows are not the same in a combined
-  build as in a build of one league-season alone. That is what conformed means; the
-  isolation gate (ADR 0013) holds on the fixture only because its league-seasons are
-  copies.
+- Bad / accepted cost: `dim_players` depends on everything loaded: its row is his
+  latest league-season's, so it is not the same in a combined build as in a build of one
+  league-season alone. That is what conformed means. It is exempt from the isolation
+  gate (ADR 0013) by name and held to two invariants instead: it has exactly the players
+  of the league-season table, and each row equals the row it is taken from.
+- Bad / accepted cost: the same ESPN player could, through a name match, carry different
+  MLB ids in different seasons. Each league-season row is right for its season;
+  `dim_players` shows the latest.
 - Bad / accepted cost: two models to keep in step, tied by a relationships test.
 - Bad / accepted cost: the dimension is keyed by the fantasy platform's player id, so it
   is one reference within ESPN, not across platforms. The owner raised keying it by the

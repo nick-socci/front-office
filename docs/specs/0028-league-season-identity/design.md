@@ -180,12 +180,14 @@ become combinations with league and season.
 |---|---|
 | `int_fantasy__transactions` | gains `league_id`, `season`; unique on (`platform`, `league_id`, `season`, `transaction_id`); the join to teams uses them |
 | `int_fantasy__replacement_levels` | grain becomes (`platform`, `league_id`, `season`, `day_kind`, `component`). Free-agent days, pools, played days and totals are per league-season; N is that league-season's team count, by a join, not a scalar subquery. The spine is league-seasons × kinds × components |
-| `dim_players` | grain unchanged: (`platform`, `platform_player_id`), every player on any roster day or in any transaction of any league-season. Columns: `platform`, `platform_player_id`, `mlbam_player_id`, `player_resolution`, `player_name`. Name and resolution come from his latest roster day anywhere (latest `scoring_date`, then highest `season`, then lowest `league_id`, then lowest `fantasy_team_id`, so the choice is deterministic); a player in no roster is resolved through the id map by id, name null, as now |
-| `dim_player_league_seasons` (new, table) | grain (`platform`, `league_id`, `season`, `platform_player_id`): every player on a roster day or in a transaction of that league-season. Columns: the key, `default_position`, `replacement_group`, `first_rostered_date`, `last_rostered_date`, `is_transaction_only`, each computed within the league-season exactly as `dim_players` computes it today. The MLB totals used to group a position-less player are **of that season only**: today they are summed over every MLB day loaded, grouped by player alone, which with two seasons would let 2027 starts change a 2026 group. They are grouped by player and the calendar year of the game date and joined on the row's `season`; the MLBAM id comes from `dim_players` |
+| `dim_player_league_seasons` (new, table) | grain (`platform`, `league_id`, `season`, `platform_player_id`): every player on a roster day or in a transaction of that league-season. Columns: the key; `mlbam_player_id`, `player_resolution` and `player_name` as resolved **in that league-season** (the crosswalk row for a rostered player; the id map by id, name null, for a transaction-only one, as now); `default_position`, `replacement_group`, `first_rostered_date`, `last_rostered_date`, `is_transaction_only`, each computed within the league-season exactly as `dim_players` computes it today. The MLB totals used to group a position-less player are **of that season only** (`int_mlb__player_game_days.season` = the row's `season`): today they are summed over every MLB day loaded, which with two seasons would let 2027 starts change a 2026 group |
+| `dim_players` | grain unchanged: (`platform`, `platform_player_id`), every player in any `dim_player_league_seasons` row. Columns: `platform`, `platform_player_id`, `mlbam_player_id`, `player_resolution`, `player_name`, all three copied from **one** row: his latest league-season (highest `season`, then latest `last_rostered_date` with nulls last, then lowest `league_id`). It is built *from* the league-season table, so the name shown and the name matched on are the same observation. It is a reference: no league-season model reads an MLBAM id from it |
 | `fct_player_category_value` | joins `int_fantasy__replacement_levels` on league and season too |
-| `fct_transaction_impact` | gains `league_id`, `season`; scoring bounds, next drop, next add, roster days, started days, replacement levels and category scales are all joined within the league-season. It reads `mlbam_player_id` from `dim_players` and `replacement_group` from `dim_player_league_seasons` |
-| `int_fantasy__player_crosswalk` | unchanged: an ESPN player id means the same player in every league |
-| MLB and id-map models, `int_fantasy__stat_components`, seeds | unchanged: they describe no league |
+| `fct_transaction_impact` | gains `league_id`, `season`; scoring bounds, next drop, next add, roster days, started days, replacement levels and category scales are all joined within the league-season. It reads `mlbam_player_id` and `replacement_group` from `dim_player_league_seasons`, not from `dim_players` |
+| `int_fantasy__player_crosswalk` | grain becomes (`platform`, `league_id`, `season`, `platform_player_id`): one resolution per player **per league-season**. The canonical name is the one on his latest roster snapshot of that league-season (scoring period, then `fetched_at`, then name). The id map is tried by id first, as now. The name fallback matches only a name that belongs to exactly one MLB player **who appeared in that MLB season**, so loading another season can neither create nor destroy a match |
+| `int_fantasy__roster_days` | joins the crosswalk on league and season as well as player; columns unchanged |
+| `int_mlb__player_game_days` | gains `season`, the MLB season of that date's games (from `stg_mlb__games`), so "that season's MLB data" is one definition used by the crosswalk and by the totals below. It gets no league column |
+| Other MLB and id-map models, `int_fantasy__stat_components`, seeds | unchanged: they describe no league |
 
 Any other single-league assumption is whatever the isolation check names; each is fixed
 by adding the key to a join, a window or a group. A fix that needs more than that is a
@@ -199,7 +201,7 @@ Generated by `scripts/make_multi_fixtures.py` from `fixtures/landing/` alone, ne
 | League-season | Built from | Differs by |
 |---|---|---|
 | `111111`, 2026 | the existing fixture | nothing (copied) |
-| `222222`, 2026 | the same | league id in payloads, partitions, URLs and paths; **same fetch timestamps** |
+| `222222`, 2026 | the same | league id in payloads, partitions, URLs and paths; **same fetch timestamps**; one rostered player's name respelled (a public major leaguer, accent removed), so the conformed dimension has a real choice to make |
 | `111111`, 2027 | the same | season; settings say the season is **one** scoring period long; only period 1's roster; matchups and transactions cut to that day; fetch timestamps one year later so the anchor puts period 1 on a 2027 date |
 | `222222`, 2027 | the 2027 one | league id; same fetch timestamps as `111111`, 2027 |
 
@@ -228,10 +230,13 @@ The existing privacy test scans this root as well (R5.2).
 5. Print every relation and league-season that differs, with counts, and exit non-zero
    if any does.
 
-`dim_players` is the one relation whose rows may legitimately depend on other
-league-seasons (ADR 0012). It has no league columns, so it is held to the one-way rule:
-every single-build row must be in the combined build. That holds on this fixture because
-its league-seasons are copies with the same names. It is not a property of real data.
+`dim_players` is the one relation defined over everything loaded (ADR 0012), so it is
+**exempt from step 4 by name**, in a one-entry list at the top of the script. It is held
+to its own invariants instead (R4.9): it has exactly the players of
+`dim_player_league_seasons`, and each row equals the league-season row it is taken from.
+The respelled player in league `222222` makes the exemption real on the fixture: his
+`dim_players` row differs between the combined build and the `111111`-only build, and
+the check must still report no differences.
 
 A relation that should carry league and season but does not fails step 4 and is named.
 Because a single build holds only its own season's MLB data, a league-keyed model that
@@ -277,13 +282,15 @@ The old file is kept until the comparison is clean and the owner renames them.
 | R3.2 | existing `stg_espn__scoring_periods_start_on_opening_day`, changed to compare each league-season's first date with the first MLB game of **its** season (today it takes the earliest MLB date of everything loaded, so a 2027 season would be held to 2026's opening day) | a test that passes only while one season is loaded |
 | R3.3 | YAML uniqueness on full keys for every ESPN staging model | a key that only held for one league |
 | R4.1 | unique on the full key of each of the three models | a grain that only held for one league |
-| R4.7 | unique on (`platform`, `platform_player_id`), as today; dbt unit test: a player rostered in two leagues and two seasons has one row, named as on his latest roster day | a player doubled by a second league; a name chosen by load order |
-| R4.8 | unique on the full key; existing `dim_players_covers_every_league_player` and `dim_players_resolved_players_have_a_group`, moved to the new model and scoped by league-season; last task: its five columns equal today's `dim_players` on 2026 | a player missing from a league-season; values changing in the move |
-| R4.9 | `relationships` from `dim_player_league_seasons` to `dim_players` | the two models out of step |
-| R4.10 | singular `dim_players_rostered_players_are_resolved`, severity warn: rostered players with resolution `unresolved` (0 on 2026) | a name match lost when more data is loaded, noticed on the build that causes it instead of in a zero later |
+| R4.11 | dbt unit tests on the crosswalk: (a) a name unique among 2026's MLB players and shared by two players in 2027 still resolves in 2026 and is unresolved in 2027; (b) a player absent from the id map who has no roster in 2026 and is rostered in 2027 is unresolved in 2026 and matched by name in 2027; (c) one player spelled two ways in two leagues resolves in each league from that league's own spelling | another season creating or destroying a match (review 2, F1); one league's spelling deciding another's match |
+| R4.12 | dbt unit test on `fct_transaction_impact`: a 2026 drop of a player resolved only in 2027 has a null `total_value`; the isolation check | an earlier season's transaction valued through a later season's match |
+| R4.7 | unique on (`platform`, `platform_player_id`), as today; dbt unit test: a player in two leagues and two seasons has one row, equal to his latest league-season's | a player doubled by a second league; a name and an id taken from different observations (review 2, F3) |
+| R4.8 | unique on the full key; existing `dim_players_covers_every_league_player` and `dim_players_resolved_players_have_a_group`, moved to the new model and scoped by league-season; last task: its seven attribute columns equal today's `dim_players` on 2026 | a player missing from a league-season; values changing in the move |
+| R4.9 | `relationships` both ways between the two models; singular `dim_players_equal_their_latest_league_season` | the two models out of step; the exemption from the isolation check hiding a wrong row (review 2, F2) |
+| R4.10 | singular `dim_player_league_seasons_rostered_players_are_resolved`, severity warn: rostered players with resolution `unresolved` (0 on 2026) | an unmatched player noticed on the build that causes it instead of in a zero later |
 | R4.2 | dbt unit test: two leagues of different sizes get pools of their own size, from their own free agents | N counted over all leagues; another league's roster removing a free agent |
 | R4.3 | dbt unit test: a drop in a short season ends at that season's last date | a window running to another season's end |
-| R4.6 | dbt unit test on `dim_player_league_seasons`: a position-less player who relieves in 2026 and starts in 2027 is `RP` on his 2026 row and `SP` on his 2027 row | one season's appearances deciding another season's group |
+| R4.6 | dbt unit test on `dim_player_league_seasons`: a position-less player who relieves in 2026 and starts in 2027 is `RP` on his 2026 row and `SP` on his 2027 row; unique + not_null on `int_mlb__player_game_days` (`mlbam_player_id`, `game_date`) unchanged, `season` not null | one season's appearances deciding another season's group; a date split across two seasons |
 | R4.4, R4.5 | the isolation check | a join missing league or season, in any model |
 | R5.1, R5.2 | pytest: the generator reproduces the committed `landing_multi` byte for byte; the privacy test scans it | a hand edit; member data |
 | R5.3 | the isolation check, as a gate | cross-attribution anywhere |
@@ -310,8 +317,13 @@ gain the new columns in their mock rows; those that mock `dim_players` for its
   from `dim_players` today and must read it from `dim_player_league_seasons`; the YAML
   relationship test on `fct_player_category_value.platform_player_id` stays on
   `dim_players`. Task 5 greps for every reader of the five columns.
-- **`dim_players` is no longer the same alone as combined**, by design. Stated in ADR
-  0012; the gate cannot police it on real data.
+- **`dim_players` is not the same alone as combined**, by design, and is exempt from
+  the gate by name. Its own invariants (R4.9) replace the row comparison, and no
+  league-season number reads from it.
+- **The crosswalk's grain changes.** It is ephemeral (inlined as a CTE) and read by
+  `int_fantasy__roster_days` only; the join gains two keys. On 2026 every roster day's
+  `mlbam_player_id` and `player_resolution` must be unchanged, which is an expected
+  value.
 - **The real rebuild differs.** If any shared column differs, nothing is swapped and the
   difference is investigated; that is the point of building beside the old file.
 
@@ -328,18 +340,11 @@ gain the new columns in their mock rows; those that mock `dim_players` for its
 - **MLB as the source of truth for players.** Raised by the owner on 2026-10-04 and
   split out as #60. `dim_players` here is keyed by the platform's player id; keying it by
   the MLB id is the intended direction and is not part of this build.
-- **Name matching across seasons.** `int_fantasy__player_crosswalk` falls back to a name
-  match only when the name belongs to exactly one MLB player, judged over every MLB
-  player loaded. With two seasons' rosters and MLB data loaded a name can stop being
-  unique, so a player resolved by name alone could become unresolved and his production
-  drop to zero. Nine players (338 of 55,653 roster days) resolve by name in 2026.
-  Decided by the owner on 2026-10-04: **not solved here; carried into #60**, which must
-  settle it before a second season's rosters are loaded. #57 loads matchup scores only
-  and cannot trigger it; the fixture's 2027 games are copies of the same players, so the
-  gate cannot either. What this build adds is visibility: the existing warning
-  `stg_idmap__covers_started_players` already lists the nine the id map lacks, and a new
-  warning lists any rostered player left with no MLBAM id (none today), which is where
-  an ambiguity would show.
+- **One player, two MLB ids.** With resolution per league-season, a name match could in
+  principle give the same ESPN player different MLB ids in different seasons (a namesake
+  appears). The league-season rows would each be right for their season; `dim_players`
+  would show the latest. Not handled further here; #60, which keys the dimension by MLB
+  id, has to decide what that case means.
 - **Whether a relabelled league is enough of a second league.** It proves isolation. It
   cannot show that a league with different categories or roster slots builds; no such
   data is available without fetching it.
@@ -372,6 +377,9 @@ Read-only checks of `data/raw/` and `data/warehouse.duckdb`, run 2026-10-04.
 | design-review | F3 (P1): the `ci` target's path is fixed, so the single builds could not be pointed at separate files | Changed: the `ci` path reads `FO_CI_DUCKDB_PATH`, defaulting to `ci.duckdb` |
 | design-review | F4 (P1): `EXCEPT` compares distinct rows, so equal counts with different duplicates pass | Changed: `EXCEPT ALL` both ways, with a test for that case |
 | design-review | F5 (P2): comparing only relations present in both files hides a missing relation | Changed: relation names are compared first and a missing one is reported |
+| design-review, second pass 2026-10-04 (after the owner chose the two-table player shape) | F1 (P0): the league-season table took its MLBAM id from the global `dim_players`, whose name match looks at every season loaded, so a 2027 match could value a 2026 transaction | Changed, by the owner's decision (reversing the earlier deferral to #60): resolution is per league-season (R4.11, R4.12); the league-season table carries the id; no league-season model reads `dim_players`; three crosswalk unit tests and one on the transaction fact |
+| design-review, second pass | F2 (P1): the gate held `dim_players` to the row comparison while ADR 0012 said its rows may differ, and the copied fixture hid the contradiction | Changed: `dim_players` is exempt by name and held to R4.9; the fixture respells one player in the second league so the exemption is exercised |
+| design-review, second pass | F3 (P2): `dim_players` chose a name by one ordering and the crosswalk matched on a name chosen by another | Changed: `dim_players` is built from the league-season table, so name, id and resolution are one observation |
 
 ## Amendments
 

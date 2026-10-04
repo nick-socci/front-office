@@ -106,17 +106,26 @@ set the deadline: before any second league or season is loaded, including an old
 - R4.1 THE SYSTEM SHALL carry `league_id` and `season` on `int_fantasy__transactions`,
   `int_fantasy__replacement_levels` and `fct_transaction_impact`, as part of each one's
   key.
-- R4.7 THE SYSTEM SHALL keep `dim_players` at one row per platform player id, across
-  every league and season loaded, holding only the MLBAM id, how it was resolved, and the
-  name on his latest roster day in any league.
+- R4.11 THE SYSTEM SHALL resolve a fantasy player to an MLBAM id within each league and
+  season: from the id map by id, or failing that by a name match that uses the name on
+  his latest roster snapshot of that league-season and counts a name as unambiguous when
+  it belongs to exactly one MLB player who appeared in that MLB season.
+- R4.12 THE SYSTEM SHALL take the MLBAM id used by every league-season model (roster
+  days, started days, player value, transaction impact) from that league-season's own
+  resolution.
 - R4.8 THE SYSTEM SHALL provide `dim_player_league_seasons` with one row per player per
-  league and season in which he was rostered or transacted, holding his default
-  position, replacement group, first and last rostered dates and whether he appears only
-  in that league-season's transaction log.
-- R4.9 THE SYSTEM SHALL fail the build if a row of `dim_player_league_seasons` has no row
-  in `dim_players`.
-- R4.10 WHEN a rostered player has no MLBAM id THE SYSTEM SHALL warn on every build,
-  naming him, without failing.
+  league and season in which he was rostered or transacted, holding his MLBAM id and how
+  it was resolved in that league-season, his default position, replacement group, first
+  and last rostered dates and whether he appears only in that league-season's
+  transaction log.
+- R4.7 THE SYSTEM SHALL keep `dim_players` at one row per platform player id, across
+  every league and season loaded, holding the MLBAM id, resolution and name of his
+  latest league-season, as a reference and not as an input to any league-season number.
+- R4.9 THE SYSTEM SHALL fail the build if `dim_players` and `dim_player_league_seasons`
+  do not hold the same players, or if a `dim_players` row differs from the league-season
+  row it is taken from.
+- R4.10 WHEN a rostered player has no MLBAM id in a league-season THE SYSTEM SHALL warn
+  on every build, naming him, without failing.
 - R4.2 THE SYSTEM SHALL form each league-season's replacement pools from the players
   unrostered in that league on that league's scoring dates, sized by that league's own
   number of teams.
@@ -132,13 +141,16 @@ set the deadline: before any second league or season is loaded, including an old
 ### R5. Proof of isolation
 
 - R5.1 THE SYSTEM SHALL keep a committed fixture landing zone of two leagues by two
-  seasons, in which captures of different leagues share fetch timestamps and the two
-  seasons have different lengths, generated from the existing fixture by script.
+  seasons, in which captures of different leagues share fetch timestamps, the two seasons
+  have different lengths, and at least one player is spelled differently in the two
+  leagues, generated from the existing fixture by script.
 - R5.2 THE SYSTEM SHALL hold that fixture to the same privacy test as the existing one.
 - R5.3 THE SYSTEM SHALL fail the gates if any model's rows for a league-season in the
   combined build differ, as a multiset, from that model's rows when that league-season is
   built alone with only its own season's MLB data; or if a model without league columns
   lacks a row the single build has; or if the two builds do not hold the same models.
+  `dim_players` alone is exempt from the row comparison, because it is defined over
+  everything loaded; it is held to R4.9 instead.
 - R5.4 THE SYSTEM SHALL fail the gates if four captures that differ only in league or
   season, fetched in the same second, do not load as four rows.
 
@@ -162,13 +174,15 @@ Real season, `data/raw/` and `data/warehouse.duckdb` as of 2026-10-04.
 | Distinct keys | 2,688 under the new key, 0 collisions | group by the key |
 | Request paths | one per ESPN league-season (plus `/communication` for transactions); `/api/v1/schedule`; one per game for boxscores; `/PLAYERIDMAPCSV` | distinct `request_path` |
 | Payloads with no sidecar | 201, still skipped with a warning (#21) | loader log |
-| Real warehouse comparison | 0 relations with a difference in a shared column; 39 relations compared; one new relation (`dim_player_league_seasons`); `dim_players` reported as having 5 fewer columns | R6.1 comparison |
+| Real warehouse comparison | 0 relations with a difference in a shared column; 39 relations compared; one new relation (`dim_player_league_seasons`); `dim_players` reported as having 5 fewer columns; `int_mlb__player_game_days` one more (`season`) | R6.1 comparison |
 | `stg_espn__transactions` | 737 rows, `league_id` and `season` never null, one league-season | query |
 | `int_fantasy__replacement_levels` | 48 rows, one league-season | query |
 | `dim_players` | 498 rows, key unchanged; `mlbam_player_id`, `player_resolution`, `player_name` identical to today | R6.1 comparison |
-| `dim_player_league_seasons` | 498 rows, one league-season; its five columns identical to today's `dim_players` columns of the same names, player for player | query joining the old `dim_players` |
+| `dim_player_league_seasons` | 498 rows, one league-season; its seven attribute columns (`mlbam_player_id`, `player_resolution` and the five moved ones) identical to today's `dim_players` columns of the same names, player for player | query joining the old `dim_players` |
+| Resolution | 489 by id map, 9 by name, 0 unresolved; `int_fantasy__roster_days` 55,653 rows with `mlbam_player_id` and `player_resolution` unchanged on every row | R6.1 comparison |
 | Players matched by name | 9 of 498 (`unambiguous_name`), 338 roster days; already reported by the existing warning `stg_idmap__covers_started_players` | query; existing test |
 | Rostered players unresolved | 0, so the new warning returns no rows on 2026 | R4.10 test |
+| Combined fixture, the conformed dimension | the player spelled differently in the two leagues has one `dim_players` row; the isolation check still reports 0 differences | R5.3 check; R4.9 test |
 | `fct_transaction_impact` | 737 rows; `total_value` sums unchanged (221.09 / 457.47 / 170.37 / 451.72) | query |
 | Combined fixture, raw | 4 league-seasons; no capture dropped; captures of the two leagues share every ESPN fetch timestamp | R5.3 / R5.4 |
 | Combined fixture, isolation | 0 differing rows in any model for any of the 4 league-seasons | R5.3 check |
