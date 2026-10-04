@@ -33,11 +33,27 @@
 --      replacement produces nothing).
 -- Components only, never rates: AVG or ERA is computed from these totals downstream.
 --
--- BIAS. The pool is players nobody rostered that date; a free agent who got added
--- leaves it. Replacement here is therefore the never-owned remainder, and is probably
--- lower than a replacement a manager could actually have had on the wire.
+-- BIAS. Two, pulling opposite ways.
+--   * The pool is players nobody rostered that date; a free agent who got added leaves
+--     it. Replacement is therefore the never-owned remainder, probably lower than what a
+--     manager could actually have had on the wire.
+--   * Ranking by appearances picks the pitchers MLB teams used most, and teams use good
+--     relievers most. The relief pool's ERA (3.49) is about what rostered relievers post
+--     in relief while started (3.37), so a reliever earns little on ERA or WHIP here and
+--     nearly all his value on saves, holds and strikeouts. Accepted in ADR 0009, which
+--     also measures the alternatives: ranking by outs picks long men (4.20 outs an
+--     appearance against a rostered reliever's 3.01), and pooling every free-agent relief
+--     appearance gives a weaker ERA floor (4.24) but a longer outing still (3.58 outs).
 --
--- SENSITIVITY. (rewritten in task 4)
+-- SENSITIVITY. Measured on the 2026 season (12 teams) at N/2, N and 2N -- pool sizes of
+-- 6, 12 and 24:
+--   batting  AVG   .2410 / .2416 / .2420
+--   start    outs  14.84 / 14.98 / 15.01   ERA 5.40 / 5.41 / 5.06   WHIP 1.50 / 1.48 / 1.42
+--   relief   outs   2.68 /  2.80 /  2.83   ERA 3.18 / 3.49 / 3.58   WHIP 1.31 / 1.26 / 1.28
+-- Started players, for scale: .254; 16.39 outs and ERA 3.89 in a start; 3.01 outs and ERA
+-- 3.37 in relief. The size of an outing, which decides innings and strikeouts, barely
+-- moves with the pool size in either kind. Relief ERA does (0.40 of a run across the
+-- range, better the smaller the pool), which is the second bias above showing itself.
 --
 -- Like int_fantasy__transactions this carries no league_id or season (#28): it assumes
 -- the one league-season loaded.
