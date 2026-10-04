@@ -1,0 +1,83 @@
+"""Compare two warehouse files, relation by relation (spec 0028, R6.1).
+
+Usage:  uv run python scripts/compare_warehouses.py OLD NEW [--round-doubles N]
+
+First the relation names (tables and views of staging, intermediate, marts and
+reconciliation); then for every relation in both, row counts, EXCEPT ALL both ways over the
+columns they share, and columns only one side has. Exit 1 if any relation differs in a
+shared column or in row count, or is missing from NEW. A relation only in NEW is reported,
+not a failure.
+
+--round-doubles N is for the one-off comparison with an older real warehouse: it rounds
+DOUBLE/FLOAT columns to N decimals and, for each relation that differs exactly, says whether
+it still differs. It is off by default; exact comparison is what the isolation check uses.
+
+The two files need distinct names: each is attached under its file stem (see warehouse_diff).
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+import duckdb
+
+from warehouse_diff import RelationDiff, attach, compare_relation, list_relations
+
+
+def describe(diff: RelationDiff) -> str:
+    return (
+        f"rows {diff.left_rows} -> {diff.right_rows}; "
+        f"only in OLD {diff.only_left}, only in NEW {diff.only_right}"
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("old", type=Path)
+    parser.add_argument("new", type=Path)
+    parser.add_argument("--round-doubles", type=int, default=None, metavar="N")
+    args = parser.parse_args(argv)
+    if args.old.stem == args.new.stem:
+        parser.error("the two warehouse files need different names (they are attached by stem)")
+
+    con = duckdb.connect()
+    old, new = attach(con, args.old), attach(con, args.new)
+    old_names, new_names = list_relations(con, old), list_relations(con, new)
+    failed = False
+
+    for name in sorted(old_names - new_names):
+        print(f"MISSING from NEW: {name}")
+        failed = True
+    for name in sorted(new_names - old_names):
+        print(f"only in NEW (not a failure): {name}")
+
+    compared = same = 0
+    for name in sorted(old_names & new_names):
+        compared += 1
+        diff = compare_relation(con, old, new, name)
+        notes = []
+        if diff.left_only_columns:
+            notes.append(f"columns only in OLD: {', '.join(diff.left_only_columns)}")
+        if diff.right_only_columns:
+            notes.append(f"columns only in NEW: {', '.join(diff.right_only_columns)}")
+        if diff.differs:
+            failed = True
+            line = f"DIFFERS {name}: {describe(diff)}"
+            if args.round_doubles is not None:
+                rounded = compare_relation(con, old, new, name, round_doubles=args.round_doubles)
+                verdict = "still differs" if rounded.differs else "equal"
+                line += f" | after rounding doubles to {args.round_doubles}: {verdict}"
+            print(line)
+        else:
+            same += 1
+        for note in notes:
+            print(f"  {name}: {note}")
+
+    print(f"compared {compared} relations: {same} identical, {compared - same} differ")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

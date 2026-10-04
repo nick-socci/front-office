@@ -1,0 +1,163 @@
+"""Compare relations between DuckDB warehouses, as multisets.
+
+Shared by scripts/compare_warehouses.py and scripts/check_tenant_isolation.py. Pure
+functions over one connection with the warehouses ATTACHED.
+
+Attach a warehouse file under its own stem (`attach` does): DuckDB views store the name
+of the catalog they were created in, so a file attached under any other name fails with
+`Catalog "..." does not exist` the moment a view is queried. Distinct files therefore need
+distinct stems.
+
+Comparison is EXCEPT ALL both ways, never plain EXCEPT: EXCEPT compares sets and would call
+the rows A, A, B, C and A, B, B, C equal.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import duckdb
+
+SCHEMAS = ("staging", "intermediate", "marts", "reconciliation")
+FLOAT_TYPES = ("DOUBLE", "FLOAT")
+
+
+def attach(con: duckdb.DuckDBPyConnection, path: Path | str) -> str:
+    """Attach a warehouse read-only under its file stem; returns the catalog name."""
+    catalog = Path(path).stem
+    con.execute(f"attach '{path}' as \"{catalog}\" (read_only)")
+    return catalog
+
+
+def list_relations(con: duckdb.DuckDBPyConnection, catalog: str) -> set[str]:
+    """Tables and views of the model schemas, as `schema.name`."""
+    placeholders = ", ".join("?" for _ in SCHEMAS)
+    rows = con.execute(
+        "select table_schema, table_name from information_schema.tables "
+        f"where table_catalog = ? and table_schema in ({placeholders})",
+        [catalog, *SCHEMAS],
+    ).fetchall()
+    return {f"{schema}.{name}" for schema, name in rows}
+
+
+def columns(con: duckdb.DuckDBPyConnection, catalog: str, relation: str) -> dict[str, str]:
+    """Column name -> type, in column order."""
+    schema, name = relation.split(".")
+    rows = con.execute(
+        "select column_name, data_type from information_schema.columns "
+        "where table_catalog = ? and table_schema = ? and table_name = ? "
+        "order by ordinal_position",
+        [catalog, schema, name],
+    ).fetchall()
+    return {column: data_type for column, data_type in rows}
+
+
+def quote(name: str) -> str:
+    return '"' + name.replace('"', '""') + '"'
+
+
+def qualified(catalog: str, relation: str) -> str:
+    schema, name = relation.split(".")
+    return f"{quote(catalog)}.{quote(schema)}.{quote(name)}"
+
+
+@dataclass
+class RelationDiff:
+    relation: str
+    left_rows: int
+    right_rows: int
+    only_left: int
+    only_right: int
+    left_only_columns: list[str] = field(default_factory=list)
+    right_only_columns: list[str] = field(default_factory=list)
+    shared_columns: list[str] = field(default_factory=list)
+
+    @property
+    def differs(self) -> bool:
+        """A row or count difference. A column on one side only is not one."""
+        return bool(self.only_left or self.only_right or self.left_rows != self.right_rows)
+
+
+def select_list(cols: dict[str, str], names: list[str], round_doubles: int | None) -> str:
+    parts = []
+    for name in names:
+        if round_doubles is not None and cols[name].upper() in FLOAT_TYPES:
+            parts.append(f"round({quote(name)}, {round_doubles}) as {quote(name)}")
+        else:
+            parts.append(quote(name))
+    return ", ".join(parts)
+
+
+def sql_select(catalog: str, relation: str, selection: str, where: str | None) -> str:
+    clause = f" where {where}" if where else ""
+    return f"select {selection} from {qualified(catalog, relation)}{clause}"
+
+
+def count_rows(
+    con: duckdb.DuckDBPyConnection, catalog: str, relation: str, where: str | None = None
+) -> int:
+    row = con.execute("select count(*) from (" + sql_select(catalog, relation, "*", where) + ")")
+    return int(row.fetchone()[0])  # type: ignore[index]
+
+
+def compare_relation(
+    con: duckdb.DuckDBPyConnection,
+    left: str,
+    right: str,
+    relation: str,
+    *,
+    left_where: str | None = None,
+    right_where: str | None = None,
+    round_doubles: int | None = None,
+) -> RelationDiff:
+    """Compare one relation over the columns both sides have, as multisets."""
+    left_cols, right_cols = columns(con, left, relation), columns(con, right, relation)
+    shared = [c for c in left_cols if c in right_cols]
+    diff = RelationDiff(
+        relation=relation,
+        left_rows=count_rows(con, left, relation, left_where),
+        right_rows=count_rows(con, right, relation, right_where),
+        only_left=0,
+        only_right=0,
+        left_only_columns=[c for c in left_cols if c not in right_cols],
+        right_only_columns=[c for c in right_cols if c not in left_cols],
+        shared_columns=shared,
+    )
+    if shared:
+        left_sql = sql_select(
+            left, relation, select_list(left_cols, shared, round_doubles), left_where
+        )
+        right_sql = sql_select(
+            right, relation, select_list(right_cols, shared, round_doubles), right_where
+        )
+        diff.only_left = count_except(con, left_sql, right_sql)
+        diff.only_right = count_except(con, right_sql, left_sql)
+    return diff
+
+
+def count_except(con: duckdb.DuckDBPyConnection, left_sql: str, right_sql: str) -> int:
+    row = con.execute(f"select count(*) from ({left_sql} except all {right_sql})").fetchone()
+    return int(row[0]) if row else 0
+
+
+def rows_missing_from(
+    con: duckdb.DuckDBPyConnection,
+    left: str,
+    right: str,
+    relation: str,
+    *,
+    left_where: str | None = None,
+    right_where: str | None = None,
+) -> int:
+    """Rows of left that right does not hold (EXCEPT ALL one way), over shared columns."""
+    left_cols, right_cols = columns(con, left, relation), columns(con, right, relation)
+    shared = [c for c in left_cols if c in right_cols]
+    if not shared:
+        return 0
+    selection = ", ".join(quote(c) for c in shared)
+    return count_except(
+        con,
+        sql_select(left, relation, selection, left_where),
+        sql_select(right, relation, selection, right_where),
+    )
