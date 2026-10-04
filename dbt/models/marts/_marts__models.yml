@@ -97,20 +97,14 @@ models:
       - name: default_position
         description: From his latest roster day; null for a transaction-only player.
       - name: replacement_group
+        description: >
+          hitter, SP or RP, as the dimension description says. Read only to tell a hitter
+          from a pitcher, for the side a drop is credited on (R4.3, #52): SP versus RP no
+          longer chooses a replacement level, the kind of outing does.
         data_tests:
           - accepted_values:
               arguments:
                 values: [hitter, SP, RP]
-      - name: pitcher_slot_replacement_group
-        description: >
-          The group his days in a pitcher slot are measured against: his
-          replacement_group if he is a pitcher, otherwise SP or RP from his pitching
-          alone (SP if at least half his games pitched were starts). RP for a player who
-          never recorded an out. Null only for a player with no MLBAM id.
-        data_tests:
-          - accepted_values:
-              arguments:
-                values: [SP, RP]
       - name: first_rostered_date
         description: First roster day; null for a transaction-only player.
       - name: last_rostered_date
@@ -332,8 +326,8 @@ unit_tests:
         rows: []
     expect:
       rows:
-        - {platform_player_id: 10, mlbam_player_id: 1000, player_name: "Latest Name", player_resolution: crosswalk_id, default_position: SS, replacement_group: hitter, pitcher_slot_replacement_group: RP, first_rostered_date: "2026-04-01", last_rostered_date: "2026-04-05", is_transaction_only: false}
-        - {platform_player_id: 11, mlbam_player_id: 1100, player_name: "Team Two", player_resolution: unambiguous_name, default_position: "1B", replacement_group: hitter, pitcher_slot_replacement_group: RP, first_rostered_date: "2026-04-05", last_rostered_date: "2026-04-05", is_transaction_only: false}
+        - {platform_player_id: 10, mlbam_player_id: 1000, player_name: "Latest Name", player_resolution: crosswalk_id, default_position: SS, replacement_group: hitter, first_rostered_date: "2026-04-01", last_rostered_date: "2026-04-05", is_transaction_only: false}
+        - {platform_player_id: 11, mlbam_player_id: 1100, player_name: "Team Two", player_resolution: unambiguous_name, default_position: "1B", replacement_group: hitter, first_rostered_date: "2026-04-05", last_rostered_date: "2026-04-05", is_transaction_only: false}
 
   - name: dim_players_transaction_only_group_comes_from_mlb_appearances
     description: >
@@ -362,9 +356,9 @@ unit_tests:
           - {mlbam_player_id: 2100, game_date: "2026-04-02", plate_appearances: 0, batters_faced: 25, outs_recorded: 18, games_pitched: 1, games_started: 1}
     expect:
       rows:
-        - {platform_player_id: 10, mlbam_player_id: 1000, player_name: "Somebody", player_resolution: crosswalk_id, default_position: SS, replacement_group: hitter, pitcher_slot_replacement_group: RP, first_rostered_date: "2026-04-01", last_rostered_date: "2026-04-01", is_transaction_only: false}
-        - {platform_player_id: 20, mlbam_player_id: 2000, player_name: null, player_resolution: crosswalk_id, default_position: null, replacement_group: RP, pitcher_slot_replacement_group: RP, first_rostered_date: null, last_rostered_date: null, is_transaction_only: true}
-        - {platform_player_id: 21, mlbam_player_id: 2100, player_name: null, player_resolution: crosswalk_id, default_position: null, replacement_group: SP, pitcher_slot_replacement_group: SP, first_rostered_date: null, last_rostered_date: null, is_transaction_only: true}
+        - {platform_player_id: 10, mlbam_player_id: 1000, player_name: "Somebody", player_resolution: crosswalk_id, default_position: SS, replacement_group: hitter, first_rostered_date: "2026-04-01", last_rostered_date: "2026-04-01", is_transaction_only: false}
+        - {platform_player_id: 20, mlbam_player_id: 2000, player_name: null, player_resolution: crosswalk_id, default_position: null, replacement_group: RP, first_rostered_date: null, last_rostered_date: null, is_transaction_only: true}
+        - {platform_player_id: 21, mlbam_player_id: 2100, player_name: null, player_resolution: crosswalk_id, default_position: null, replacement_group: SP, first_rostered_date: null, last_rostered_date: null, is_transaction_only: true}
 
   - name: dim_players_keeps_a_transaction_only_player_the_id_map_lacks
     description: >
@@ -383,39 +377,7 @@ unit_tests:
         rows: []
     expect:
       rows:
-        - {platform_player_id: 22, mlbam_player_id: null, player_name: null, player_resolution: unresolved, default_position: null, replacement_group: null, pitcher_slot_replacement_group: null, is_transaction_only: true}
-
-  - name: dim_players_a_two_way_player_is_measured_as_a_starter_in_a_pitcher_slot
-    description: >
-      Id 30 is a DH by default position who also starts on the mound; id 31 is a shortstop
-      who threw one mop-up inning; id 32 is a shortstop who never pitched. All three are
-      hitters by replacement_group. In a pitcher slot the two-way player is measured as an
-      SP, from his pitching alone, and the other two as RP. Catches a starter's innings
-      being valued against a reliever's day, and plate appearances deciding the pitching
-      group.
-    model: dim_players
-    given:
-      - input: ref('int_fantasy__roster_days')
-        rows:
-          - {platform: espn, scoring_date: "2026-04-01", fantasy_team_id: 1, platform_player_id: 30, mlbam_player_id: 3000, player_resolution: crosswalk_id, player_name: "Two Way", default_position: "DH"}
-          - {platform: espn, scoring_date: "2026-04-01", fantasy_team_id: 1, platform_player_id: 31, mlbam_player_id: 3100, player_resolution: crosswalk_id, player_name: "Mop Up", default_position: "SS"}
-          - {platform: espn, scoring_date: "2026-04-01", fantasy_team_id: 1, platform_player_id: 32, mlbam_player_id: 3200, player_resolution: crosswalk_id, player_name: "Never Pitched", default_position: "SS"}
-      - input: ref('int_fantasy__transactions')
-        rows: []
-      - input: ref('stg_idmap__players')
-        rows: []
-      - input: ref('int_mlb__player_game_days')
-        rows:
-          - {mlbam_player_id: 3000, game_date: "2026-04-01", plate_appearances: 5, batters_faced: 0, outs_recorded: 0, games_pitched: 0, games_started: 0}
-          - {mlbam_player_id: 3000, game_date: "2026-04-02", plate_appearances: 4, batters_faced: 24, outs_recorded: 18, games_pitched: 1, games_started: 1}
-          - {mlbam_player_id: 3000, game_date: "2026-04-03", plate_appearances: 40, batters_faced: 0, outs_recorded: 0, games_pitched: 0, games_started: 0}
-          - {mlbam_player_id: 3100, game_date: "2026-04-01", plate_appearances: 4, batters_faced: 4, outs_recorded: 3, games_pitched: 1, games_started: 0}
-          - {mlbam_player_id: 3200, game_date: "2026-04-01", plate_appearances: 4, batters_faced: 0, outs_recorded: 0, games_pitched: 0, games_started: 0}
-    expect:
-      rows:
-        - {platform_player_id: 30, replacement_group: hitter, pitcher_slot_replacement_group: SP}
-        - {platform_player_id: 31, replacement_group: hitter, pitcher_slot_replacement_group: RP}
-        - {platform_player_id: 32, replacement_group: hitter, pitcher_slot_replacement_group: RP}
+        - {platform_player_id: 22, mlbam_player_id: null, player_name: null, player_resolution: unresolved, default_position: null, replacement_group: null, is_transaction_only: true}
 
 # -----------------------------------------------------------------------------
 # fct_player_category_value unit tests (#11): the per-category arithmetic, which lives in
