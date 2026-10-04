@@ -1,6 +1,6 @@
 # 0011. A raw response is identified by its request path and parameters
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-04
 - Spec: [0028-league-season-identity](../specs/0028-league-season-identity/design.md) · Issue: #28
 

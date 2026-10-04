@@ -1,6 +1,6 @@
 # 0013. Isolation is proved by building each league-season alone
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-04
 - Spec: [0028-league-season-identity](../specs/0028-league-season-identity/design.md) · Issue: #28
 

@@ -109,9 +109,9 @@ See [ADR 0013](../../adr/0013-isolation-is-proved-by-building-each-league-season
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0011](../../adr/0011-a-raw-response-is-identified-by-its-request-path-and-parameters.md) | The raw key gains the request path; partitions are stored for staging to read | proposed |
-| [0012](../../adr/0012-players-have-a-conformed-dimension-and-a-league-season-table.md) | `dim_players` is one row per player everywhere; `dim_player_league_seasons` holds what is per league-season | proposed |
-| [0013](../../adr/0013-isolation-is-proved-by-building-each-league-season-alone.md) | Isolation is a gate: every model, combined build against single builds | proposed |
+| [0011](../../adr/0011-a-raw-response-is-identified-by-its-request-path-and-parameters.md) | The raw key gains the request path; partitions are stored for staging to read | accepted |
+| [0012](../../adr/0012-players-have-a-conformed-dimension-and-a-league-season-table.md) | `dim_players` is one row per player everywhere; `dim_player_league_seasons` holds what is per league-season | accepted |
+| [0013](../../adr/0013-isolation-is-proved-by-building-each-league-season-alone.md) | Isolation is a gate: every model, combined build against single builds | accepted |
 
 ## Detailed design
 

@@ -1,6 +1,6 @@
 # League and season identity through raw storage and every model — requirements
 
-Issue: #28 · Tier: L · Status: draft
+Issue: #28 · Tier: L · Status: approved 2026-10-04
 
 ## Problem
 
