@@ -307,6 +307,28 @@ unit_tests:
         - {league_id: "A", season: 2026, transaction_id: "m1", espn_player_id: 2}
         - {league_id: "B", season: 2026, transaction_id: "m1", espn_player_id: 3}
 
+  - name: transactions_a_message_on_two_pages_is_taken_from_the_first_page
+    description: >
+      Catches a missing or changed tie-break. Activity landing between two page requests
+      can put one message on both pages of a run, and every page of a run shares one
+      fetched_at, so recency cannot choose. The copy on the page with the lower
+      request_key is kept (offset=0 before offset=2000), whichever order the rows arrive
+      in: here the later page is listed first and carries a different target, so a
+      dedupe with no tie-break, or one that prefers the last page, returns player 9.
+    model: stg_espn__transactions
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: "limit=2000&offset=2000&view=x", fetched_at: "20260901T000000Z", file_path: a2, partitions: '{"season": 2026, "league_id": "A", "offset": 2000}', payload: '{"topics": [{"id": "t1", "date": 1700000000000, "messages": [{"id": "m1", "date": 1700000000000, "messageTypeId": 178, "targetId": 9, "to": 1}]}]}'}
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: "limit=2000&offset=0&view=x", fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2026, "league_id": "A"}', payload: '{"topics": [{"id": "t1", "date": 1700000000000, "messages": [{"id": "m1", "date": 1700000000000, "messageTypeId": 178, "targetId": 2, "to": 1}]}]}'}
+      - input: ref('espn_activity_types')
+        rows:
+          - {message_type_id: 178, activity: "FA ADDED", is_transaction: true}
+    expect:
+      rows:
+        - {league_id: "A", season: 2026, transaction_id: "m1", espn_player_id: 2}
+
   - name: scoring_periods_run_to_each_leagues_own_final_period
     description: >
       Catches one series generated to the longest league's final period. Two league-seasons
