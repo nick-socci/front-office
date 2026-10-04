@@ -10,7 +10,8 @@ not a failure.
 
 --round-doubles N is for the one-off comparison with an older real warehouse: it rounds
 DOUBLE/FLOAT columns to N decimals and, for each relation that differs exactly, says whether
-it still differs. It is off by default; exact comparison is what the isolation check uses.
+it still differs; a relation equal after rounding is then not a failure. It is off by default;
+exact comparison is what the isolation check uses.
 
 The two files need distinct names: each is attached under its file stem (see warehouse_diff).
 """
@@ -53,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     for name in sorted(new_names - old_names):
         print(f"only in NEW (not a failure): {name}")
 
-    compared = same = 0
+    compared = same = last_digit = 0
     for name in sorted(old_names & new_names):
         compared += 1
         diff = compare_relation(con, old, new, name)
@@ -63,19 +64,30 @@ def main(argv: list[str] | None = None) -> int:
         if diff.right_only_columns:
             notes.append(f"columns only in NEW: {', '.join(diff.right_only_columns)}")
         if diff.differs:
-            failed = True
             line = f"DIFFERS {name}: {describe(diff)}"
+            still_differs = True
             if args.round_doubles is not None:
                 rounded = compare_relation(con, old, new, name, round_doubles=args.round_doubles)
-                verdict = "still differs" if rounded.differs else "equal"
+                still_differs = rounded.differs
+                verdict = "still differs" if still_differs else "equal"
                 line += f" | after rounding doubles to {args.round_doubles}: {verdict}"
+            # With --round-doubles the rounded comparison is the verdict: a relation that is
+            # equal after rounding is reported, but is not a failure.
+            if still_differs:
+                failed = True
+            else:
+                last_digit += 1
             print(line)
         else:
             same += 1
         for note in notes:
             print(f"  {name}: {note}")
 
-    print(f"compared {compared} relations: {same} identical, {compared - same} differ")
+    differ = compared - same - last_digit
+    summary = f"compared {compared} relations: {same} identical, {differ} differ"
+    if args.round_doubles is not None:
+        summary += f", {last_digit} equal only after rounding doubles to {args.round_doubles}"
+    print(summary)
     return 1 if failed else 0
 
 

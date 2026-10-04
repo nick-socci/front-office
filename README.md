@@ -64,6 +64,34 @@ D, and what did each of them do in MLB that day?*
 ESPN league data requires `ESPN_S2`, `SWID` and `LEAGUE_ID` in a gitignored `.env`
 (copy the cookies from a logged-in browser session). MLB's API needs no credentials.
 
+### More than one league or season
+
+Every capture is filed by the request it answers (its URL path, which is where ESPN puts
+the league and season) and every league-scoped model carries `league_id` and `season`,
+so several leagues and seasons can share one warehouse. Two things enforce it:
+
+- `front-office load` refuses two captures with the same identity, naming both files and
+  loading nothing, instead of quietly keeping one.
+- `scripts/check_tenant_isolation.py`, part of the gates, builds a fixture of two leagues
+  by two seasons together and each one alone, and fails if any model gives a
+  league-season different rows.
+
+### Rebuilding the warehouse after the raw table changes shape
+
+The raw table is derived from the landing zone, so a change to its shape is a rebuild,
+not a migration. `front-office load` refuses a warehouse with the old shape and changes
+nothing. Build a new file beside the old one, compare, and only then swap them yourself:
+
+```bash
+uv run front-office load --db data/warehouse_r2.duckdb
+cd dbt && FO_DUCKDB_PATH=../data/warehouse_r2.duckdb DBT_PROFILES_DIR=. uv run dbt build
+cd .. && uv run python scripts/compare_warehouses.py data/warehouse.duckdb data/warehouse_r2.duckdb
+```
+
+The comparison lists any model present in only one file and any difference in the columns
+they share. `--round-doubles 9` compares decimal columns to nine places, for an older
+warehouse whose last digits were not reproducible.
+
 ## Decisions worth explaining
 
 **Raw JSON first, parse in dbt.** The alternative — parsing in Python and storing tidy

@@ -39,9 +39,11 @@ set the deadline: before any second league or season is loaded, including an old
 - **No change to the landing zone**: its layout, its sidecar format, and every landed
   file stay as they are. The raw table is rebuilt from them.
 - **No change to any 2026 number.** Every existing column of every model is identical
-  after the change. Models only gain columns, with one exception: five columns of
+  after the change. Models only gain columns, with two exceptions. Five columns of
   `dim_players` move, with the same values, to the new `dim_player_league_seasons`
-  (ADR 0012).
+  (ADR 0012). And decimal values that rest on an order-dependent sum may differ from the
+  old warehouse in their last binary digit, once, because those sums are made
+  reproducible (R4.13; owner-approved 2026-10-04, see design.md, Amendments).
 - **Not R1, R3 or R4** (#27, #29, #30): capture timing, orphan repair and settle windows
   are separate work. No sub-second timestamps.
 - **No second fantasy platform.** `platform` stays `'espn'`.
@@ -126,6 +128,9 @@ set the deadline: before any second league or season is loaded, including an old
   row it is taken from.
 - R4.10 WHEN a rostered player has no MLBAM id in a league-season THE SYSTEM SHALL warn
   on every build, naming him, without failing.
+- R4.13 THE SYSTEM SHALL compute every sum or average of non-integer values in a model in
+  a fixed order, so that the same inputs give the same output bit for bit on every
+  build. *(Added 2026-10-04 with the owner's approval.)*
 - R4.2 THE SYSTEM SHALL form each league-season's replacement pools from the players
   unrostered in that league on that league's scoring dates, sized by that league's own
   number of teams.
@@ -160,7 +165,10 @@ set the deadline: before any second league or season is loaded, including an old
   present in only one, and per model any difference in row count or, as multisets, in the
   values of the columns they share.
 - R6.2 WHEN the real landing zone is rebuilt into a new warehouse file THE SYSTEM SHALL
-  show no difference from the current warehouse in any shared column of any model.
+  show no difference from the current warehouse in any shared column of any model, with
+  decimal columns compared to nine decimal places. *(Reworded 2026-10-04 with the
+  owner's approval; it first required exact equality, which the old warehouse's
+  order-dependent last digits make unattainable.)*
 
 ## Expected values
 
@@ -174,13 +182,14 @@ Real season, `data/raw/` and `data/warehouse.duckdb` as of 2026-10-04.
 | Distinct keys | 2,688 under the new key, 0 collisions | group by the key |
 | Request paths | one per ESPN league-season (plus `/communication` for transactions); `/api/v1/schedule`; one per game for boxscores; `/PLAYERIDMAPCSV` | distinct `request_path` |
 | Payloads with no sidecar | 201, still skipped with a warning (#21) | loader log |
-| Real warehouse comparison | 0 relations with a difference in a shared column; 39 relations compared; one new relation (`dim_player_league_seasons`); `dim_players` reported as having 5 fewer columns; `int_mlb__player_game_days` one more (`season`) | R6.1 comparison |
+| Real warehouse comparison | 0 relations with a difference in a shared column at nine decimal places; exactly, only `int_fantasy__category_scales`, `fct_player_category_value`, `fct_player_season_value` and `fct_transaction_impact` differ, in the last digit of decimal values; 39 relations compared; one new relation (`dim_player_league_seasons`); `dim_players` reported as having 5 fewer columns; `int_mlb__player_game_days` one more (`season`) | R6.1 comparison |
 | `stg_espn__transactions` | 737 rows, `league_id` and `season` never null, one league-season | query |
 | `int_fantasy__replacement_levels` | 48 rows, one league-season | query |
 | `dim_players` | 498 rows, key unchanged; `mlbam_player_id`, `player_resolution`, `player_name` identical to today | R6.1 comparison |
 | `dim_player_league_seasons` | 498 rows, one league-season; its seven attribute columns (`mlbam_player_id`, `player_resolution` and the five moved ones) identical to today's `dim_players` columns of the same names, player for player | query joining the old `dim_players` |
 | Resolution | 489 by id map, 9 by name, 0 unresolved; `int_fantasy__roster_days` 55,653 rows with `mlbam_player_id` and `player_resolution` unchanged on every row | R6.1 comparison |
 | Players matched by name | 9 of 498 (`unambiguous_name`), 338 roster days; already reported by the existing warning `stg_idmap__covers_started_players` | query; existing test |
+| Reproducible builds | two consecutive builds of the real season give bit-identical values in every model | build twice, compare exactly (R4.13) |
 | Rostered players unresolved | 0, so the new warning returns no rows on 2026 | R4.10 test |
 | Combined fixture, the conformed dimension | the player spelled differently in the two leagues has one `dim_players` row; the isolation check still reports 0 differences | R5.3 check; R4.9 test |
 | `fct_transaction_impact` | 737 rows; `total_value` sums unchanged (221.09 / 457.47 / 170.37 / 451.72) | query |
