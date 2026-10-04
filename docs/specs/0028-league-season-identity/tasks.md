@@ -23,8 +23,9 @@ them.
      MLB game.
    - Verify: fixture build green; uniqueness tests on full keys pass.
 5. Resolve players per league-season — `impl` — R4.11, R4.12, R4.6
-   - dbt unit tests first: the three crosswalk cases (a name ambiguous only in a later
-     season; a player matched only in a later season; two spellings in two leagues).
+   - dbt unit tests first: the two crosswalk cases, with players absent from the id map
+     (a name ambiguous only in a later season; one ESPN id under two differently
+     normalised names in two leagues, resolving differently).
      `int_mlb__player_game_days` gains `season`; the crosswalk's grain gains league and
      season; `int_fantasy__roster_days` joins on them.
    - Verify: fixture build green; on the fixture every roster day's `mlbam_player_id`
@@ -33,7 +34,8 @@ them.
    - dbt unit tests first: two leagues of different sizes for the pools; a short season
      for the window; a position-less player whose role differs between two seasons; a
      player in two leagues and two seasons with one `dim_players` row equal to his
-     latest league-season's; a 2026 drop of a player resolved only in 2027. Uniqueness on
+     latest league-season's; a player only in 2026's transaction log and name-matched in
+     2027, unresolved on his 2026 row; a 2026 drop of that player. Uniqueness on
      full keys; relationships both ways; `dim_players_equal_their_latest_league_season`.
      Grep for every reader of the moved columns and of `dim_players.mlbam_player_id` and
      point each at `dim_player_league_seasons`. Move the two singular `dim_players_*`
@@ -48,7 +50,8 @@ them.
 7. Build the isolation check and the warehouse comparison — `impl` — R5.3, R6.1
    - pytest first for the diff function (changed value, missing row, added column,
      missing relation, equal counts with different duplicates). `dim_players` is the
-     one named exemption from the row comparison. Make the `ci` target's
+     one named exemption from the row comparison, and each single build runs the tests
+     of the two player models. Make the `ci` target's
      path `env_var('FO_CI_DUCKDB_PATH', 'ci.duckdb')`. Single builds load only their
      own season's MLB folders.
    - Verify: the check runs and prints a per-relation, per-league-season report.

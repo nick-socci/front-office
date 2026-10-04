@@ -217,7 +217,10 @@ The existing privacy test scans this root as well (R5.2).
    tests).
 2. For each of the four league-seasons: copy to a temporary root that league-season's
    ESPN folders, **that season's** MLB folders (`season=` is an MLB partition) and the id
-   map; load into its own file (`FO_CI_DUCKDB_PATH`); `dbt run --target ci` (models only).
+   map; load into its own file (`FO_CI_DUCKDB_PATH`); `dbt run --target ci` (models
+   only), then `dbt test --select dim_players dim_player_league_seasons`, so the exempt
+   dimension's invariants (R4.9) are checked in every single build and not only in the
+   combined one.
 3. The set of relations in the staging, intermediate, marts and reconciliation schemas
    must be the same in every warehouse; a relation missing from one is reported.
 4. For every relation:
@@ -234,9 +237,10 @@ The existing privacy test scans this root as well (R5.2).
 **exempt from step 4 by name**, in a one-entry list at the top of the script. It is held
 to its own invariants instead (R4.9): it has exactly the players of
 `dim_player_league_seasons`, and each row equals the league-season row it is taken from.
-The respelled player in league `222222` makes the exemption real on the fixture: his
-`dim_players` row differs between the combined build and the `111111`-only build, and
-the check must still report no differences.
+The respelled player in league `222222`, 2026 makes the exemption real on the fixture.
+In the combined build his `dim_players` row comes from his latest league-season, a 2027
+one, with the original spelling; in the `222222`, 2026-only build it carries the
+respelling. Those two rows differ, and the check must still report no differences.
 
 A relation that should carry league and season but does not fails step 4 and is named.
 Because a single build holds only its own season's MLB data, a league-keyed model that
@@ -282,7 +286,8 @@ The old file is kept until the comparison is clean and the owner renames them.
 | R3.2 | existing `stg_espn__scoring_periods_start_on_opening_day`, changed to compare each league-season's first date with the first MLB game of **its** season (today it takes the earliest MLB date of everything loaded, so a 2027 season would be held to 2026's opening day) | a test that passes only while one season is loaded |
 | R3.3 | YAML uniqueness on full keys for every ESPN staging model | a key that only held for one league |
 | R4.1 | unique on the full key of each of the three models | a grain that only held for one league |
-| R4.11 | dbt unit tests on the crosswalk: (a) a name unique among 2026's MLB players and shared by two players in 2027 still resolves in 2026 and is unresolved in 2027; (b) a player absent from the id map who has no roster in 2026 and is rostered in 2027 is unresolved in 2026 and matched by name in 2027; (c) one player spelled two ways in two leagues resolves in each league from that league's own spelling | another season creating or destroying a match (review 2, F1); one league's spelling deciding another's match |
+| R4.11 | dbt unit tests on the crosswalk, every player absent from the id map so the name fallback decides: (a) a name unique among 2026's MLB players and shared by two players in 2027 resolves in 2026 and is unresolved in 2027; (b) the same ESPN id rostered in two leagues under two names that differ after accents are stripped, one matching an MLB player and one matching nobody, is resolved in the first league and unresolved in the second | another season creating or destroying a match (review 2, F1); one league's spelling deciding another's match, which an accent-only difference or an id-mapped player could not show (review 3, F1) |
+| R4.11, R4.8 | dbt unit test on `dim_player_league_seasons`: a player absent from the id map who appears only in 2026's transaction log and is rostered and name-matched in 2027 has an `unresolved` 2026 row and a resolved 2027 row. (The crosswalk has no 2026 row for him: it is built from roster entries.) | a later season's match reaching back into an earlier one (review 2, F1; placed here per review 3, F3) |
 | R4.12 | dbt unit test on `fct_transaction_impact`: a 2026 drop of a player resolved only in 2027 has a null `total_value`; the isolation check | an earlier season's transaction valued through a later season's match |
 | R4.7 | unique on (`platform`, `platform_player_id`), as today; dbt unit test: a player in two leagues and two seasons has one row, equal to his latest league-season's | a player doubled by a second league; a name and an id taken from different observations (review 2, F3) |
 | R4.8 | unique on the full key; existing `dim_players_covers_every_league_player` and `dim_players_resolved_players_have_a_group`, moved to the new model and scoped by league-season; last task: its seven attribute columns equal today's `dim_players` on 2026 | a player missing from a league-season; values changing in the move |
@@ -380,6 +385,10 @@ Read-only checks of `data/raw/` and `data/warehouse.duckdb`, run 2026-10-04.
 | design-review, second pass 2026-10-04 (after the owner chose the two-table player shape) | F1 (P0): the league-season table took its MLBAM id from the global `dim_players`, whose name match looks at every season loaded, so a 2027 match could value a 2026 transaction | Changed, by the owner's decision (reversing the earlier deferral to #60): resolution is per league-season (R4.11, R4.12); the league-season table carries the id; no league-season model reads `dim_players`; three crosswalk unit tests and one on the transaction fact |
 | design-review, second pass | F2 (P1): the gate held `dim_players` to the row comparison while ADR 0012 said its rows may differ, and the copied fixture hid the contradiction | Changed: `dim_players` is exempt by name and held to R4.9; the fixture respells one player in the second league so the exemption is exercised |
 | design-review, second pass | F3 (P2): `dim_players` chose a name by one ordering and the crosswalk matched on a name chosen by another | Changed: `dim_players` is built from the league-season table, so name, id and resolution are one observation |
+| design-review, third pass 2026-10-04 | F1 (P1): the two-spellings test could pass with a global name, because an accent is stripped before matching and nearly every fixture player resolves by id | Changed: the unit case uses a player absent from the id map and two names that differ after normalisation, with different expected resolutions |
+| design-review, third pass | F2 (P1): single builds used `dbt run`, so the exempt dimension's invariants were never checked in them | Changed: each single build also runs the tests of the two player models |
+| design-review, third pass | F3 (P2): the crosswalk has no row for a player with no roster entry, so its case (b) could not be asserted there | Changed: that case is a unit test on `dim_player_league_seasons` |
+| design-review, third pass | F4 (P3): the text named the wrong single build as differing from the combined `dim_players` row | Changed: it is the `222222`, 2026 build |
 
 ## Amendments
 
