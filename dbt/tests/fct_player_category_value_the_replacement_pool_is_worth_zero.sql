@@ -1,5 +1,6 @@
 -- The replacement pool, valued by the same macros as a player, must be worth zero in every
--- category on its kind's side. Returns each (day_kind, category) whose value over
+-- category on its kind's side, in every league-season (#28). Returns each (league-season,
+-- day_kind, category) whose value over
 -- replacement is not zero within 1e-9.
 --
 -- Each kind's own pool rows of int_fantasy__replacement_levels stand in for a player whose
@@ -28,6 +29,9 @@ with component_sides as (
 pool_parts as (
 
     select
+        levels.platform,
+        levels.league_id,
+        levels.season,
         levels.day_kind,
         rules.stat_key as category_key,
         rules.part,
@@ -43,13 +47,16 @@ pool_parts as (
     inner join component_sides
         on component_sides.component = levels.component
         and component_sides.side = case levels.day_kind when 'batting' then 'batting' else 'pitching' end
-    group by levels.day_kind, rules.stat_key, rules.part
+    group by levels.platform, levels.league_id, levels.season, levels.day_kind, rules.stat_key, rules.part
 
 ),
 
 pool_categories as (
 
     select
+        platform,
+        league_id,
+        season,
         day_kind,
         category_key,
         max(pool_played_days) as played_days,
@@ -58,13 +65,16 @@ pool_categories as (
         max(part_replacement) filter (where part = 'numerator') as replacement_numerator,
         max(part_replacement) filter (where part = 'denominator') as replacement_denominator
     from pool_parts
-    group by day_kind, category_key
+    group by platform, league_id, season, day_kind, category_key
 
 ),
 
 valued as (
 
     select
+        pool_categories.platform,
+        pool_categories.league_id,
+        pool_categories.season,
         pool_categories.day_kind,
         pool_categories.category_key,
         {{ fo_value_over_replacement(
@@ -73,14 +83,14 @@ valued as (
             'categories.is_lower_better'
         ) }} as value_over_replacement
     from pool_categories
-    inner join (
-        select distinct category_key, is_lower_better
-        from {{ ref('int_fantasy__categories') }}
-    ) as categories
-        on categories.category_key = pool_categories.category_key
+    inner join {{ ref('int_fantasy__categories') }} as categories
+        on categories.platform = pool_categories.platform
+        and categories.league_id = pool_categories.league_id
+        and categories.season = pool_categories.season
+        and categories.category_key = pool_categories.category_key
 
 )
 
-select day_kind, category_key, value_over_replacement
+select platform, league_id, season, day_kind, category_key, value_over_replacement
 from valued
 where abs(value_over_replacement) > 1e-9

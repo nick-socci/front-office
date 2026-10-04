@@ -10,15 +10,19 @@
 -- for (a trade, or one ESPN adds later) gets a null movement and fails the not_null test
 -- on it, rather than being given a team by guess.
 --
--- Carries no league_id or season, because staging has neither (#28). The marts join it to
--- the single league-season on team and player id, and #28 must land before a second
--- league or season is loaded, or those joins would mix leagues.
+-- Carries league_id and season, from staging, as part of its key (#28): a transaction id is
+-- only unique inside one league and season, and a team id means nothing outside them. The
+-- marts join this model to rosters, scales and levels on league and season as well as on
+-- team and player id, so one league's log never reaches another league's players. Every
+-- acting team is checked against that league-season's own teams by a singular test.
 
 {{ config(materialized='table') }}
 
 with transactions as (
 
     select
+        transactions.league_id,
+        transactions.season,
         transactions.transaction_id,
         transactions.topic_id,
         transactions.transacted_at,
@@ -38,6 +42,8 @@ with transactions as (
 
 select
     'espn' as platform,
+    transactions.league_id,
+    cast(transactions.season as bigint) as season,
     transactions.transaction_id,
     transactions.topic_id,
     transactions.transacted_at,

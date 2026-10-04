@@ -311,9 +311,8 @@ models:
       One row per transaction message: a player added or dropped, with the fantasy team
       that acted. The acting team is `to` or `for` depending on the message type, chosen
       by the espn_activity_types seed (ADR 0004). Trades are not here: they have no rule,
-      and a type with no rule fails the movement test rather than being guessed. Carries
-      no league_id or season (#28), so it joins to the single league-season on team and
-      player id.
+      and a type with no rule fails the movement test rather than being guessed. Keyed by
+      league and season too (#28): a transaction id is unique only inside one.
     config:
       contract:
         enforced: true
@@ -321,10 +320,16 @@ models:
       - name: platform
         data_type: varchar
         constraints: [{type: not_null}]
+      - name: league_id
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: season
+        data_type: bigint
+        constraints: [{type: not_null}]
       - name: transaction_id
         data_type: varchar
         constraints: [{type: not_null}]
-        data_tests: [unique, not_null]
+        data_tests: [not_null]
       - name: topic_id
         data_type: varchar
       - name: transacted_at
@@ -339,11 +344,10 @@ models:
           the message did not carry.
         data_type: bigint
         data_tests:
+          # That the team belongs to the SAME league and season is the singular test
+          # int_fantasy__transactions_name_a_team_of_their_league_season: a
+          # single-column relationships test would pass for a team of another league.
           - not_null
-          - relationships:
-              arguments:
-                to: ref('int_fantasy__teams')
-                field: fantasy_team_id
       - name: movement
         data_type: varchar
         data_tests:
@@ -362,20 +366,31 @@ models:
           For a type-239 drop, the lineup slot the player left (message_from is a slot
           id there, not a team); null for every other row.
         data_type: varchar
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, transaction_id]
 
   - name: int_fantasy__replacement_levels
     description: >
-      The production of a replacement player, per played day: one row per (day kind,
-      component), the kind being batting, start or relief (ADR 0008). The batting pool is
+      The production of a replacement player, per played day: one row per (league, season,
+      day kind, component), the kind being batting, start or relief (ADR 0008). The batting pool is
       the top N unrostered hitters by plate appearances. A pitching pool is the top N
       unrostered pitchers with a day of that kind, ranked by how many such days they had,
       then outs recorded; its level counts only days of that kind, so a swingman's starts
-      are not in the relief level. N is the number of fantasy teams. The level is the pool's
+      are not in the relief level. N is that league-season's own number of fantasy teams, and
+      its free agents are the players on none of that league's rosters (#28). The level is the pool's
       component total over its played days. Every kind has its rows even with an empty
       pool, where pool_players and pool_played_days are 0 and pool_total and
       level_per_played_day are null: an empty pool must not read as a replacement who
       produces nothing.
     columns:
+      - name: platform
+        data_tests: [not_null]
+      - name: league_id
+        data_tests: [not_null]
+      - name: season
+        data_tests: [not_null]
       - name: day_kind
         description: batting, start or relief; the kind of day the level is measured over.
         data_tests:
@@ -428,7 +443,7 @@ models:
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
-            combination_of_columns: [day_kind, component]
+            combination_of_columns: [platform, league_id, season, day_kind, component]
 
   # ---------------------------------------------------------------------------
   # Not part of the seam: MLB facts and the attribution grain.
@@ -1090,15 +1105,15 @@ unit_tests:
     given:
       - input: ref('int_fantasy__teams')
         rows:
-          - {fantasy_team_id: 1}
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {scoring_date: "2026-06-01", mlbam_player_id: 900003}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", mlbam_player_id: 900003}
       - input: ref('int_mlb__player_game_days')
         rows:
-          - {mlbam_player_id: 900002, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 2}
-          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 1}
-          - {mlbam_player_id: 900003, game_date: "2026-06-01", games_batted: 1, plate_appearances: 5, hits: 5}
+          - {season: 2026, mlbam_player_id: 900002, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 2}
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 1}
+          - {season: 2026, mlbam_player_id: 900003, game_date: "2026-06-01", games_batted: 1, plate_appearances: 5, hits: 5}
     expect:
       rows:
         - {day_kind: batting, component: games_batted, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
@@ -1130,15 +1145,15 @@ unit_tests:
     given:
       - input: ref('int_fantasy__teams')
         rows:
-          - {fantasy_team_id: 1}
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {scoring_date: "2026-06-01", mlbam_player_id: 900009}
-          - {scoring_date: "2026-06-02", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", mlbam_player_id: 900009}
       - input: ref('int_mlb__player_game_days')
         rows:
-          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 2}
-          - {mlbam_player_id: 900001, game_date: "2026-06-02", games_batted: 0, games_pitched: 1, outs_recorded: 3, batters_faced: 1}
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 2}
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-02", games_batted: 0, games_pitched: 1, outs_recorded: 3, batters_faced: 1}
     expect:
       rows:
         - {day_kind: batting, component: games_batted, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
@@ -1167,14 +1182,14 @@ unit_tests:
     given:
       - input: ref('int_fantasy__teams')
         rows:
-          - {fantasy_team_id: 1}
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {scoring_date: "2026-06-01", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", mlbam_player_id: 900009}
       - input: ref('int_mlb__player_game_days')
         rows:
-          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 2}
-          - {mlbam_player_id: 900002, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 2}
+          - {season: 2026, mlbam_player_id: 900002, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
     expect:
       rows:
         - {day_kind: batting, component: games_batted, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
@@ -1205,19 +1220,19 @@ unit_tests:
     given:
       - input: ref('int_fantasy__teams')
         rows:
-          - {fantasy_team_id: 1}
-          - {fantasy_team_id: 2}
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1}
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 2}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {scoring_date: "2026-06-01", mlbam_player_id: 900009}
-          - {scoring_date: "2026-06-02", mlbam_player_id: 900009}
-          - {scoring_date: "2026-06-03", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", mlbam_player_id: 900009}
       - input: ref('int_mlb__player_game_days')
         rows:
-          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_batted: 1, plate_appearances: 5, hits: 4}
-          - {mlbam_player_id: 900002, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 1}
-          - {mlbam_player_id: 900002, game_date: "2026-06-02", games_batted: 1, plate_appearances: 4, hits: 1}
-          - {mlbam_player_id: 900002, game_date: "2026-06-03", games_batted: 1, plate_appearances: 4, hits: 1}
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-01", games_batted: 1, plate_appearances: 5, hits: 4}
+          - {season: 2026, mlbam_player_id: 900002, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 1}
+          - {season: 2026, mlbam_player_id: 900002, game_date: "2026-06-02", games_batted: 1, plate_appearances: 4, hits: 1}
+          - {season: 2026, mlbam_player_id: 900002, game_date: "2026-06-03", games_batted: 1, plate_appearances: 4, hits: 1}
     expect:
       rows:
         - {day_kind: batting, component: games_batted, pool_players: 2, pool_played_days: 4, pool_total: 4, level_per_played_day: 1}
@@ -1247,17 +1262,17 @@ unit_tests:
     given:
       - input: ref('int_fantasy__teams')
         rows:
-          - {fantasy_team_id: 1}
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {scoring_date: "2026-06-01", mlbam_player_id: 900009}
-          - {scoring_date: "2026-06-02", mlbam_player_id: 900009}
-          - {scoring_date: "2026-06-03", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", mlbam_player_id: 900009}
       - input: ref('int_mlb__player_game_days')
         rows:
-          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
-          - {mlbam_player_id: 900001, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
-          - {mlbam_player_id: 900001, game_date: "2026-06-03", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-03", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
     expect:
       rows:
         - {day_kind: batting, component: games_batted, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
@@ -1286,13 +1301,13 @@ unit_tests:
     given:
       - input: ref('int_fantasy__teams')
         rows:
-          - {fantasy_team_id: 1}
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {scoring_date: "2026-06-01", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", mlbam_player_id: 900009}
       - input: ref('int_mlb__player_game_days')
         rows:
-          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_pitched: 2, games_started: 1, outs_recorded: 21, batters_faced: 28}
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-01", games_pitched: 2, games_started: 1, outs_recorded: 21, batters_faced: 28}
     expect:
       rows:
         - {day_kind: batting, component: games_batted, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
@@ -1324,21 +1339,21 @@ unit_tests:
     given:
       - input: ref('int_fantasy__teams')
         rows:
-          - {fantasy_team_id: 1}
-          - {fantasy_team_id: 2}
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1}
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 2}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {scoring_date: "2026-06-01", mlbam_player_id: 900009}
-          - {scoring_date: "2026-06-02", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", mlbam_player_id: 900009}
       - input: ref('int_mlb__player_game_days')
         rows:
-          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
-          - {mlbam_player_id: 900001, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
-          - {mlbam_player_id: 900002, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 3, batters_faced: 100}
-          - {mlbam_player_id: 900002, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 3, batters_faced: 100}
-          - {mlbam_player_id: 900003, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 3, batters_faced: 5}
-          - {mlbam_player_id: 900003, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 4, batters_faced: 5}
-          - {mlbam_player_id: 900004, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 20, batters_faced: 50}
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 900002, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 3, batters_faced: 100}
+          - {season: 2026, mlbam_player_id: 900002, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 3, batters_faced: 100}
+          - {season: 2026, mlbam_player_id: 900003, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 3, batters_faced: 5}
+          - {season: 2026, mlbam_player_id: 900003, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 4, batters_faced: 5}
+          - {season: 2026, mlbam_player_id: 900004, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 20, batters_faced: 50}
     expect:
       rows:
         - {day_kind: batting, component: games_batted, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
@@ -1367,21 +1382,21 @@ unit_tests:
     given:
       - input: ref('int_fantasy__teams')
         rows:
-          - {fantasy_team_id: 1}
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {scoring_date: "2026-06-01", mlbam_player_id: 900009}
-          - {scoring_date: "2026-06-02", mlbam_player_id: 900009}
-          - {scoring_date: "2026-06-03", mlbam_player_id: 900009}
-          - {scoring_date: "2026-06-04", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-04", mlbam_player_id: 900009}
       - input: ref('int_mlb__player_game_days')
         rows:
-          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
-          - {mlbam_player_id: 900001, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
-          - {mlbam_player_id: 900001, game_date: "2026-06-03", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
-          - {mlbam_player_id: 900001, game_date: "2026-06-04", games_pitched: 1, games_started: 1, outs_recorded: 27, batters_faced: 33}
-          - {mlbam_player_id: 900002, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
-          - {mlbam_player_id: 900002, game_date: "2026-06-02", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-03", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-04", games_pitched: 1, games_started: 1, outs_recorded: 27, batters_faced: 33}
+          - {season: 2026, mlbam_player_id: 900002, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
+          - {season: 2026, mlbam_player_id: 900002, game_date: "2026-06-02", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
     expect:
       rows:
         - {day_kind: batting, component: games_batted, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
@@ -1395,6 +1410,50 @@ unit_tests:
         - {day_kind: relief, component: games_started, pool_players: 1, pool_played_days: 3, pool_total: 0, level_per_played_day: 0}
         - {day_kind: relief, component: outs_recorded, pool_players: 1, pool_played_days: 3, pool_total: 9, level_per_played_day: 3}
         - {day_kind: relief, component: batters_faced, pool_players: 1, pool_played_days: 3, pool_total: 12, level_per_played_day: 4}
+
+  - name: replacement_levels_leagues_of_different_sizes_get_pools_of_their_own_size
+    description: >
+      Two leagues in 2026: league 1 has one team, league 2 has two. Hitters 900001 to 900004
+      have 5, 4, 3 and 2 plate appearances on 06-01. League 1 rosters 900001 that day and
+      league 2 rosters 900004. League 1's pool is one player (900002, the top of its free
+      agents) and league 2's is two (900001 and 900002): 900001 is on a roster in league 1 and
+      is still a free agent in league 2. Catches N counted over all leagues (a pool of three
+      in both), and another league's roster removing a free agent.
+    model: int_fantasy__replacement_levels
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, plate_appearances]
+        fo_pitching_columns: [games_pitched, outs_recorded]
+    given:
+      - input: ref('int_fantasy__teams')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1}
+          - {platform: espn, league_id: "2", season: 2026, fantasy_team_id: 1}
+          - {platform: espn, league_id: "2", season: 2026, fantasy_team_id: 2}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", mlbam_player_id: 900001}
+          - {platform: espn, league_id: "2", season: 2026, scoring_date: "2026-06-01", mlbam_player_id: 900004}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-01", games_batted: 1, plate_appearances: 5}
+          - {season: 2026, mlbam_player_id: 900002, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4}
+          - {season: 2026, mlbam_player_id: 900003, game_date: "2026-06-01", games_batted: 1, plate_appearances: 3}
+          - {season: 2026, mlbam_player_id: 900004, game_date: "2026-06-01", games_batted: 1, plate_appearances: 2}
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, day_kind: batting, component: games_batted, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {league_id: "1", season: 2026, day_kind: batting, component: plate_appearances, pool_players: 1, pool_played_days: 1, pool_total: 4, level_per_played_day: 4}
+        - {league_id: "1", season: 2026, day_kind: start, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {league_id: "1", season: 2026, day_kind: start, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {league_id: "1", season: 2026, day_kind: relief, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {league_id: "2", season: 2026, day_kind: batting, component: games_batted, pool_players: 2, pool_played_days: 2, pool_total: 2, level_per_played_day: 1}
+        - {league_id: "2", season: 2026, day_kind: batting, component: plate_appearances, pool_players: 2, pool_played_days: 2, pool_total: 9, level_per_played_day: 4.5}
+        - {league_id: "2", season: 2026, day_kind: start, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {league_id: "2", season: 2026, day_kind: start, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {league_id: "2", season: 2026, day_kind: relief, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {league_id: "2", season: 2026, day_kind: relief, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
 
 # -----------------------------------------------------------------------------
 # Unit tests: int_fantasy__category_scales (spec 0055).
