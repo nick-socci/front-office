@@ -392,3 +392,21 @@ Read-only checks of `data/raw/` and `data/warehouse.duckdb`, run 2026-10-04.
 
 ## Amendments
 
+### 2026-10-04 — the latest response is chosen in one pass, with `file_path` as tie-break
+
+Found in task 3, on the real season. The first implementation ranked narrow columns and
+joined the payloads back, the form `latest_boxscore_responses.sql` uses. At dbt's default
+four threads it ran DuckDB out of memory (23.9 GiB) in `stg_espn__player_game_stats` and
+`stg_mlb__batting_game_logs`; the code on `main` builds the same models on the same
+warehouse without error. A single `qualify row_number()` over league, season and period
+builds in the same time as `main` and passes. The macro's header records the measurement.
+The window orders by `fetched_at desc, file_path desc`: the design said only recency, and
+the project's rule is a deterministic tie-break. No decision changes.
+
+### 2026-10-04 — a relationship test to widen later in this build
+
+Task 4 left the `relationships` test from `stg_espn__matchup_periods.scoring_period` to
+`stg_espn__scoring_periods.scoring_period` on the value alone. With two league-seasons it
+would pass for a period that exists only in another league. It and any other
+single-column relationship between league-scoped models are widened in task 8, since the
+isolation check compares rows and cannot see a test that is too loose.
