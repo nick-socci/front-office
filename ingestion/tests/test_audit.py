@@ -23,14 +23,14 @@ RUN = "20260327T160000Z"  # noon Eastern, 2026-03-27: period 3 is current
 TODAY = dt.date(2026, 5, 1)
 
 
-def land(zone, source, endpoint, partitions, payload, *, fetched_at=RUN, params=None):
+def land(zone, source, endpoint, partitions, payload, *, fetched_at=RUN, params=None, url=None):
     return zone.write(
         source=source,
         endpoint=endpoint,
         partitions=partitions,
         name=f"fetched_at={fetched_at}",
         payload=payload,
-        request={"url": f"https://example.test/{endpoint}", "params": params or {}},
+        request={"url": url or f"https://example.test/{endpoint}", "params": params or {}},
         fetched_at=fetched_at,
     )
 
@@ -217,9 +217,54 @@ def test_a_warehouse_without_the_raw_table_is_an_error(zone):
 
 
 def test_captures_that_share_a_raw_key_are_an_error(zone):
-    """Two leagues, same request parameters, same second: the loader keeps only one."""
+    """Two leagues, same URL and parameters, same second: the loader now refuses to load
+    them, so the audit sees them against a table loaded before the second one landed."""
+    con = duckdb.connect()
+    load_landing_zone(con, zone)
     land_settings(zone, latest=3, league="2")
-    assert "2 captures share raw key" in details(audit(zone), Severity.ERROR)
+    findings = run_audit(zone, con, season=SEASON, today=TODAY)
+    assert "2 captures share raw key" in details(findings, Severity.ERROR)
+
+
+def test_a_capture_is_not_loaded_because_another_leagues_row_has_its_old_key(zone):
+    """Catches an audit that compares on the pre-#28 key (R1.6).
+
+    League 2's settings differ from league 1's only by URL path. Its row is loaded; the
+    capture for league 3 is not. Compared on (source, endpoint, request_key, fetched_at)
+    league 3 would count as loaded because leagues 1 and 2 hold that key.
+    """
+    con = duckdb.connect()
+    load_landing_zone(con, zone)
+    land_settings_at(zone, league="2")
+    load_landing_zone(con, zone)
+    land_settings_at(zone, league="3")
+    findings = run_audit(zone, con, season=SEASON, today=TODAY)
+    assert "1 committed capture(s) not in raw.api_responses" in details(findings, Severity.ERROR)
+
+
+def land_settings_at(zone, *, league):
+    land(
+        zone,
+        "espn",
+        "settings",
+        {"season": SEASON, "league_id": league},
+        {"status": {"firstScoringPeriod": 1, "latestScoringPeriod": 3, "finalScoringPeriod": 2}},
+        params={"view": "mSettings"},
+        url=f"https://example.test/leagues/{league}",
+    )
+
+
+def test_an_old_shape_raw_table_is_an_error_not_a_crash(zone):
+    """Catches a SQL error when the audit meets a table with no request_path (R1.6)."""
+    con = duckdb.connect()
+    con.execute(
+        "create schema raw; create table raw.api_responses (source varchar, endpoint varchar, "
+        "request_key varchar, fetched_at varchar, payload json, file_path varchar)"
+    )
+    findings = run_audit(zone, con, season=SEASON, today=TODAY)
+    errors = details(findings, Severity.ERROR)
+    assert "old shape" in errors
+    assert "new warehouse file" in errors
 
 
 # -- mlb -------------------------------------------------------------------------------
