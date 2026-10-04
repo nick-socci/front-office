@@ -297,9 +297,13 @@ Found in task 5. Against the pre-build snapshot all 5,220 batting rows of
 `fct_player_category_value` have bit-identical `numerator`, `denominator`, `played_days`,
 `contribution` and `value_over_replacement`. `standardised_value` differs on 2,038 of them
 by about 1e-15 (the largest seen is 1.8e-15, and it varies from build to build): DuckDB's `stddev_pop` depends on the order rows reach it, and the
-spine changes that order, so the standard deviation moves in its last bit. The expected
-value "identical in `standardised_value`" is read as equal within 1e-12; R2.5's intent,
-that nothing about hitters changes, holds. No decision changes.
+spine changes that order, so the standard deviation moves in its last bit. The same
+code rebuilt gives different last bits, so exact equality with the snapshot was never
+attainable. Review round 1 of #54 (F1) pointed out that reading this as "within 1e-12"
+changes R2.5 and sits against the no-go on tolerance widening, which is not an agent's
+call. **The owner approved the rewording on 2026-10-03**: R2.5 and its expected value now
+say value over replacement is identical and standardised value agrees to 1e-12. No dbt
+test is loosened; the comparison is the one-off snapshot check of the last task.
 
 ### 2026-10-03 — what the spine fills in, and which components a kind meets
 
