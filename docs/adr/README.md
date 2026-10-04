@@ -16,5 +16,5 @@ Decisions made before 2026-10 are in [docs/design/](../design/).
 | [0009](0009-a-pitching-pool-is-ranked-by-appearances.md) | A pitching pool is ranked by appearances | accepted | 2026-10-03 | [0052](../specs/0052-pitcher-replacement-by-outing/design.md) |
 | [0010](0010-category-values-are-scaled-by-the-matchup-margin.md) | Category values are scaled by the matchup margin | accepted | 2026-10-03 | [0055](../specs/0055-matchup-margin-scale/design.md) |
 | [0011](0011-a-raw-response-is-identified-by-its-request-path-and-parameters.md) | A raw response is identified by its request path and parameters | proposed | 2026-10-04 | [0028](../specs/0028-league-season-identity/design.md) |
-| [0012](0012-dim-players-is-per-league-season.md) | dim_players has one row per player per league-season | proposed | 2026-10-04 | [0028](../specs/0028-league-season-identity/design.md) |
+| [0012](0012-players-have-a-conformed-dimension-and-a-league-season-table.md) | Players have a conformed dimension and a per-league-season table | proposed | 2026-10-04 | [0028](../specs/0028-league-season-identity/design.md) |
 | [0013](0013-isolation-is-proved-by-building-each-league-season-alone.md) | Isolation is proved by building each league-season alone | proposed | 2026-10-04 | [0028](../specs/0028-league-season-identity/design.md) |

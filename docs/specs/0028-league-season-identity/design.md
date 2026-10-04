@@ -8,7 +8,8 @@ A capture's league and season exist today in two places that nothing downstream 
 the URL path and the landing partitions, both in its sidecar. This design carries them
 through. The loader stores the request path and the partitions on every raw row and keys
 the table by the path. The latest-response macro picks the newest response *per league
-and season*. The five models that drop league and season gain them. A second fixture of
+and season*. The models that drop league and season gain them, and `dim_players` splits
+into a player-level dimension and a per-league-season table. A second fixture of
 four league-seasons, and a check that each builds the same combined as alone, prove it
 and keep proving it. The real warehouse is rebuilt from the untouched landing zone into
 a new file and compared before the owner swaps it.
@@ -21,7 +22,7 @@ flowchart TD
   latest["fo_espn_latest<br/>(changed: per league, season, period)"]
   stg["stg_espn__*<br/>league_id, season on every model"]
   intm["int_fantasy__*<br/>(transactions, replacement_levels changed)"]
-  marts["dim_players, fct_transaction_impact<br/>(changed)"]
+  marts["dim_players, fct_transaction_impact (changed)<br/>dim_player_league_seasons (new)"]
   check["tenant isolation check<br/>(new gate)"]
 
   sidecar -->|"path from url; partitions as they are"| loader
@@ -49,7 +50,9 @@ Dashed boxes change; the thick one is new. The dotted edge is the check, not a d
   grain change even when today's row count does not move. The uniqueness test is what
   states the grain, so each changed model's test moves to the full key.
 - **Conformed dimension.** A dimension that means the same thing to every fact that joins
-  it. `dim_players` stops trying to be one across seasons (ADR 0012).
+  it, whatever league or season the fact is about. `dim_players` becomes one: a row is a
+  player, full stop. What is only true of him in one league-season moves to its own
+  model at that grain (ADR 0012).
 - **`--target` and environment variables.** A dbt *target* is a named connection in
   `profiles.yml`. The `ci` target's path is fixed today (`ci.duckdb`); it becomes
   `env_var('FO_CI_DUCKDB_PATH', 'ci.duckdb')`, so the isolation check can build several
@@ -78,15 +81,18 @@ response's first proposal and the reviewer's follow-up rejected it for the query
 
 ### The grain of `dim_players`
 
-| Criterion | A — per league-season (chosen) | B — conformed player + per-league-season table | C — one row per player, latest anywhere |
+| Criterion | A — per league-season | B — conformed player + per-league-season table (chosen by the owner) | C — one row per player, latest anywhere |
 |---|---|---|---|
 | Every attribute true at the grain | yes | yes | no: position and roster dates are per league-season |
-| Combined build equals single build | yes | yes | no |
+| One place to refer to a player across leagues and seasons | no | yes | yes, but wrong |
+| Combined build equals single build | yes | the per-league-season table yes; the player dimension by design no | no |
 | Models to maintain | 1 | 2 | 1 |
-| Cross-season player lookup | no | yes | yes, but wrong |
-| 2026 output | same 498 rows + 2 columns | 498 + 498 | unchanged |
+| 2026 output | same 498 rows + 2 columns | 498 + 498; five columns move | unchanged |
 
-See [ADR 0012](../../adr/0012-dim-players-is-per-league-season.md).
+A was the recommendation. The owner chose **B** on 2026-10-04: several seasons and
+leagues are the known intent, so a single reference for a player is worth having now.
+
+See [ADR 0012](../../adr/0012-players-have-a-conformed-dimension-and-a-league-season-table.md).
 
 ### How isolation is proved
 
@@ -104,7 +110,7 @@ See [ADR 0013](../../adr/0013-isolation-is-proved-by-building-each-league-season
 | ADR | Decision | Status |
 |---|---|---|
 | [0011](../../adr/0011-a-raw-response-is-identified-by-its-request-path-and-parameters.md) | The raw key gains the request path; partitions are stored for staging to read | proposed |
-| [0012](../../adr/0012-dim-players-is-per-league-season.md) | `dim_players` has one row per player per league-season | proposed |
+| [0012](../../adr/0012-players-have-a-conformed-dimension-and-a-league-season-table.md) | `dim_players` is one row per player everywhere; `dim_player_league_seasons` holds what is per league-season | proposed |
 | [0013](../../adr/0013-isolation-is-proved-by-building-each-league-season-alone.md) | Isolation is a gate: every model, combined build against single builds | proposed |
 
 ## Detailed design
@@ -174,9 +180,10 @@ become combinations with league and season.
 |---|---|
 | `int_fantasy__transactions` | gains `league_id`, `season`; unique on (`platform`, `league_id`, `season`, `transaction_id`); the join to teams uses them |
 | `int_fantasy__replacement_levels` | grain becomes (`platform`, `league_id`, `season`, `day_kind`, `component`). Free-agent days, pools, played days and totals are per league-season; N is that league-season's team count, by a join, not a scalar subquery. The spine is league-seasons × kinds × components |
-| `dim_players` | grain becomes (`platform`, `league_id`, `season`, `platform_player_id`); latest roster day, transaction-only players and roster dates are within the league-season. The MLB totals used to group a position-less player are **of that season only**: today they are summed over every MLB day loaded, grouped by player alone, which with two seasons would let 2027 starts change a 2026 group. They are grouped by player and the calendar year of the game date and joined on the row's `season` |
+| `dim_players` | grain unchanged: (`platform`, `platform_player_id`), every player on any roster day or in any transaction of any league-season. Columns: `platform`, `platform_player_id`, `mlbam_player_id`, `player_resolution`, `player_name`. Name and resolution come from his latest roster day anywhere (latest `scoring_date`, then highest `season`, then lowest `league_id`, then lowest `fantasy_team_id`, so the choice is deterministic); a player in no roster is resolved through the id map by id, name null, as now |
+| `dim_player_league_seasons` (new, table) | grain (`platform`, `league_id`, `season`, `platform_player_id`): every player on a roster day or in a transaction of that league-season. Columns: the key, `default_position`, `replacement_group`, `first_rostered_date`, `last_rostered_date`, `is_transaction_only`, each computed within the league-season exactly as `dim_players` computes it today. The MLB totals used to group a position-less player are **of that season only**: today they are summed over every MLB day loaded, grouped by player alone, which with two seasons would let 2027 starts change a 2026 group. They are grouped by player and the calendar year of the game date and joined on the row's `season`; the MLBAM id comes from `dim_players` |
 | `fct_player_category_value` | joins `int_fantasy__replacement_levels` on league and season too |
-| `fct_transaction_impact` | gains `league_id`, `season`; scoring bounds, next drop, next add, roster days, started days, `dim_players`, replacement levels and category scales are all joined within the league-season |
+| `fct_transaction_impact` | gains `league_id`, `season`; scoring bounds, next drop, next add, roster days, started days, replacement levels and category scales are all joined within the league-season. It reads `mlbam_player_id` from `dim_players` and `replacement_group` from `dim_player_league_seasons` |
 | `int_fantasy__player_crosswalk` | unchanged: an ESPN player id means the same player in every league |
 | MLB and id-map models, `int_fantasy__stat_components`, seeds | unchanged: they describe no league |
 
@@ -221,6 +228,11 @@ The existing privacy test scans this root as well (R5.2).
 5. Print every relation and league-season that differs, with counts, and exit non-zero
    if any does.
 
+`dim_players` is the one relation whose rows may legitimately depend on other
+league-seasons (ADR 0012). It has no league columns, so it is held to the one-way rule:
+every single-build row must be in the combined build. That holds on this fixture because
+its league-seasons are copies with the same names. It is not a property of real data.
+
 A relation that should carry league and season but does not fails step 4 and is named.
 Because a single build holds only its own season's MLB data, a league-keyed model that
 reads another season's MLB rows in the combined build also differs and is named; that is
@@ -264,10 +276,13 @@ The old file is kept until the comparison is clean and the owner renames them.
 | R3.2 | singular: each league-season's periods run 1 to its own final period, with no gaps | a short season padded to a long one's length |
 | R3.2 | existing `stg_espn__scoring_periods_start_on_opening_day`, changed to compare each league-season's first date with the first MLB game of **its** season (today it takes the earliest MLB date of everything loaded, so a 2027 season would be held to 2026's opening day) | a test that passes only while one season is loaded |
 | R3.3 | YAML uniqueness on full keys for every ESPN staging model | a key that only held for one league |
-| R4.1 | unique on the full key of each of the four models | a grain that only held for one league |
+| R4.1 | unique on the full key of each of the three models | a grain that only held for one league |
+| R4.7 | unique on (`platform`, `platform_player_id`), as today; dbt unit test: a player rostered in two leagues and two seasons has one row, named as on his latest roster day | a player doubled by a second league; a name chosen by load order |
+| R4.8 | unique on the full key; existing `dim_players_covers_every_league_player` and `dim_players_resolved_players_have_a_group`, moved to the new model and scoped by league-season; last task: its five columns equal today's `dim_players` on 2026 | a player missing from a league-season; values changing in the move |
+| R4.9 | `relationships` from `dim_player_league_seasons` to `dim_players` | the two models out of step |
 | R4.2 | dbt unit test: two leagues of different sizes get pools of their own size, from their own free agents | N counted over all leagues; another league's roster removing a free agent |
 | R4.3 | dbt unit test: a drop in a short season ends at that season's last date | a window running to another season's end |
-| R4.1 | dbt unit test on `dim_players`: a position-less player who relieves in 2026 and starts in 2027 is `RP` on his 2026 row and `SP` on his 2027 row | one season's appearances deciding another season's group |
+| R4.6 | dbt unit test on `dim_player_league_seasons`: a position-less player who relieves in 2026 and starts in 2027 is `RP` on his 2026 row and `SP` on his 2027 row | one season's appearances deciding another season's group |
 | R4.4, R4.5 | the isolation check | a join missing league or season, in any model |
 | R5.1, R5.2 | pytest: the generator reproduces the committed `landing_multi` byte for byte; the privacy test scans it | a hand edit; member data |
 | R5.3 | the isolation check, as a gate | cross-attribution anywhere |
@@ -275,8 +290,9 @@ The old file is kept until the comparison is clean and the owner renames them.
 | R6.2 | last task, on the real landing zone | any 2026 number moving |
 
 Tests are written before the code they test. Existing dbt unit tests that mock
-`raw.api_responses`, `int_fantasy__replacement_levels`, `dim_players` or
-`int_fantasy__transactions` gain the new columns in their mock rows.
+`raw.api_responses`, `int_fantasy__replacement_levels` or `int_fantasy__transactions`
+gain the new columns in their mock rows; those that mock `dim_players` for its
+`replacement_group` mock `dim_player_league_seasons` instead.
 
 ## Risks
 
@@ -289,9 +305,12 @@ Tests are written before the code they test. Existing dbt unit tests that mock
 - **Fixture generation for 2027 is fiddly**: the anchor date, the trimmed matchup, new
   `gamePk`s. Bounded by generating from the committed fixture with a byte-for-byte test.
 - **Gate time grows.** Four fixture builds; measured in the build and reported.
-- **`dim_players` consumers join on player id alone.** Two do today
-  (`fct_player_category_value` no longer reads it; `fct_transaction_impact` does). The
-  uniqueness test on the full key and the isolation check catch a fan-out.
+- **Readers of the moved columns.** `fct_transaction_impact` reads `replacement_group`
+  from `dim_players` today and must read it from `dim_player_league_seasons`; the YAML
+  relationship test on `fct_player_category_value.platform_player_id` stays on
+  `dim_players`. Task 5 greps for every reader of the five columns.
+- **`dim_players` is no longer the same alone as combined**, by design. Stated in ADR
+  0012; the gate cannot police it on real data.
 - **The real rebuild differs.** If any shared column differs, nothing is swapped and the
   difference is investigated; that is the point of building beside the old file.
 
@@ -331,7 +350,7 @@ Read-only checks of `data/raw/` and `data/warehouse.duckdb`, run 2026-10-04.
 | Loaded today | 2,688 rows: settings 3, teams 3, roster 180, matchups 2, transactions 3, schedule 2, boxscore 2,494 (2,430 games), id map 1 |
 | Models without league and season | of 39 relations: `stg_espn__transactions`, `int_fantasy__transactions`, `int_fantasy__replacement_levels`, `dim_players`, `fct_transaction_impact`; and by design the MLB and id-map models and `int_fantasy__stat_components` |
 | Global aggregates | `stg_espn__scoring_periods`: `generate_series(1, (select max(final_scoring_period) …))`; `int_fantasy__replacement_levels`: `(select count(*) from int_fantasy__teams)` twice; `fct_transaction_impact`: `scoring_bounds` cross-joined, and the category scales joined on category alone |
-| Single-column uniqueness | `stg_espn__scoring_periods.scoring_period` and `.scoring_date`; `stg_espn__transactions.transaction_id`; `dim_players.platform_player_id` |
+| Single-column uniqueness | `stg_espn__scoring_periods.scoring_period` and `.scoring_date`; `stg_espn__transactions.transaction_id`; `dim_players.platform_player_id` (which stays) |
 | `fo_espn_latest` callers | 9 staging models; `stg_espn__transactions` has its own global `max(fetched_at)` |
 | Fixture today | one league (`111111`), 2026, two scoring periods, 11 payloads, 2 boxscores |
 

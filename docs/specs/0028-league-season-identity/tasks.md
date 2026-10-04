@@ -22,10 +22,13 @@ them.
    - Scope `stg_espn__scoring_periods_start_on_opening_day` to each season's own first
      MLB game.
    - Verify: fixture build green; uniqueness tests on full keys pass.
-5. Carry league and season through the four models — `impl` — R4.1–R4.3, R4.6
+5. Carry league and season through the three models; split the player dimension — `impl` — R4.1–R4.3, R4.6–R4.9
    - dbt unit tests first: two leagues of different sizes for the pools; a short season
-     for the window; a position-less player whose role differs between two seasons.
-     Uniqueness on full keys.
+     for the window; a position-less player whose role differs between two seasons; a
+     player in two leagues and two seasons with one `dim_players` row. Uniqueness on full
+     keys; the relationships test. Grep for every reader of the five moved columns and
+     point each at `dim_player_league_seasons`. Move the two singular `dim_players_*`
+     tests that are about league-season attributes.
    - Verify: fixture build green; fixture row counts unchanged.
 6. Generate the combined fixture — `impl` — R5.1, R5.2
    - `scripts/make_multi_fixtures.py` from `fixtures/landing/` only; pytest that it
@@ -48,7 +51,9 @@ them.
    - Verify: `.agentic/gates` green.
 10. Rebuild the real warehouse beside the old one and compare — `judgment` — R6.2
     - Run the three commands. Do not rename, replace or delete either file.
-    - Verify: 2,688 raw rows; 0 relations differing in a shared column; results on #28.
+    - Verify: 2,688 raw rows; 0 relations differing in a shared column; the five columns
+      of `dim_player_league_seasons` equal today's `dim_players` columns for all 498
+      players; results on #28.
 11. Verify every acceptance criterion and expected value against real data — `judgment` — all
     - Verify: record the queries and results as a comment on #28. The owner swaps the
       warehouse files.

@@ -39,7 +39,9 @@ set the deadline: before any second league or season is loaded, including an old
 - **No change to the landing zone**: its layout, its sidecar format, and every landed
   file stay as they are. The raw table is rebuilt from them.
 - **No change to any 2026 number.** Every existing column of every model is identical
-  after the change; models only gain columns.
+  after the change. Models only gain columns, with one exception: five columns of
+  `dim_players` move, with the same values, to the new `dim_player_league_seasons`
+  (ADR 0012).
 - **Not R1, R3 or R4** (#27, #29, #30): capture timing, orphan repair and settle windows
   are separate work. No sub-second timestamps.
 - **No second fantasy platform.** `platform` stays `'espn'`.
@@ -54,9 +56,10 @@ set the deadline: before any second league or season is loaded, including an old
 - *Hunting every single-league assumption by reading* → the isolation check finds them:
   any model that differs between a combined build and a build of one league-season
   alone is named by it.
-- *A cross-season player dimension* → `dim_players` goes to one row per player per
-  league-season ([ADR 0012](../../adr/0012-dim-players-is-per-league-season.md)); a
-  conformed player dimension is for whoever first needs to follow a player across years.
+- *Building out the player dimension* → `dim_players` keeps only what is true of a player
+  everywhere, and one new model holds what is true of him in a league-season
+  ([ADR 0012](../../adr/0012-players-have-a-conformed-dimension-and-a-league-season-table.md)). No
+  history of name changes, no MLB team, no career table.
 - *Realistic second-league fixtures* → the extra tenants are relabelled copies of the
   committed fixture. They prove isolation, not baseball.
 
@@ -101,8 +104,17 @@ set the deadline: before any second league or season is loaded, including an old
 ### R4. Intermediate and marts
 
 - R4.1 THE SYSTEM SHALL carry `league_id` and `season` on `int_fantasy__transactions`,
-  `int_fantasy__replacement_levels`, `dim_players` and `fct_transaction_impact`, as part
-  of each one's key.
+  `int_fantasy__replacement_levels` and `fct_transaction_impact`, as part of each one's
+  key.
+- R4.7 THE SYSTEM SHALL keep `dim_players` at one row per platform player id, across
+  every league and season loaded, holding only the MLBAM id, how it was resolved, and the
+  name on his latest roster day in any league.
+- R4.8 THE SYSTEM SHALL provide `dim_player_league_seasons` with one row per player per
+  league and season in which he was rostered or transacted, holding his default
+  position, replacement group, first and last rostered dates and whether he appears only
+  in that league-season's transaction log.
+- R4.9 THE SYSTEM SHALL fail the build if a row of `dim_player_league_seasons` has no row
+  in `dim_players`.
 - R4.2 THE SYSTEM SHALL form each league-season's replacement pools from the players
   unrostered in that league on that league's scoring dates, sized by that league's own
   number of teams.
@@ -148,10 +160,11 @@ Real season, `data/raw/` and `data/warehouse.duckdb` as of 2026-10-04.
 | Distinct keys | 2,688 under the new key, 0 collisions | group by the key |
 | Request paths | one per ESPN league-season (plus `/communication` for transactions); `/api/v1/schedule`; one per game for boxscores; `/PLAYERIDMAPCSV` | distinct `request_path` |
 | Payloads with no sidecar | 201, still skipped with a warning (#21) | loader log |
-| Real warehouse comparison | 0 relations with a difference in a shared column; 39 relations compared | R6.1 comparison |
+| Real warehouse comparison | 0 relations with a difference in a shared column; 39 relations compared; one new relation (`dim_player_league_seasons`); `dim_players` reported as having 5 fewer columns | R6.1 comparison |
 | `stg_espn__transactions` | 737 rows, `league_id` and `season` never null, one league-season | query |
 | `int_fantasy__replacement_levels` | 48 rows, one league-season | query |
-| `dim_players` | 498 rows, one league-season | query |
+| `dim_players` | 498 rows, key unchanged; `mlbam_player_id`, `player_resolution`, `player_name` identical to today | R6.1 comparison |
+| `dim_player_league_seasons` | 498 rows, one league-season; its five columns identical to today's `dim_players` columns of the same names, player for player | query joining the old `dim_players` |
 | `fct_transaction_impact` | 737 rows; `total_value` sums unchanged (221.09 / 457.47 / 170.37 / 451.72) | query |
 | Combined fixture, raw | 4 league-seasons; no capture dropped; captures of the two leagues share every ESPN fetch timestamp | R5.3 / R5.4 |
 | Combined fixture, isolation | 0 differing rows in any model for any of the 4 league-seasons | R5.3 check |
