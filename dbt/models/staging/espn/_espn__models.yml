@@ -285,6 +285,25 @@ models:
         data_type: timestamp
 
 unit_tests:
+  - name: latest_response_is_chosen_per_league_and_season
+    description: >
+      Catches a global "latest". League 1 was captured earlier than league 2, so selecting
+      the single newest response would return league 2 alone and silently drop league 1.
+      Each league-season must keep its own newest capture: league 1 has two, and only the
+      later (final period 180) may be used, not the earlier one (final period 100).
+    model: stg_espn__league_settings
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: settings, request_path: /a, request_key: view=mSettings, fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2026, "league_id": "1"}', payload: '{"id": 1, "seasonId": 2026, "status": {"finalScoringPeriod": 100}}'}
+          - {source: espn, endpoint: settings, request_path: /a, request_key: view=mSettings, fetched_at: "20260902T000000Z", file_path: a2, partitions: '{"season": 2026, "league_id": "1"}', payload: '{"id": 1, "seasonId": 2026, "status": {"finalScoringPeriod": 180}}'}
+          - {source: espn, endpoint: settings, request_path: /b, request_key: view=mSettings, fetched_at: "20260915T000000Z", file_path: b1, partitions: '{"season": 2026, "league_id": "2"}', payload: '{"id": 2, "seasonId": 2026, "status": {"finalScoringPeriod": 150}}'}
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, final_scoring_period: 180}
+        - {league_id: "2", season: 2026, final_scoring_period: 150}
+
   - name: scoring_period_dates_use_the_eastern_day_boundary
     description: >
       A settings snapshot taken at 02:52 UTC belongs to the PREVIOUS Eastern day. If the
