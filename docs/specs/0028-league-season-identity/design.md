@@ -324,6 +324,9 @@ gain the new columns in their mock rows; those that mock `dim_players` for its
   needed eventually; it waits until collisions have been observed in live operation and
   what causes them is understood. Until then the only resolution is a person removing or
   fixing a file.
+- **MLB as the source of truth for players.** Raised by the owner on 2026-10-04 and
+  split out as #60. `dim_players` here is keyed by the platform's player id; keying it by
+  the MLB id is the intended direction and is not part of this build.
 - **Name matching across seasons.** `int_fantasy__player_crosswalk` falls back to a name
   match only when the name belongs to exactly one MLB player, judged over every MLB
   player loaded. With two seasons loaded a name can stop being unique, so a player

@@ -70,4 +70,11 @@ fact. Option 3 is wrong as soon as a role changes between seasons.
   isolation gate (ADR 0013) holds on the fixture only because its league-seasons are
   copies.
 - Bad / accepted cost: two models to keep in step, tied by a relationships test.
-- Follow-ups: none.
+- Bad / accepted cost: the dimension is keyed by the fantasy platform's player id, so it
+  is one reference within ESPN, not across platforms. The owner raised keying it by the
+  MLB id (2026-10-04). On 2026 that would be clean (498 of 498 players resolve, one to
+  one), but it needs a rule for players with no MLB id, a source for MLB player
+  attributes, and a decision on who is in the table. It is kept out of #28, which is
+  about league and season.
+- Follow-ups: #60 keys the dimension by MLB id with a platform bridge. This ADR's split is
+  a step toward it: `dim_player_league_seasons` would not change.
