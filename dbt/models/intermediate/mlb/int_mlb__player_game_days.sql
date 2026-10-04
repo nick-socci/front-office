@@ -14,6 +14,12 @@
 --   * Components only, never rates. AVG and ERA are computed at whatever grain the
 --     question needs, downstream. Innings stay as outs_recorded for the same reason.
 --
+-- `season` is the MLB season of that date's games, taken from stg_mlb__games. It is the
+-- one definition of "that season's MLB data" that the player crosswalk and the
+-- per-league-season player dimension share (#28). It is part of the grouping, so a
+-- date split across two seasons could not collapse silently into one row: it would make
+-- two rows and fail the unique test on (mlbam_player_id, game_date). It carries no league: MLB has none.
+--
 -- Materialized as a table: it is the join target for every roster-day above it, and
 -- 71,044 rows is nothing.
 
@@ -24,6 +30,7 @@ with batting as (
     select
         logs.mlbam_player_id,
         games.official_date as game_date,
+        games.season,
         count(*) as games_batted,
         sum(logs.plate_appearances) as plate_appearances,
         sum(logs.at_bats) as at_bats,
@@ -46,7 +53,7 @@ with batting as (
     from {{ ref('stg_mlb__batting_game_logs') }} as logs
     inner join {{ ref('stg_mlb__games') }} as games
         on games.game_pk = logs.game_pk
-    group by logs.mlbam_player_id, games.official_date
+    group by logs.mlbam_player_id, games.official_date, games.season
 
 ),
 
@@ -55,6 +62,7 @@ pitching as (
     select
         logs.mlbam_player_id,
         games.official_date as game_date,
+        games.season,
         count(*) as games_pitched,
         sum(logs.games_started) as games_started,
         sum(logs.outs_recorded) as outs_recorded,
@@ -80,13 +88,14 @@ pitching as (
     from {{ ref('stg_mlb__pitching_game_logs') }} as logs
     inner join {{ ref('stg_mlb__games') }} as games
         on games.game_pk = logs.game_pk
-    group by logs.mlbam_player_id, games.official_date
+    group by logs.mlbam_player_id, games.official_date, games.season
 
 )
 
 select
     coalesce(batting.mlbam_player_id, pitching.mlbam_player_id) as mlbam_player_id,
     coalesce(batting.game_date, pitching.game_date) as game_date,
+    coalesce(batting.season, pitching.season) as season,
 
     coalesce(batting.games_batted, 0) as games_batted,
     coalesce(pitching.games_pitched, 0) as games_pitched,

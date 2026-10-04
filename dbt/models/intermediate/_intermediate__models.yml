@@ -463,6 +463,9 @@ models:
         data_tests: [not_null]
       - name: game_date
         data_tests: [not_null]
+      - name: season
+        description: The MLB season of that date's games.
+        data_tests: [not_null]
       - name: at_bats
         data_tests:
           - not_null
@@ -616,9 +619,11 @@ models:
 unit_tests:
   - name: crosswalk_one_row_per_id_named_by_the_latest_snapshot
     description: >
-      One ESPN id spelled two ways is one row, named as on the latest snapshot. Season
-      decides before scoring period; the period decides before fetched_at, because every
-      period in one backfill shares a fetched_at.
+      One ESPN id spelled two ways in a league-season is one row, named as on the latest
+      snapshot; the period decides before fetched_at, because every period in one
+      backfill shares a fetched_at. The same id in another season is a row of its own,
+      named from that season's snapshots only. Catches: a name taken from another
+      season, and a double row for a respelled player.
     model: int_fantasy__player_crosswalk
     given:
       - input: ref('stg_espn__roster_entries')
@@ -626,7 +631,7 @@ unit_tests:
           # id 1: accent added in a later period of the same backfill (tied fetched_at).
           - {league_id: "1", season: 2026, scoring_period: 5, espn_player_id: 1, player_name: "Jose Ramirez", fetched_at: "2026-09-26 00:00:00"}
           - {league_id: "1", season: 2026, scoring_period: 6, espn_player_id: 1, player_name: "José Ramírez", fetched_at: "2026-09-26 00:00:00"}
-          # id 2: a later season wins even with an earlier period and an older fetch.
+          # id 2: one row per league-season, each named by its own snapshots.
           - {league_id: "1", season: 2026, scoring_period: 180, espn_player_id: 2, player_name: "Old Spelling", fetched_at: "2026-09-26 00:00:00"}
           - {league_id: "1", season: 2027, scoring_period: 1, espn_player_id: 2, player_name: "New Spelling", fetched_at: "2026-01-01 00:00:00"}
       - input: ref('stg_idmap__players')
@@ -637,15 +642,18 @@ unit_tests:
         rows: []
       - input: ref('stg_mlb__pitching_game_logs')
         rows: []
+      - input: ref('stg_mlb__games')
+        rows: []
     expect:
       rows:
-        - {platform_player_id: 1, player_name: "José Ramírez", mlbam_player_id: 608070, resolution: crosswalk_id}
-        - {platform_player_id: 2, player_name: "New Spelling", mlbam_player_id: 700002, resolution: crosswalk_id}
+        - {league_id: "1", season: 2026, platform_player_id: 1, player_name: "José Ramírez", mlbam_player_id: 608070, resolution: crosswalk_id}
+        - {league_id: "1", season: 2026, platform_player_id: 2, player_name: "Old Spelling", mlbam_player_id: 700002, resolution: crosswalk_id}
+        - {league_id: "1", season: 2027, platform_player_id: 2, player_name: "New Spelling", mlbam_player_id: 700002, resolution: crosswalk_id}
 
   - name: crosswalk_exact_ties_break_the_same_way_in_either_input_order
     description: >
-      Same season, period and fetched_at, three names across two leagues: league, then
-      name, decides. The winner is neither the alphabetically first name nor the first or
+      Same league-season, period and fetched_at, two names: the name decides. League 2's
+      row for the same id is its own resolution. The winner is neither the first nor the
       last row, and the next test gives the rows in reverse; the answer must not change.
     model: int_fantasy__player_crosswalk
     given:
@@ -660,9 +668,12 @@ unit_tests:
         rows: []
       - input: ref('stg_mlb__pitching_game_logs')
         rows: []
+      - input: ref('stg_mlb__games')
+        rows: []
     expect:
       rows:
-        - {platform_player_id: 3, player_name: "Yves Name", resolution: unresolved}
+        - {league_id: "1", season: 2026, platform_player_id: 3, player_name: "Yves Name", resolution: unresolved}
+        - {league_id: "2", season: 2026, platform_player_id: 3, player_name: "Abe Name", resolution: unresolved}
 
   - name: crosswalk_exact_ties_break_the_same_way_in_reverse_input_order
     model: int_fantasy__player_crosswalk
@@ -678,9 +689,12 @@ unit_tests:
         rows: []
       - input: ref('stg_mlb__pitching_game_logs')
         rows: []
+      - input: ref('stg_mlb__games')
+        rows: []
     expect:
       rows:
-        - {platform_player_id: 3, player_name: "Yves Name", resolution: unresolved}
+        - {league_id: "1", season: 2026, platform_player_id: 3, player_name: "Yves Name", resolution: unresolved}
+        - {league_id: "2", season: 2026, platform_player_id: 3, player_name: "Abe Name", resolution: unresolved}
 
   - name: crosswalk_resolution_precedence
     description: >
@@ -707,20 +721,86 @@ unit_tests:
           - {espn_player_id: 10, mlbam_player_id: 669257}
       - input: ref('stg_mlb__batting_game_logs')
         rows:
-          - {mlbam_player_id: 519299, player_name: "Will Smith"}
-          - {mlbam_player_id: 641313, player_name: "Andrés Giménez"}
-          - {mlbam_player_id: 571970, player_name: "Max Muncy"}
-          - {mlbam_player_id: 691777, player_name: "Max Muncy"}
-          - {mlbam_player_id: 700014, player_name: "Matched Once"}
+          - {game_pk: 1, mlbam_player_id: 519299, player_name: "Will Smith"}
+          - {game_pk: 1, mlbam_player_id: 641313, player_name: "Andrés Giménez"}
+          - {game_pk: 1, mlbam_player_id: 571970, player_name: "Max Muncy"}
+          - {game_pk: 1, mlbam_player_id: 691777, player_name: "Max Muncy"}
+          - {game_pk: 1, mlbam_player_id: 700014, player_name: "Matched Once"}
       - input: ref('stg_mlb__pitching_game_logs')
         rows: []
+      - input: ref('stg_mlb__games')
+        rows:
+          - {game_pk: 1, season: 2026}
     expect:
       rows:
-        - {platform_player_id: 10, mlbam_player_id: 669257, resolution: crosswalk_id}
-        - {platform_player_id: 11, mlbam_player_id: 641313, resolution: unambiguous_name}
-        - {platform_player_id: 12, mlbam_player_id: null, resolution: unresolved}
-        - {platform_player_id: 13, mlbam_player_id: null, resolution: unresolved}
-        - {platform_player_id: 14, mlbam_player_id: null, resolution: unresolved}
+        - {league_id: "1", season: 2026, platform_player_id: 10, mlbam_player_id: 669257, resolution: crosswalk_id}
+        - {league_id: "1", season: 2026, platform_player_id: 11, mlbam_player_id: 641313, resolution: unambiguous_name}
+        - {league_id: "1", season: 2026, platform_player_id: 12, mlbam_player_id: null, resolution: unresolved}
+        - {league_id: "1", season: 2026, platform_player_id: 13, mlbam_player_id: null, resolution: unresolved}
+        - {league_id: "1", season: 2026, platform_player_id: 14, mlbam_player_id: null, resolution: unresolved}
+
+  - name: crosswalk_another_season_neither_creates_nor_destroys_a_match
+    description: >
+      Nobody here is in the id map, so the name fallback decides. "Solo Name" is one MLB
+      player in 2026 and two in 2027: the player rostered in 2026 resolves by name, the
+      one rostered in 2027 is unresolved. "Rookie Name" is unique in 2027 only, and the
+      ESPN player of that name rostered in 2026 stays unresolved. Catches: another season
+      creating a match (a 2027 name reaching a 2026 player) or destroying one (a second
+      2027 player making a 2026 name ambiguous).
+    model: int_fantasy__player_crosswalk
+    given:
+      - input: ref('stg_espn__roster_entries')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 1, espn_player_id: 20, player_name: "Solo Name", fetched_at: "2026-09-26 00:00:00"}
+          - {league_id: "1", season: 2027, scoring_period: 1, espn_player_id: 21, player_name: "Solo Name", fetched_at: "2027-09-26 00:00:00"}
+          - {league_id: "1", season: 2026, scoring_period: 1, espn_player_id: 22, player_name: "Rookie Name", fetched_at: "2026-09-26 00:00:00"}
+      - input: ref('stg_idmap__players')
+        rows: []
+      - input: ref('stg_mlb__batting_game_logs')
+        rows:
+          - {game_pk: 1, mlbam_player_id: 800001, player_name: "Solo Name"}
+          - {game_pk: 2, mlbam_player_id: 800001, player_name: "Solo Name"}
+          - {game_pk: 2, mlbam_player_id: 800002, player_name: "Solo Name"}
+          - {game_pk: 2, mlbam_player_id: 800003, player_name: "Rookie Name"}
+      - input: ref('stg_mlb__pitching_game_logs')
+        rows: []
+      - input: ref('stg_mlb__games')
+        rows:
+          - {game_pk: 1, season: 2026}
+          - {game_pk: 2, season: 2027}
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, platform_player_id: 20, mlbam_player_id: 800001, resolution: unambiguous_name}
+        - {league_id: "1", season: 2027, platform_player_id: 21, mlbam_player_id: null, resolution: unresolved}
+        - {league_id: "1", season: 2026, platform_player_id: 22, mlbam_player_id: null, resolution: unresolved}
+
+  - name: crosswalk_one_leagues_spelling_does_not_decide_anothers_match
+    description: >
+      One ESPN id (not in the id map) rostered in two leagues of one season under two
+      names that differ after accents are stripped: "Pat Matched" matches an MLB player,
+      "Pat Mismatched" matches nobody. League 1 resolves, league 2 is unresolved.
+      Catches: one league's spelling deciding another's match (an accent-only difference
+      or an id-mapped player could not show this).
+    model: int_fantasy__player_crosswalk
+    given:
+      - input: ref('stg_espn__roster_entries')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 1, espn_player_id: 30, player_name: "Pat Matched", fetched_at: "2026-09-26 00:00:00"}
+          - {league_id: "2", season: 2026, scoring_period: 1, espn_player_id: 30, player_name: "Pat Mismatched", fetched_at: "2026-09-26 00:00:00"}
+      - input: ref('stg_idmap__players')
+        rows: []
+      - input: ref('stg_mlb__batting_game_logs')
+        rows:
+          - {game_pk: 1, mlbam_player_id: 810001, player_name: "Pat Matched"}
+      - input: ref('stg_mlb__pitching_game_logs')
+        rows: []
+      - input: ref('stg_mlb__games')
+        rows:
+          - {game_pk: 1, season: 2026}
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, platform_player_id: 30, player_name: "Pat Matched", mlbam_player_id: 810001, resolution: unambiguous_name}
+        - {league_id: "2", season: 2026, platform_player_id: 30, player_name: "Pat Mismatched", mlbam_player_id: null, resolution: unresolved}
 
 # -----------------------------------------------------------------------------
 # Unit tests: MLB day aggregation and per player-day input status (#25).
