@@ -1,0 +1,646 @@
+{
+ "id": "111111",
+ "seasonId": 2027,
+ "schedule": [
+  {
+   "id": 1,
+   "matchupPeriodId": 1,
+   "winner": "HOME",
+   "playoffTierType": "NONE",
+   "home": {
+    "teamId": 9,
+    "cumulativeScore": {
+     "wins": 9,
+     "losses": 8,
+     "ties": 0,
+     "scoreByStat": {
+      "0": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 303.0
+      },
+      "1": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 75.0
+      },
+      "33": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 21.0
+      },
+      "2": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 0.24752475
+      },
+      "34": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 309.0
+      },
+      "5": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 12.0
+      },
+      "37": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 85.0
+      },
+      "39": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 43.0
+      },
+      "8": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 130.0
+      },
+      "41": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 1.24271845
+      },
+      "10": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 48.0
+      },
+      "45": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 49.0
+      },
+      "47": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 4.2815534
+      },
+      "48": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 105.0
+      },
+      "49": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 9.17475728
+      },
+      "83": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 2.0
+      },
+      "20": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 49.0
+      },
+      "21": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 48.0
+      },
+      "53": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 7.0
+      },
+      "54": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 8.0
+      },
+      "23": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 7.0
+      },
+      "57": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 2.0
+      },
+      "27": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 68.0
+      },
+      "60": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 0.0
+      }
+     }
+    },
+    "pointsByScoringPeriod": {
+     "1": 0.0
+    }
+   },
+   "away": {
+    "teamId": 6,
+    "cumulativeScore": {
+     "wins": 8,
+     "losses": 9,
+     "ties": 0,
+     "scoreByStat": {
+      "0": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 339.0
+      },
+      "1": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 81.0
+      },
+      "33": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 10.0
+      },
+      "2": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 0.23893805
+      },
+      "34": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 218.0
+      },
+      "5": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 13.0
+      },
+      "37": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 52.0
+      },
+      "39": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 30.0
+      },
+      "8": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 138.0
+      },
+      "41": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 1.12844037
+      },
+      "10": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 33.0
+      },
+      "45": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 28.0
+      },
+      "47": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 3.46788991
+      },
+      "48": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 84.0
+      },
+      "49": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 10.40366972
+      },
+      "83": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 7.0
+      },
+      "20": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 44.0
+      },
+      "21": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 47.0
+      },
+      "53": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 5.0
+      },
+      "54": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 7.0
+      },
+      "23": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 3.0
+      },
+      "57": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 7.0
+      },
+      "27": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 83.0
+      },
+      "60": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 0.0
+      }
+     }
+    },
+    "pointsByScoringPeriod": {
+     "1": 0.0
+    }
+   }
+  },
+  {
+   "id": 2,
+   "matchupPeriodId": 1,
+   "winner": "HOME",
+   "playoffTierType": "NONE",
+   "home": {
+    "teamId": 2,
+    "cumulativeScore": {
+     "wins": 12,
+     "losses": 3,
+     "ties": 2,
+     "scoreByStat": {
+      "0": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 331.0
+      },
+      "1": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 75.0
+      },
+      "33": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 15.0
+      },
+      "2": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 0.2265861
+      },
+      "34": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 293.0
+      },
+      "5": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 16.0
+      },
+      "37": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 71.0
+      },
+      "39": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 40.0
+      },
+      "8": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 129.0
+      },
+      "41": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 1.13651877
+      },
+      "10": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 46.0
+      },
+      "45": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 38.0
+      },
+      "47": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 3.50170648
+      },
+      "48": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 112.0
+      },
+      "49": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 10.32081911
+      },
+      "83": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 10.0
+      },
+      "20": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "TIE",
+       "score": 44.0
+      },
+      "21": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 41.0
+      },
+      "53": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "TIE",
+       "score": 5.0
+      },
+      "54": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 5.0
+      },
+      "23": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 7.0
+      },
+      "57": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 4.0
+      },
+      "27": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 87.0
+      },
+      "60": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 6.0
+      }
+     }
+    },
+    "pointsByScoringPeriod": {
+     "1": 0.0
+    }
+   },
+   "away": {
+    "teamId": 3,
+    "cumulativeScore": {
+     "wins": 3,
+     "losses": 12,
+     "ties": 2,
+     "scoreByStat": {
+      "0": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 302.0
+      },
+      "1": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 63.0
+      },
+      "33": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 10.0
+      },
+      "2": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 0.20860927
+      },
+      "34": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 209.0
+      },
+      "5": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 10.0
+      },
+      "37": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 51.0
+      },
+      "39": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 18.0
+      },
+      "8": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 114.0
+      },
+      "41": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 0.99043062
+      },
+      "10": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 37.0
+      },
+      "45": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 19.0
+      },
+      "47": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 2.45454545
+      },
+      "48": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 79.0
+      },
+      "49": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 10.20574163
+      },
+      "83": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 8.0
+      },
+      "20": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "TIE",
+       "score": 44.0
+      },
+      "21": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 39.0
+      },
+      "53": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "TIE",
+       "score": 5.0
+      },
+      "54": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "WIN",
+       "score": 2.0
+      },
+      "23": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 6.0
+      },
+      "57": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 6.0
+      },
+      "27": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": "LOSS",
+       "score": 89.0
+      },
+      "60": {
+       "ineligible": false,
+       "rank": 0.0,
+       "result": null,
+       "score": 2.0
+      }
+     }
+    },
+    "pointsByScoringPeriod": {
+     "1": 0.0
+    }
+   }
+  }
+ ]
+}

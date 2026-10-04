@@ -18,17 +18,20 @@ import pytest
 
 from front_office.privacy import FORBIDDEN_KEYS, GUID, walk
 
-FIXTURE_ROOT = Path(__file__).resolve().parents[2] / "fixtures/landing"
-ESPN_FIXTURES = sorted((FIXTURE_ROOT / "espn").rglob("*.json"))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+# The combined fixture (spec 0028, R5.2) is held to every check the single one is.
+FIXTURE_ROOTS = [REPO_ROOT / "fixtures/landing", REPO_ROOT / "fixtures/landing_multi"]
+ESPN_FIXTURES = sorted(p for root in FIXTURE_ROOTS for p in (root / "espn").rglob("*.json"))
 # Seeds are committed too, and the pre-commit guard is opt-in per clone, so CI checks them.
-SEEDS = sorted((Path(__file__).resolve().parents[2] / "dbt/seeds").glob("*.csv"))
+SEEDS = sorted((REPO_ROOT / "dbt/seeds").glob("*.csv"))
 
 FIXTURE_TEAM_NAME = re.compile(r"^Team \d{2}$")
 
 
-def test_espn_fixtures_exist():
+@pytest.mark.parametrize("root", FIXTURE_ROOTS, ids=lambda r: r.name)
+def test_espn_fixtures_exist(root):
     """A privacy test that silently checks nothing is worse than no test."""
-    assert ESPN_FIXTURES, "no ESPN fixtures found; regenerate with scripts/make_fixtures.py"
+    assert list((root / "espn").rglob("*.json")), f"no ESPN fixtures under {root}; regenerate"
 
 
 @pytest.mark.parametrize("path", ESPN_FIXTURES, ids=lambda p: p.name)
@@ -56,10 +59,13 @@ def test_seeds_carry_no_member_columns_or_guids(path):
     assert match is None, f"{path}: looks like an ESPN account id: {match.group() if match else ''}"
 
 
-def test_team_names_are_aliases():
+@pytest.mark.parametrize("root", FIXTURE_ROOTS, ids=lambda r: r.name)
+def test_team_names_are_aliases(root):
     """Real team names are chosen by real people and must not be committed."""
     teams_fixtures = [
-        p for p in ESPN_FIXTURES if "/teams/" in str(p) and not p.name.endswith(".meta.json")
+        p
+        for p in (root / "espn").rglob("*.json")
+        if "/teams/" in str(p) and not p.name.endswith(".meta.json")
     ]
     assert teams_fixtures, "no ESPN teams fixture found"
     for path in teams_fixtures:
@@ -68,9 +74,12 @@ def test_team_names_are_aliases():
             assert team["abbrev"].startswith("T"), f"{path}: real abbrev {team['abbrev']!r}"
 
 
-def test_league_name_is_a_placeholder():
+@pytest.mark.parametrize("root", FIXTURE_ROOTS, ids=lambda r: r.name)
+def test_league_name_is_a_placeholder(root):
     settings = [
-        p for p in ESPN_FIXTURES if "/settings/" in str(p) and not p.name.endswith(".meta.json")
+        p
+        for p in (root / "espn").rglob("*.json")
+        if "/settings/" in str(p) and not p.name.endswith(".meta.json")
     ]
     assert settings, "no ESPN settings fixture found"
     for path in settings:

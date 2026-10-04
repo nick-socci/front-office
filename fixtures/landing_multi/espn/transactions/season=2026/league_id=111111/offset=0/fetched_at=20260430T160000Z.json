@@ -1,0 +1,159 @@
+{
+ "topics": [
+  {
+   "id": "topic-001",
+   "date": 1789921020086,
+   "totalMessageCount": 2,
+   "messages": [
+    {
+     "id": "message-001-01",
+     "date": 1789921020086,
+     "messageTypeId": 179,
+     "targetId": 4629089,
+     "to": 4
+    },
+    {
+     "id": "message-001-02",
+     "date": 1789921020086,
+     "messageTypeId": 178,
+     "targetId": 5007859,
+     "to": 4
+    }
+   ]
+  },
+  {
+   "id": "topic-002",
+   "date": 1789898864617,
+   "totalMessageCount": 2,
+   "messages": [
+    {
+     "id": "message-002-01",
+     "date": 1789898864617,
+     "messageTypeId": 178,
+     "targetId": 5214984,
+     "to": 4
+    },
+    {
+     "id": "message-002-02",
+     "date": 1789898864617,
+     "messageTypeId": 179,
+     "targetId": 4927516,
+     "to": 4
+    }
+   ]
+  },
+  {
+   "id": "topic-003",
+   "date": 1789898750252,
+   "totalMessageCount": 2,
+   "messages": [
+    {
+     "id": "message-003-01",
+     "date": 1789898750252,
+     "messageTypeId": 179,
+     "targetId": 4917878,
+     "to": 4
+    },
+    {
+     "id": "message-003-02",
+     "date": 1789898750252,
+     "messageTypeId": 178,
+     "targetId": 4837405,
+     "to": 4
+    }
+   ]
+  },
+  {
+   "id": "topic-004",
+   "date": 1789461234280,
+   "totalMessageCount": 2,
+   "messages": [
+    {
+     "id": "message-004-01",
+     "date": 1789461234280,
+     "messageTypeId": 178,
+     "targetId": 42604,
+     "to": 4
+    },
+    {
+     "id": "message-004-02",
+     "date": 1789461234280,
+     "messageTypeId": 179,
+     "targetId": 5294127,
+     "to": 4
+    }
+   ]
+  },
+  {
+   "id": "topic-005",
+   "date": 1789413725659,
+   "totalMessageCount": 2,
+   "messages": [
+    {
+     "id": "message-005-01",
+     "date": 1789413725659,
+     "messageTypeId": 239,
+     "targetId": 42178,
+     "to": -1,
+     "from": 16,
+     "for": 6
+    },
+    {
+     "id": "message-005-02",
+     "date": 1789413725659,
+     "messageTypeId": 188,
+     "targetId": 35591,
+     "to": 16,
+     "from": 17,
+     "for": 6
+    }
+   ]
+  },
+  {
+   "id": "topic-006",
+   "date": 1789382597711,
+   "totalMessageCount": 2,
+   "messages": [
+    {
+     "id": "message-006-01",
+     "date": 1789382597711,
+     "messageTypeId": 179,
+     "targetId": 4927630,
+     "to": 4
+    },
+    {
+     "id": "message-006-02",
+     "date": 1789382597711,
+     "messageTypeId": 178,
+     "targetId": 5023126,
+     "to": 4
+    }
+   ]
+  },
+  {
+   "id": "topic-007",
+   "date": 1789926158094,
+   "totalMessageCount": 2,
+   "messages": [
+    {
+     "id": "message-007-01",
+     "date": 1789926158094,
+     "messageTypeId": 188,
+     "targetId": 4977664,
+     "to": 16,
+     "from": 5,
+     "for": 6
+    },
+    {
+     "id": "message-007-02",
+     "date": 1789926158094,
+     "messageTypeId": 188,
+     "targetId": 41295,
+     "to": 5,
+     "from": 16,
+     "for": 6
+    }
+   ]
+  }
+ ]
+}

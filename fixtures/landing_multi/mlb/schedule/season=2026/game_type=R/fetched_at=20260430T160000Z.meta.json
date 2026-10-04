@@ -1,0 +1,18 @@
+{
+  "source": "mlb",
+  "endpoint": "schedule",
+  "partitions": {
+    "season": 2026,
+    "game_type": "R"
+  },
+  "url": "https://statsapi.mlb.com/api/v1/schedule",
+  "params": {
+    "sportId": 1,
+    "season": 2026,
+    "gameType": "R",
+    "startDate": "2026-04-29",
+    "endDate": "2026-04-30"
+  },
+  "request_key": "endDate=2026-04-30&gameType=R&season=2026&sportId=1&startDate=2026-04-29",
+  "fetched_at": "20260430T160000Z"
+}

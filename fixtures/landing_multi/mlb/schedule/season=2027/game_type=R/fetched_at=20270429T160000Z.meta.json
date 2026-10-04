@@ -1,0 +1,18 @@
+{
+  "source": "mlb",
+  "endpoint": "schedule",
+  "partitions": {
+    "season": 2027,
+    "game_type": "R"
+  },
+  "url": "https://statsapi.mlb.com/api/v1/schedule",
+  "params": {
+    "sportId": 1,
+    "season": 2027,
+    "gameType": "R",
+    "startDate": "2027-04-28",
+    "endDate": "2027-04-28"
+  },
+  "request_key": "endDate=2027-04-28&gameType=R&season=2027&sportId=1&startDate=2027-04-28",
+  "fetched_at": "20270429T160000Z"
+}
