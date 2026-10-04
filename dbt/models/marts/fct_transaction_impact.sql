@@ -32,11 +32,12 @@
 -- with no MLBAM id or group is unresolved: zeroes, and a NULL total_value, because 0
 -- would read as replacement level.
 --
--- total_value is on the scale of fct_player_category_value: the same per-category
--- arithmetic (the fo_category_value macros), the same replacement levels and the same
--- standard deviation, which is READ from that fact (population sd of value_over_replacement
--- over rows with played_days > 0 per category), never recomputed over transactions, or a
--- two-week window and a season would not be comparable.
+-- total_value is on the scale of fct_player_category_value, in matchup margins (ADR 0010):
+-- the same per-category arithmetic (the fo_category_value macros), the same replacement
+-- levels and the same margin scale and side denominator, READ from
+-- int_fantasy__category_scales, never recomputed over transactions, or a two-week window
+-- and a season would not be comparable. Like the rest of this model, the join to the scales
+-- is on category_key alone and assumes the one league-season loaded (#28).
 --
 -- KIND OF DAY (ADR 0008, #52), as in fct_player_category_value. A window's played days are
 -- grouped by kind and each kind is valued against its own replacement level: `batting` (a
@@ -52,7 +53,7 @@
 -- Per (transaction, category) the values of the kinds on the category's side are summed:
 -- NULL if ANY kind with played days has a null value (a null level, an empty pool), because
 -- a plain sum skips nulls and would report a partial value as complete. A category with no
--- played day on its side is worth 0. Standardising and the sum over every scored category
+-- played day on its side is worth 0. Scaling and the sum over every scored category
 -- (NULL if any is NULL) are as before. The wide component columns and the day counts stay
 -- whole-window totals; only total_value is valued per kind.
 
@@ -375,12 +376,18 @@ kind_parts_pivoted as (
 
 ),
 
+-- A category is a rate if it has a denominator part, derived as fct_player_category_value
+-- does.
 scored_categories as (
 
-    select distinct
-        category_key,
-        is_lower_better
-    from {{ ref('int_fantasy__categories') }}
+    select
+        categories.category_key,
+        categories.is_lower_better,
+        coalesce(bool_or(rules.part = 'denominator'), false) as is_rate
+    from {{ ref('int_fantasy__categories') }} as categories
+    left join {{ ref('int_fantasy__stat_components') }} as rules
+        on rules.stat_key = categories.category_key
+    group by categories.category_key, categories.is_lower_better
 
 ),
 
@@ -441,28 +448,22 @@ with_value as (
 
 ),
 
--- The season fact's own spread, read rather than recomputed.
-category_spread as (
-
-    select
-        category_key,
-        stddev_pop(value_over_replacement) as standard_deviation
-    from {{ ref('fct_player_category_value') }}
-    where played_days > 0
-    group by category_key
-
-),
-
-standardised as (
+-- Each value divided by its category's scale, read from int_fantasy__category_scales as the
+-- season fact does. A LEFT join: a category with no scale is worth 0 by the macro's rules,
+-- not dropped. Assumes the one league-season loaded (#28), like the rest of this model.
+scaled as (
 
     select
         with_value.transaction_id,
-        {{ fo_standardised_value(
-            'with_value.value_over_replacement', 'with_value.played_days', 'category_spread.standard_deviation'
-        ) }} as standardised_value
+        {{ fo_scaled_value(
+            'with_value.value_over_replacement', 'with_value.played_days',
+            'scales.margin_scale', 'scales.side_denominator', 'scored_categories.is_rate'
+        ) }} as scaled_value
     from with_value
-    left join category_spread
-        on category_spread.category_key = with_value.category_key
+    inner join scored_categories
+        on scored_categories.category_key = with_value.category_key
+    left join {{ ref('int_fantasy__category_scales') }} as scales
+        on scales.category_key = with_value.category_key
 
 ),
 
@@ -471,10 +472,10 @@ total_values as (
     select
         transaction_id,
         case
-            when count(*) filter (where standardised_value is null) > 0 then null
-            else sum(standardised_value)
+            when count(*) filter (where scaled_value is null) > 0 then null
+            else sum(scaled_value)
         end as total_value
-    from standardised
+    from scaled
     group by transaction_id
 
 )
