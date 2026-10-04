@@ -116,8 +116,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.keep:
-        shutil.rmtree(args.keep, ignore_errors=True)
-        args.keep.mkdir(parents=True)
+        # Never clear a directory the caller named: it may hold something else. The
+        # workspace must be new or empty.
+        if args.keep.exists() and (not args.keep.is_dir() or any(args.keep.iterdir())):
+            parser.error(f"--keep {args.keep} exists and is not an empty directory; name a new one")
+        args.keep.mkdir(parents=True, exist_ok=True)
         workdir = args.keep.resolve()
     else:
         workdir = Path(tempfile.mkdtemp(prefix="isolation_"))

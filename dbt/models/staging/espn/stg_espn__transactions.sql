@@ -70,6 +70,7 @@ header as (
         league_id,
         season,
         fetched_at,
+        request_key,
         {{ fo_json_array('payload', '$.topics[*]') }} as topics
     from latest
 
@@ -81,6 +82,7 @@ topics as (
         league_id,
         season,
         fetched_at,
+        request_key,
         unnest(topics) as topic
     from header
 
@@ -92,6 +94,7 @@ messages as (
         league_id,
         season,
         fetched_at,
+        request_key,
         {{ fo_json_text('topic', '$.id') }} as topic_id,
         {{ fo_json_int('topic', '$.date') }} as topic_date_ms,
         unnest({{ fo_json_array('topic', '$.messages[*]') }}) as message
@@ -119,4 +122,9 @@ left join {{ ref('espn_activity_types') }} as activities
     on activities.message_type_id = {{ fo_json_int('message', '$.messageTypeId') }}
 -- `is distinct from`, so an unknown type (null) is kept and fails the activity test.
 where activities.is_transaction is distinct from false
-{{ fo_latest_by_entity(['league_id', 'season', "message ->> '$.id'"]) }}
+-- Every page of a run shares one fetched_at, so recency cannot choose between two copies
+-- of a message that straddles a page boundary: the page (request_key) and topic do.
+{{ fo_latest_by_entity(
+    ['league_id', 'season', "message ->> '$.id'"],
+    order_by='fetched_at desc, request_key, topic_id'
+) }}

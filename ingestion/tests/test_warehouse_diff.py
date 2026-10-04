@@ -162,3 +162,21 @@ def test_round_doubles_still_reports_a_real_difference(pair):
     )
     rounded = compare_relation(con, left, right, "marts.t", round_doubles=6)
     assert rounded.differs and (rounded.only_left, rounded.only_right) == (1, 1)
+
+
+def test_keep_refuses_a_directory_that_is_not_empty(tmp_path: Path) -> None:
+    """Catches --keep clearing a directory the caller named.
+
+    The first version removed DIR recursively before using it, so pointing it at a
+    directory that held anything else would have deleted that (#61 review, F1).
+    """
+    import check_tenant_isolation
+
+    precious = tmp_path / "keep"
+    precious.mkdir()
+    (precious / "notes.txt").write_text("do not delete")
+
+    with pytest.raises(SystemExit):
+        check_tenant_isolation.main(["--keep", str(precious)])
+
+    assert (precious / "notes.txt").read_text() == "do not delete"

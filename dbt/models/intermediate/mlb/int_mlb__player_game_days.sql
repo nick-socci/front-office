@@ -146,3 +146,7 @@ from batting
 full outer join pitching
     on pitching.mlbam_player_id = batting.mlbam_player_id
     and pitching.game_date = batting.game_date
+    -- A date belongs to one MLB season, so this never splits a real day; it stops a
+    -- batting line and a pitching line of different seasons from being read as one day
+    -- (#28, R4.6). `is not distinct from`, so rows with no season still pair up.
+    and pitching.season is not distinct from batting.season

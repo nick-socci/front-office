@@ -89,8 +89,11 @@ cd .. && uv run python scripts/compare_warehouses.py data/warehouse.duckdb data/
 ```
 
 The comparison lists any model present in only one file and any difference in the columns
-they share. `--round-doubles 9` compares decimal columns to nine places, for an older
-warehouse whose last digits were not reproducible.
+they share, and exits non-zero if there is one. Builds are reproducible to the last digit
+since #28, so the exact comparison is the right one from now on. For the first rebuild,
+from a warehouse built before #28, add `--round-doubles 9`: that warehouse's decimal
+values were not reproducible in their last digit, and without the option four models
+are reported as differing.
 
 ## Decisions worth explaining
 

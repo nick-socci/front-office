@@ -10,25 +10,18 @@
 -- Each payload-derived field is computed in its own CTE before the comparison, and
 -- `payload` is not carried past it (rule 1: these payloads are megabytes).
 
-with latest as (
+with responses as (
 
-    select 'settings' as endpoint, payload, league_id, season
-    from ({{ fo_espn_latest('settings') }})
-
-    union all
-
-    select 'teams' as endpoint, payload, league_id, season
-    from ({{ fo_espn_latest('teams') }})
-
-    union all
-
-    select 'roster' as endpoint, payload, league_id, season
-    from ({{ fo_espn_latest('roster', extra_partition='scoringPeriodId') }})
-
-    union all
-
-    select 'matchups' as endpoint, payload, league_id, season
-    from ({{ fo_espn_latest('matchups') }})
+    -- Every landed response of these endpoints, not only the latest of each league-season:
+    -- a misfiled capture is wrong whether or not a newer one hides it (R2.3).
+    select
+        endpoint,
+        payload,
+        {{ fo_json_text('partitions', '$.league_id') }} as league_id,
+        {{ fo_json_int('partitions', '$.season') }}::integer as season
+    from {{ source('raw', 'api_responses') }}
+    where source = 'espn'
+      and endpoint in ('settings', 'teams', 'roster', 'matchups')
 
 ),
 
@@ -40,7 +33,7 @@ header as (
         season as partition_season,
         {{ fo_json_text('payload', '$.id') }} as payload_league_id,
         {{ fo_json_int('payload', '$.seasonId') }} as payload_season
-    from latest
+    from responses
 
 )
 
