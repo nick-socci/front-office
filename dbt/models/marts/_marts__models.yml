@@ -118,8 +118,10 @@ models:
       started day. A fct_ model records measurements at a grain; this one is long, so
       nothing in it knows how many categories the league scores. Holds the numerator and
       denominator over all the pair's started days, the contribution, the value over
-      replacement (positive is better, whichever way the category runs) and the value in
-      standard deviations. played_days counts days on the category's side only. A pitching
+      replacement (positive is better, whichever way the category runs) and the scaled value
+      (ADR 0010): the value over replacement in matchup margins, that is divided by the
+      category's margin scale from int_fantasy__category_scales, and for a rate first by
+      the typical side denominator. played_days counts days on the category's side only. A pitching
       row can rest on two replacement levels (a start and a relief day each meet their own,
       ADR 0008), so it names no single group.
     columns:
@@ -144,6 +146,11 @@ models:
         description: The count, or the rate computed from numerator and denominator. Null for a rate over a zero denominator.
       - name: value_over_replacement
         description: Null only when a needed replacement level is null for a kind of day the pair played on this side. Summed over kinds of day.
+      - name: scaled_value
+        description: >
+          Value over replacement in matchup margins (ADR 0010). 0 when the pair has no played
+          day on the side, or the category's margin scale is null or 0; null only when the
+          value over replacement is null.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -153,8 +160,9 @@ models:
     description: >
       One row per (player, fantasy team): how many days he started, played, started outside
       any matchup and started on unverified inputs, and his total value. Counted from the
-      started-day grain, not from the category fact. total_value is the sum of his
-      standardised values over every scored category and is null if any of them is null.
+      started-day grain, not from the category fact. total_value is the matchup margins he
+      added over a free agent, summed across every scored category (ADR 0010), and is null
+      if any category's scaled value is null.
     columns:
       - name: platform
         data_tests: [not_null]
@@ -175,7 +183,7 @@ models:
   - name: fct_transaction_impact
     description: >
       One row per transaction (an add or a drop) with the window of days it opens and what
-      the player produced in it, valued on the scale of fct_player_category_value. An add
+      the player produced in it, valued on the scale of fct_player_category_value, in matchup margins (ADR 0010). An add
       is measured over the days the adding team started him until that team's next drop of
       him; a drop over the rest of the season, whoever had him. Components are summed over
       the window on the credited side. total_value is null for a dropped player with no
@@ -394,7 +402,10 @@ unit_tests:
       times in a played day against a replacement 1, so his batter-strikeout value, a
       lower-is-better count, is -2. Each has no played day on the other side: 0, and a
       count's contribution is its numerator. Catches a missing sign flip, or a flip
-      applied to the wrong kind of category.
+      applied to the wrong kind of category. Scaled (ADR 0010): the batter-strikeout
+      margin scale is 2, so -2 / 2 = -1; ERA is a rate with margin scale 0.5 and side
+      denominator 27 outs, so 94.5 / 27 / 0.5 = 7, which also covers a rate in a real
+      category. Without a played day the scaled value is 0.
     model: fct_player_category_value
     overrides:
       macros:
@@ -421,12 +432,16 @@ unit_tests:
           - {day_kind: start, component: games_pitched, level_per_played_day: 1}
           - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
           - {day_kind: start, component: earned_runs, level_per_played_day: 3}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 2}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 0.5, side_denominator: 27}
     expect:
       rows:
-        - {platform_player_id: 1, category_key: 27, played_days: 0, numerator: 0, denominator: null, contribution: 0, value_over_replacement: 0}
-        - {platform_player_id: 1, category_key: 47, played_days: 1, numerator: 27, denominator: 27, contribution: 1, value_over_replacement: 94.5}
-        - {platform_player_id: 2, category_key: 27, played_days: 1, numerator: 3, denominator: null, contribution: 3, value_over_replacement: -2}
-        - {platform_player_id: 2, category_key: 47, played_days: 0, numerator: 0, denominator: 0, contribution: null, value_over_replacement: 0}
+        - {platform_player_id: 1, category_key: 27, played_days: 0, numerator: 0, denominator: null, contribution: 0, value_over_replacement: 0, scaled_value: 0}
+        - {platform_player_id: 1, category_key: 47, played_days: 1, numerator: 27, denominator: 27, contribution: 1, value_over_replacement: 94.5, scaled_value: 7}
+        - {platform_player_id: 2, category_key: 27, played_days: 1, numerator: 3, denominator: null, contribution: 3, value_over_replacement: -2, scaled_value: -1}
+        - {platform_player_id: 2, category_key: 47, played_days: 0, numerator: 0, denominator: 0, contribution: null, value_over_replacement: 0, scaled_value: 0}
 
   - name: player_category_value_a_rate_over_zero_outs_has_no_contribution_and_loses_its_numerator
     description: >
@@ -434,7 +449,8 @@ unit_tests:
       denominator 0. His contribution is null (no ERA exists), and his value over
       replacement is -54, the whole numerator, because replacement would have recorded
       nothing over zero outs either. Catches a division error, or a zero denominator
-      reading as a perfect ERA.
+      reading as a perfect ERA. Scaled: -54 / 27 / 0.5 = -4 (side denominator 27, margin
+      scale 0.5), so the null contribution does not null the scaled value.
     model: fct_player_category_value
     overrides:
       macros:
@@ -456,16 +472,22 @@ unit_tests:
           - {day_kind: start, component: games_pitched, level_per_played_day: 1}
           - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
           - {day_kind: start, component: earned_runs, level_per_played_day: 3}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 0.5, side_denominator: 27}
     expect:
       rows:
-        - {platform_player_id: 1, category_key: 47, played_days: 1, numerator: 54, denominator: 0, contribution: null, value_over_replacement: -54}
+        - {platform_player_id: 1, category_key: 47, played_days: 1, numerator: 54, denominator: 0, contribution: null, value_over_replacement: -54, scaled_value: -4}
 
   - name: player_category_value_a_pair_with_no_played_day_on_a_side_is_worth_zero_not_null
     description: >
       Hitters 1 and 2 strike out 3 and 5 times against a replacement 1 per day: values -2
-      and -4 (lower is better), sd 1, so standardised -2 and -4. Pitcher 3 never batted:
-      0 and 0, not null, and he does not enter the sd. Catches a null for a pair that
-      neither helped nor hurt, and the sd being taken over pairs who did not play.
+      and -4 (lower is better). The batter-strikeout margin scale is 2, so scaled -1 and
+      -2. (Under ADR 0003 the expected values were -2 and -4, from a player standard
+      deviation of 1; they changed because the divisor is now the mock scale 2.) Pitcher 3
+      never batted: 0 and 0, not null, although the category has a scale. Catches a null
+      for a pair that neither helped nor hurt, and a played-days-0 row being divided.
+      Covers case (c), no played day gives 0.
     model: fct_player_category_value
     overrides:
       macros:
@@ -487,11 +509,14 @@ unit_tests:
         rows:
           - {day_kind: batting, component: games_batted, level_per_played_day: 1}
           - {day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 2}
     expect:
       rows:
-        - {platform_player_id: 1, category_key: 27, played_days: 1, value_over_replacement: -2, standardised_value: -2}
-        - {platform_player_id: 2, category_key: 27, played_days: 1, value_over_replacement: -4, standardised_value: -4}
-        - {platform_player_id: 3, category_key: 27, played_days: 0, value_over_replacement: 0, standardised_value: 0}
+        - {platform_player_id: 1, category_key: 27, played_days: 1, value_over_replacement: -2, scaled_value: -1}
+        - {platform_player_id: 2, category_key: 27, played_days: 1, value_over_replacement: -4, scaled_value: -2}
+        - {platform_player_id: 3, category_key: 27, played_days: 0, value_over_replacement: 0, scaled_value: 0}
 
   - name: player_category_value_a_batting_only_day_in_a_pitcher_slot_charges_no_replacement
     description: >
@@ -524,16 +549,21 @@ unit_tests:
           - {day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
           - {day_kind: start, component: games_pitched, level_per_played_day: 1}
           - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 2}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
     expect:
       rows:
-        - {platform_player_id: 1, category_key: 27, played_days: 0, numerator: 0, value_over_replacement: 0, standardised_value: 0}
-        - {platform_player_id: 1, category_key: 34, played_days: 0, numerator: 0, value_over_replacement: 0, standardised_value: 0}
+        - {platform_player_id: 1, category_key: 27, played_days: 0, numerator: 0, value_over_replacement: 0, scaled_value: 0}
+        - {platform_player_id: 1, category_key: 34, played_days: 0, numerator: 0, value_over_replacement: 0, scaled_value: 0}
 
-  - name: player_category_value_zero_spread_standardises_to_zero_without_a_division_error
+  - name: player_category_value_a_zero_margin_scale_scales_to_zero_without_a_division_error
     description: >
-      Two starters each record 18 outs against a replacement 15, so both have value 3 and
-      the category's standard deviation is 0. Both standardise to 0 (no spread, no
-      information) rather than dividing by zero. Catches R4.8.
+      Two starters each record 18 outs against a replacement 15, so both have value 3, and
+      the category's margin scale is 0 (two teams that never differed). Both scale to 0,
+      not a division by zero. Under ADR 0003 the same case came from a zero player spread;
+      it is now a zero margin scale (R2.3). Catches a division error on a zero scale.
     model: fct_player_category_value
     overrides:
       macros:
@@ -554,15 +584,20 @@ unit_tests:
         rows:
           - {day_kind: start, component: games_pitched, level_per_played_day: 1}
           - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 0}
     expect:
       rows:
-        - {platform_player_id: 1, category_key: 34, value_over_replacement: 3, standardised_value: 0}
-        - {platform_player_id: 2, category_key: 34, value_over_replacement: 3, standardised_value: 0}
+        - {platform_player_id: 1, category_key: 34, value_over_replacement: 3, scaled_value: 0}
+        - {platform_player_id: 2, category_key: 34, value_over_replacement: 3, scaled_value: 0}
 
   - name: player_category_value_an_empty_replacement_pool_makes_value_null_only_where_played
     description: >
       The relief pool is empty, so its levels are null (the start pool is not given at all). Reliever 1 pitched (a relief day: no game started): his value and
-      standardised value are null (R3.4), not computed against zero. Hitter 2 never
+      scaled value are null (R3.4), not computed against zero, though the category has
+      a scale of 3. Covers case (e), a null level with a played day gives a null scaled
+      value. Hitter 2 never
       pitched: 0 for the pitching category, not null, even though the kind he would be
       charged against is empty. Catches an empty pool becoming "replacement is zero", and
       a null level poisoning pairs that played no day on that side.
@@ -589,10 +624,13 @@ unit_tests:
           - {day_kind: relief, component: games_pitched, level_per_played_day: null}
           - {day_kind: relief, component: outs_recorded, level_per_played_day: null}
           - {day_kind: relief, component: earned_runs, level_per_played_day: null}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
     expect:
       rows:
-        - {platform_player_id: 1, category_key: 34, played_days: 1, value_over_replacement: null, standardised_value: null}
-        - {platform_player_id: 2, category_key: 34, played_days: 0, value_over_replacement: 0, standardised_value: 0}
+        - {platform_player_id: 1, category_key: 34, played_days: 1, value_over_replacement: null, scaled_value: null}
+        - {platform_player_id: 2, category_key: 34, played_days: 0, value_over_replacement: 0, scaled_value: 0}
 
   - name: player_category_value_a_pair_with_a_start_and_a_relief_day_is_measured_against_each_kind
     description: >
@@ -621,6 +659,9 @@ unit_tests:
         rows:
           - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
           - {day_kind: relief, component: outs_recorded, level_per_played_day: 3}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
     expect:
       rows:
         - {platform_player_id: 1, category_key: 34, played_days: 2, numerator: 21, value_over_replacement: 3}
@@ -629,7 +670,7 @@ unit_tests:
     description: >
       A pair has a start (18 outs, level 15, so +3 on its own) and a relief day whose
       relief level is null (an empty relief pool). The pitching value and the
-      standardised value are null, not +3. Catches (R2.2) a plain sum skipping the null
+      scaled value are null, not +3 (nor 3 / 3 = 1). Catches (R2.2) a plain sum skipping the null
       and reporting a partial value as complete.
     model: fct_player_category_value
     overrides:
@@ -651,9 +692,12 @@ unit_tests:
         rows:
           - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
           - {day_kind: relief, component: outs_recorded, level_per_played_day: null}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
     expect:
       rows:
-        - {platform_player_id: 1, category_key: 34, played_days: 2, numerator: 21, value_over_replacement: null, standardised_value: null}
+        - {platform_player_id: 1, category_key: 34, played_days: 2, numerator: 21, value_over_replacement: null, scaled_value: null}
 
   - name: player_category_value_two_players_with_identical_days_get_identical_rows
     description: >
@@ -684,6 +728,9 @@ unit_tests:
         rows:
           - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
           - {day_kind: relief, component: outs_recorded, level_per_played_day: 3}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
     expect:
       rows:
         - {platform_player_id: 1, category_key: 34, played_days: 2, numerator: 21, value_over_replacement: 3}
@@ -692,8 +739,10 @@ unit_tests:
   - name: player_category_value_a_hitter_only_pair_keeps_its_pitching_rows
     description: >
       A pair with only a hitter-slot day has no start or relief group, but still has a row
-      for the pitching category (OUTS): 0 played days, numerator 0, value 0, standardised
-      0, and a count's denominator stays null. Catches (R2.1) pairs with no pitched day
+      for the pitching category (OUTS): 0 played days, numerator 0, value 0, scaled
+      value 0, and a count's denominator stays null. The hitter's batter-strikeout value
+      is -2 and its margin scale 2, so -1 (under ADR 0003 it was 0, because one pair has
+      no spread; that is why the expected value changed). Catches (R2.1) pairs with no pitched day
       losing their pitching rows to the per-kind grouping.
     model: fct_player_category_value
     overrides:
@@ -717,16 +766,128 @@ unit_tests:
           - {day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
           - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
           - {day_kind: relief, component: outs_recorded, level_per_played_day: 3}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 2}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
     expect:
       rows:
-        - {platform_player_id: 1, category_key: 27, played_days: 1, numerator: 3, contribution: 3, value_over_replacement: -2, standardised_value: 0}
-        - {platform_player_id: 1, category_key: 34, played_days: 0, numerator: 0, contribution: 0, value_over_replacement: 0, standardised_value: 0}
+        - {platform_player_id: 1, category_key: 27, played_days: 1, numerator: 3, contribution: 3, value_over_replacement: -2, scaled_value: -1}
+        - {platform_player_id: 1, category_key: 34, played_days: 0, numerator: 0, contribution: 0, value_over_replacement: 0, scaled_value: 0}
+
+  - name: player_category_value_a_count_is_divided_by_its_margin_scale
+    description: >
+      Hitter 1 strikes out 0 times where a replacement strikes out 6 (lower is better), so
+      his count value is +6. Batter strikeouts' margin scale is 3, so scaled 6 / 3 = 2; a
+      count has no side denominator (null) and none is applied. Covers case (a). Catches a
+      count divided by anything but its margin scale.
+    model: fct_player_category_value
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, batter_strikeouts]
+        fo_pitching_columns: [games_pitched, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: hitter, games_batted: 1, batter_strikeouts: 0}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, category_label: B_SO, is_lower_better: true}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 27, part: numerator, component: batter_strikeouts, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {day_kind: batting, component: batter_strikeouts, level_per_played_day: 6}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 3, side_denominator: null}
+    expect:
+      rows:
+        - {platform_player_id: 1, category_key: 27, played_days: 1, value_over_replacement: 6, scaled_value: 2}
+
+  - name: player_category_value_a_rate_is_converted_by_the_side_denominator_then_the_margin_scale
+    description: >
+      A starter allows 1 earned run (numerator 27) over 18 outs against a replacement of 3
+      earned runs (81) over 18 outs, so his ERA value is -(27 - 81) = +54 earned-run units.
+      The side denominator is 108 outs and the margin scale 0.25, so scaled 54 / 108 / 0.25 =
+      2. Covers case (b). Catches the rate conversion being skipped (54 / 0.25 = 216) or the
+      wrong divisor (multiplying by the side denominator gives 54 * 108 / 0.25). The numbers are exact in binary
+      floating point: 54 / 180 / 0.1 comes out as 2.9999999999999996, and a unit test
+      compares exactly.
+    model: fct_player_category_value
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, batter_strikeouts]
+        fo_pitching_columns: [games_pitched, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, games_started: 1, outs_recorded: 18, earned_runs: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 47, part: numerator, component: earned_runs, weight: 27}
+          - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {day_kind: start, component: earned_runs, level_per_played_day: 3}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 0.25, side_denominator: 108}
+    expect:
+      rows:
+        - {platform_player_id: 1, category_key: 47, played_days: 1, value_over_replacement: 54, scaled_value: 2}
+
+  - name: player_category_value_a_null_scale_or_a_missing_scale_gives_zero_not_a_dropped_row
+    description: >
+      A starter has +3 outs over replacement in two categories. Category 34 has a scales
+      row whose margin_scale is null (no measurable matchup); category 35 has no scales
+      row at all. Both rows stay, with scaled value 0, not null and not dropped. Covers
+      case (d). Catches an inner join to the scales dropping a category, and a null scale
+      reading as null or as a division error.
+    model: fct_player_category_value
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, batter_strikeouts]
+        fo_pitching_columns: [games_pitched, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, games_started: 1, outs_recorded: 18}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, category_label: OUTS, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 35, category_label: OUTS2, is_lower_better: false}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
+          - {platform: espn, stat_key: 35, part: numerator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: null, side_denominator: null}
+    expect:
+      rows:
+        - {platform_player_id: 1, category_key: 34, value_over_replacement: 3, scaled_value: 0}
+        - {platform_player_id: 1, category_key: 35, value_over_replacement: 3, scaled_value: 0}
 
 # -----------------------------------------------------------------------------
 # fct_transaction_impact unit tests (#11). Days are 2026-04-01 (the first scoring date) to
 # 2026-04-10 (the last). Macros are overridden to short lists, as for the category fact;
 # the HR and ERA categories, one hitter pool level and the SP and RP levels are given in
-# every test, and the standard deviations come from the given fct_player_category_value.
+# every test, and the scales come from the given int_fantasy__category_scales (ADR 0010).
+# Totals are restated against those scales: HR is divided by 2 and ERA by 18 * 1. Under
+# ADR 0003 they were divided by the player standard deviations 1 and 9, so every nonzero
+# expected total_value below changed.
 # -----------------------------------------------------------------------------
 
   - name: transaction_impact_add_window_ends_at_the_same_teams_drop_and_counts_only_its_started_days
@@ -737,6 +898,10 @@ unit_tests:
       day 5). The drop's window is days 8-10 and takes his MLB days there; team 2's earlier add
       is no re-add after the drop. Catches an add window running past its drop, a window
       counting another team's started days, and a re-add before the drop being taken as next.
+      Totals are HR over replacement divided by the HR margin scale 2 (under ADR 0003 they
+      were divided by sd 1, which is why every value halved): a1 has 3 HR in 2 played days,
+      3 - 0.5 * 2 = 2, so 2 / 2 = 1 (was 2); d1 has 8 HR in 2 played days, 8 - 1 = 7, so
+      3.5 (was 7); a2 has 2 HR in 1 played day, 2 - 0.5 = 1.5, so 0.75 (was 1.5).
     model: fct_transaction_impact
     overrides:
       macros:
@@ -798,21 +963,18 @@ unit_tests:
           - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
           - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
           - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
-      # Two players per category with a played day: HR values 1 and 3 (population sd 1),
-      # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
-      # transactions.
-      - input: ref('fct_player_category_value')
+      # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
+      # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
+      # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
+      - input: ref('int_fantasy__category_scales')
         rows:
-          - {category_key: 5, played_days: 1, value_over_replacement: 1}
-          - {category_key: 5, played_days: 1, value_over_replacement: 3}
-          - {category_key: 5, played_days: 0, value_over_replacement: 0}
-          - {category_key: 47, played_days: 1, value_over_replacement: -9}
-          - {category_key: 47, played_days: 1, value_over_replacement: 9}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, margin_scale: 2, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 1, side_denominator: 18}
     expect:
       rows:
-        - {transaction_id: a1, window_start: 2026-04-03, window_end: 2026-04-07, rostered_days: 5, started_days: 3, played_started_days: 2, played_days: null, home_runs: 3, total_value: 2}
-        - {transaction_id: d1, window_start: 2026-04-08, window_end: 2026-04-10, rostered_days: null, started_days: null, played_started_days: null, played_days: 2, home_runs: 8, total_value: 7}
-        - {transaction_id: a2, window_start: 2026-04-04, window_end: 2026-04-10, rostered_days: 2, started_days: 1, played_started_days: 1, played_days: null, home_runs: 2, total_value: 1.5}
+        - {transaction_id: a1, window_start: 2026-04-03, window_end: 2026-04-07, rostered_days: 5, started_days: 3, played_started_days: 2, played_days: null, home_runs: 3, total_value: 1}
+        - {transaction_id: d1, window_start: 2026-04-08, window_end: 2026-04-10, rostered_days: null, started_days: null, played_started_days: null, played_days: 2, home_runs: 8, total_value: 3.5}
+        - {transaction_id: a2, window_start: 2026-04-04, window_end: 2026-04-10, rostered_days: 2, started_days: 1, played_started_days: 1, played_days: null, home_runs: 2, total_value: 0.75}
 
   - name: transaction_impact_drop_window_runs_to_season_end_past_a_re_add
     description: >
@@ -821,6 +983,8 @@ unit_tests:
       counting through the re-add (MLB days 4, 6 and 10; day 3 is excluded), and next_added_*
       name team 2's add, the earliest strictly after the drop. Catches a window that stops at
       the re-add, an add before the drop taken as the next one, and the wrong re-add chosen.
+      d2's total is 14 HR in 3 played days, 14 - 0.5 * 3 = 12.5, divided by the HR margin
+      scale 2 = 6.25 (was 12.5 over sd 1).
     model: fct_transaction_impact
     overrides:
       macros:
@@ -871,19 +1035,16 @@ unit_tests:
           - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
           - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
           - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
-      # Two players per category with a played day: HR values 1 and 3 (population sd 1),
-      # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
-      # transactions.
-      - input: ref('fct_player_category_value')
+      # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
+      # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
+      # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
+      - input: ref('int_fantasy__category_scales')
         rows:
-          - {category_key: 5, played_days: 1, value_over_replacement: 1}
-          - {category_key: 5, played_days: 1, value_over_replacement: 3}
-          - {category_key: 5, played_days: 0, value_over_replacement: 0}
-          - {category_key: 47, played_days: 1, value_over_replacement: -9}
-          - {category_key: 47, played_days: 1, value_over_replacement: 9}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, margin_scale: 2, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 1, side_denominator: 18}
     expect:
       rows:
-        - {transaction_id: d2, window_start: 2026-04-04, window_end: 2026-04-10, played_days: 3, home_runs: 14, next_added_at: 2026-04-05 10:00:00+00, next_added_by_team_id: 2, total_value: 12.5}
+        - {transaction_id: d2, window_start: 2026-04-04, window_end: 2026-04-10, played_days: 3, home_runs: 14, next_added_at: 2026-04-05 10:00:00+00, next_added_by_team_id: 2, total_value: 6.25}
         - {transaction_id: a3, window_start: 2026-04-02, window_end: 2026-04-10, played_days: null, home_runs: 0, next_added_at: null, next_added_by_team_id: null, total_value: 0}
         - {transaction_id: a4, window_start: 2026-04-05, window_end: 2026-04-10, played_days: null, home_runs: 0, next_added_at: null, next_added_by_team_id: null, total_value: 0}
         - {transaction_id: a5, window_start: 2026-04-08, window_end: 2026-04-10, played_days: null, home_runs: 0, next_added_at: null, next_added_by_team_id: null, total_value: 0}
@@ -948,16 +1109,13 @@ unit_tests:
           - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
           - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
           - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
-      # Two players per category with a played day: HR values 1 and 3 (population sd 1),
-      # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
-      # transactions.
-      - input: ref('fct_player_category_value')
+      # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
+      # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
+      # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
+      - input: ref('int_fantasy__category_scales')
         rows:
-          - {category_key: 5, played_days: 1, value_over_replacement: 1}
-          - {category_key: 5, played_days: 1, value_over_replacement: 3}
-          - {category_key: 5, played_days: 0, value_over_replacement: 0}
-          - {category_key: 47, played_days: 1, value_over_replacement: -9}
-          - {category_key: 47, played_days: 1, value_over_replacement: 9}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, margin_scale: 2, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 1, side_denominator: 18}
     expect:
       rows:
         - {transaction_id: a6, window_start: 2026-04-01, window_end: 2026-04-10, rostered_days: 1, started_days: 1, home_runs: 1}
@@ -1025,16 +1183,13 @@ unit_tests:
           - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
           - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
           - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
-      # Two players per category with a played day: HR values 1 and 3 (population sd 1),
-      # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
-      # transactions.
-      - input: ref('fct_player_category_value')
+      # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
+      # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
+      # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
+      - input: ref('int_fantasy__category_scales')
         rows:
-          - {category_key: 5, played_days: 1, value_over_replacement: 1}
-          - {category_key: 5, played_days: 1, value_over_replacement: 3}
-          - {category_key: 5, played_days: 0, value_over_replacement: 0}
-          - {category_key: 47, played_days: 1, value_over_replacement: -9}
-          - {category_key: 47, played_days: 1, value_over_replacement: 9}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, margin_scale: 2, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 1, side_denominator: 18}
     expect:
       rows:
         - {transaction_id: a8, window_start: 2026-04-05, window_end: 2026-04-05, rostered_days: 1, started_days: 1, home_runs: 1}
@@ -1050,10 +1205,11 @@ unit_tests:
       flipped to -27 and divided by sd 9: -3; HR is 0. Add of player 9 (hitter group): a
       pitcher-slot day with 9 outs, 1 earned run and no start is a relief day, valued against
       the relief level (rN 108: 27 - 108 = -81, flipped, 9 -> +9), a hitter-slot day with a
-      home run against batting (1 - 0.5 = 0.5, sd 1): total 9.5. Expected values are
-      unchanged by #52 because the start and relief levels here equal the old SP and RP
-      levels and the days land on the same side of them. Catches the wrong level on either
-      side, the other side's line leaking into a drop, and a different sd from the season fact.
+      home run against batting (1 - 0.5 = 0.5). Scaled (ADR 0010), ERA is a rate divided by
+      its side denominator 18 and margin scale 1, HR by its margin scale 2. d8: -27 / 18 =
+      -1.5 (was -27 / sd 9 = -3). a10: ERA +81 / 18 = 4.5 and HR 0.5 / 2 = 0.25, total 4.75
+      (was 81 / sd 9 = 9 plus 0.5 / sd 1 = 9.5). Catches the wrong level on either side, the
+      other side's line leaking into a drop, and a rate scaled without its side denominator.
     model: fct_transaction_impact
     overrides:
       macros:
@@ -1101,20 +1257,17 @@ unit_tests:
           - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
           - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
           - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
-      # Two players per category with a played day: HR values 1 and 3 (population sd 1),
-      # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
-      # transactions.
-      - input: ref('fct_player_category_value')
+      # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
+      # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
+      # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
+      - input: ref('int_fantasy__category_scales')
         rows:
-          - {category_key: 5, played_days: 1, value_over_replacement: 1}
-          - {category_key: 5, played_days: 1, value_over_replacement: 3}
-          - {category_key: 5, played_days: 0, value_over_replacement: 0}
-          - {category_key: 47, played_days: 1, value_over_replacement: -9}
-          - {category_key: 47, played_days: 1, value_over_replacement: 9}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, margin_scale: 2, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 1, side_denominator: 18}
     expect:
       rows:
-        - {transaction_id: d8, played_started_days: null, played_days: 1, home_runs: 0, earned_runs: 3, outs_recorded: 18, total_value: -3}
-        - {transaction_id: a10, played_started_days: 2, played_days: null, home_runs: 1, earned_runs: 1, outs_recorded: 9, total_value: 9.5}
+        - {transaction_id: d8, played_started_days: null, played_days: 1, home_runs: 0, earned_runs: 3, outs_recorded: 18, total_value: -1.5}
+        - {transaction_id: a10, played_started_days: 2, played_days: null, home_runs: 1, earned_runs: 1, outs_recorded: 9, total_value: 4.75}
   - name: transaction_impact_an_add_with_a_start_and_a_relief_day_is_valued_against_each_level
     description: >
       Team 1 adds pitcher 11 on day 2 and keeps him; in the window he has a start (day 3: 18
@@ -1122,8 +1275,9 @@ unit_tests:
       The start level is 18 outs and 2 earned runs a day (rN 54, rD 18), the relief level 9
       outs and 4 earned runs (rN 108, rD 9). ERA value of the start is 81 - (54 / 18) * 18 =
       27, flipped -27; of the relief day 27 - (108 / 9) * 3 = -9, flipped +9; their sum -18,
-      over sd 9 is -2. HR is 0 (no batting day), so total_value is -2. Against the start level
-      alone the whole window (N 108, D 21) would give -5, against the relief level alone +16.
+      over the side denominator 18 and margin scale 1 is -1 (was -2 over sd 9). HR is 0 (no
+      batting day), so total_value is -1. Against the start level alone the whole window
+      (N 108, D 21) would give -45 / 18 = -2.5, against the relief level alone +144 / 18 = 8.
       Catches (R3.1) an add window valued against one level.
     model: fct_transaction_impact
     overrides:
@@ -1171,19 +1325,16 @@ unit_tests:
           - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
           - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
           - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
-      # Two players per category with a played day: HR values 1 and 3 (population sd 1),
-      # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
-      # transactions.
-      - input: ref('fct_player_category_value')
+      # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
+      # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
+      # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
+      - input: ref('int_fantasy__category_scales')
         rows:
-          - {category_key: 5, played_days: 1, value_over_replacement: 1}
-          - {category_key: 5, played_days: 1, value_over_replacement: 3}
-          - {category_key: 5, played_days: 0, value_over_replacement: 0}
-          - {category_key: 47, played_days: 1, value_over_replacement: -9}
-          - {category_key: 47, played_days: 1, value_over_replacement: 9}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, margin_scale: 2, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 1, side_denominator: 18}
     expect:
       rows:
-        - {transaction_id: a11, started_days: 2, played_started_days: 2, outs_recorded: 21, earned_runs: 4, total_value: -2}
+        - {transaction_id: a11, started_days: 2, played_started_days: 2, outs_recorded: 21, earned_runs: 4, total_value: -1}
 
   - name: transaction_impact_a_drop_of_a_pitcher_is_valued_against_each_kind_of_outing_after_it
     description: >
@@ -1191,9 +1342,9 @@ unit_tests:
       (day 5: 15 outs, 2 earned runs) and a relief day (day 8: 6 outs, 1 earned run); his
       relief day on day 3 (30 outs) is before the window and ignored. Start level rN 54,
       rD 18; relief level rN 108, rD 9. Start: 54 - (54 / 18) * 15 = 9, flipped -9. Relief:
-      27 - (108 / 9) * 6 = -45, flipped +45. Sum 36, over sd 9 is +4. HR is 0. Against the
-      relief level alone (his group RP used to choose it) the window (N 81, D 21) would be
-      worth 171 / 9 = 19. Catches (R3.2) a drop valued against one level, and the group
+      27 - (108 / 9) * 6 = -45, flipped +45. Sum 36, over the side denominator 18 and margin
+      scale 1 is +2 (was +4 over sd 9). HR is 0. Against the relief level alone (his group
+      RP used to choose it) the window (N 81, D 21) would be worth 171 / 18 = 9.5. Catches (R3.2) a drop valued against one level, and the group
       label choosing the level.
     model: fct_transaction_impact
     overrides:
@@ -1241,19 +1392,16 @@ unit_tests:
           - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
           - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
           - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
-      # Two players per category with a played day: HR values 1 and 3 (population sd 1),
-      # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
-      # transactions.
-      - input: ref('fct_player_category_value')
+      # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
+      # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
+      # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
+      - input: ref('int_fantasy__category_scales')
         rows:
-          - {category_key: 5, played_days: 1, value_over_replacement: 1}
-          - {category_key: 5, played_days: 1, value_over_replacement: 3}
-          - {category_key: 5, played_days: 0, value_over_replacement: 0}
-          - {category_key: 47, played_days: 1, value_over_replacement: -9}
-          - {category_key: 47, played_days: 1, value_over_replacement: 9}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, margin_scale: 2, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 1, side_denominator: 18}
     expect:
       rows:
-        - {transaction_id: d12, played_days: 2, outs_recorded: 21, earned_runs: 3, total_value: 4}
+        - {transaction_id: d12, played_days: 2, outs_recorded: 21, earned_runs: 3, total_value: 2}
 
   - name: transaction_impact_an_unresolved_dropped_player_has_no_value
     description: >
@@ -1304,16 +1452,13 @@ unit_tests:
           - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
           - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
           - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
-      # Two players per category with a played day: HR values 1 and 3 (population sd 1),
-      # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
-      # transactions.
-      - input: ref('fct_player_category_value')
+      # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
+      # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
+      # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
+      - input: ref('int_fantasy__category_scales')
         rows:
-          - {category_key: 5, played_days: 1, value_over_replacement: 1}
-          - {category_key: 5, played_days: 1, value_over_replacement: 3}
-          - {category_key: 5, played_days: 0, value_over_replacement: 0}
-          - {category_key: 47, played_days: 1, value_over_replacement: -9}
-          - {category_key: 47, played_days: 1, value_over_replacement: 9}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, margin_scale: 2, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 1, side_denominator: 18}
     expect:
       rows:
         - {transaction_id: d9, window_start: 2026-04-04, window_end: 2026-04-10, played_days: 0, home_runs: 0, total_value: null}

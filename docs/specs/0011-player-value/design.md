@@ -475,3 +475,13 @@ measured against a free-agent pool of the same kind of outing (start or relief),
 by appearances. The RP expected values in requirements.md (ERA 4.13 and its sensitivity)
 describe the superseded pool. Everything about hitters, the unit, the scalar and the
 transaction windows stands.
+
+### 2026-10-04 — the standardisation is superseded by spec 0055
+
+Decided in #55 ([spec 0055](../0055-matchup-margin-scale/design.md), ADR 0010). A category's
+value over replacement is no longer divided by its standard deviation across (player,
+team) pairs but by the category's matchup margin, read from
+`int_fantasy__category_scales`; the column `standardised_value` is renamed `scaled_value`
+and the macro `fo_standardised_value` `fo_scaled_value`. R4.8 (zero spread gives 0)
+carries over as "a zero or unknown scale gives 0". `total_value` is still the sum over
+scored categories. Value over replacement and everything before it stand.

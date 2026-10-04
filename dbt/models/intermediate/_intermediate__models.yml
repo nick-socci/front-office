@@ -87,6 +87,46 @@ models:
           arguments:
             combination_of_columns: [platform, league_id, season, category_key]
 
+  - name: int_fantasy__category_scales
+    description: >
+      One row per scored category: the usual gap between two teams in it (margin_scale,
+      a root mean square of home-minus-away margins, about zero so swapping sides changes
+      nothing) and, for a rate, the mean denominator of a side (side_denominator, null for
+      a count). Both value facts divide by these (ADR 0010). A category with no measurable
+      matchup keeps a row with a null scale.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        data_type: varchar
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: league_id
+        data_type: varchar
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: season
+        data_type: bigint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: category_key
+        data_type: bigint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: matchups_measured
+        data_type: bigint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: margin_scale
+        data_type: double
+      - name: side_denominator
+        data_type: double
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, category_key]
+
   - name: int_fantasy__matchup_periods
     description: >
       One row per (matchup period, calendar date). Periods are not a uniform length --
@@ -1275,3 +1315,118 @@ unit_tests:
         - {day_kind: relief, component: games_started, pool_players: 1, pool_played_days: 3, pool_total: 0, level_per_played_day: 0}
         - {day_kind: relief, component: outs_recorded, pool_players: 1, pool_played_days: 3, pool_total: 9, level_per_played_day: 3}
         - {day_kind: relief, component: batters_faced, pool_players: 1, pool_played_days: 3, pool_total: 12, level_per_played_day: 4}
+
+# -----------------------------------------------------------------------------
+# Unit tests: int_fantasy__category_scales (spec 0055).
+#
+# Margins are chosen so the root mean square is exact in floating point: +1 and -7 give
+# sqrt((1 + 49) / 2) = sqrt(25) = 5, where a deviation about the mean (-3) would give 4.
+# -----------------------------------------------------------------------------
+
+  - name: category_scales_are_a_root_mean_square_about_zero
+    description: >
+      Two matchups with home-minus-away margins +1 and -7. The scale is sqrt(25) = 5. A standard deviation about the mean (-3) would give 4, so this catches a deviation about the mean.
+    model: int_fantasy__category_scales
+    given:
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 0}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: true, stat_key: 0, denominator: null, stat_value: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: false, stat_key: 0, denominator: null, stat_value: 9}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, is_home: true, stat_key: 0, denominator: null, stat_value: 3}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, is_home: false, stat_key: 0, denominator: null, stat_value: 10}
+    expect:
+      rows:
+        - {category_key: 0, matchups_measured: 2, margin_scale: 5, side_denominator: null}
+
+  - name: category_scales_do_not_change_when_home_and_away_are_swapped
+    description: >
+      The same two matchups as the previous test with the home and away sides swapped (margins -1 and +7). The scale is still 5. Catches a result that depends on which side is home.
+    model: int_fantasy__category_scales
+    given:
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 0}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: false, stat_key: 0, denominator: null, stat_value: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: true, stat_key: 0, denominator: null, stat_value: 9}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, is_home: false, stat_key: 0, denominator: null, stat_value: 3}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, is_home: true, stat_key: 0, denominator: null, stat_value: 10}
+    expect:
+      rows:
+        - {category_key: 0, matchups_measured: 2, margin_scale: 5, side_denominator: null}
+
+  - name: category_scales_do_not_count_a_matchup_with_a_null_side
+    description: >
+      Matchup 2 has a null value on one side, so it contributes no margin and matchups_measured is 1; the scale is the one margin, 4. Catches a null read as zero, which would count two matchups and give sqrt((16 + 25) / 2).
+    model: int_fantasy__category_scales
+    given:
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 0}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: true, stat_key: 0, denominator: null, stat_value: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: false, stat_key: 0, denominator: null, stat_value: 6}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, is_home: true, stat_key: 0, denominator: null, stat_value: 5}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, is_home: false, stat_key: 0, denominator: null, stat_value: null}
+    expect:
+      rows:
+        - {category_key: 0, matchups_measured: 1, margin_scale: 4, side_denominator: null}
+
+  - name: category_scales_give_a_rate_a_side_denominator_and_a_count_none
+    description: >
+      A rate (stat 47, with denominators 150 and 210 on its two sides) has the mean, 180; a count (stat 0, null denominators) has a null side_denominator. Catches a count given a denominator.
+    model: int_fantasy__category_scales
+    given:
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 0}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: true, stat_key: 0, denominator: null, stat_value: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: false, stat_key: 0, denominator: null, stat_value: 8}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: true, stat_key: 47, denominator: 150, stat_value: 4}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: false, stat_key: 47, denominator: 210, stat_value: 3}
+    expect:
+      rows:
+        - {category_key: 0, matchups_measured: 1, margin_scale: 2, side_denominator: null}
+        - {category_key: 47, matchups_measured: 1, margin_scale: 1, side_denominator: 180}
+
+  - name: category_scales_leave_a_zero_denominator_side_out
+    description: >
+      A rate with sides of 180 and 0 outs; the zero-out side has a null value. The mean denominator is 180, not 90, and the matchup contributes no margin. Catches an undefined rate halving the divisor and inflating every player's rate value.
+    model: int_fantasy__category_scales
+    given:
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: true, stat_key: 47, denominator: 180, stat_value: 3}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: false, stat_key: 47, denominator: 0, stat_value: null}
+    expect:
+      rows:
+        - {category_key: 47, matchups_measured: 0, margin_scale: null, side_denominator: 180}
+
+  - name: category_scales_keep_a_scored_category_with_no_matchup_rows
+    description: >
+      A scored category (stat 5) with no matchup rows still has a row: matchups_measured 0 and a null scale. Catches a category vanishing from the facts through an inner join.
+    model: int_fantasy__category_scales
+    given:
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 0}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: true, stat_key: 0, denominator: null, stat_value: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: false, stat_key: 0, denominator: null, stat_value: 8}
+    expect:
+      rows:
+        - {category_key: 0, matchups_measured: 1, margin_scale: 2, side_denominator: null}
+        - {category_key: 5, matchups_measured: 0, margin_scale: null, side_denominator: null}

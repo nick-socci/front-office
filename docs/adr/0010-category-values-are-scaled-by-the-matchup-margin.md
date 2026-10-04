@@ -1,6 +1,6 @@
 # 0010. Category values are scaled by the matchup margin
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-03
 - Spec: [0055-matchup-margin-scale](../specs/0055-matchup-margin-scale/design.md) · Issue: #55
 
