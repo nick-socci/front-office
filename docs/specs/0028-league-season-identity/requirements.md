@@ -115,6 +115,8 @@ set the deadline: before any second league or season is loaded, including an old
   in that league-season's transaction log.
 - R4.9 THE SYSTEM SHALL fail the build if a row of `dim_player_league_seasons` has no row
   in `dim_players`.
+- R4.10 WHEN a rostered player has no MLBAM id THE SYSTEM SHALL warn on every build,
+  naming him, without failing.
 - R4.2 THE SYSTEM SHALL form each league-season's replacement pools from the players
   unrostered in that league on that league's scoring dates, sized by that league's own
   number of teams.
@@ -165,6 +167,8 @@ Real season, `data/raw/` and `data/warehouse.duckdb` as of 2026-10-04.
 | `int_fantasy__replacement_levels` | 48 rows, one league-season | query |
 | `dim_players` | 498 rows, key unchanged; `mlbam_player_id`, `player_resolution`, `player_name` identical to today | R6.1 comparison |
 | `dim_player_league_seasons` | 498 rows, one league-season; its five columns identical to today's `dim_players` columns of the same names, player for player | query joining the old `dim_players` |
+| Players matched by name | 9 of 498 (`unambiguous_name`), 338 roster days; already reported by the existing warning `stg_idmap__covers_started_players` | query; existing test |
+| Rostered players unresolved | 0, so the new warning returns no rows on 2026 | R4.10 test |
 | `fct_transaction_impact` | 737 rows; `total_value` sums unchanged (221.09 / 457.47 / 170.37 / 451.72) | query |
 | Combined fixture, raw | 4 league-seasons; no capture dropped; captures of the two leagues share every ESPN fetch timestamp | R5.3 / R5.4 |
 | Combined fixture, isolation | 0 differing rows in any model for any of the 4 league-seasons | R5.3 check |

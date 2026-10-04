@@ -22,13 +22,14 @@ them.
    - Scope `stg_espn__scoring_periods_start_on_opening_day` to each season's own first
      MLB game.
    - Verify: fixture build green; uniqueness tests on full keys pass.
-5. Carry league and season through the three models; split the player dimension — `impl` — R4.1–R4.3, R4.6–R4.9
+5. Carry league and season through the three models; split the player dimension — `impl` — R4.1–R4.3, R4.6–R4.10
    - dbt unit tests first: two leagues of different sizes for the pools; a short season
      for the window; a position-less player whose role differs between two seasons; a
      player in two leagues and two seasons with one `dim_players` row. Uniqueness on full
      keys; the relationships test. Grep for every reader of the five moved columns and
      point each at `dim_player_league_seasons`. Move the two singular `dim_players_*`
-     tests that are about league-season attributes.
+     tests that are about league-season attributes. Add the warn-level
+     `dim_players_rostered_players_are_resolved` (R4.10).
    - Verify: fixture build green; fixture row counts unchanged.
 6. Generate the combined fixture — `impl` — R5.1, R5.2
    - `scripts/make_multi_fixtures.py` from `fixtures/landing/` only; pytest that it

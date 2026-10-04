@@ -280,6 +280,7 @@ The old file is kept until the comparison is clean and the owner renames them.
 | R4.7 | unique on (`platform`, `platform_player_id`), as today; dbt unit test: a player rostered in two leagues and two seasons has one row, named as on his latest roster day | a player doubled by a second league; a name chosen by load order |
 | R4.8 | unique on the full key; existing `dim_players_covers_every_league_player` and `dim_players_resolved_players_have_a_group`, moved to the new model and scoped by league-season; last task: its five columns equal today's `dim_players` on 2026 | a player missing from a league-season; values changing in the move |
 | R4.9 | `relationships` from `dim_player_league_seasons` to `dim_players` | the two models out of step |
+| R4.10 | singular `dim_players_rostered_players_are_resolved`, severity warn: rostered players with resolution `unresolved` (0 on 2026) | a name match lost when more data is loaded, noticed on the build that causes it instead of in a zero later |
 | R4.2 | dbt unit test: two leagues of different sizes get pools of their own size, from their own free agents | N counted over all leagues; another league's roster removing a free agent |
 | R4.3 | dbt unit test: a drop in a short season ends at that season's last date | a window running to another season's end |
 | R4.6 | dbt unit test on `dim_player_league_seasons`: a position-less player who relieves in 2026 and starts in 2027 is `RP` on his 2026 row and `SP` on his 2027 row | one season's appearances deciding another season's group |
@@ -329,11 +330,16 @@ gain the new columns in their mock rows; those that mock `dim_players` for its
   the MLB id is the intended direction and is not part of this build.
 - **Name matching across seasons.** `int_fantasy__player_crosswalk` falls back to a name
   match only when the name belongs to exactly one MLB player, judged over every MLB
-  player loaded. With two seasons loaded a name can stop being unique, so a player
-  resolved by name alone could become unresolved in a combined build. The isolation
-  check would report it if the fixture triggers it. It is not designed away here: 338 of
-  55,653 roster days in 2026 resolve by name. If the check trips on it, it goes to the
-  owner as a meaning question.
+  player loaded. With two seasons' rosters and MLB data loaded a name can stop being
+  unique, so a player resolved by name alone could become unresolved and his production
+  drop to zero. Nine players (338 of 55,653 roster days) resolve by name in 2026.
+  Decided by the owner on 2026-10-04: **not solved here; carried into #60**, which must
+  settle it before a second season's rosters are loaded. #57 loads matchup scores only
+  and cannot trigger it; the fixture's 2027 games are copies of the same players, so the
+  gate cannot either. What this build adds is visibility: the existing warning
+  `stg_idmap__covers_started_players` already lists the nine the id map lacks, and a new
+  warning lists any rostered player left with no MLBAM id (none today), which is where
+  an ambiguity would show.
 - **Whether a relabelled league is enough of a second league.** It proves isolation. It
   cannot show that a league with different categories or roster slots builds; no such
   data is available without fetching it.
