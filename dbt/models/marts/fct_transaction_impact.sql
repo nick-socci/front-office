@@ -36,11 +36,25 @@
 -- arithmetic (the fo_category_value macros), the same replacement levels and the same
 -- standard deviation, which is READ from that fact (population sd of value_over_replacement
 -- over rows with played_days > 0 per category), never recomputed over transactions, or a
--- two-week window and a season would not be comparable. Played days are those on the
--- category's side. Batting is measured against group `hitter`; pitching against the
--- player's pitcher_slot_replacement_group on an add (his slot, as the season fact does) and
--- against his replacement_group on a drop. total_value is the sum of the standardised
--- values over every scored category, NULL if any is NULL.
+-- two-week window and a season would not be comparable.
+--
+-- KIND OF DAY (ADR 0008, #52), as in fct_player_category_value. A window's played days are
+-- grouped by kind and each kind is valued against its own replacement level: `batting` (a
+-- hitter-side day with games_batted > 0), `start` or `relief` (a pitching-side day, by
+-- fo_pitching_day_kind from that day's own games_pitched and games_started). A start is
+-- compared with what a free agent produced in a start, a relief day with what one produced
+-- in relief. On an add the days are the window's started days of that player for that team,
+-- the side of each being its slot's; on a drop they are his MLB days, the side being the
+-- one his dim_players.replacement_group credits (hitter, or pitcher for SP and RP). That
+-- group now only tells a hitter from a pitcher: SP versus RP chooses nothing, the outing
+-- does. A day that is not a played day on its side belongs to no kind and adds nothing.
+--
+-- Per (transaction, category) the values of the kinds on the category's side are summed:
+-- NULL if ANY kind with played days has a null value (a null level, an empty pool), because
+-- a plain sum skips nulls and would report a partial value as complete. A category with no
+-- played day on its side is worth 0. Standardising and the sum over every scored category
+-- (NULL if any is NULL) are as before. The wide component columns and the day counts stay
+-- whole-window totals; only total_value is valued per kind.
 
 {{ config(materialized='table') }}
 
@@ -87,7 +101,6 @@ windows as (
         transactions.*,
         players.mlbam_player_id,
         players.replacement_group,
-        players.pitcher_slot_replacement_group,
         case transactions.movement
             when 'add' then greatest(transactions.transaction_date, bounds.first_scoring_date)
             when 'drop' then greatest(transactions.transaction_date + 1, bounds.first_scoring_date)
@@ -210,12 +223,6 @@ measured as (
         case windows.movement
             when 'drop' then coalesce(drop_games.hitter_played_days, 0) + coalesce(drop_games.pitcher_played_days, 0)
         end as played_days,
-        coalesce(add_started.hitter_played_days, drop_games.hitter_played_days, 0) as hitter_played_days,
-        coalesce(add_started.pitcher_played_days, drop_games.pitcher_played_days, 0) as pitcher_played_days,
-        case windows.movement
-            when 'add' then windows.pitcher_slot_replacement_group
-            else windows.replacement_group
-        end as pitching_replacement_group,
         next_adds.next_added_at,
         next_adds.next_added_by_team_id,
         {%- for column in component_columns %}
@@ -233,6 +240,47 @@ measured as (
 
 ),
 
+-- Each add's started days with their kind. A started day that is not a played day on its
+-- slot's side has no kind and is dropped here.
+add_kinded_days as (
+
+    select
+        windows.transaction_id,
+        case days.slot_role
+            when 'hitter' then case when days.games_batted > 0 then 'batting' end
+            when 'pitcher' then {{ fo_pitching_day_kind('days.games_pitched', 'days.games_started') }}
+        end as day_kind,
+        days.*
+    from windows
+    inner join {{ ref('int_fantasy__started_player_days') }} as days
+        on days.platform = windows.platform
+        and days.platform_player_id = windows.platform_player_id
+        and days.fantasy_team_id = windows.fantasy_team_id
+        and days.scoring_date between windows.window_start and windows.window_end
+    where windows.movement = 'add'
+
+),
+
+-- Each drop's MLB days with their kind, on the side his group is credited for only.
+drop_kinded_days as (
+
+    select
+        windows.transaction_id,
+        case
+            when windows.replacement_group = 'hitter'
+                then case when games.games_batted > 0 then 'batting' end
+            when windows.replacement_group in ('SP', 'RP')
+                then {{ fo_pitching_day_kind('games.games_pitched', 'games.games_started') }}
+        end as day_kind,
+        games.*
+    from windows
+    inner join {{ ref('int_mlb__player_game_days') }} as games
+        on games.mlbam_player_id = windows.mlbam_player_id
+        and games.game_date between windows.window_start and windows.window_end
+    where windows.movement = 'drop'
+
+),
+
 -- Which side of a player's day each component belongs to.
 component_sides as (
 
@@ -247,30 +295,50 @@ component_sides as (
 
 ),
 
--- One row per (transaction, component): the component's total over the window.
-transaction_component_totals as (
+-- One row per (transaction, kind): the played days of that kind and the component totals.
+kind_days as (
+
+    select
+        transaction_id,
+        day_kind,
+        count(*) as played_days,
+        {%- for column in component_columns %}
+        coalesce(sum({{ column }}), 0) as {{ column }}{{ ',' if not loop.last }}
+        {%- endfor %}
+    from (
+        select transaction_id, day_kind, {{ component_columns | join(', ') }} from add_kinded_days
+        union all
+        select transaction_id, day_kind, {{ component_columns | join(', ') }} from drop_kinded_days
+    )
+    where day_kind is not null
+    group by transaction_id, day_kind
+
+),
+
+-- One row per (transaction, kind, component): the component's total over the window's days
+-- of that kind. One query per component rather than a pivot, as the season fact does.
+kind_component_totals as (
 
     {%- for column in component_columns %}
     select
-        platform,
         transaction_id,
-        pitching_replacement_group,
+        day_kind,
         '{{ column }}' as component,
         cast({{ column }} as double) as component_total
-    from measured
+    from kind_days
     {{ 'union all' if not loop.last }}
     {%- endfor %}
 
 ),
 
--- The weighted sums per (transaction, stat, part): what the window held, and what a
--- replacement would have done per played day. A null level anywhere makes the replacement
--- null, as in fct_player_category_value.
-category_parts as (
+-- The weighted sums per (transaction, kind, stat, part): what the window held on days of
+-- that kind, and what a replacement would have done per played day of that kind. A null
+-- level anywhere makes the replacement null; a plain sum would skip it.
+kind_parts as (
 
     select
-        totals.platform,
         totals.transaction_id,
+        totals.day_kind,
         rules.stat_key as category_key,
         rules.part,
         sum(rules.weight * totals.component_total) as part_total,
@@ -278,47 +346,32 @@ category_parts as (
             when bool_or(levels.level_per_played_day is null) then null
             else sum(rules.weight * levels.level_per_played_day)
         end as part_replacement
-    from transaction_component_totals as totals
+    from kind_component_totals as totals
     inner join {{ ref('int_fantasy__stat_components') }} as rules
-        on rules.platform = totals.platform
-        and rules.component = totals.component
+        on rules.component = totals.component
     inner join component_sides as sides
         on sides.component = totals.component
+        -- a kind meets only the components of its own side
+        and sides.side = case totals.day_kind when 'batting' then 'batting' else 'pitching' end
     left join {{ ref('int_fantasy__replacement_levels') }} as levels
         on levels.component = totals.component
-        and levels.replacement_group = case sides.side
-            when 'batting' then 'hitter'
-            else totals.pitching_replacement_group
-        end
-    group by totals.platform, totals.transaction_id, rules.stat_key, rules.part
+        and levels.day_kind = totals.day_kind
+    group by totals.transaction_id, totals.day_kind, rules.stat_key, rules.part
 
 ),
 
-category_sides as (
+kind_parts_pivoted as (
 
     select
-        rules.platform,
-        rules.stat_key as category_key,
-        max(sides.side) as side
-    from {{ ref('int_fantasy__stat_components') }} as rules
-    inner join component_sides as sides
-        on sides.component = rules.component
-    group by rules.platform, rules.stat_key
-
-),
-
-category_parts_pivoted as (
-
-    select
-        platform,
         transaction_id,
+        day_kind,
         category_key,
         max(part_total) filter (where part = 'numerator') as numerator,
         max(part_total) filter (where part = 'denominator') as denominator,
         max(part_replacement) filter (where part = 'numerator') as replacement_numerator,
         max(part_replacement) filter (where part = 'denominator') as replacement_denominator
-    from category_parts
-    group by platform, transaction_id, category_key
+    from kind_parts
+    group by transaction_id, day_kind, category_key
 
 ),
 
@@ -331,40 +384,60 @@ scored_categories as (
 
 ),
 
-valued as (
+-- One row per (transaction, kind, category) with that kind's value over replacement.
+kind_values as (
 
     select
         parts.transaction_id,
         parts.category_key,
-        scored_categories.is_lower_better,
-        case category_sides.side
-            when 'batting' then measured.hitter_played_days
-            else measured.pitcher_played_days
-        end as played_days,
-        parts.numerator,
-        parts.denominator,
-        parts.replacement_numerator,
-        parts.replacement_denominator
-    from category_parts_pivoted as parts
+        kind_days.played_days,
+        {{ fo_value_over_replacement(
+            'parts.numerator', 'parts.denominator', 'kind_days.played_days',
+            'parts.replacement_numerator', 'parts.replacement_denominator', 'scored_categories.is_lower_better'
+        ) }} as value_over_replacement
+    from kind_parts_pivoted as parts
     inner join scored_categories
         on scored_categories.category_key = parts.category_key
-    inner join category_sides
-        on category_sides.platform = parts.platform
-        and category_sides.category_key = parts.category_key
-    inner join measured
-        on measured.transaction_id = parts.transaction_id
+    inner join kind_days
+        on kind_days.transaction_id = parts.transaction_id
+        and kind_days.day_kind = parts.day_kind
 
 ),
 
+-- The sum over kinds for each (transaction, category) the window has a played day in. The
+-- value is null if any kind's value is null.
+summed_over_kinds as (
+
+    select
+        transaction_id,
+        category_key,
+        cast(sum(played_days) as bigint) as played_days,
+        case
+            when bool_or(value_over_replacement is null) then null
+            else sum(value_over_replacement)
+        end as value_over_replacement
+    from kind_values
+    group by transaction_id, category_key
+
+),
+
+-- Every transaction crossed with every scored category, the summed values left-joined on:
+-- a window with no played day on a category's side is worth 0 there, not absent.
 with_value as (
 
     select
-        *,
-        {{ fo_value_over_replacement(
-            'numerator', 'denominator', 'played_days',
-            'replacement_numerator', 'replacement_denominator', 'is_lower_better'
-        ) }} as value_over_replacement
-    from valued
+        measured.transaction_id,
+        scored_categories.category_key,
+        coalesce(summed.played_days, 0) as played_days,
+        case
+            when summed.category_key is null then 0
+            else summed.value_over_replacement
+        end as value_over_replacement
+    from measured
+    cross join scored_categories
+    left join summed_over_kinds as summed
+        on summed.transaction_id = measured.transaction_id
+        and summed.category_key = scored_categories.category_key
 
 ),
 

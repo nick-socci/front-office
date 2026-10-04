@@ -74,10 +74,13 @@ models:
 
   - name: stg_espn__roster_entry_slots
     description: >
-      One row per (scoring period, team, player, eligible slot): where a player COULD
-      have been started that day. Eligibility is a daily snapshot -- a player gains
-      second-base eligibility mid-season once he has played enough games there -- so
-      consumers must use the day's own row, not a season-wide set.
+      One row per (scoring period, team, player, eligible slot): the slots ESPN said the
+      player was eligible for when the payload was fetched (fetched_at), attached to that
+      period's roster. ESPN returns current eligibility whatever period is requested, so
+      for a backfilled period this is NOT the day's eligibility: across the 2026 backfill
+      no player's eligible slots change in 180 periods, and an earlier capture of the
+      same periods differs for 4 players (#52). Only a capture made on the day carries
+      that day's eligibility.
     columns:
       - name: scoring_period
         data_tests: [not_null]

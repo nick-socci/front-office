@@ -1,6 +1,6 @@
 # Pitcher replacement level by kind of outing — requirements
 
-Issue: #52 · Tier: M · Status: draft
+Issue: #52 · Tier: M · Status: approved 2026-10-03
 
 ## Problem
 
@@ -46,7 +46,9 @@ Two facts found while grounding shape the answer:
 - **No new ingestion**, and no attempt to recover historical eligibility.
 - **No change to how production is credited, to windows, or to grains.** Row counts of
   every model are unchanged.
-- **No tolerance widening** and no test weakened to make a build pass.
+- **No tolerance widening** and no test weakened to make a build pass. One comparison is
+  stated to floating-point precision, not as a tolerance on a reconciliation: batting
+  standardised values against the pre-build snapshot (R2.5, owner-approved 2026-10-03).
 
 ## Rabbit holes
 
@@ -94,7 +96,9 @@ Two facts found while grounding shape the answer:
 - R2.4 THE SYSTEM SHALL NOT use a player's default position, eligibility or roster slot
   (`SP`, `RP`, `P`) to choose a pitching level.
 - R2.5 THE SYSTEM SHALL keep every batting category row of `fct_player_category_value`
-  unchanged in value and standardised value.
+  identical in value over replacement, and equal in standardised value to floating-point
+  precision (1e-12). *(Reworded 2026-10-03 with the owner's approval; see design.md,
+  Amendments. It first read "unchanged in value and standardised value".)*
 
 ### R3. Transaction impact
 
@@ -138,7 +142,7 @@ are checked against the real season in the last task.
 | Started pitching days | 5,254 = 2,524 start + 2,730 relief | query |
 | Each pool is worth zero | value over replacement of each kind's own pool = 0 per category | singular test |
 | Hitters | 260 of 261 hitter pairs' `total_value` unchanged to 1e-9; the one two-way player rises by about 2.8 | compare with the pre-build snapshot |
-| Batting category rows | 5,220 rows (580 × 9) identical in `value_over_replacement` and `standardised_value` | compare with the pre-build snapshot |
+| Batting category rows | 5,220 rows (580 × 9) bit-identical in `value_over_replacement`; `standardised_value` within 1e-12 (measured: at most 1.8e-15) | compare with the pre-build snapshot |
 | Pitching standard deviations | IP 25.4 outs (was 115.6), K 20.7 (36.5), SV+HD 4.55 (6.53), W 2.14 (2.84), L 2.01 (2.36), ERA 379.4 (337.8), WHIP 65.3 (59.6), K/9 442.1 (463.2) | query on the category fact |
 | Transaction impact, pitchers | sum of `total_value`: adds 426.05 over 223 (was 220.94), drops 440.35 over 210 (was 208.18); 210 adds and 189 drops move | query, grouped by movement and hitter/pitcher |
 | Transaction impact, hitters | sums unchanged: adds 172.17 over 151, drops 134.42 over 153; 0 rows move | same query; compare with the pre-build snapshot |

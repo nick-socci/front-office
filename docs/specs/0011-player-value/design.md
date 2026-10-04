@@ -465,3 +465,13 @@ Task 10. The next drop that ends an add's window is found by `transacted_at`, no
 rather than `lead`. Empty windows are kept with zero counts: one add dropped again before
 the season, and three drops on the last scoring date. 51 windows start on 2026-03-25: the
 49 pre-season transactions and two adds made that day.
+
+### 2026-10-03 — pitcher groups are superseded by spec 0052
+
+Decided in #52 ([spec 0052](../0052-pitcher-replacement-by-outing/design.md), ADRs 0008 and
+0009). The `SP` and `RP` replacement groups, the ranking of pitching pools by outs, and the
+`pitcher_slot_replacement_group` rule added above no longer apply: a pitched day is
+measured against a free-agent pool of the same kind of outing (start or relief), ranked
+by appearances. The RP expected values in requirements.md (ERA 4.13 and its sensitivity)
+describe the superseded pool. Everything about hitters, the unit, the scalar and the
+transaction windows stands.

@@ -325,19 +325,24 @@ models:
 
   - name: int_fantasy__replacement_levels
     description: >
-      The production of a replacement player, per played day: one row per (replacement
-      group, component). The pool is the top N unrostered players of each group, N being
-      the number of fantasy teams; the level is the pool's component total over the
-      pool's played days. Every group has its rows even with an empty pool, where
-      pool_players and pool_played_days are 0 and pool_total and level_per_played_day
-      are null: an empty pool must not read as a replacement who produces nothing.
+      The production of a replacement player, per played day: one row per (day kind,
+      component), the kind being batting, start or relief (ADR 0008). The batting pool is
+      the top N unrostered hitters by plate appearances. A pitching pool is the top N
+      unrostered pitchers with a day of that kind, ranked by how many such days they had,
+      then outs recorded; its level counts only days of that kind, so a swingman's starts
+      are not in the relief level. N is the number of fantasy teams. The level is the pool's
+      component total over its played days. Every kind has its rows even with an empty
+      pool, where pool_players and pool_played_days are 0 and pool_total and
+      level_per_played_day are null: an empty pool must not read as a replacement who
+      produces nothing.
     columns:
-      - name: replacement_group
+      - name: day_kind
+        description: batting, start or relief; the kind of day the level is measured over.
         data_tests:
           - not_null
           - accepted_values:
               arguments:
-                values: [hitter, SP, RP]
+                values: [batting, start, relief]
       - name: component
         data_tests:
           - not_null
@@ -383,7 +388,7 @@ models:
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
-            combination_of_columns: [replacement_group, component]
+            combination_of_columns: [day_kind, component]
 
   # ---------------------------------------------------------------------------
   # Not part of the seam: MLB facts and the attribution grain.
@@ -955,7 +960,8 @@ unit_tests:
     description: >
       Two free-agent hitters with equal plate appearances and one fantasy team (N = 1):
       the pool is the lower mlbam id, whichever order the rows arrive in. A rostered
-      hitter with more plate appearances is not eligible.
+      hitter with more plate appearances is not eligible. The key is day_kind batting
+      (was hitter); no value changed, and no pitching pool exists.
     model: int_fantasy__replacement_levels
     overrides:
       macros:
@@ -975,23 +981,27 @@ unit_tests:
           - {mlbam_player_id: 900003, game_date: "2026-06-01", games_batted: 1, plate_appearances: 5, hits: 5}
     expect:
       rows:
-        - {replacement_group: hitter, component: games_batted, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
-        - {replacement_group: hitter, component: plate_appearances, pool_players: 1, pool_played_days: 1, pool_total: 4, level_per_played_day: 4}
-        - {replacement_group: hitter, component: hits, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
-        - {replacement_group: SP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: SP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: SP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: SP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: RP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: RP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: RP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: RP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: games_batted, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {day_kind: batting, component: plate_appearances, pool_players: 1, pool_played_days: 1, pool_total: 4, level_per_played_day: 4}
+        - {day_kind: batting, component: hits, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {day_kind: start, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
 
   - name: replacement_levels_a_played_day_is_one_sided
     description: >
-      A pool hitter has one day batting and one day only pitching a mop-up inning (3 outs
-      against 1 batter faced, so with 4 plate appearances he is still a hitter). The pitching-only day is not a played day for hitter and
-      contributes nothing: pool_played_days is 1, not 2, and the level is per batting day.
+      A free-agent hitter has one day batting and one day only pitching a mop-up inning (3 outs
+      against 1 batter faced, so with 4 plate appearances he is still a hitter). The batting
+      pool is unchanged: the pitching-only day is not a played day for batting, so
+      pool_played_days is 1, not 2, and the level is per batting day. What changed with the
+      pitching rule: the mop-up day is a relief outing, so he is also the relief pool's one
+      member, with that one day and no batting component in it. Before, a hitter was never
+      in a pitching pool.
     model: int_fantasy__replacement_levels
     overrides:
       macros:
@@ -1011,24 +1021,24 @@ unit_tests:
           - {mlbam_player_id: 900001, game_date: "2026-06-02", games_batted: 0, games_pitched: 1, outs_recorded: 3, batters_faced: 1}
     expect:
       rows:
-        - {replacement_group: hitter, component: games_batted, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
-        - {replacement_group: hitter, component: plate_appearances, pool_players: 1, pool_played_days: 1, pool_total: 4, level_per_played_day: 4}
-        - {replacement_group: hitter, component: hits, pool_players: 1, pool_played_days: 1, pool_total: 2, level_per_played_day: 2}
-        - {replacement_group: SP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: SP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: SP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: SP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: RP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: RP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: RP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: RP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: games_batted, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {day_kind: batting, component: plate_appearances, pool_players: 1, pool_played_days: 1, pool_total: 4, level_per_played_day: 4}
+        - {day_kind: batting, component: hits, pool_players: 1, pool_played_days: 1, pool_total: 2, level_per_played_day: 2}
+        - {day_kind: start, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: games_pitched, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {day_kind: relief, component: games_started, pool_players: 1, pool_played_days: 1, pool_total: 0, level_per_played_day: 0}
+        - {day_kind: relief, component: outs_recorded, pool_players: 1, pool_played_days: 1, pool_total: 3, level_per_played_day: 3}
+        - {day_kind: relief, component: batters_faced, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
 
   - name: replacement_levels_an_empty_pool_still_has_rows_with_a_null_level
     description: >
-      Free-agent days for a hitter and a starter but no reliever. RP still gets a row per
-      pitching component, with pool_players 0, pool_played_days 0 and a null level: an
-      inner join would drop the group, and a coalesce to 0 would say replacement
-      relievers produce nothing.
+      Free-agent days for a hitter and a starter but no reliever. The relief pool still gets
+      a row per pitching component, with pool_players 0, pool_played_days 0 and a null level:
+      an inner join would drop the kind, and a coalesce to 0 would say replacement relievers
+      produce nothing. Re-keyed from SP and RP to start and relief; no value changed.
     model: int_fantasy__replacement_levels
     overrides:
       macros:
@@ -1047,17 +1057,17 @@ unit_tests:
           - {mlbam_player_id: 900002, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
     expect:
       rows:
-        - {replacement_group: hitter, component: games_batted, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
-        - {replacement_group: hitter, component: plate_appearances, pool_players: 1, pool_played_days: 1, pool_total: 4, level_per_played_day: 4}
-        - {replacement_group: hitter, component: hits, pool_players: 1, pool_played_days: 1, pool_total: 2, level_per_played_day: 2}
-        - {replacement_group: SP, component: games_pitched, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
-        - {replacement_group: SP, component: games_started, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
-        - {replacement_group: SP, component: outs_recorded, pool_players: 1, pool_played_days: 1, pool_total: 18, level_per_played_day: 18}
-        - {replacement_group: SP, component: batters_faced, pool_players: 1, pool_played_days: 1, pool_total: 24, level_per_played_day: 24}
-        - {replacement_group: RP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: RP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: RP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: RP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: games_batted, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {day_kind: batting, component: plate_appearances, pool_players: 1, pool_played_days: 1, pool_total: 4, level_per_played_day: 4}
+        - {day_kind: batting, component: hits, pool_players: 1, pool_played_days: 1, pool_total: 2, level_per_played_day: 2}
+        - {day_kind: start, component: games_pitched, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {day_kind: start, component: games_started, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {day_kind: start, component: outs_recorded, pool_players: 1, pool_played_days: 1, pool_total: 18, level_per_played_day: 18}
+        - {day_kind: start, component: batters_faced, pool_players: 1, pool_played_days: 1, pool_total: 24, level_per_played_day: 24}
+        - {day_kind: relief, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
 
   - name: replacement_levels_pool_components_before_dividing
     description: >
@@ -1065,7 +1075,8 @@ unit_tests:
       1 hit each. The level is the pool's 7 hits over its 4 played days, 1.75 a day. The
       average of the two players' own per-day rates would be 2.5, so this catches a level
       built by averaging per-player rates instead of pooling components (R3.2), which the
-      pool-is-worth-zero test cannot see because it reads the level it checks.
+      pool-is-worth-zero test cannot see because it reads the level it checks. Re-keyed to
+      day_kind batting; no value changed.
     model: int_fantasy__replacement_levels
     overrides:
       macros:
@@ -1089,14 +1100,178 @@ unit_tests:
           - {mlbam_player_id: 900002, game_date: "2026-06-03", games_batted: 1, plate_appearances: 4, hits: 1}
     expect:
       rows:
-        - {replacement_group: hitter, component: games_batted, pool_players: 2, pool_played_days: 4, pool_total: 4, level_per_played_day: 1}
-        - {replacement_group: hitter, component: plate_appearances, pool_players: 2, pool_played_days: 4, pool_total: 17, level_per_played_day: 4.25}
-        - {replacement_group: hitter, component: hits, pool_players: 2, pool_played_days: 4, pool_total: 7, level_per_played_day: 1.75}
-        - {replacement_group: SP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: SP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: SP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: SP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: RP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: RP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: RP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {replacement_group: RP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: games_batted, pool_players: 2, pool_played_days: 4, pool_total: 4, level_per_played_day: 1}
+        - {day_kind: batting, component: plate_appearances, pool_players: 2, pool_played_days: 4, pool_total: 17, level_per_played_day: 4.25}
+        - {day_kind: batting, component: hits, pool_players: 2, pool_played_days: 4, pool_total: 7, level_per_played_day: 1.75}
+        - {day_kind: start, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+
+  - name: replacement_levels_a_day_is_classified_by_the_outing_not_the_player
+    description: >
+      One free agent has one start day and two relief days. The start is in the start pool and
+      the two relief days are in the relief pool, each pool holding only days of its own kind:
+      start level 18 outs over 1 day, relief level 3 outs over 2 days. Catches a day classified
+      by the player (all three days read as starts, or all as relief) rather than by the
+      outing.
+    model: int_fantasy__replacement_levels
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, plate_appearances, hits]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, batters_faced]
+    given:
+      - input: ref('int_fantasy__teams')
+        rows:
+          - {fantasy_team_id: 1}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {scoring_date: "2026-06-01", mlbam_player_id: 900009}
+          - {scoring_date: "2026-06-02", mlbam_player_id: 900009}
+          - {scoring_date: "2026-06-03", mlbam_player_id: 900009}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
+          - {mlbam_player_id: 900001, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {mlbam_player_id: 900001, game_date: "2026-06-03", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+    expect:
+      rows:
+        - {day_kind: batting, component: games_batted, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: plate_appearances, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: hits, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: games_pitched, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {day_kind: start, component: games_started, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {day_kind: start, component: outs_recorded, pool_players: 1, pool_played_days: 1, pool_total: 18, level_per_played_day: 18}
+        - {day_kind: start, component: batters_faced, pool_players: 1, pool_played_days: 1, pool_total: 24, level_per_played_day: 24}
+        - {day_kind: relief, component: games_pitched, pool_players: 1, pool_played_days: 2, pool_total: 2, level_per_played_day: 1}
+        - {day_kind: relief, component: games_started, pool_players: 1, pool_played_days: 2, pool_total: 0, level_per_played_day: 0}
+        - {day_kind: relief, component: outs_recorded, pool_players: 1, pool_played_days: 2, pool_total: 6, level_per_played_day: 3}
+        - {day_kind: relief, component: batters_faced, pool_players: 1, pool_played_days: 2, pool_total: 8, level_per_played_day: 4}
+
+  - name: replacement_levels_a_doubleheader_day_with_a_start_is_a_start
+    description: >
+      A free-agent day with games_pitched 2 and games_started 1 (a start and a relief
+      appearance on one date) is a start: it is in the start pool, not the relief pool. Catches
+      a day with both kinds read as relief. No such day exists in 2026, so only a unit test can
+      hold the rule.
+    model: int_fantasy__replacement_levels
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, plate_appearances, hits]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, batters_faced]
+    given:
+      - input: ref('int_fantasy__teams')
+        rows:
+          - {fantasy_team_id: 1}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {scoring_date: "2026-06-01", mlbam_player_id: 900009}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_pitched: 2, games_started: 1, outs_recorded: 21, batters_faced: 28}
+    expect:
+      rows:
+        - {day_kind: batting, component: games_batted, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: plate_appearances, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: hits, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: games_pitched, pool_players: 1, pool_played_days: 1, pool_total: 2, level_per_played_day: 2}
+        - {day_kind: start, component: games_started, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {day_kind: start, component: outs_recorded, pool_players: 1, pool_played_days: 1, pool_total: 21, level_per_played_day: 21}
+        - {day_kind: start, component: batters_faced, pool_players: 1, pool_played_days: 1, pool_total: 28, level_per_played_day: 28}
+        - {day_kind: relief, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+
+  - name: replacement_levels_the_relief_pool_ranks_by_appearances_then_outs_then_id
+    description: >
+      Four free-agent relievers, two fantasy teams (N = 2). 900001 and 900002 have 2 relief
+      days and 6 outs each; 900003 has 2 days and 7 outs; 900004 has 1 day and 20 outs (fewer
+      appearances, more outs than anyone). The pool is 900003 (more outs than the others on
+      equal days) and 900001 (days and outs tied with 900002, lower id wins). batters_faced
+      marks who is in: 4 a day for 900001, 5 for 900003, 100 and 50 for the two left out.
+      Catches ranking by outs alone (900004 would be in), ranking by days and id only (900002
+      would be in, 900003 out), and an arbitrary tie at the cut.
+    model: int_fantasy__replacement_levels
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, plate_appearances, hits]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, batters_faced]
+    given:
+      - input: ref('int_fantasy__teams')
+        rows:
+          - {fantasy_team_id: 1}
+          - {fantasy_team_id: 2}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {scoring_date: "2026-06-01", mlbam_player_id: 900009}
+          - {scoring_date: "2026-06-02", mlbam_player_id: 900009}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {mlbam_player_id: 900001, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {mlbam_player_id: 900002, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 3, batters_faced: 100}
+          - {mlbam_player_id: 900002, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 3, batters_faced: 100}
+          - {mlbam_player_id: 900003, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 3, batters_faced: 5}
+          - {mlbam_player_id: 900003, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 4, batters_faced: 5}
+          - {mlbam_player_id: 900004, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 20, batters_faced: 50}
+    expect:
+      rows:
+        - {day_kind: batting, component: games_batted, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: plate_appearances, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: hits, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: games_pitched, pool_players: 2, pool_played_days: 4, pool_total: 4, level_per_played_day: 1}
+        - {day_kind: relief, component: games_started, pool_players: 2, pool_played_days: 4, pool_total: 0, level_per_played_day: 0}
+        - {day_kind: relief, component: outs_recorded, pool_players: 2, pool_played_days: 4, pool_total: 13, level_per_played_day: 3.25}
+        - {day_kind: relief, component: batters_faced, pool_players: 2, pool_played_days: 4, pool_total: 18, level_per_played_day: 4.5}
+
+  - name: replacement_levels_a_relief_pool_members_start_is_not_in_the_relief_level
+    description: >
+      900001 has three relief days (3 outs each) and one start (27 outs); 900002 has two starts,
+      and with one fantasy team (N = 1) the start pool is 900002 alone, so 900001's start is in no
+      pool. The relief level is 9 outs over 3 days: the start is in neither pool_total nor
+      pool_played_days of relief. Catches a swingman's starts leaking into the relief level.
+    model: int_fantasy__replacement_levels
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, plate_appearances, hits]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, batters_faced]
+    given:
+      - input: ref('int_fantasy__teams')
+        rows:
+          - {fantasy_team_id: 1}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {scoring_date: "2026-06-01", mlbam_player_id: 900009}
+          - {scoring_date: "2026-06-02", mlbam_player_id: 900009}
+          - {scoring_date: "2026-06-03", mlbam_player_id: 900009}
+          - {scoring_date: "2026-06-04", mlbam_player_id: 900009}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {mlbam_player_id: 900001, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {mlbam_player_id: 900001, game_date: "2026-06-03", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {mlbam_player_id: 900001, game_date: "2026-06-04", games_pitched: 1, games_started: 1, outs_recorded: 27, batters_faced: 33}
+          - {mlbam_player_id: 900002, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
+          - {mlbam_player_id: 900002, game_date: "2026-06-02", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
+    expect:
+      rows:
+        - {day_kind: batting, component: games_batted, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: plate_appearances, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: hits, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: games_pitched, pool_players: 1, pool_played_days: 2, pool_total: 2, level_per_played_day: 1}
+        - {day_kind: start, component: games_started, pool_players: 1, pool_played_days: 2, pool_total: 2, level_per_played_day: 1}
+        - {day_kind: start, component: outs_recorded, pool_players: 1, pool_played_days: 2, pool_total: 36, level_per_played_day: 18}
+        - {day_kind: start, component: batters_faced, pool_players: 1, pool_played_days: 2, pool_total: 48, level_per_played_day: 24}
+        - {day_kind: relief, component: games_pitched, pool_players: 1, pool_played_days: 3, pool_total: 3, level_per_played_day: 1}
+        - {day_kind: relief, component: games_started, pool_players: 1, pool_played_days: 3, pool_total: 0, level_per_played_day: 0}
+        - {day_kind: relief, component: outs_recorded, pool_players: 1, pool_played_days: 3, pool_total: 9, level_per_played_day: 3}
+        - {day_kind: relief, component: batters_faced, pool_players: 1, pool_played_days: 3, pool_total: 12, level_per_played_day: 4}

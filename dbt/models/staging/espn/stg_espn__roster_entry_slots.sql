@@ -1,10 +1,20 @@
--- One row per (scoring period, team, player, eligible slot): where a player COULD have
--- been started that day, as opposed to where he actually was.
+-- One row per (scoring period, team, player, eligible slot): the slots ESPN said a player
+-- was eligible for WHEN THE PAYLOAD WAS FETCHED, attached to the roster of that scoring
+-- period. Where he actually was is stg_espn__roster_entries.
 --
--- Without this, "you should have started someone else" is guesswork. Eligibility is a
--- daily snapshot in ESPN -- a player picks up second-base eligibility mid-season once he
--- has played enough games there -- so this is captured per scoring period rather than
--- once per season, and consumers must use the day's own eligibility.
+-- This is not the day's eligibility unless the payload was fetched on the day. ESPN
+-- returns a player's current eligibility whatever scoringPeriodId is requested (#52):
+--   * every period of 2026 was fetched in one backfill (2026-09-26), and no player's
+--     eligible slots change once across its 180 periods -- 493 players, 227 of them
+--     hitters, who gain positions in-season;
+--   * a pre-pipeline capture of the same periods five days earlier disagrees with it for
+--     4 players (494 player-periods of 59,930): three pitchers are P,SP there and P,SP,RP
+--     here, one hitter gains 2B, on periods as early as 1.
+-- So for a backfilled period this is eligibility as of fetched_at, which is why that
+-- column is carried. Eligibility only grows within a season, so the slot a player was
+-- actually started in is always inside it (stg_espn__started_slot_is_always_eligible),
+-- but a "could have started" reading of 2026 would allow moves that were not legal on
+-- the day. Only a capture made on the day itself (#27) can carry that day's eligibility.
 --
 -- Parsed from the raw payload rather than derived from stg_espn__roster_entries, so that
 -- model keeps its one-row-per-player grain instead of carrying an array column. Both

@@ -13,7 +13,7 @@
 -- stg_idmap__players holds one row per ESPN id (it keeps the latest per id), so the join
 -- cannot fan out; int_fantasy__player_crosswalk joins it the same way.
 --
--- replacement_group is what the value model measures a player against:
+-- replacement_group tells a hitter from a pitcher (see the last paragraph):
 --   - SP or RP when his default position says so; hitter for any other position;
 --   - with no default position (transaction-only), the fo_replacement_group rule over his
 --     MLB appearances across the WHOLE season, not just free-agent days: a pitcher dropped
@@ -23,14 +23,9 @@
 -- A resolved player with no MLB rows at all would get hitter from the macro; that is not
 -- special-cased here.
 --
--- pitcher_slot_replacement_group is the group his days in a PITCHER slot are measured
--- against. For a pitcher it is his replacement_group. For anyone else it comes from his
--- pitching alone, by the same macro: SP if at least half his games pitched were starts,
--- else RP. A two-way player whose default position is DH started 15 days in pitcher slots
--- in 2026 and pitched on 13 of them, every one a start; measured against a reliever's
--- day his innings and strikeouts would be inflated (amendment of 2026-10-03, superseding
--- the spec's flat RP rule). A position player who never recorded an out is RP: he has no
--- pitching day to charge, so the level is never applied.
+-- A pitcher's days are measured by kind of outing since #52 (ADR 0008), not by a group, so
+-- the column that chose a pitcher-slot level is gone; replacement_group only tells a hitter
+-- from a pitcher for a drop's side.
 --
 -- No MLB team column: a player changes team within a season, so it is not his attribute.
 -- No league_id or season, as the intermediates it reads (#28).
@@ -147,22 +142,6 @@ select
             'season_totals.games_started'
         ) }}
     end as replacement_group,
-    case
-        when players.default_position in ('SP', 'RP') then players.default_position
-        when players.mlbam_player_id is null then null
-        -- Pitching only: with no plate appearances the macro says hitter exactly when he
-        -- recorded no outs, and that case is RP.
-        else replace(
-            {{ fo_replacement_group(
-                '0',
-                'season_totals.batters_faced',
-                'season_totals.outs_recorded',
-                'season_totals.games_pitched',
-                'season_totals.games_started'
-            ) }},
-            'hitter', 'RP'
-        )
-    end as pitcher_slot_replacement_group,
     players.first_rostered_date,
     players.last_rostered_date,
     players.is_transaction_only
