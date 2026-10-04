@@ -816,7 +816,7 @@ unit_tests:
           - {mlbam_player_id: 101, game_date: "2026-04-09", games_batted: 1, home_runs: 0}
       - input: ref('dim_players')
         rows:
-          - {platform: espn, platform_player_id: 1, mlbam_player_id: 101, replacement_group: hitter, pitcher_slot_replacement_group: RP}
+          - {platform: espn, platform_player_id: 1, mlbam_player_id: 101, replacement_group: hitter}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
@@ -828,14 +828,14 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {replacement_group: hitter, component: games_batted, level_per_played_day: 1}
-          - {replacement_group: hitter, component: home_runs, level_per_played_day: 0.5}
-          - {replacement_group: SP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: SP, component: outs_recorded, level_per_played_day: 18}
-          - {replacement_group: SP, component: earned_runs, level_per_played_day: 2}
-          - {replacement_group: RP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: RP, component: outs_recorded, level_per_played_day: 9}
-          - {replacement_group: RP, component: earned_runs, level_per_played_day: 4}
+          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
       # Two players per category with a played day: HR values 1 and 3 (population sd 1),
       # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
       # transactions.
@@ -889,7 +889,7 @@ unit_tests:
           - {mlbam_player_id: 102, game_date: "2026-04-10", games_batted: 1, home_runs: 8}
       - input: ref('dim_players')
         rows:
-          - {platform: espn, platform_player_id: 2, mlbam_player_id: 102, replacement_group: hitter, pitcher_slot_replacement_group: RP}
+          - {platform: espn, platform_player_id: 2, mlbam_player_id: 102, replacement_group: hitter}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
@@ -901,14 +901,14 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {replacement_group: hitter, component: games_batted, level_per_played_day: 1}
-          - {replacement_group: hitter, component: home_runs, level_per_played_day: 0.5}
-          - {replacement_group: SP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: SP, component: outs_recorded, level_per_played_day: 18}
-          - {replacement_group: SP, component: earned_runs, level_per_played_day: 2}
-          - {replacement_group: RP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: RP, component: outs_recorded, level_per_played_day: 9}
-          - {replacement_group: RP, component: earned_runs, level_per_played_day: 4}
+          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
       # Two players per category with a played day: HR values 1 and 3 (population sd 1),
       # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
       # transactions.
@@ -964,9 +964,9 @@ unit_tests:
           - {mlbam_player_id: 104, game_date: "2026-04-10", games_batted: 1, home_runs: 0}
       - input: ref('dim_players')
         rows:
-          - {platform: espn, platform_player_id: 3, mlbam_player_id: 103, replacement_group: hitter, pitcher_slot_replacement_group: RP}
-          - {platform: espn, platform_player_id: 4, mlbam_player_id: 104, replacement_group: hitter, pitcher_slot_replacement_group: RP}
-          - {platform: espn, platform_player_id: 5, mlbam_player_id: 105, replacement_group: hitter, pitcher_slot_replacement_group: RP}
+          - {platform: espn, platform_player_id: 3, mlbam_player_id: 103, replacement_group: hitter}
+          - {platform: espn, platform_player_id: 4, mlbam_player_id: 104, replacement_group: hitter}
+          - {platform: espn, platform_player_id: 5, mlbam_player_id: 105, replacement_group: hitter}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
@@ -978,14 +978,14 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {replacement_group: hitter, component: games_batted, level_per_played_day: 1}
-          - {replacement_group: hitter, component: home_runs, level_per_played_day: 0.5}
-          - {replacement_group: SP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: SP, component: outs_recorded, level_per_played_day: 18}
-          - {replacement_group: SP, component: earned_runs, level_per_played_day: 2}
-          - {replacement_group: RP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: RP, component: outs_recorded, level_per_played_day: 9}
-          - {replacement_group: RP, component: earned_runs, level_per_played_day: 4}
+          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
       # Two players per category with a played day: HR values 1 and 3 (population sd 1),
       # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
       # transactions.
@@ -1042,8 +1042,8 @@ unit_tests:
           - {mlbam_player_id: 106, game_date: "2026-04-06", games_batted: 1, home_runs: 0}
       - input: ref('dim_players')
         rows:
-          - {platform: espn, platform_player_id: 6, mlbam_player_id: 106, replacement_group: hitter, pitcher_slot_replacement_group: RP}
-          - {platform: espn, platform_player_id: 7, mlbam_player_id: 107, replacement_group: hitter, pitcher_slot_replacement_group: RP}
+          - {platform: espn, platform_player_id: 6, mlbam_player_id: 106, replacement_group: hitter}
+          - {platform: espn, platform_player_id: 7, mlbam_player_id: 107, replacement_group: hitter}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
@@ -1055,14 +1055,14 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {replacement_group: hitter, component: games_batted, level_per_played_day: 1}
-          - {replacement_group: hitter, component: home_runs, level_per_played_day: 0.5}
-          - {replacement_group: SP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: SP, component: outs_recorded, level_per_played_day: 18}
-          - {replacement_group: SP, component: earned_runs, level_per_played_day: 2}
-          - {replacement_group: RP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: RP, component: outs_recorded, level_per_played_day: 9}
-          - {replacement_group: RP, component: earned_runs, level_per_played_day: 4}
+          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
       # Two players per category with a played day: HR values 1 and 3 (population sd 1),
       # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
       # transactions.
@@ -1082,14 +1082,16 @@ unit_tests:
 
   - name: transaction_impact_values_each_side_against_the_right_replacement_group
     description: >
-      Drop of SP 8 (day 3), window 4-10: one start with 3 earned runs in 18 outs; his batting
-      line that day (a home run) is ignored because his group is credited on the pitching side
-      only. ERA value is 81 - (54 / 18) * 18 = 27, flipped to -27 and divided by sd 9: -3; HR
-      is 0. Add of player 9 (hitter group, RP in a pitcher slot): a pitcher-slot day with 9
-      outs and 1 earned run is valued against RP (rN 108: 27 - 108 = -81, flipped, 9 -> +9), a
-      hitter-slot day with a home run against hitter (1 - 0.5 = 0.5, sd 1): total 9.5. Catches the
-      wrong replacement group on either side, the other side's line leaking into a drop, and a
-      different sd from the season fact.
+      Drop of pitcher 8 (day 3), window 4-10: one start with 3 earned runs in 18 outs; his
+      batting line that day (a home run) is ignored because his group is credited on the
+      pitching side only. ERA value against the start level is 81 - (54 / 18) * 18 = 27,
+      flipped to -27 and divided by sd 9: -3; HR is 0. Add of player 9 (hitter group): a
+      pitcher-slot day with 9 outs, 1 earned run and no start is a relief day, valued against
+      the relief level (rN 108: 27 - 108 = -81, flipped, 9 -> +9), a hitter-slot day with a
+      home run against batting (1 - 0.5 = 0.5, sd 1): total 9.5. Expected values are
+      unchanged by #52 because the start and relief levels here equal the old SP and RP
+      levels and the days land on the same side of them. Catches the wrong level on either
+      side, the other side's line leaking into a drop, and a different sd from the season fact.
     model: fct_transaction_impact
     overrides:
       macros:
@@ -1109,15 +1111,15 @@ unit_tests:
           - {platform: espn, platform_player_id: 9, fantasy_team_id: 1, scoring_date: "2026-04-03"}
       - input: ref('int_fantasy__started_player_days')
         rows:
-          - {platform: espn, platform_player_id: 9, fantasy_team_id: 1, scoring_date: "2026-04-03", slot_role: pitcher, games_pitched: 1, outs_recorded: 9, earned_runs: 1}
+          - {platform: espn, platform_player_id: 9, fantasy_team_id: 1, scoring_date: "2026-04-03", slot_role: pitcher, games_pitched: 1, games_started: 0, outs_recorded: 9, earned_runs: 1}
           - {platform: espn, platform_player_id: 9, fantasy_team_id: 1, scoring_date: "2026-04-04", slot_role: hitter, games_batted: 1, home_runs: 1}
       - input: ref('int_mlb__player_game_days')
         rows:
-          - {mlbam_player_id: 108, game_date: "2026-04-05", games_batted: 1, home_runs: 9, games_pitched: 1, outs_recorded: 18, earned_runs: 3}
+          - {mlbam_player_id: 108, game_date: "2026-04-05", games_batted: 1, home_runs: 9, games_pitched: 1, games_started: 1, outs_recorded: 18, earned_runs: 3}
       - input: ref('dim_players')
         rows:
-          - {platform: espn, platform_player_id: 8, mlbam_player_id: 108, replacement_group: SP, pitcher_slot_replacement_group: SP}
-          - {platform: espn, platform_player_id: 9, mlbam_player_id: 109, replacement_group: hitter, pitcher_slot_replacement_group: RP}
+          - {platform: espn, platform_player_id: 8, mlbam_player_id: 108, replacement_group: SP}
+          - {platform: espn, platform_player_id: 9, mlbam_player_id: 109, replacement_group: hitter}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
@@ -1129,14 +1131,14 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {replacement_group: hitter, component: games_batted, level_per_played_day: 1}
-          - {replacement_group: hitter, component: home_runs, level_per_played_day: 0.5}
-          - {replacement_group: SP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: SP, component: outs_recorded, level_per_played_day: 18}
-          - {replacement_group: SP, component: earned_runs, level_per_played_day: 2}
-          - {replacement_group: RP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: RP, component: outs_recorded, level_per_played_day: 9}
-          - {replacement_group: RP, component: earned_runs, level_per_played_day: 4}
+          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
       # Two players per category with a played day: HR values 1 and 3 (population sd 1),
       # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
       # transactions.
@@ -1151,6 +1153,146 @@ unit_tests:
       rows:
         - {transaction_id: d8, played_started_days: null, played_days: 1, home_runs: 0, earned_runs: 3, outs_recorded: 18, total_value: -3}
         - {transaction_id: a10, played_started_days: 2, played_days: null, home_runs: 1, earned_runs: 1, outs_recorded: 9, total_value: 9.5}
+  - name: transaction_impact_an_add_with_a_start_and_a_relief_day_is_valued_against_each_level
+    description: >
+      Team 1 adds pitcher 11 on day 2 and keeps him; in the window he has a start (day 3: 18
+      outs, 3 earned runs) and a relief day (day 4: 3 outs, 1 earned run) in pitcher slots.
+      The start level is 18 outs and 2 earned runs a day (rN 54, rD 18), the relief level 9
+      outs and 4 earned runs (rN 108, rD 9). ERA value of the start is 81 - (54 / 18) * 18 =
+      27, flipped -27; of the relief day 27 - (108 / 9) * 3 = -9, flipped +9; their sum -18,
+      over sd 9 is -2. HR is 0 (no batting day), so total_value is -2. Against the start level
+      alone the whole window (N 108, D 21) would give -5, against the relief level alone +16.
+      Catches (R3.1) an add window valued against one level.
+    model: fct_transaction_impact
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, home_runs]
+        fo_pitching_columns: [games_pitched, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__transactions')
+        rows:
+          - {platform: espn, transaction_id: "a11", transacted_at: "2026-04-02 10:00:00+00", transaction_date: "2026-04-02", platform_player_id: 11, fantasy_team_id: 1, movement: add}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, scoring_date: "2026-04-01"}
+          - {platform: espn, scoring_date: "2026-04-10"}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, platform_player_id: 11, fantasy_team_id: 1, scoring_date: "2026-04-03"}
+          - {platform: espn, platform_player_id: 11, fantasy_team_id: 1, scoring_date: "2026-04-04"}
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, platform_player_id: 11, fantasy_team_id: 1, scoring_date: "2026-04-03", slot_role: pitcher, games_pitched: 1, games_started: 1, outs_recorded: 18, earned_runs: 3}
+          - {platform: espn, platform_player_id: 11, fantasy_team_id: 1, scoring_date: "2026-04-04", slot_role: pitcher, games_pitched: 1, games_started: 0, outs_recorded: 3, earned_runs: 1}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 111, game_date: "2026-04-03", games_pitched: 1, games_started: 1, outs_recorded: 18, earned_runs: 3}
+      - input: ref('dim_players')
+        rows:
+          - {platform: espn, platform_player_id: 11, mlbam_player_id: 111, replacement_group: SP}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 5, part: numerator, component: home_runs, weight: 1}
+          - {platform: espn, stat_key: 47, part: numerator, component: earned_runs, weight: 27}
+          - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
+      # Two players per category with a played day: HR values 1 and 3 (population sd 1),
+      # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
+      # transactions.
+      - input: ref('fct_player_category_value')
+        rows:
+          - {category_key: 5, played_days: 1, value_over_replacement: 1}
+          - {category_key: 5, played_days: 1, value_over_replacement: 3}
+          - {category_key: 5, played_days: 0, value_over_replacement: 0}
+          - {category_key: 47, played_days: 1, value_over_replacement: -9}
+          - {category_key: 47, played_days: 1, value_over_replacement: 9}
+    expect:
+      rows:
+        - {transaction_id: a11, started_days: 2, played_started_days: 2, outs_recorded: 21, earned_runs: 4, total_value: -2}
+
+  - name: transaction_impact_a_drop_of_a_pitcher_is_valued_against_each_kind_of_outing_after_it
+    description: >
+      Team 1 drops pitcher 12 (group RP) on day 3, window 4-10. After the drop he has a start
+      (day 5: 15 outs, 2 earned runs) and a relief day (day 8: 6 outs, 1 earned run); his
+      relief day on day 3 (30 outs) is before the window and ignored. Start level rN 54,
+      rD 18; relief level rN 108, rD 9. Start: 54 - (54 / 18) * 15 = 9, flipped -9. Relief:
+      27 - (108 / 9) * 6 = -45, flipped +45. Sum 36, over sd 9 is +4. HR is 0. Against the
+      relief level alone (his group RP used to choose it) the window (N 81, D 21) would be
+      worth 171 / 9 = 19. Catches (R3.2) a drop valued against one level, and the group
+      label choosing the level.
+    model: fct_transaction_impact
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, home_runs]
+        fo_pitching_columns: [games_pitched, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__transactions')
+        rows:
+          - {platform: espn, transaction_id: "d12", transacted_at: "2026-04-03 10:00:00+00", transaction_date: "2026-04-03", platform_player_id: 12, fantasy_team_id: 1, movement: drop}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, scoring_date: "2026-04-01"}
+          - {platform: espn, scoring_date: "2026-04-10"}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, platform_player_id: 9, fantasy_team_id: 9, scoring_date: "2026-04-01"}
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, platform_player_id: 9, fantasy_team_id: 9, scoring_date: "2026-04-01", slot_role: hitter, games_batted: 0, home_runs: 0}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 112, game_date: "2026-04-03", games_pitched: 1, games_started: 0, outs_recorded: 30, earned_runs: 0}
+          - {mlbam_player_id: 112, game_date: "2026-04-05", games_pitched: 1, games_started: 1, outs_recorded: 15, earned_runs: 2}
+          - {mlbam_player_id: 112, game_date: "2026-04-08", games_pitched: 1, games_started: 0, outs_recorded: 6, earned_runs: 1}
+      - input: ref('dim_players')
+        rows:
+          - {platform: espn, platform_player_id: 12, mlbam_player_id: 112, replacement_group: RP}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 5, part: numerator, component: home_runs, weight: 1}
+          - {platform: espn, stat_key: 47, part: numerator, component: earned_runs, weight: 27}
+          - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
+      # Two players per category with a played day: HR values 1 and 3 (population sd 1),
+      # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
+      # transactions.
+      - input: ref('fct_player_category_value')
+        rows:
+          - {category_key: 5, played_days: 1, value_over_replacement: 1}
+          - {category_key: 5, played_days: 1, value_over_replacement: 3}
+          - {category_key: 5, played_days: 0, value_over_replacement: 0}
+          - {category_key: 47, played_days: 1, value_over_replacement: -9}
+          - {category_key: 47, played_days: 1, value_over_replacement: 9}
+    expect:
+      rows:
+        - {transaction_id: d12, played_days: 2, outs_recorded: 21, earned_runs: 3, total_value: 4}
+
   - name: transaction_impact_an_unresolved_dropped_player_has_no_value
     description: >
       A drop of a player with no MLBAM id and no replacement group: components and played
@@ -1180,7 +1322,7 @@ unit_tests:
           - {mlbam_player_id: 102, game_date: "2026-04-04", games_batted: 1, home_runs: 2}
       - input: ref('dim_players')
         rows:
-          - {platform: espn, platform_player_id: 10, mlbam_player_id: null, replacement_group: null, pitcher_slot_replacement_group: null}
+          - {platform: espn, platform_player_id: 10, mlbam_player_id: null, replacement_group: null}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
@@ -1192,14 +1334,14 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {replacement_group: hitter, component: games_batted, level_per_played_day: 1}
-          - {replacement_group: hitter, component: home_runs, level_per_played_day: 0.5}
-          - {replacement_group: SP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: SP, component: outs_recorded, level_per_played_day: 18}
-          - {replacement_group: SP, component: earned_runs, level_per_played_day: 2}
-          - {replacement_group: RP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: RP, component: outs_recorded, level_per_played_day: 9}
-          - {replacement_group: RP, component: earned_runs, level_per_played_day: 4}
+          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
       # Two players per category with a played day: HR values 1 and 3 (population sd 1),
       # ERA values -9 and 9 (sd 9). The model must read these, not recompute from the
       # transactions.
