@@ -1,6 +1,6 @@
 # 0009. A pitching pool is ranked by appearances
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-03
 - Spec: [0052-pitcher-replacement-by-outing](../specs/0052-pitcher-replacement-by-outing/design.md) · Issue: #52
 

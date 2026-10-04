@@ -1,6 +1,6 @@
 # Pitcher replacement level by kind of outing — requirements
 
-Issue: #52 · Tier: M · Status: draft
+Issue: #52 · Tier: M · Status: approved 2026-10-03
 
 ## Problem
 

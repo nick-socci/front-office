@@ -94,8 +94,8 @@ managers use the way rostered relievers are used
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0008](../../adr/0008-a-pitchers-day-is-measured-against-the-same-kind-of-outing.md) | A pitcher's day is measured against a replacement day of the same kind (start or relief) | proposed |
-| [0009](../../adr/0009-a-pitching-pool-is-ranked-by-appearances.md) | A pitching pool is the top N free agents by appearances of that kind | proposed |
+| [0008](../../adr/0008-a-pitchers-day-is-measured-against-the-same-kind-of-outing.md) | A pitcher's day is measured against a replacement day of the same kind (start or relief) | accepted |
+| [0009](../../adr/0009-a-pitching-pool-is-ranked-by-appearances.md) | A pitching pool is the top N free agents by appearances of that kind | accepted |
 
 Both partly supersede [ADR 0001](../../adr/0001-replacement-level-is-the-free-agent-pool.md)
 (its `SP` and `RP` groups, and "outs for pitchers"). ADRs 0002, 0003, 0005, 0006 and 0007
