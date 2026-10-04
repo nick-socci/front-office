@@ -1,13 +1,15 @@
 -- The replacement pool, valued by the same macros as a player, must be worth zero in every
--- category on its group's side. Returns each (group, category) whose value over
+-- category on its kind's side. Returns each (day_kind, category) whose value over
 -- replacement is not zero within 1e-9.
 --
--- Each group's own pool rows of int_fantasy__replacement_levels stand in for a player:
--- numerator and denominator are the weighted pool totals, played days are the pool's, and
--- the levels are the pool's own per-played-day levels. By construction that player does
--- exactly what replacement does, so any non-zero value is a formula that has drifted from
--- the definition, or per-player rates being averaged rather than components pooled (R3.2).
--- A group with an empty pool has null levels, a null value, and is not a failure here;
+-- Each kind's own pool rows of int_fantasy__replacement_levels stand in for a player whose
+-- days are all of that kind: batting categories for `batting`, pitching categories for
+-- `start` and for `relief`. Numerator and denominator are the weighted pool totals, played
+-- days are the pool's, and the levels are the pool's own per-played-day levels. By
+-- construction that player does exactly what replacement does, so any non-zero value is a
+-- formula that has drifted from the definition, or per-player rates being averaged rather
+-- than components pooled (R3.2). A kind with an empty pool has null levels, a null value,
+-- and is not a failure here;
 -- int_fantasy__replacement_pool_has_played_days warns about it.
 
 with component_sides as (
@@ -26,7 +28,7 @@ with component_sides as (
 pool_parts as (
 
     select
-        levels.replacement_group,
+        levels.day_kind,
         rules.stat_key as category_key,
         rules.part,
         max(levels.pool_played_days) as pool_played_days,
@@ -40,15 +42,15 @@ pool_parts as (
         on rules.component = levels.component
     inner join component_sides
         on component_sides.component = levels.component
-        and component_sides.side = case levels.replacement_group when 'hitter' then 'batting' else 'pitching' end
-    group by levels.replacement_group, rules.stat_key, rules.part
+        and component_sides.side = case levels.day_kind when 'batting' then 'batting' else 'pitching' end
+    group by levels.day_kind, rules.stat_key, rules.part
 
 ),
 
 pool_categories as (
 
     select
-        replacement_group,
+        day_kind,
         category_key,
         max(pool_played_days) as played_days,
         max(part_total) filter (where part = 'numerator') as numerator,
@@ -56,14 +58,14 @@ pool_categories as (
         max(part_replacement) filter (where part = 'numerator') as replacement_numerator,
         max(part_replacement) filter (where part = 'denominator') as replacement_denominator
     from pool_parts
-    group by replacement_group, category_key
+    group by day_kind, category_key
 
 ),
 
 valued as (
 
     select
-        pool_categories.replacement_group,
+        pool_categories.day_kind,
         pool_categories.category_key,
         {{ fo_value_over_replacement(
             'pool_categories.numerator', 'pool_categories.denominator', 'pool_categories.played_days',
@@ -79,6 +81,6 @@ valued as (
 
 )
 
-select replacement_group, category_key, value_over_replacement
+select day_kind, category_key, value_over_replacement
 from valued
 where abs(value_over_replacement) > 1e-9

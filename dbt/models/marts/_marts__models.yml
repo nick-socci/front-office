@@ -125,7 +125,9 @@ models:
       nothing in it knows how many categories the league scores. Holds the numerator and
       denominator over all the pair's started days, the contribution, the value over
       replacement (positive is better, whichever way the category runs) and the value in
-      standard deviations. played_days counts days on the category's side only.
+      standard deviations. played_days counts days on the category's side only. A pitching
+      row can rest on two replacement levels (a start and a relief day each meet their own,
+      ADR 0008), so it names no single group.
     columns:
       - name: platform
         data_tests: [not_null]
@@ -144,12 +146,10 @@ models:
         data_tests: [not_null]
       - name: category_key
         data_tests: [not_null]
-      - name: replacement_group
-        description: The group the category's side is measured against (hitter, SP or RP).
       - name: contribution
         description: The count, or the rate computed from numerator and denominator. Null for a rate over a zero denominator.
       - name: value_over_replacement
-        description: Null only when the needed replacement level is null and the pair played on this side.
+        description: Null only when a needed replacement level is null for a kind of day the pair played on this side. Summed over kinds of day.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -441,7 +441,7 @@ unit_tests:
     given:
       - input: ref('int_fantasy__started_player_days')
         rows:
-          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, outs_recorded: 27, earned_runs: 1}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, games_started: 1, outs_recorded: 27, earned_runs: 1}
           - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, fantasy_team_id: 1, slot_role: hitter, games_batted: 1, batter_strikeouts: 3}
       - input: ref('int_fantasy__categories')
         rows:
@@ -454,21 +454,17 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {replacement_group: hitter, component: games_batted, level_per_played_day: 1}
-          - {replacement_group: hitter, component: batter_strikeouts, level_per_played_day: 1}
-          - {replacement_group: SP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: SP, component: outs_recorded, level_per_played_day: 18}
-          - {replacement_group: SP, component: earned_runs, level_per_played_day: 3}
-      - input: ref('dim_players')
-        rows:
-          - {platform: espn, platform_player_id: 1, pitcher_slot_replacement_group: SP}
-          - {platform: espn, platform_player_id: 2, pitcher_slot_replacement_group: RP}
+          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
+          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {day_kind: start, component: earned_runs, level_per_played_day: 3}
     expect:
       rows:
-        - {platform_player_id: 1, category_key: 27, replacement_group: hitter, played_days: 0, numerator: 0, denominator: null, contribution: 0, value_over_replacement: 0}
-        - {platform_player_id: 1, category_key: 47, replacement_group: SP, played_days: 1, numerator: 27, denominator: 27, contribution: 1, value_over_replacement: 94.5}
-        - {platform_player_id: 2, category_key: 27, replacement_group: hitter, played_days: 1, numerator: 3, denominator: null, contribution: 3, value_over_replacement: -2}
-        - {platform_player_id: 2, category_key: 47, replacement_group: RP, played_days: 0, numerator: 0, denominator: 0, contribution: null, value_over_replacement: 0}
+        - {platform_player_id: 1, category_key: 27, played_days: 0, numerator: 0, denominator: null, contribution: 0, value_over_replacement: 0}
+        - {platform_player_id: 1, category_key: 47, played_days: 1, numerator: 27, denominator: 27, contribution: 1, value_over_replacement: 94.5}
+        - {platform_player_id: 2, category_key: 27, played_days: 1, numerator: 3, denominator: null, contribution: 3, value_over_replacement: -2}
+        - {platform_player_id: 2, category_key: 47, played_days: 0, numerator: 0, denominator: 0, contribution: null, value_over_replacement: 0}
 
   - name: player_category_value_a_rate_over_zero_outs_has_no_contribution_and_loses_its_numerator
     description: >
@@ -485,7 +481,7 @@ unit_tests:
     given:
       - input: ref('int_fantasy__started_player_days')
         rows:
-          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, outs_recorded: 0, earned_runs: 2}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, games_started: 1, outs_recorded: 0, earned_runs: 2}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true}
@@ -495,12 +491,9 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {replacement_group: SP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: SP, component: outs_recorded, level_per_played_day: 18}
-          - {replacement_group: SP, component: earned_runs, level_per_played_day: 3}
-      - input: ref('dim_players')
-        rows:
-          - {platform: espn, platform_player_id: 1, pitcher_slot_replacement_group: SP}
+          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {day_kind: start, component: earned_runs, level_per_played_day: 3}
     expect:
       rows:
         - {platform_player_id: 1, category_key: 47, played_days: 1, numerator: 54, denominator: 0, contribution: null, value_over_replacement: -54}
@@ -521,7 +514,7 @@ unit_tests:
         rows:
           - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: hitter, games_batted: 1, batter_strikeouts: 3}
           - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, fantasy_team_id: 1, slot_role: hitter, games_batted: 1, batter_strikeouts: 5}
-          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, outs_recorded: 3}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, games_started: 1, outs_recorded: 3}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 27, category_label: B_SO, is_lower_better: true}
@@ -530,13 +523,8 @@ unit_tests:
           - {platform: espn, stat_key: 27, part: numerator, component: batter_strikeouts, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {replacement_group: hitter, component: games_batted, level_per_played_day: 1}
-          - {replacement_group: hitter, component: batter_strikeouts, level_per_played_day: 1}
-      - input: ref('dim_players')
-        rows:
-          - {platform: espn, platform_player_id: 1, pitcher_slot_replacement_group: RP}
-          - {platform: espn, platform_player_id: 2, pitcher_slot_replacement_group: RP}
-          - {platform: espn, platform_player_id: 3, pitcher_slot_replacement_group: SP}
+          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
     expect:
       rows:
         - {platform_player_id: 1, category_key: 27, played_days: 1, value_over_replacement: -2, standardised_value: -2}
@@ -570,13 +558,10 @@ unit_tests:
           - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {replacement_group: hitter, component: games_batted, level_per_played_day: 1}
-          - {replacement_group: hitter, component: batter_strikeouts, level_per_played_day: 1}
-          - {replacement_group: SP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: SP, component: outs_recorded, level_per_played_day: 18}
-      - input: ref('dim_players')
-        rows:
-          - {platform: espn, platform_player_id: 1, pitcher_slot_replacement_group: SP}
+          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
+          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
     expect:
       rows:
         - {platform_player_id: 1, category_key: 27, played_days: 0, numerator: 0, value_over_replacement: 0, standardised_value: 0}
@@ -595,8 +580,8 @@ unit_tests:
     given:
       - input: ref('int_fantasy__started_player_days')
         rows:
-          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, outs_recorded: 18}
-          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, fantasy_team_id: 2, slot_role: pitcher, games_pitched: 1, outs_recorded: 18}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, games_started: 1, outs_recorded: 18}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, fantasy_team_id: 2, slot_role: pitcher, games_pitched: 1, games_started: 1, outs_recorded: 18}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 34, category_label: OUTS, is_lower_better: false}
@@ -605,12 +590,8 @@ unit_tests:
           - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {replacement_group: SP, component: games_pitched, level_per_played_day: 1}
-          - {replacement_group: SP, component: outs_recorded, level_per_played_day: 15}
-      - input: ref('dim_players')
-        rows:
-          - {platform: espn, platform_player_id: 1, pitcher_slot_replacement_group: SP}
-          - {platform: espn, platform_player_id: 2, pitcher_slot_replacement_group: SP}
+          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
     expect:
       rows:
         - {platform_player_id: 1, category_key: 34, value_over_replacement: 3, standardised_value: 0}
@@ -618,9 +599,9 @@ unit_tests:
 
   - name: player_category_value_an_empty_replacement_pool_makes_value_null_only_where_played
     description: >
-      The RP pool is empty, so its levels are null. Reliever 1 pitched: his value and
+      The relief pool is empty, so its levels are null (the start pool is not given at all). Reliever 1 pitched (a relief day: no game started): his value and
       standardised value are null (R3.4), not computed against zero. Hitter 2 never
-      pitched: 0 for the pitching category, not null, even though the group he would be
+      pitched: 0 for the pitching category, not null, even though the kind he would be
       charged against is empty. Catches an empty pool becoming "replacement is zero", and
       a null level poisoning pairs that played no day on that side.
     model: fct_player_category_value
@@ -631,7 +612,7 @@ unit_tests:
     given:
       - input: ref('int_fantasy__started_player_days')
         rows:
-          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, outs_recorded: 3}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, games_started: 0, outs_recorded: 3}
           - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, fantasy_team_id: 1, slot_role: hitter, games_batted: 1, batter_strikeouts: 2}
       - input: ref('int_fantasy__categories')
         rows:
@@ -641,19 +622,143 @@ unit_tests:
           - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {replacement_group: hitter, component: games_batted, level_per_played_day: 1}
-          - {replacement_group: hitter, component: batter_strikeouts, level_per_played_day: 1}
-          - {replacement_group: RP, component: games_pitched, level_per_played_day: null}
-          - {replacement_group: RP, component: outs_recorded, level_per_played_day: null}
-          - {replacement_group: RP, component: earned_runs, level_per_played_day: null}
-      - input: ref('dim_players')
-        rows:
-          - {platform: espn, platform_player_id: 1, pitcher_slot_replacement_group: RP}
-          - {platform: espn, platform_player_id: 2, pitcher_slot_replacement_group: RP}
+          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
+          - {day_kind: relief, component: games_pitched, level_per_played_day: null}
+          - {day_kind: relief, component: outs_recorded, level_per_played_day: null}
+          - {day_kind: relief, component: earned_runs, level_per_played_day: null}
     expect:
       rows:
         - {platform_player_id: 1, category_key: 34, played_days: 1, value_over_replacement: null, standardised_value: null}
         - {platform_player_id: 2, category_key: 34, played_days: 0, value_over_replacement: 0, standardised_value: 0}
+
+  - name: player_category_value_a_pair_with_a_start_and_a_relief_day_is_measured_against_each_kind
+    description: >
+      One pair has a start of 18 outs and a relief day of 3 outs. The start level is 15
+      outs a day and the relief level 3, so the outs value is (18 - 15) + (3 - 3) = +3,
+      with 2 played days and a numerator of 21. Against the start level alone the pair would
+      be worth +6, against the relief level alone +15. Catches (R2.1) the pair being measured against a single
+      level, and (R2.3) played days counted per kind rather than summed.
+    model: fct_player_category_value
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, batter_strikeouts]
+        fo_pitching_columns: [games_pitched, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, games_started: 1, outs_recorded: 18}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, games_started: 0, outs_recorded: 3}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, category_label: OUTS, is_lower_better: false}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
+          - {day_kind: relief, component: outs_recorded, level_per_played_day: 3}
+    expect:
+      rows:
+        - {platform_player_id: 1, category_key: 34, played_days: 2, numerator: 21, value_over_replacement: 3}
+
+  - name: player_category_value_a_null_level_for_one_kind_nulls_the_whole_pitching_value
+    description: >
+      A pair has a start (18 outs, level 15, so +3 on its own) and a relief day whose
+      relief level is null (an empty relief pool). The pitching value and the
+      standardised value are null, not +3. Catches (R2.2) a plain sum skipping the null
+      and reporting a partial value as complete.
+    model: fct_player_category_value
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, batter_strikeouts]
+        fo_pitching_columns: [games_pitched, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, games_started: 1, outs_recorded: 18}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, games_started: 0, outs_recorded: 3}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, category_label: OUTS, is_lower_better: false}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
+          - {day_kind: relief, component: outs_recorded, level_per_played_day: null}
+    expect:
+      rows:
+        - {platform_player_id: 1, category_key: 34, played_days: 2, numerator: 21, value_over_replacement: null, standardised_value: null}
+
+  - name: player_category_value_two_players_with_identical_days_get_identical_rows
+    description: >
+      Players 1 and 2 have the same two started days (a start of 18 outs and a relief day
+      of 3) and so get the same played days, numerator and value (+3 against levels 15 and
+      3). The model no longer reads dim_players, so no default position, eligibility or
+      slot label is available to it; the test pins that the rows depend on the days alone.
+      Catches (R2.4) a label choosing a pitching level again.
+    model: fct_player_category_value
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, batter_strikeouts]
+        fo_pitching_columns: [games_pitched, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, games_started: 1, outs_recorded: 18}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, games_started: 0, outs_recorded: 3}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, games_started: 1, outs_recorded: 18}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, fantasy_team_id: 1, slot_role: pitcher, games_pitched: 1, games_started: 0, outs_recorded: 3}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, category_label: OUTS, is_lower_better: false}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
+          - {day_kind: relief, component: outs_recorded, level_per_played_day: 3}
+    expect:
+      rows:
+        - {platform_player_id: 1, category_key: 34, played_days: 2, numerator: 21, value_over_replacement: 3}
+        - {platform_player_id: 2, category_key: 34, played_days: 2, numerator: 21, value_over_replacement: 3}
+
+  - name: player_category_value_a_hitter_only_pair_keeps_its_pitching_rows
+    description: >
+      A pair with only a hitter-slot day has no start or relief group, but still has a row
+      for the pitching category (OUTS): 0 played days, numerator 0, value 0, standardised
+      0, and a count's denominator stays null. Catches (R2.1) pairs with no pitched day
+      losing their pitching rows to the per-kind grouping.
+    model: fct_player_category_value
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, batter_strikeouts]
+        fo_pitching_columns: [games_pitched, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, slot_role: hitter, games_batted: 1, batter_strikeouts: 3}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, category_label: B_SO, is_lower_better: true}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, category_label: OUTS, is_lower_better: false}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 27, part: numerator, component: batter_strikeouts, weight: 1}
+          - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
+          - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
+          - {day_kind: relief, component: outs_recorded, level_per_played_day: 3}
+    expect:
+      rows:
+        - {platform_player_id: 1, category_key: 27, played_days: 1, numerator: 3, contribution: 3, value_over_replacement: -2, standardised_value: 0}
+        - {platform_player_id: 1, category_key: 34, played_days: 0, numerator: 0, contribution: 0, value_over_replacement: 0, standardised_value: 0}
 
 # -----------------------------------------------------------------------------
 # fct_transaction_impact unit tests (#11). Days are 2026-04-01 (the first scoring date) to

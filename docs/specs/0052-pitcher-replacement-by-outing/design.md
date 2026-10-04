@@ -291,3 +291,20 @@ harness reproduces the built `fct_player_season_value.total_value` for all 580 p
 
 ## Amendments
 
+### 2026-10-03 — batting rows are identical in value, and equal to 1e-12 when standardised
+
+Found in task 5. Against the pre-build snapshot all 5,220 batting rows of
+`fct_player_category_value` have bit-identical `numerator`, `denominator`, `played_days`,
+`contribution` and `value_over_replacement`. `standardised_value` differs on 2,038 of them
+by at most 8.9e-16: DuckDB's `stddev_pop` depends on the order rows reach it, and the
+spine changes that order, so the standard deviation moves in its last bit. The expected
+value "identical in `standardised_value`" is read as equal within 1e-12; R2.5's intent,
+that nothing about hitters changes, holds. No decision changes.
+
+### 2026-10-03 — what the spine fills in, and which components a kind meets
+
+Task 5. Two things the design implied and the model now states. A (pair, category) with
+no played day on its side takes denominator 0 when the category is a rate and null when
+it is a count, "rate" meaning the category has a denominator part in
+`int_fantasy__stat_components`. And a kind's totals meet only the components of its own
+side (`batting` with batting components, `start` and `relief` with pitching ones).

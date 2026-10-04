@@ -47,8 +47,8 @@ where fact.played_started_days > fact.started_days
 union
 
 -- A category's side comes from its components in int_fantasy__stat_components and the
--- fo_*_columns lists, NOT from the fact row being checked: a row whose group and played
--- days were both put on the wrong side would otherwise agree with itself.
+-- fo_*_columns lists, NOT from the fact row being checked: a row whose side and played
+-- days were both wrong would otherwise agree with itself.
 select categories.platform_player_id, categories.fantasy_team_id
 from {{ ref('fct_player_category_value') }} as categories
 inner join (
@@ -70,4 +70,3 @@ where categories.played_days is distinct from
             when 'batting' then recomputed.hitter_played_days
             else recomputed.pitcher_played_days
         end
-    or (categories.replacement_group = 'hitter') is distinct from (category_sides.side = 'batting')
