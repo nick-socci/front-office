@@ -79,10 +79,14 @@ Within option 3, the ranking decides more than the grouping does.
 | Appearances (chosen) | 2.80 | 0.256 | 3.49 | +0.57 |
 | Outs (ADR 0001's rule) | 4.20 | 0.201 | 3.35 | −0.56 |
 | Saves + holds (#52, pool C) | 2.90 | 0.36 | 2.83 | not measured |
+| No ranking: every free-agent relief appearance | 3.58 | 0.201 | 4.24 | +0.39 |
 
 Rostered relief appearances, for scale: 3.01 outs, 0.452 SV+HD, ERA 3.37. Outs selects
 long men and so does not fix the problem. Saves plus holds selects on a scored category
-and is a floor better than the players above it. Appearances selects the relievers
+and is a floor better than the players above it. No ranking gives a weaker ERA floor but
+a longer outing than a rostered reliever's, because lightly used free agents are bulk
+arms (5.20 outs an appearance for those with under 10), so it charges relievers for
+innings again. Appearances selects the relievers
 managers use the way rostered relievers are used
 ([ADR 0009](../../adr/0009-a-pitching-pool-is-ranked-by-appearances.md)).
 
@@ -266,6 +270,7 @@ harness reproduces the built `fct_player_season_value.total_value` for all 580 p
 | Pools at N = 12 | start: 306 days, 4,584 outs, ERA 5.41, WHIP 1.48. Relief: 833 days, 2,334 outs, 213 SV+HD, ERA 3.49, WHIP 1.26. No player in both |
 | The relief cut is a tie | ranks 10–13 all have 66 appearances (187, 214, 144, 196 outs); by id alone the 144-out pitcher is in and the level is 2.74 outs; by outs then id, 2.80 |
 | Ranking by outs does not fix it | relief pool 661 days, 4.20 outs, ERA 3.35; reliever-only median −0.56, IP −1.05 sd |
+| The unranked pool | relief: 695 pitchers, 12,523 days, 3.58 outs, 1.11 K, 0.201 SV+HD, ERA 4.24, WHIP 1.35; start: 282 pitchers, 1,875 days, 13.47 outs, ERA 4.84. Medians: RP +0.62, SP +1.16; reliever-only +0.39, IP −0.48 sd; 20+ save pairs median +6.25, 1 negative, worst 82nd from the bottom. Outs per free-agent relief appearance by appearances made: 1–9 5.20 (349 pitchers), 10–19 4.57, 20–39 3.37, 40+ 3.12 |
 | Chosen definition | medians: RP +0.67, SP +1.52, hitter +0.78; reliever-only +0.57 (86), `RP`-default swingmen +3.92 (21), SP-only +2.29 (170), `SP`-default swingmen −0.02 (42) |
 | Reliever-only, by category (sd) | IP +0.08, K +0.29, W +0.06, L −0.31, SV+HD +1.26, ERA +0.04, WHIP +0.07, K/9 +0.32 (were −1.47, −1.06, −0.86, +1.11, +1.43, +0.20, +0.12, +0.50) |
 | Closers | 15 pairs with 20+ saves: median +2.76 → +6.87; 3 negative → 0; the 36-save pair ranked 8th worst → 240th from the bottom |
