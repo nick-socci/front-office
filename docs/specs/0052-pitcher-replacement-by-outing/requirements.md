@@ -46,7 +46,9 @@ Two facts found while grounding shape the answer:
 - **No new ingestion**, and no attempt to recover historical eligibility.
 - **No change to how production is credited, to windows, or to grains.** Row counts of
   every model are unchanged.
-- **No tolerance widening** and no test weakened to make a build pass.
+- **No tolerance widening** and no test weakened to make a build pass. One comparison is
+  stated to floating-point precision, not as a tolerance on a reconciliation: batting
+  standardised values against the pre-build snapshot (R2.5, owner-approved 2026-10-03).
 
 ## Rabbit holes
 

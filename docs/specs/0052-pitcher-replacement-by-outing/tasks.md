@@ -54,6 +54,7 @@ them.
      `pitcher_slot_replacement_group`.
    - Verify: `docs/adr/README.md` and the three ADRs agree.
 10. Verify every acceptance criterion and expected value against real data — `judgment` — all
-    - Includes the snapshot comparison: 5,220 batting rows identical, 260 of 261 hitter
-      pairs unchanged.
+    - Includes the snapshot comparison: 5,220 batting rows bit-identical in value over
+      replacement and equal to 1e-12 in standardised value (R2.5 as reworded 2026-10-03),
+      260 of 261 hitter pairs unchanged.
     - Verify: record the queries and results as a comment on #52.
