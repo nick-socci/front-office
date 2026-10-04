@@ -14,3 +14,4 @@ Decisions made before 2026-10 are in [docs/design/](../design/).
 | [0007](0007-category-values-are-a-long-table.md) | Category values are a long table | accepted | 2026-10-03 | [0011](../specs/0011-player-value/design.md) |
 | [0008](0008-a-pitchers-day-is-measured-against-the-same-kind-of-outing.md) | A pitcher's day is measured against the same kind of outing | accepted | 2026-10-03 | [0052](../specs/0052-pitcher-replacement-by-outing/design.md) |
 | [0009](0009-a-pitching-pool-is-ranked-by-appearances.md) | A pitching pool is ranked by appearances | accepted | 2026-10-03 | [0052](../specs/0052-pitcher-replacement-by-outing/design.md) |
+| [0010](0010-category-values-are-scaled-by-the-matchup-margin.md) | Category values are scaled by the matchup margin | proposed | 2026-10-03 | [0055](../specs/0055-matchup-margin-scale/design.md) |
