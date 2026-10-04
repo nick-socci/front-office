@@ -74,6 +74,7 @@ matchup_margins as (
         home.league_id,
         home.season,
         home.category_key,
+        home.matchup_id,
         home.stat_value - away.stat_value as margin
     from scored_values as home
     inner join scored_values as away
@@ -97,7 +98,9 @@ margin_scales as (
         season,
         category_key,
         count(*) as matchups_measured,
-        sqrt(avg(margin * margin)) as margin_scale
+        -- Summed in matchup order, not avg(): the last digit of a floating-point sum depends
+        -- on the order of its terms, and row order changes from build to build (#28, R4.13).
+        sqrt(sum(margin * margin order by matchup_id) / count(*)) as margin_scale
     from matchup_margins
     group by platform, league_id, season, category_key
 

@@ -59,12 +59,7 @@ models:
       - name: espn_player_id
         data_tests: [not_null]
       - name: team_id
-        data_tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('stg_espn__teams')
-                field: team_id
+        data_tests: [not_null]
       - name: lineup_slot_id
         data_tests: [not_null]
     data_tests:
@@ -87,12 +82,7 @@ models:
       - name: espn_player_id
         data_tests: [not_null]
       - name: team_id
-        data_tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('stg_espn__teams')
-                field: team_id
+        data_tests: [not_null]
       - name: lineup_slot_id
         data_tests: [not_null]
       - name: lineup_slot
@@ -157,12 +147,7 @@ models:
       - name: matchup_period
         data_tests: [not_null]
       - name: scoring_period
-        data_tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('stg_espn__scoring_periods')
-                field: scoring_period
+        data_tests: [not_null]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:

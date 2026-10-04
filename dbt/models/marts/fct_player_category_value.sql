@@ -156,7 +156,7 @@ kind_parts as (
         sum(rules.weight * totals.component_total) as part_total,
         case
             when bool_or(levels.level_per_played_day is null) then null
-            else sum(rules.weight * levels.level_per_played_day)
+            else sum(rules.weight * levels.level_per_played_day order by rules.component)
         end as part_replacement
     from kind_component_totals as totals
     inner join {{ ref('int_fantasy__stat_components') }} as rules

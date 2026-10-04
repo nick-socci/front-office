@@ -419,7 +419,7 @@ kind_parts as (
         sum(rules.weight * totals.component_total) as part_total,
         case
             when bool_or(levels.level_per_played_day is null) then null
-            else sum(rules.weight * levels.level_per_played_day)
+            else sum(rules.weight * levels.level_per_played_day order by rules.component)
         end as part_replacement
     from kind_component_totals as totals
     inner join {{ ref('int_fantasy__stat_components') }} as rules
@@ -564,6 +564,7 @@ scaled as (
         with_value.league_id,
         with_value.season,
         with_value.transaction_id,
+        with_value.category_key,
         {{ fo_scaled_value(
             'with_value.value_over_replacement', 'with_value.played_days',
             'scales.margin_scale', 'scales.side_denominator', 'scored_categories.is_rate'
@@ -591,7 +592,8 @@ total_values as (
         transaction_id,
         case
             when count(*) filter (where scaled_value is null) > 0 then null
-            else sum(scaled_value)
+            -- in category order: a sum of doubles is only reproducible in a fixed order (#28)
+            else sum(scaled_value order by category_key)
         end as total_value
     from scaled
     group by platform, league_id, season, transaction_id
