@@ -18,7 +18,7 @@ them.
 3. Write the header of the scale model — `judgment` — R4.1
    - Definition, rate conversion, sample, sensitivity without the two long periods.
    - Verify: header numbers match a fresh query, recorded on #55.
-4. Change `fo_standardised_value` and `fct_player_category_value` — `impl` — R2.1–R2.5
+4. Rename to `scaled_value` / `fo_scaled_value` and scale by the margin in `fct_player_category_value` — `impl` — R2.1–R2.6
    - Unit tests first: a count, a rate, no played day, zero scale, null scale, null value.
      Restate existing unit tests against a mocked scale, saying in each why an expected
      value changed. Reword the fact's and the season fact's descriptions.

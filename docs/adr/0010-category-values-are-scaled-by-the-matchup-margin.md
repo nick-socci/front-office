@@ -45,7 +45,8 @@ What the summary number means is the owner's decision.
 
 ## Decision
 
-Chosen: **scale by the matchup margin**. `standardised_value` becomes value over
+Chosen: **scale by the matchup margin**. `standardised_value` is renamed `scaled_value`
+and becomes value over
 replacement, in the category's own units, divided by the category's margin scale;
 `total_value` remains the plain sum over scored categories. It reads as "matchup margins
 added over a free agent, summed across categories".

@@ -42,8 +42,9 @@ The thick border is the new model; dashed ones change.
   two facts that must divide by the same number read it from one place. The DAG (dbt's
   dependency graph, built from `ref()`) then shows that player value depends on matchup
   results, which is new and worth seeing.
-- **A changed macro signature is a contract change.** `fo_standardised_value` gains an
-  argument; every caller and every unit test that feeds it changes with it.
+- **A changed macro signature is a contract change.** `fo_standardised_value` becomes
+  `fo_scaled_value` and gains arguments; every caller and every unit test that feeds it
+  changes with it. The column it fills is renamed the same way.
 
 ## Alternatives considered
 
@@ -117,9 +118,9 @@ margins, so a category with no measurable matchup has a row with a null scale (R
 The header states the definition, the rate conversion, the sample (143 matchups, one
 season) and the sensitivity to the two long periods.
 
-### `fo_standardised_value` (changed macro)
+### `fo_scaled_value` (renamed and changed macro)
 
-Signature becomes `fo_standardised_value(value_over_replacement, played_days,
+`fo_standardised_value` is renamed, and its signature becomes `fo_scaled_value(value_over_replacement, played_days,
 margin_scale, side_denominator, is_rate)`:
 
 - `played_days = 0` → 0;
@@ -139,8 +140,10 @@ as `fct_player_category_value` already derives it.
 
 Everything up to and including `value_over_replacement` is untouched. The `category_spread`
 CTE (the `stddev_pop`) is removed; the model joins `int_fantasy__category_scales` on
-(`platform`, `league_id`, `season`, `category_key`) and calls the macro. Columns and
-their names are unchanged; `standardised_value` now means matchup margins.
+(`platform`, `league_id`, `season`, `category_key`) and calls the macro. The column
+`standardised_value` is renamed `scaled_value`: it is no longer divided by a standard
+deviation of the value itself, and a name that says only "on a common scale" stays true
+under ADR 0003, ADR 0010 and whatever #57 produces. No other column changes.
 
 ### `fct_player_season_value` (unchanged SQL)
 
@@ -179,10 +182,11 @@ this ties the transaction fact to the same scale.
 | R3.1 | existing transaction unit tests, re-fed with scales; expected totals restated with the arithmetic | a window standardised differently from a season |
 | R3.2 | existing `…an_add_covering_a_pair_reproduces_the_season_fact` | the two facts drifting |
 | R3 | last task: the four sums of `total_value` in the expected values | plausible but wrong arithmetic |
+| R2.6 | YAML column list; no `standardised_value` or `fo_standardised_value` left in `dbt/` | the old name lingering beside the new meaning |
 | R4 | review of the header, ADR 0003, the index and the note on #12 | the old meaning surviving in prose |
 
 Existing unit tests that assert a `standardised_value` or `total_value` computed from a
-spread are restated against a mocked scale, each saying why its expected value changed.
+spread are renamed to `scaled_value` and restated against a mocked scale, each saying why its expected value changed.
 `…zero_spread_standardises_to_zero…` becomes the zero-scale case. Tests are written
 before the models they test.
 
@@ -209,9 +213,12 @@ before the models they test.
 
 ## Open questions
 
-- **Whether `standardised_value` should be renamed** now that it is not divided by a
-  standard deviation of players. Kept: it is still a value on a standard scale, and
-  renaming a column across two facts and #12 is churn. The owner may prefer otherwise.
+- **Several valuation methods side by side.** Raised by the owner on 2026-10-04 as
+  something to consider later, not for this build. The design leaves one seam for it:
+  every method differs only in the scale a category's value is divided by, and that
+  lives in `int_fantasy__category_scales`. Offering methods as options would mean a
+  `scale_method` key on that model and on the value facts (a grain change), or a dbt
+  variable that picks one per build. Which, and whether, is for #57.
 - **Whether a fitted scale would do better.** Decided by the owner on 2026-10-03: matchup
   margin for now, and #57 to land earlier seasons' matchup scores and backtest a fitted
   win-probability scale. The league has 17 earlier seasons; whether ESPN still serves

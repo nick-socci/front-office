@@ -37,7 +37,7 @@ half for several that hitters fill (evidence in [design.md](design.md#evidence))
   on 2026 (design.md). Not shipped.
 - **No correction for correlated categories** (H, TB, R). Each is its own category in the
   league's scoring.
-- **No change to grains, row counts, windows or column names.**
+- **No change to grains, row counts or windows**, and one column rename only (R2.6).
 - **No lineup work.** #12 consumes whatever scalar this leaves.
 - **No tolerance widening** and no test weakened to make a build pass.
 
@@ -71,16 +71,19 @@ half for several that hitters fill (evidence in [design.md](design.md#evidence))
 
 ### R2. Player value
 
-- R2.1 THE SYSTEM SHALL compute `standardised_value` as value over replacement divided by
+- R2.1 THE SYSTEM SHALL compute `scaled_value` as value over replacement divided by
   the margin scale for a count category, and as value over replacement divided by the
   typical side denominator and then by the margin scale for a rate category.
 - R2.2 WHEN a pair has no played day on a category's side THE SYSTEM SHALL give
-  `standardised_value` as 0.
+  `scaled_value` as 0.
 - R2.3 IF the margin scale is zero or null, or a rate's typical side denominator is zero
-  or null, THEN THE SYSTEM SHALL give `standardised_value` as 0, and null only when value
+  or null, THEN THE SYSTEM SHALL give `scaled_value` as 0, and null only when value
   over replacement is itself null.
-- R2.4 THE SYSTEM SHALL keep `total_value` as the sum of standardised values over the
+- R2.4 THE SYSTEM SHALL keep `total_value` as the sum of scaled values over the
   scored categories, null if any is null.
+- R2.6 THE SYSTEM SHALL name the scaled category value `scaled_value`, in place of
+  `standardised_value`, in `fct_player_category_value`, and rename the macro to
+  `fo_scaled_value`; `total_value` keeps its name. *(Owner's decision, 2026-10-04.)*
 - R2.5 THE SYSTEM SHALL leave `numerator`, `denominator`, `played_days`, `contribution`
   and `value_over_replacement` of `fct_player_category_value` identical to their values
   before the change.
@@ -118,7 +121,7 @@ half for several that hitters fill (evidence in [design.md](design.md#evidence))
 | Top 50 / top 100 | SP 19 / 37, hitter 28 / 54, RP 3 / 9 | query |
 | Bottom 20 | hitter 17, SP 2, RP 1 | query |
 | Relievers below zero | 36 of 107 `RP` pairs | query |
-| Sum of standardised values | batting categories 1,139, pitching 1,250 (were 862 and 1,152) | query |
+| Sum of scaled values | batting categories 1,139, pitching 1,250 (were 862 and 1,152) | query |
 | Rank agreement with today | rank correlation of `total_value` 0.992 | compare with the snapshot |
 | Transaction impact, sums of `total_value` | hitter adds 221.09 (151), pitcher adds 457.47 (223), hitter drops 170.37 (153), pitcher drops 451.72 (210) | query |
 | Transaction impact, other columns | all 737 rows identical outside `total_value` | compare with the pre-build snapshot |
