@@ -23,7 +23,27 @@
 -- matchup keeps a row (matchups_measured 0, margin_scale null) rather than vanishing from
 -- the facts through an inner join.
 --
--- SAMPLE AND SENSITIVITY. (written in task 3)
+-- RATE CONVERSION. A rate's value over replacement arrives in numerator units over the
+-- player's own denominator (earned runs x 27 saved over his outs). Dividing by
+-- side_denominator turns it into the change it makes to a typical side's rate, which is
+-- the unit margin_scale is in. It is a first-order conversion: a pitcher's effect on a
+-- side with fewer innings than typical is larger than stated.
+--
+-- SAMPLE. One season of one league: on 2026, 143 matchups, every one with both sides
+-- defined in all 17 categories. Typical side denominators are 207.83 at-bats and 172.40
+-- outs.
+--
+-- SENSITIVITY. Two of the 24 matchup periods are long (12 and 14 days). Every matchup
+-- counts once here whatever its length. Measured without those two periods (131 matchups)
+-- the scales move by at most 7.0% (IP, 47.17 to 43.88 outs), 5.8% (W), 5.5% (B_SO), and by
+-- under 2% for every rate, HR, SB, TB and B_BB.
+--
+-- WHAT COMES WITH MEASURING IT HERE (accepted by the owner, #55; revisited in #57):
+--   * player value now depends on matchup results, so it moves whenever a matchup is
+--     restated, even for a player whose own production did not change;
+--   * the players being valued are in the sides the scale is measured from;
+--   * early in a season the scale rests on few matchups and is noisy.
+-- A scale pooled from earlier seasons would remove all three.
 
 {{ config(materialized='table') }}
 
