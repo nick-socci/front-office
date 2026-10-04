@@ -4,6 +4,11 @@
 -- player moved), so a trade of two players is one topic with two messages. The message
 -- is the grain here, because that is what moves a player.
 --
+-- message_to, message_from and message_for are ESPN's `to`, `from` and `for` fields, kept
+-- as sent. They are not all team ids: which one names the acting team depends on the
+-- message type, and for type 239 `from` is a lineup slot id. Staging does not choose;
+-- int_fantasy__transactions applies the rule (ADR 0004).
+--
 -- The payload also identifies the ESPN MEMBER behind each move via an account GUID
 -- (topic.author / message.author). Those fields are never selected: they identify a
 -- real person, and this repo is public.
@@ -67,8 +72,9 @@ select
     {{ fo_json_int('message', '$.messageTypeId') }} as message_type_id,
     activities.activity,
     {{ fo_json_int('message', '$.targetId') }} as espn_player_id,
-    {{ fo_json_int('message', '$.to') }} as to_team_id,
-    {{ fo_json_int('message', '$.from') }} as from_team_id,
+    {{ fo_json_int('message', '$.to') }} as message_to,
+    {{ fo_json_int('message', '$.from') }} as message_from,
+    {{ fo_json_int('message', '$.for') }} as message_for,
     {{ fo_parse_fetched_at() }} as fetched_at
 from messages
 left join {{ ref('espn_activity_types') }} as activities

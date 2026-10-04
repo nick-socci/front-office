@@ -1,6 +1,6 @@
 # 0003. Total value is a sum of standardised category values
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-03
 - Spec: [0011-player-value](../specs/0011-player-value/design.md) · Issue: #11
 

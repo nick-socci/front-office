@@ -1,6 +1,6 @@
 # 0007. Category values are a long table
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-03
 - Spec: [0011-player-value](../specs/0011-player-value/design.md) · Issue: #11
 

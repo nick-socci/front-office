@@ -113,13 +113,13 @@ category values and a narrow fact for the season summary
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0001](../../adr/0001-replacement-level-is-the-free-agent-pool.md) | Replacement level is the top-N free agents per group, N = number of teams | proposed |
-| [0002](../../adr/0002-value-is-measured-per-played-day.md) | Counts compare per played day; rates compare as marginal components | proposed |
-| [0003](../../adr/0003-total-value-is-a-sum-of-standardised-category-values.md) | Total value is the equal-weight sum of standardised category values | proposed |
-| [0004](../../adr/0004-a-transactions-acting-team-depends-on-its-message-type.md) | A transaction's acting team comes from a field chosen by message type, held in a seed | proposed |
-| [0005](../../adr/0005-a-drops-impact-is-the-rest-of-the-season.md) | A drop's impact is the player's MLB production for the rest of the season | proposed |
-| [0006](../../adr/0006-player-value-counts-every-started-day.md) | Value counts every started day; reconciliation covers matchup days only | proposed |
-| [0007](../../adr/0007-category-values-are-a-long-table.md) | Category values are a long fact; the season summary is a separate narrow fact | proposed |
+| [0001](../../adr/0001-replacement-level-is-the-free-agent-pool.md) | Replacement level is the top-N free agents per group, N = number of teams | accepted |
+| [0002](../../adr/0002-value-is-measured-per-played-day.md) | Counts compare per played day; rates compare as marginal components | accepted |
+| [0003](../../adr/0003-total-value-is-a-sum-of-standardised-category-values.md) | Total value is the equal-weight sum of standardised category values | accepted |
+| [0004](../../adr/0004-a-transactions-acting-team-depends-on-its-message-type.md) | A transaction's acting team comes from a field chosen by message type, held in a seed | accepted |
+| [0005](../../adr/0005-a-drops-impact-is-the-rest-of-the-season.md) | A drop's impact is the player's MLB production for the rest of the season | accepted |
+| [0006](../../adr/0006-player-value-counts-every-started-day.md) | Value counts every started day; reconciliation covers matchup days only | accepted |
+| [0007](../../adr/0007-category-values-are-a-long-table.md) | Category values are a long fact; the season summary is a separate narrow fact | accepted |
 
 ## Detailed design
 
@@ -367,3 +367,101 @@ Read-only queries against `data/warehouse.duckdb` (built 2026-10-01), run 2026-1
 
 ## Amendments
 
+### 2026-10-03 — the seed generator is behind the committed seeds
+
+Found in task 2. `scripts/make_espn_seeds.py` writes `espn_activity_types` with two
+columns and `espn_lineup_slots` with three, but the committed seeds carry
+`is_transaction` (and a row for type 188) and `slot_role`, added in #26 and #10 without
+the generator. Running it as task 2 instructs would have dropped them. Task 2 therefore
+first makes the generator reproduce the committed seeds byte for byte, with the rules for
+`is_transaction` and `slot_role` held as tables in the script, and only then adds
+`movement`, `method` and `team_field`. No decision changes.
+
+### 2026-10-03 — the fixtures must carry the message's `for` field
+
+Found in task 1. `scripts/make_fixtures.py` allowlists `to` and `from` on a transaction
+message but not `for`, and the fixtures hold one type-239 drop. Without `for` its acting
+team is null in CI and R2.5 fails there. Task 2 adds `for` to the allowlist and
+regenerates. `for` is a team id on type 239 (ADR 0004), not member data, and the
+allowlist approach and privacy test are unchanged.
+
+### 2026-10-03 — type 180 also carries `for`, and it is not the acting team
+
+Found in task 1. All 20 WAIVER ADDED messages carry `for` and `from` (always 0). ADR
+0004's rule for 180 stands: the player is on the `to` team's roster the next day for all
+10 in-season claims (the other 10 are pre-season), on the `for` team's for 1 (the one row
+where the two are equal), and each claim's paired drop names the `to` team. What `for`
+means on a 180 is not established and nothing here uses it.
+
+### 2026-10-03 — task 2 and 3 results against the open questions
+
+- *The eleven 179/181 drops*: 7 are pre-season (the spec said 6) and 4 are same-day
+  add-and-drops by the same team. None names a wrong team.
+- Across all types, 33 of 363 drops have the player on no roster the day before, so the
+  rostering-team test covers 330 and passes on all of them. Two type-239 drops are neither
+  pre-season nor same-day: one team's free-agent adds on 2026-04-19 dropped on 04-20,
+  absent from the 04-19 roster snapshot.
+- *Fixtures and the replacement pool* (task 3): the CI warehouse holds unrostered players
+  in every group (22 hitters, 3 SP, 9 RP), so no fixture change was needed for the pool.
+- The seed generator now writes LF line endings, as the hand-edited seeds already had;
+  `espn_stat_ids` and `espn_player_positions` change in line endings only.
+
+### 2026-10-03 — the hitter replacement AVG at N = 12 measures .2416, not .237
+
+Found in task 5. Built exactly as designed (unrostered that date, grouped over free-agent
+days, top N by plate appearances, ties by id), the hitter pool is 12 players, 1,690 played
+days, 1,369 H in 5,666 AB: **.2416**. Everything else in the expected-values table
+reproduces to the printed precision: hitters .2410 at N = 6 and .2420 at N = 24; SP ERA
+5.07 / 5.15 / 5.00 and WHIP 1.45; RP ERA 4.45 / 4.13 / 3.90 and WHIP 1.29; 44,217
+free-agent days, 1,266 players, 557 / 148 / 561 per group. The 12/13 cut is not a tie (483
+PA twice, split by id, then 479).
+
+No variant of the pool tried (ranking by at-bats, days or games; never-rostered instead of
+unrostered-that-date) gives .237 at 12 together with .241 and .242 at 6 and 24, so the
+.237 in requirements.md, the design's alternatives table and ADR 0001 looks like a
+mis-recorded figure, not a different definition. **The definition is unchanged and
+nothing was tuned.** The owner accepted .2416 as the expected value on 2026-10-03;
+requirements.md and ADR 0001 carry the corrected figure.
+
+### 2026-10-03 — a non-pitcher in a pitcher slot is measured from his own pitching
+
+Found in task 6; decided by the owner. The open question said the only 2026 cases were two
+days on which a `DH`-default player did not pitch. The count is 15 started days in pitcher
+slots (9 `SP`, 6 `P`) by one `DH`-default two-way player, and he pitched on 13 of them,
+every one a start. The spec's flat `RP` fallback would have measured a starter's day
+against a reliever's.
+
+Superseded rule: for pitcher-slot days, a player whose `replacement_group` is `hitter` is
+measured against `SP` if at least half his games pitched in the season were starts, else
+`RP` (the `fo_replacement_group` rule on his pitching alone). A player who never recorded
+an out stays `RP`; he has no pitching day, so the level is never applied. The answer is
+the new column `dim_players.pitcher_slot_replacement_group`, which both value facts read.
+2026: 230 hitters `RP`, 1 hitter `SP`. This refines how ADR 0002's levels are assigned and
+changes no ADR decision.
+
+### 2026-10-03 — "outside any matchup" means the team has no side that period
+
+Found in task 8. Every scoring date belongs to a matchup period, so a started day is never
+outside the matchup calendar. The 245 days are outside because their team has no row in
+`int_fantasy__matchup_sides` for that period (two teams, period 22, a bye). That is what
+`started_days_outside_matchups` counts and what the R5.1 and R5.2 tests treat as outside;
+R4.6 and ADR 0006 read the same way. Measured: 38,665 = 38,420 + 245; R5.1 holds exactly
+on all 286 sides.
+
+### 2026-10-03 — supporting columns on the value facts
+
+`fct_player_category_value` also carries `platform`, `league_id`, `season`,
+`category_label`, `is_lower_better`, `replacement_group` (the group used on the
+category's side) and `played_days` (on that side), beside the columns the design lists.
+`played_days` is needed to recompute the standard deviation for `fct_transaction_impact`
+and to read a value in context; the rest identify the row. `fct_player_season_value`
+carries `platform`, `league_id` and `season` likewise. A third reconciliation test checks
+that the category fact's numerators and denominators add back up to the day grain per team.
+
+### 2026-10-03 — transaction windows on the real season
+
+Task 10. The next drop that ends an add's window is found by `transacted_at`, not date
+(five same-day add-and-drops, 26 player-team pairs with several adds), with a self-join
+rather than `lead`. Empty windows are kept with zero counts: one add dropped again before
+the season, and three drops on the last scoring date. 51 windows start on 2026-03-25: the
+49 pre-season transactions and two adds made that day.

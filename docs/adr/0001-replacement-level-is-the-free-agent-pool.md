@@ -1,6 +1,6 @@
 # 0001. Replacement level is the free-agent pool
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-03
 - Spec: [0011-player-value](../specs/0011-player-value/design.md) · Issue: #11
 
@@ -33,7 +33,7 @@ roster that date.
 Chosen: **the free-agent pool**, with three groups (hitter, SP, RP) and N = the number of
 fantasy teams (12 in 2026), ranked by playing time while unrostered (plate appearances
 for hitters, outs for pitchers). It is the only option that measures availability rather
-than a manager's choice, and it is stable: hitters' AVG is .241 / .237 / .242 and starters'
+than a manager's choice, and it is stable: hitters' AVG is .241 / .242 / .242 (the middle figure was first recorded as .237; corrected 2026-10-03) and starters'
 ERA 5.07 / 5.15 / 5.00 at N = 6 / 12 / 24, against .254 and 3.81 for started players.
 
 Three groups rather than one per hitter position because 12 free agents split nine ways

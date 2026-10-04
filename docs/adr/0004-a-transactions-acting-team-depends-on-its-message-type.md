@@ -1,6 +1,6 @@
 # 0004. A transaction's acting team depends on its message type
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-03
 - Spec: [0011-player-value](../specs/0011-player-value/design.md) · Issue: #11
 

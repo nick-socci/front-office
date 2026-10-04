@@ -266,6 +266,125 @@ models:
             combination_of_columns:
               [platform, league_id, season, scoring_date, fantasy_team_id, platform_player_id]
 
+  - name: int_fantasy__transactions
+    description: >
+      One row per transaction message: a player added or dropped, with the fantasy team
+      that acted. The acting team is `to` or `for` depending on the message type, chosen
+      by the espn_activity_types seed (ADR 0004). Trades are not here: they have no rule,
+      and a type with no rule fails the movement test rather than being guessed. Carries
+      no league_id or season (#28), so it joins to the single league-season on team and
+      player id.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: transaction_id
+        data_type: varchar
+        constraints: [{type: not_null}]
+        data_tests: [unique, not_null]
+      - name: topic_id
+        data_type: varchar
+      - name: transacted_at
+        data_type: timestamp with time zone
+      - name: transaction_date
+        data_type: date
+      - name: platform_player_id
+        data_type: bigint
+      - name: fantasy_team_id
+        description: >
+          The team that acted. A null means the seed's team_field named a message field
+          the message did not carry.
+        data_type: bigint
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_fantasy__teams')
+                field: fantasy_team_id
+      - name: movement
+        data_type: varchar
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [add, drop]
+      - name: method
+        data_type: varchar
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [free_agent, waiver, drop]
+      - name: dropped_from_slot
+        description: >
+          For a type-239 drop, the lineup slot the player left (message_from is a slot
+          id there, not a team); null for every other row.
+        data_type: varchar
+
+  - name: int_fantasy__replacement_levels
+    description: >
+      The production of a replacement player, per played day: one row per (replacement
+      group, component). The pool is the top N unrostered players of each group, N being
+      the number of fantasy teams; the level is the pool's component total over the
+      pool's played days. Every group has its rows even with an empty pool, where
+      pool_players and pool_played_days are 0 and pool_total and level_per_played_day
+      are null: an empty pool must not read as a replacement who produces nothing.
+    columns:
+      - name: replacement_group
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [hitter, SP, RP]
+      - name: component
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - games_batted
+                  - plate_appearances
+                  - at_bats
+                  - hits
+                  - doubles
+                  - triples
+                  - home_runs
+                  - runs
+                  - runs_batted_in
+                  - batter_walks
+                  - batter_strikeouts
+                  - stolen_bases
+                  - caught_stealing
+                  - hit_by_pitch
+                  - sacrifice_flies
+                  - total_bases
+                  - games_pitched
+                  - games_started
+                  - outs_recorded
+                  - batters_faced
+                  - hits_allowed
+                  - runs_allowed
+                  - earned_runs
+                  - home_runs_allowed
+                  - pitcher_walks
+                  - pitcher_strikeouts
+                  - hit_batsmen
+                  - wins
+                  - losses
+                  - saves
+                  - holds
+                  - blown_saves
+      - name: pool_players
+        data_tests: [not_null]
+      - name: pool_played_days
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [replacement_group, component]
+
   # ---------------------------------------------------------------------------
   # Not part of the seam: MLB facts and the attribution grain.
   # ---------------------------------------------------------------------------
@@ -823,3 +942,161 @@ unit_tests:
         - {fantasy_team_id: 2, stat_key: 83, numerator: 0, denominator: null, stat_value: 0}
         - {fantasy_team_id: 2, stat_key: 47, numerator: 0, denominator: 0, stat_value: null}
         - {fantasy_team_id: 2, stat_key: 41, numerator: 0, denominator: 0, stat_value: null}
+
+# -----------------------------------------------------------------------------
+# Unit tests: int_fantasy__replacement_levels (#11).
+#
+# Each overrides fo_batting_columns and fo_pitching_columns to short lists, so `expect`
+# can list every row of the model rather than 48. The model builds its rows from those
+# two macros, so the rules under test are the same.
+# -----------------------------------------------------------------------------
+
+  - name: replacement_levels_pool_ties_break_on_the_lower_mlbam_id
+    description: >
+      Two free-agent hitters with equal plate appearances and one fantasy team (N = 1):
+      the pool is the lower mlbam id, whichever order the rows arrive in. A rostered
+      hitter with more plate appearances is not eligible.
+    model: int_fantasy__replacement_levels
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, plate_appearances, hits]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, batters_faced]
+    given:
+      - input: ref('int_fantasy__teams')
+        rows:
+          - {fantasy_team_id: 1}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {scoring_date: "2026-06-01", mlbam_player_id: 900003}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 900002, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 2}
+          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 1}
+          - {mlbam_player_id: 900003, game_date: "2026-06-01", games_batted: 1, plate_appearances: 5, hits: 5}
+    expect:
+      rows:
+        - {replacement_group: hitter, component: games_batted, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {replacement_group: hitter, component: plate_appearances, pool_players: 1, pool_played_days: 1, pool_total: 4, level_per_played_day: 4}
+        - {replacement_group: hitter, component: hits, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {replacement_group: SP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: SP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: SP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: SP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+
+  - name: replacement_levels_a_played_day_is_one_sided
+    description: >
+      A pool hitter has one day batting and one day only pitching a mop-up inning (3 outs
+      against 1 batter faced, so with 4 plate appearances he is still a hitter). The pitching-only day is not a played day for hitter and
+      contributes nothing: pool_played_days is 1, not 2, and the level is per batting day.
+    model: int_fantasy__replacement_levels
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, plate_appearances, hits]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, batters_faced]
+    given:
+      - input: ref('int_fantasy__teams')
+        rows:
+          - {fantasy_team_id: 1}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {scoring_date: "2026-06-01", mlbam_player_id: 900009}
+          - {scoring_date: "2026-06-02", mlbam_player_id: 900009}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 2}
+          - {mlbam_player_id: 900001, game_date: "2026-06-02", games_batted: 0, games_pitched: 1, outs_recorded: 3, batters_faced: 1}
+    expect:
+      rows:
+        - {replacement_group: hitter, component: games_batted, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {replacement_group: hitter, component: plate_appearances, pool_players: 1, pool_played_days: 1, pool_total: 4, level_per_played_day: 4}
+        - {replacement_group: hitter, component: hits, pool_players: 1, pool_played_days: 1, pool_total: 2, level_per_played_day: 2}
+        - {replacement_group: SP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: SP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: SP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: SP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+
+  - name: replacement_levels_an_empty_pool_still_has_rows_with_a_null_level
+    description: >
+      Free-agent days for a hitter and a starter but no reliever. RP still gets a row per
+      pitching component, with pool_players 0, pool_played_days 0 and a null level: an
+      inner join would drop the group, and a coalesce to 0 would say replacement
+      relievers produce nothing.
+    model: int_fantasy__replacement_levels
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, plate_appearances, hits]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, batters_faced]
+    given:
+      - input: ref('int_fantasy__teams')
+        rows:
+          - {fantasy_team_id: 1}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {scoring_date: "2026-06-01", mlbam_player_id: 900009}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 2}
+          - {mlbam_player_id: 900002, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
+    expect:
+      rows:
+        - {replacement_group: hitter, component: games_batted, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {replacement_group: hitter, component: plate_appearances, pool_players: 1, pool_played_days: 1, pool_total: 4, level_per_played_day: 4}
+        - {replacement_group: hitter, component: hits, pool_players: 1, pool_played_days: 1, pool_total: 2, level_per_played_day: 2}
+        - {replacement_group: SP, component: games_pitched, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {replacement_group: SP, component: games_started, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
+        - {replacement_group: SP, component: outs_recorded, pool_players: 1, pool_played_days: 1, pool_total: 18, level_per_played_day: 18}
+        - {replacement_group: SP, component: batters_faced, pool_players: 1, pool_played_days: 1, pool_total: 24, level_per_played_day: 24}
+        - {replacement_group: RP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+
+  - name: replacement_levels_pool_components_before_dividing
+    description: >
+      Two pool hitters with unequal playing time: one day with 4 hits, and three days with
+      1 hit each. The level is the pool's 7 hits over its 4 played days, 1.75 a day. The
+      average of the two players' own per-day rates would be 2.5, so this catches a level
+      built by averaging per-player rates instead of pooling components (R3.2), which the
+      pool-is-worth-zero test cannot see because it reads the level it checks.
+    model: int_fantasy__replacement_levels
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, plate_appearances, hits]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, batters_faced]
+    given:
+      - input: ref('int_fantasy__teams')
+        rows:
+          - {fantasy_team_id: 1}
+          - {fantasy_team_id: 2}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {scoring_date: "2026-06-01", mlbam_player_id: 900009}
+          - {scoring_date: "2026-06-02", mlbam_player_id: 900009}
+          - {scoring_date: "2026-06-03", mlbam_player_id: 900009}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 900001, game_date: "2026-06-01", games_batted: 1, plate_appearances: 5, hits: 4}
+          - {mlbam_player_id: 900002, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 1}
+          - {mlbam_player_id: 900002, game_date: "2026-06-02", games_batted: 1, plate_appearances: 4, hits: 1}
+          - {mlbam_player_id: 900002, game_date: "2026-06-03", games_batted: 1, plate_appearances: 4, hits: 1}
+    expect:
+      rows:
+        - {replacement_group: hitter, component: games_batted, pool_players: 2, pool_played_days: 4, pool_total: 4, level_per_played_day: 1}
+        - {replacement_group: hitter, component: plate_appearances, pool_players: 2, pool_played_days: 4, pool_total: 17, level_per_played_day: 4.25}
+        - {replacement_group: hitter, component: hits, pool_players: 2, pool_played_days: 4, pool_total: 7, level_per_played_day: 1.75}
+        - {replacement_group: SP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: SP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: SP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: SP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {replacement_group: RP, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}

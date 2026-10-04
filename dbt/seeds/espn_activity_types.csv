@@ -1,8 +1,8 @@
-message_type_id,activity,is_transaction
-178,FA ADDED,true
-179,DROPPED,true
-180,WAIVER ADDED,true
-181,DROPPED,true
-188,LINEUP MOVED,false
-239,DROPPED,true
-244,TRADED,true
+message_type_id,activity,is_transaction,movement,method,team_field
+178,FA ADDED,true,add,free_agent,to
+179,DROPPED,true,drop,drop,to
+180,WAIVER ADDED,true,add,waiver,to
+181,DROPPED,true,drop,drop,to
+188,LINEUP MOVED,false,,,
+239,DROPPED,true,drop,drop,for
+244,TRADED,true,,,

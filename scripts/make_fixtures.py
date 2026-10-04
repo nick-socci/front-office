@@ -200,9 +200,9 @@ ESPN_MATCHUP_FIELDS = (
 )
 FIXTURE_MATCHUPS = 2
 
-# Transaction messages: what moved, where to. Never `author`, which is the ESPN account
-# GUID of the member who made the move.
-ESPN_TRANSACTION_MESSAGE_FIELDS = ("date", "messageTypeId", "targetId", "to", "from")
+# Transaction messages: what moved, where to. `for` is the acting team on a type-239 drop
+# (ADR 0004). Never `author`, which is the ESPN account GUID of the member who made the move.
+ESPN_TRANSACTION_MESSAGE_FIELDS = ("date", "messageTypeId", "targetId", "to", "from", "for")
 FIXTURE_TRANSACTION_TOPICS = 6
 # Message types that move a player, per dbt/seeds/espn_activity_types.csv. The fixture
 # takes topics carrying one of these, plus one topic of lineup moves only (type 188), so
