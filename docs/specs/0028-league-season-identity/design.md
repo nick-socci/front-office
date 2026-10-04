@@ -299,6 +299,12 @@ Tests are written before the code they test. Existing dbt unit tests that mock
 
 - **Whether pre-2018 ESPN seasons use a different path.** Believed so (#57). The key
   handles any path; whether staging can parse those payloads is #57's question.
+- **How a collision is resolved, once one has been seen.** Decided by the owner on
+  2026-10-04: the load fails and inserts nothing (R1.4), and choosing which of two
+  colliding files to keep is deliberately *not* designed now. Some mechanism will be
+  needed eventually; it waits until collisions have been observed in live operation and
+  what causes them is understood. Until then the only resolution is a person removing or
+  fixing a file.
 - **Name matching across seasons.** `int_fantasy__player_crosswalk` falls back to a name
   match only when the name belongs to exactly one MLB player, judged over every MLB
   player loaded. With two seasons loaded a name can stop being unique, so a player

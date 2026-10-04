@@ -61,4 +61,8 @@ whose API it is.
 - Bad / accepted cost: identity is derived at load, not recorded at landing. A sidecar
   with no URL has no identity and is skipped with a warning, as one with no metadata is
   today.
-- Follow-ups: #57 can land earlier seasons once this is in.
+- Bad / accepted cost: one colliding pair blocks the whole load until a person removes or
+  fixes a file. There is no rule for choosing which to keep; the owner wants to see
+  collisions in live operation before designing one (2026-10-04).
+- Follow-ups: #57 can land earlier seasons once this is in. A way to resolve a collision
+  is a later decision.
