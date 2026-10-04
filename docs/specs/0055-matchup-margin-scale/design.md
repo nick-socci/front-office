@@ -25,7 +25,7 @@ flowchart LR
   cats -->|"which categories are scored"| scales
   scales -->|"margin scale, side denominator"| cat
   scales -->|"the same scales"| impact
-  cat -->|"sum of standardised values"| season
+  cat -->|"sum of scaled values"| season
 
   classDef new stroke-width:3px
   classDef changed stroke-dasharray:5 3
@@ -160,7 +160,7 @@ unchanged; only `total_value` moves.
 
 It guards that both facts divide by the same number. It becomes
 `value_facts_share_the_category_scales`: for every row of the category fact with played
-days and a non-zero scale, `standardised_value × margin_scale × (side_denominator or 1)`
+days and a non-zero scale, `scaled_value × margin_scale × (side_denominator or 1)`
 equals `value_over_replacement` within 1e-9. Together with the whole-season-add test
 this ties the transaction fact to the same scale.
 
@@ -201,7 +201,7 @@ before the models they test.
   falls from 58th worst to 19th worst on it), and no reliever reaches the top 20.
 - **It cannot be shown to be better.** Stated in ADR 0010: 12 teams.
 - **CI fixtures hold two matchups.** A category whose two margins are zero has scale 0
-  and every standardised value 0 there. Structure is still tested; R2.3 makes it safe.
+  and every scaled value 0 there. Structure is still tested; R2.3 makes it safe.
 - **Value now moves when a matchup is restated** (#10's 10/5 refresh, #25, #30). Expected
   values here are as of 2026-10-03 and are re-measured if those land first.
   Accepted by the owner on 2026-10-04 as designed. Two costs go with it and are stated
