@@ -145,17 +145,29 @@ folder is examined, which is what the fetch logic needs. `has_landed` and `iter_
 are rebuilt on it: `has_landed(source, endpoint, partitions)` is true when the entity's
 folder holds at least one committed capture.
 
-**`LandingZone.scan`** classifies every entry under the root as `committed`, `temp` (a
-`….tmp-<pid>` directory), `invalid` (a `fetched_at=` directory that fails the shallow
-check) or `loose` (any file outside a capture directory, which is what the old layout
-and the spike payloads are). The lock file and the quarantine are not under the root.
+**`LandingZone.scan`** classifies every entry under the root:
+
+| Kind | What it is |
+|---|---|
+| `committed` | a `fetched_at=` directory that passes the shallow check |
+| `temp` | a `….tmp-<pid>` directory, whatever it holds |
+| `invalid` | a `fetched_at=` directory that fails the shallow check, including an empty one |
+| `loose` | a file that is not inside a capture or temporary directory: the old layout and the spike payloads |
+| `empty` | any other directory with nothing in it, such as a partition folder left behind when its contents moved |
+
+A source, endpoint or partition folder that leads to at least one entry of another kind
+is structure and is not reported. The lock file, the quarantine and the migration
+directory are not under the root.
 
 Every reader treats an entry that vanishes between listing and reading as not committed
 (R2.8).
 
-**`LandingZone.sweep(run_stamp, dry_run=False, deep=False, force=False)`**: collects
+**`LandingZone.sweep(run_stamp, dry_run=False, deep=False, force=False)`**: refuses
+with `MigrationUnfinished` if a migration is in progress (below). Otherwise it collects
 every scanned entry that is not `committed` (with `deep`, also committed captures that
-fail the deep check). If the count exceeds `max(50, 1% of the files under the root)` and
+fail the deep check). An `empty` directory is moved like anything else, and the scan is
+repeated until nothing new turns up, since moving a folder's last entry leaves the
+folder empty. If the count exceeds `max(50, 1% of the files under the root)` and
 `force` is false, it raises `SweepTooLarge` with the count and the first few paths and
 moves nothing (R3.6). Otherwise it creates the quarantine root, writes a `.gitignore`
 containing `*` into it, and moves each entry to
@@ -207,32 +219,66 @@ that case says so.
 One script, used on the real landing zone and on both fixture trees.
 
 - Under the writer lock. For every old-layout pair (`X.json` beside `X.meta.json`) whose
-  sidecar passes the old equivalent of the shallow check: create `X.tmp-<pid>/`, rename
+  sidecar passes the old equivalent of the shallow check: create `X.migrating/`, rename
   the two files into it as `payload.json` and `meta.json`, then rename the directory to
-  `X/`. Only renames; no file is opened for writing.
-- It appends each move, old path and new path, to
-  `<landing root>_migration-<stamp>.tsv` before making it, so a kill mid-way leaves a
-  record of exactly what was done.
-- `--dry-run` lists the moves and what would be left behind. `--reverse <tsv>` undoes a
-  recorded migration.
+  `X/`. Only renames; no file is opened for writing. The working name is `.migrating`,
+  not `.tmp-<pid>`, so it is never confused with a writer's temporary directory and is
+  the same on a rerun by another process.
+- **The journal.** It lives in `<landing root>_migration/`, a directory created first
+  with a `.gitignore` containing `*`, because it holds paths that include the league id
+  and the root may be anywhere, including a fixture tree in the public repository. It is
+  an append-only file with two records per capture: `begin <old stem> <new directory>`
+  written and flushed before the first rename, and `done <old stem>` after the last. A
+  first record `start` and a last record `finished` bracket the run.
+- **Resuming (R6.6).** On start the script reads the journal. For a capture with `begin`
+  and no `done` it works out the state from what is on disk and completes it: either or
+  both files may already be inside `X.migrating/`, or the final rename may already have
+  happened. Each of those states has a test. Only then does it continue with captures
+  not yet begun.
+- **The interlock (R6.7).** A journal with `start` and no `finished` means a migration is
+  in progress. `LandingZone.sweep`, and therefore every backfill and `repair`, refuses
+  to run in that state. Without this, a backfill after an interrupted migration would
+  sweep the half-moved capture's pieces into quarantine and fetch the entity again,
+  silently replacing a historical capture with a fresh one.
+- `--dry-run` lists the moves and what would be left behind. `--reverse` reads the
+  journal and undoes every capture it shows begun, from whatever state it is in, then
+  marks the journal reversed.
 - Anything that is not an old-layout pair is left where it is and reported (R6.3). After
   #21 there should be nothing; if the 201 spike payloads are still there they stay
   loose, and the sweep's size limit then stops the first backfill until a person
   decides.
 - Run on a tree already migrated, it finds no old-layout pairs and does nothing (R6.4).
 
-`scripts/make_fixtures.py` and `scripts/make_multi_fixtures.py` write the new layout.
-The committed fixture trees are moved by the migration script, so their file contents
-are unchanged and only paths differ in the diff.
+`scripts/make_fixtures.py` and `scripts/make_multi_fixtures.py` read and write the new
+layout. The committed fixture trees are moved by the migration script, so their file
+contents are unchanged and only paths differ in the diff; the journals that produces are
+in ignored directories and are not committed.
+
+`make_multi_fixtures.py` reads only the committed base fixture, and its byte-for-byte
+test keeps holding. `make_fixtures.py` reads the real landing zone, which is still in
+the old layout until task 11. So it is exercised in task 8 against a migrated copy of
+`data/raw/` (a reflink copy on the same filesystem, in an ignored directory, removed
+afterwards) and again against the real root after the migration. Any difference between
+what it generates and the committed base fixture is reported, not accepted: the base
+fixture was generated before the 2026-10-05 refresh, and a newer capture of one of its
+games could legitimately differ.
 
 ### Verifying the real migration
 
-`scripts/verify_migration.py <manifest> <tsv> <root>`: for every line of the checksum
-manifest taken on 2026-10-05, the file at the path the move list maps it to must exist
-and hash to the same value; no file under the root may be absent from that mapping. The
-201 spike payloads are in the manifest and gone from the tree after #21; the script
-takes the list of deleted paths (`.review/spike-files.txt`) and requires the two to
-account for every manifest line exactly.
+`scripts/verify_migration.py` checks two things.
+
+*Files.* For every line of the checksum manifest taken on 2026-10-05, the file at the
+path the journal maps it to must exist and hash to the same value; no file under the
+root may be absent from that mapping. The 201 spike payloads are in the manifest and
+gone from the tree after #21; the script takes the list of deleted paths and requires
+the two to account for every manifest line exactly.
+
+*Raw rows.* Given the current warehouse and the rebuilt one, every row of
+`raw.api_responses` must match on its key (source, endpoint, request path, request key,
+fetch time), its partitions and its payload, and the old row's `file_path` mapped
+through the journal must equal the new row's. `compare_warehouses.py` compares model
+relations only, so without this a raw row could change while every model happened to
+agree.
 
 ### Rebuilding the warehouse
 
@@ -244,14 +290,18 @@ cd dbt && FO_DUCKDB_PATH=../data/warehouse_r3.duckdb DBT_PROFILES_DIR=. uv run d
 cd .. && uv run python scripts/compare_warehouses.py data/warehouse.duckdb data/warehouse_r3.duckdb
 ```
 
-The comparison is exact, with no rounding: builds have been reproducible since #28. The
-owner swaps the files.
+The comparison is exact, with no rounding: builds have been reproducible since #28.
+`compare_warehouses.py` gains `--strict-columns`, which makes a column present on only
+one side a failure; today it is printed and passed over, which was right for #28, where
+columns were meant to change, and is wrong here, where none should. The owner swaps the
+files.
 
 ### `.gitignore`
 
-Add `data/raw_quarantine/`, `data/*.lock` and `data/*_migration-*.tsv`. The quarantine's
-own ignore file is the first line of defence and covers a non-default root; the move
-list holds paths, which include the league id.
+Add `data/raw_quarantine/`, `data/raw_migration/` and `data/*.lock`. These are the second
+line of defence. The first is the ignore-everything file written into the quarantine and
+into the migration directory before anything else is put there, which covers a root
+that is not the default.
 
 ### Order of work on the real data (owner's decision)
 
@@ -281,6 +331,7 @@ migration, in the last tasks.
 | R2.7 | the loader raises, naming the file, for a committed capture whose payload is not JSON | a silently skipped capture |
 | R2.8 | an entry removed between listing and reading is skipped by `committed`, `iter_landed`, the loader and the audit without an error | a reader crashing because a sweep ran |
 | R3.1–R3.3 | the sweep moves each kind whole, keeps relative paths, never overwrites (sweeping twice with one stamp), and `--dry-run` moves nothing | a deleted or overwritten file |
+| R3.1, R5.1 | an empty `fetched_at=` directory is `invalid`; an empty partition folder is `empty`; both are swept and both are audit errors; a partition folder that becomes empty because its last entry was swept goes in the same sweep | debris that holds no file and so is never seen |
 | R3.2 | with the landing root at an arbitrary path inside a git work tree, `git check-ignore` passes for a file nested in its quarantine | private data in a committable place |
 | R3.5 | `repair --dry-run` lists and exits 0 with the tree unchanged; `--deep` moves a capture whose checksum fails | a dry run that moves |
 | R3.6 | 51 loose files in a tree of 100 captures: the sweep raises and moves nothing; with `force` it moves them; 3 temporary directories move without `force` | a mass move caused by a bug or an unmigrated tree |
@@ -289,9 +340,12 @@ migration, in the last tasks.
 | R5.1–R5.3 | the audit reports debris as an error, a checksum mismatch as an error, and a non-empty quarantine as a warning | silent corruption; forgotten quarantine |
 | R6.1, R6.3 | the migration moves a tree of old-layout pairs, leaves a lone payload where it is and reports it; `--dry-run` moves nothing | a spike payload paired with the wrong sidecar; a dry run that moves |
 | R6.1 | every file's SHA-256 is the same before and after, and no file was opened for writing (the tree is made read-only except for directory entries) | the migration changing contents |
-| R6.2 | a migration killed half-way (simulated) has a move list that matches what moved; `--reverse` restores the original tree byte for byte, including from the half-way state | an irreversible or unrecorded move |
+| R6.2 | `--reverse` restores the original tree byte for byte, from a finished migration and from each interrupted state; with the root at an arbitrary path inside a git work tree, `git check-ignore` passes for the journal | an irreversible move; a list of private paths left committable |
+| R6.6 | a migration killed after each of its four steps for one capture (simulated by stopping there): a second run completes that capture and the rest, and the result equals an uninterrupted migration | a capture left in pieces |
+| R6.7 | with a journal started and not finished, `backfill` and `repair` exit non-zero naming the migration and move nothing; after the migration finishes, or is reversed, they run | a backfill sweeping a half-moved historical capture and replacing it with a fresh fetch |
+| R6.2, all | the raw-row comparison reports a changed payload, a changed partition and a `file_path` that does not map; `compare_warehouses.py --strict-columns` fails on a column present on one side only | a comparison that proves less than it says |
 | R6.4 | the migration run twice does nothing the second time | double nesting |
-| R6.5 | both generators reproduce their committed trees byte for byte in the new layout; the privacy test and the pre-commit guard still cover every ESPN payload | a hand-moved fixture; a payload escaping the privacy checks under its new name |
+| R6.5 | `make_multi_fixtures.py` reproduces its committed tree byte for byte in the new layout (pytest); `make_fixtures.py` is run against a migrated copy and, later, the real root, with any difference reported; the privacy test and the pre-commit guard still cover every ESPN payload | a hand-moved fixture; a payload escaping the privacy checks under its new name |
 
 Fault-injection cases and what each must leave. "Second run" is a backfill of the same
 settled game with a later stamp.
@@ -316,8 +370,10 @@ the code they test.
 ## Risks
 
 - **The migration moves every file in the real landing zone.** Mitigated by: the owner's
-  verified NAS backup beforehand; renames only; a move list written before each move;
-  verification of every file against the manifest; and a tested reversal.
+  verified NAS backup beforehand; renames only; a journal that records each capture's
+  move beginning and ending; resumption from any interrupted state; a refusal to
+  backfill or sweep while it is unfinished; verification of every file against the
+  manifest and every raw row against the current warehouse; and a tested reversal.
 - **The roster captures cannot be re-created** if lost, which is why the backup comes
   first.
 - **A second warehouse rebuild and swap.** About five minutes of machine time, compared
@@ -370,6 +426,12 @@ Probes in temporary directories and a read-only scan of `data/raw/`, 2026-10-05.
 | design-review, first pass | F2 (P1): the committed test did not require the sidecar to describe its path or the payload to be readable | Kept: one `LandingZone.check`, shallow and deep (R2.1, R2.6, R2.7) |
 | design-review, first pass | F3 (P1): the fault-injection matrix demanded outcomes the write sequence could not give | Kept in spirit: each failure point has its own expected state, rewritten for the rename protocol |
 | design-review, first pass | F4 (P2): readers could read a path the sweep had moved | Kept: readers treat a vanished entry as not committed (R2.8) |
+| design-review 2026-10-05, second pass (on this design) | F1 (P1): a migration interrupted between a capture's renames had no recovery, and the next backfill could sweep its pieces into quarantine | Changed: a begin/done journal, resumption from every interrupted state, and a refusal to backfill or sweep while a migration is unfinished (R6.2, R6.6, R6.7) |
+| design-review, second pass | F2 (P1): the base fixture generator was to be verified before its real-data input was migrated | Changed: it is run against a migrated copy in task 8 and against the real root after task 11; only the multi generator has a byte-for-byte test |
+| design-review, second pass | F3 (P1): the journal's ignore rule covered only the default root, and it holds paths with the league id | Changed: the journal lives in a directory made git-ignored before the first record, as the quarantine is |
+| design-review, second pass | F4 (P2): the prescribed comparison covers model relations only and passes over column differences | Changed: a raw-row comparison through the journal, and `--strict-columns` |
+| design-review, second pass | F5 (P2): the sweep's dry run before the migration exceeds the limit, and the task did not say that was expected | Changed: the expected refusal is an expected value; task 10 runs only the migration's dry run before, and the sweep's after |
+| design-review, second pass | F6 (P2): empty and unexpected directories had no classification | Changed: `invalid` covers an empty capture directory, a new kind `empty` covers the rest, both swept and audited |
 
 ## Amendments
 

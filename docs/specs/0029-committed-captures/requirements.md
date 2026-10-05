@@ -108,9 +108,9 @@ has no single answer until this is fixed.
 ### R3. Recovery
 
 - R3.1 WHEN a backfill starts THE SYSTEM SHALL move everything under the landing root
-  that is not a committed capture (a leftover temporary directory, a capture directory
-  that fails R2.1, a loose file) to a quarantine directory, keeping its relative path,
-  and log each one.
+  that is not a committed capture or a folder leading to one (a leftover temporary
+  directory, a capture directory that fails R2.1, a loose file, an empty directory) to a
+  quarantine directory, keeping its relative path, and log each one.
 - R3.2 THE SYSTEM SHALL keep the quarantine directory outside the landing root, and SHALL
   make it ignored by git wherever it is, by writing an ignore-everything file into it
   before moving anything.
@@ -151,8 +151,15 @@ has no single answer until this is fixed.
 
 - R6.1 THE SYSTEM SHALL provide a migration that moves every existing committed capture
   into the directory layout by rename alone, under the writer lock, with a dry-run mode.
-- R6.2 THE SYSTEM SHALL record every move the migration makes, old path to new path, in a
-  file beside the landing root, and SHALL be able to reverse the migration from it.
+- R6.2 THE SYSTEM SHALL record the migration in a journal, noting each capture when its
+  move begins and again when it is complete, and SHALL be able to reverse the migration
+  from it. The journal lives in a directory beside the landing root that is made
+  git-ignored before the first record is written, wherever the root is.
+- R6.6 WHEN the migration is interrupted THE SYSTEM SHALL, on being run again, first
+  finish any capture the journal shows begun and not completed, from whatever state its
+  files are in, and only then continue.
+- R6.7 WHILE a migration has been started and not finished THE SYSTEM SHALL refuse to run
+  a backfill or a sweep, saying that the migration must be completed or reversed first.
 - R6.3 THE SYSTEM SHALL leave anything that is not a committed capture where it is during
   the migration, and report it.
 - R6.4 WHEN the migration is run on a landing zone already in the directory layout THE
@@ -172,12 +179,13 @@ Real landing zone, `data/raw/`, on 2026-10-05 after the settle-window refresh.
 | The rename this design relies on | onto a non-empty directory it fails; onto an empty directory it silently replaces it, so the writer checks first | reproduced on the landing zone's filesystem (btrfs) |
 | Before the migration | #21 done: 0 payloads with no sidecar; 10,236 files; the owner's NAS backup of the old layout verified | scan; the owner's confirmation on #8 |
 | Migration, dry run | 5,118 captures to move; 0 items left behind | `--dry-run` |
+| Sweep dry run **before** the migration | refuses: about 10,236 loose files is over the limit, exit non-zero, nothing moved. This is the expected state of an unmigrated landing zone, not a failure | `front-office repair --dry-run` |
 | After the migration | 5,118 capture directories, each with `payload.json` and `meta.json`; 10,236 files; 0 loose files | scan |
 | Contents unchanged | every file's SHA-256 equals its entry in the manifest of 2026-10-05 (`59b4bf09…618f8c`) under its old path, through the recorded move list; no file missing or added | comparison script |
 | Reversal | applied to a copy of the fixture tree, the reverse of the migration restores the original tree byte for byte | pytest |
 | First sweep after the migration (dry run) | 0 items to move | `front-office repair --dry-run` |
-| Raw table after rebuild | 5,118 rows, 5,118 distinct keys | row count |
-| Warehouse comparison | every relation identical between the current warehouse and the rebuilt one, compared exactly (builds are reproducible since #28) | `compare_warehouses.py` without rounding |
+| Raw table after rebuild | 5,118 rows, 5,118 distinct keys; every row equal to the current warehouse's in key, partitions and payload, and its `file_path` equal to the old one mapped through the journal | raw comparison in `verify_migration.py` |
+| Warehouse comparison | every model relation identical between the current warehouse and the rebuilt one, compared exactly, with the same columns (builds are reproducible since #28) | `compare_warehouses.py --strict-columns`, no rounding |
 | Fixtures | both committed trees in the directory layout; the gates and the isolation check pass | `.agentic/gates` |
 | Fault injection | each failure point leaves the state in design.md's table; after the next run the entity is committed once and the landing root holds only captures | pytest, one case per point |
 | Audit after all of it | exit 0, 0 errors, 0 warnings | `front-office audit --season 2026` |
