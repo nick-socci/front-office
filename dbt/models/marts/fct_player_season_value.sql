@@ -96,7 +96,8 @@ total_values as (
         fantasy_team_id,
         case
             when count(*) filter (where scaled_value is null) > 0 then null
-            else sum(scaled_value)
+            -- in category order: a sum of doubles is only reproducible in a fixed order (#28)
+            else sum(scaled_value order by category_key)
         end as total_value
     from {{ ref('fct_player_category_value') }}
     group by platform, league_id, season, platform_player_id, fantasy_team_id

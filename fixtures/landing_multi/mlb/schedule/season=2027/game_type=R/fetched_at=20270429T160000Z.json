@@ -1,0 +1,490 @@
+{
+ "dates": [
+  {
+   "date": "2027-04-28",
+   "games": [
+    {
+     "gamePk": 1824445,
+     "gameGuid": "17071155-0192-4741-87b1-e2c7e768331d",
+     "gameType": "R",
+     "season": "2027",
+     "gameDate": "2027-04-28T17:10:00Z",
+     "officialDate": "2027-04-28",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 114,
+        "name": "Cleveland Guardians"
+       },
+       "score": 3,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 139,
+        "name": "Tampa Bay Rays"
+       },
+       "score": 1,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 5,
+      "name": "Progressive Field"
+     }
+    },
+    {
+     "gamePk": 1824608,
+     "gameGuid": "fa8f79f0-14a5-4ddb-960b-ed34d817f1c8",
+     "gameType": "R",
+     "season": "2027",
+     "gameDate": "2027-04-28T17:10:00Z",
+     "officialDate": "2027-04-28",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 145,
+        "name": "Chicago White Sox"
+       },
+       "score": 3,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 108,
+        "name": "Los Angeles Angels"
+       },
+       "score": 2,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 4,
+      "name": "Rate Field"
+     }
+    },
+    {
+     "gamePk": 1823717,
+     "gameGuid": "f0dc452b-83b1-42bf-b06e-5a15efc9ca19",
+     "gameType": "R",
+     "season": "2027",
+     "gameDate": "2027-04-28T17:40:00Z",
+     "officialDate": "2027-04-28",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 142,
+        "name": "Minnesota Twins"
+       },
+       "score": 3,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 136,
+        "name": "Seattle Mariners"
+       },
+       "score": 5,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 3312,
+      "name": "Target Field"
+     }
+    },
+    {
+     "gamePk": 1822907,
+     "gameGuid": "2683a6ef-b2ff-4c50-afca-3966811f376c",
+     "gameType": "R",
+     "season": "2027",
+     "gameDate": "2027-04-28T18:35:00Z",
+     "officialDate": "2027-04-28",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 140,
+        "name": "Texas Rangers"
+       },
+       "score": 3,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 147,
+        "name": "New York Yankees"
+       },
+       "score": 0,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 5325,
+      "name": "Globe Life Field"
+     }
+    },
+    {
+     "gamePk": 1822821,
+     "gameGuid": "0c4177b8-4e2a-4832-a927-f3feb664d0d9",
+     "gameType": "R",
+     "season": "2027",
+     "gameDate": "2027-04-28T19:07:00Z",
+     "officialDate": "2027-04-28",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 141,
+        "name": "Toronto Blue Jays"
+       },
+       "score": 8,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 111,
+        "name": "Boston Red Sox"
+       },
+       "score": 1,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 14,
+      "name": "Rogers Centre"
+     }
+    },
+    {
+     "gamePk": 1823958,
+     "gameGuid": "adf76e82-e9a7-4818-ac57-c10103c4061e",
+     "gameType": "R",
+     "season": "2027",
+     "gameDate": "2027-04-28T19:10:00Z",
+     "officialDate": "2027-04-28",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 119,
+        "name": "Los Angeles Dodgers"
+       },
+       "score": 2,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 146,
+        "name": "Miami Marlins"
+       },
+       "score": 3,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 22,
+      "name": "UNIQLO Field at Dodger Stadium"
+     }
+    },
+    {
+     "gamePk": 1823312,
+     "gameGuid": "e2b2cabd-bbb2-4acc-923e-abd7f806fce6",
+     "gameType": "R",
+     "season": "2027",
+     "gameDate": "2027-04-28T20:10:00Z",
+     "officialDate": "2027-04-28",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 135,
+        "name": "San Diego Padres"
+       },
+       "score": 4,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 112,
+        "name": "Chicago Cubs"
+       },
+       "score": 5,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 2680,
+      "name": "Petco Park"
+     }
+    },
+    {
+     "gamePk": 1824525,
+     "gameGuid": "0b1057a2-e703-4a0f-bd1f-3a62f1e27092",
+     "gameType": "R",
+     "season": "2027",
+     "gameDate": "2027-04-28T22:40:00Z",
+     "officialDate": "2027-04-28",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 113,
+        "name": "Cincinnati Reds"
+       },
+       "score": 2,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 115,
+        "name": "Colorado Rockies"
+       },
+       "score": 13,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 2602,
+      "name": "Great American Ball Park"
+     }
+    },
+    {
+     "gamePk": 1823392,
+     "gameGuid": "dc230d8d-887c-4475-84d3-03b70e34efb4",
+     "gameType": "R",
+     "season": "2027",
+     "gameDate": "2027-04-28T22:40:00Z",
+     "officialDate": "2027-04-28",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 134,
+        "name": "Pittsburgh Pirates"
+       },
+       "score": 4,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 138,
+        "name": "St. Louis Cardinals"
+       },
+       "score": 5,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 31,
+      "name": "PNC Park"
+     }
+    },
+    {
+     "gamePk": 1823633,
+     "gameGuid": "d095f1b9-7923-4741-bb07-8ce03e6c0969",
+     "gameType": "R",
+     "season": "2027",
+     "gameDate": "2027-04-28T23:10:00Z",
+     "officialDate": "2027-04-28",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 121,
+        "name": "New York Mets"
+       },
+       "score": 2,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 120,
+        "name": "Washington Nationals"
+       },
+       "score": 14,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 3289,
+      "name": "Citi Field"
+     }
+    },
+    {
+     "gamePk": 1824930,
+     "gameGuid": "2422a147-a6a1-4216-8f5c-732bb5fb61e8",
+     "gameType": "R",
+     "season": "2027",
+     "gameDate": "2027-04-28T23:15:00Z",
+     "officialDate": "2027-04-28",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 144,
+        "name": "Atlanta Braves"
+       },
+       "score": 4,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 116,
+        "name": "Detroit Tigers"
+       },
+       "score": 3,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 4705,
+      "name": "Truist Park"
+     }
+    },
+    {
+     "gamePk": 1823796,
+     "gameGuid": "03727caa-d3db-41ed-a67f-8e60ce4ca6b8",
+     "gameType": "R",
+     "season": "2027",
+     "gameDate": "2027-04-28T23:40:00Z",
+     "officialDate": "2027-04-28",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 158,
+        "name": "Milwaukee Brewers"
+       },
+       "score": 2,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 109,
+        "name": "Arizona Diamondbacks"
+       },
+       "score": 6,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 32,
+      "name": "American Family Field"
+     }
+    },
+    {
+     "gamePk": 1825015,
+     "gameGuid": "3576f826-563e-448c-8ae9-7be9af7431fc",
+     "gameType": "R",
+     "season": "2027",
+     "gameDate": "2027-04-29T01:40:00Z",
+     "officialDate": "2027-04-28",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 133,
+        "name": "Athletics"
+       },
+       "score": 5,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 118,
+        "name": "Kansas City Royals"
+       },
+       "score": 2,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 2529,
+      "name": "Sutter Health Park"
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -48,3 +48,8 @@ jobs:
         working-directory: dbt
         env:
           DBT_PROFILES_DIR: .
+
+      - name: Tenant isolation (two leagues by two seasons)
+        # Builds fixtures/landing_multi together and each league-season alone, and fails
+        # if any model gives a league-season different rows (spec 0028, ADR 0013).
+        run: uv run python scripts/check_tenant_isolation.py

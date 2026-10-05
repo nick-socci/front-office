@@ -44,4 +44,6 @@ inner join {{ ref('stg_espn__scoring_periods') }} as days
 inner join {{ ref('espn_lineup_slots') }} as slots
     on slots.lineup_slot_id = entries.lineup_slot_id
 left join {{ ref('int_fantasy__player_crosswalk') }} as crosswalk
-    on crosswalk.platform_player_id = entries.espn_player_id
+    on crosswalk.league_id = entries.league_id
+    and crosswalk.season = entries.season
+    and crosswalk.platform_player_id = entries.espn_player_id

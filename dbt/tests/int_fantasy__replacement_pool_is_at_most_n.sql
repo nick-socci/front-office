@@ -1,9 +1,21 @@
 -- A replacement pool holds at most one player per fantasy team: N is the number of
--- teams, so a larger pool means the top-N cut was made at the wrong size (or not made).
--- Returns the offending day kinds.
+-- teams of THE LEAGUE AND SEASON the pool belongs to, so a larger pool means the top-N cut
+-- was made at the wrong size (or at the size of another league). Returns the offending
+-- league-season day kinds.
 select
-    day_kind,
-    max(pool_players) as pool_players
-from {{ ref('int_fantasy__replacement_levels') }}
-group by day_kind
-having max(pool_players) > (select count(*) from {{ ref('int_fantasy__teams') }})
+    levels.platform,
+    levels.league_id,
+    levels.season,
+    levels.day_kind,
+    max(levels.pool_players) as pool_players
+from {{ ref('int_fantasy__replacement_levels') }} as levels
+inner join (
+    select platform, league_id, season, count(*) as team_count
+    from {{ ref('int_fantasy__teams') }}
+    group by platform, league_id, season
+) as sizes
+    on sizes.platform = levels.platform
+    and sizes.league_id = levels.league_id
+    and sizes.season = levels.season
+group by levels.platform, levels.league_id, levels.season, levels.day_kind, sizes.team_count
+having max(levels.pool_players) > sizes.team_count

@@ -1,0 +1,970 @@
+{
+ "dates": [
+  {
+   "date": "2026-04-29",
+   "games": [
+    {
+     "gamePk": 824445,
+     "gameGuid": "17071155-0192-4741-87b1-e2c7e768331d",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-29T17:10:00Z",
+     "officialDate": "2026-04-29",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 114,
+        "name": "Cleveland Guardians"
+       },
+       "score": 3,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 139,
+        "name": "Tampa Bay Rays"
+       },
+       "score": 1,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 5,
+      "name": "Progressive Field"
+     }
+    },
+    {
+     "gamePk": 824608,
+     "gameGuid": "fa8f79f0-14a5-4ddb-960b-ed34d817f1c8",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-29T17:10:00Z",
+     "officialDate": "2026-04-29",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 145,
+        "name": "Chicago White Sox"
+       },
+       "score": 3,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 108,
+        "name": "Los Angeles Angels"
+       },
+       "score": 2,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 4,
+      "name": "Rate Field"
+     }
+    },
+    {
+     "gamePk": 823717,
+     "gameGuid": "f0dc452b-83b1-42bf-b06e-5a15efc9ca19",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-29T17:40:00Z",
+     "officialDate": "2026-04-29",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 142,
+        "name": "Minnesota Twins"
+       },
+       "score": 3,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 136,
+        "name": "Seattle Mariners"
+       },
+       "score": 5,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 3312,
+      "name": "Target Field"
+     }
+    },
+    {
+     "gamePk": 822907,
+     "gameGuid": "2683a6ef-b2ff-4c50-afca-3966811f376c",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-29T18:35:00Z",
+     "officialDate": "2026-04-29",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 140,
+        "name": "Texas Rangers"
+       },
+       "score": 3,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 147,
+        "name": "New York Yankees"
+       },
+       "score": 0,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 5325,
+      "name": "Globe Life Field"
+     }
+    },
+    {
+     "gamePk": 822821,
+     "gameGuid": "0c4177b8-4e2a-4832-a927-f3feb664d0d9",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-29T19:07:00Z",
+     "officialDate": "2026-04-29",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 141,
+        "name": "Toronto Blue Jays"
+       },
+       "score": 8,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 111,
+        "name": "Boston Red Sox"
+       },
+       "score": 1,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 14,
+      "name": "Rogers Centre"
+     }
+    },
+    {
+     "gamePk": 823958,
+     "gameGuid": "adf76e82-e9a7-4818-ac57-c10103c4061e",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-29T19:10:00Z",
+     "officialDate": "2026-04-29",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 119,
+        "name": "Los Angeles Dodgers"
+       },
+       "score": 2,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 146,
+        "name": "Miami Marlins"
+       },
+       "score": 3,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 22,
+      "name": "UNIQLO Field at Dodger Stadium"
+     }
+    },
+    {
+     "gamePk": 823312,
+     "gameGuid": "e2b2cabd-bbb2-4acc-923e-abd7f806fce6",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-29T20:10:00Z",
+     "officialDate": "2026-04-29",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 135,
+        "name": "San Diego Padres"
+       },
+       "score": 4,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 112,
+        "name": "Chicago Cubs"
+       },
+       "score": 5,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 2680,
+      "name": "Petco Park"
+     }
+    },
+    {
+     "gamePk": 824525,
+     "gameGuid": "0b1057a2-e703-4a0f-bd1f-3a62f1e27092",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-29T22:40:00Z",
+     "officialDate": "2026-04-29",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 113,
+        "name": "Cincinnati Reds"
+       },
+       "score": 2,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 115,
+        "name": "Colorado Rockies"
+       },
+       "score": 13,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 2602,
+      "name": "Great American Ball Park"
+     }
+    },
+    {
+     "gamePk": 823392,
+     "gameGuid": "dc230d8d-887c-4475-84d3-03b70e34efb4",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-29T22:40:00Z",
+     "officialDate": "2026-04-29",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 134,
+        "name": "Pittsburgh Pirates"
+       },
+       "score": 4,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 138,
+        "name": "St. Louis Cardinals"
+       },
+       "score": 5,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 31,
+      "name": "PNC Park"
+     }
+    },
+    {
+     "gamePk": 823633,
+     "gameGuid": "d095f1b9-7923-4741-bb07-8ce03e6c0969",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-29T23:10:00Z",
+     "officialDate": "2026-04-29",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 121,
+        "name": "New York Mets"
+       },
+       "score": 2,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 120,
+        "name": "Washington Nationals"
+       },
+       "score": 14,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 3289,
+      "name": "Citi Field"
+     }
+    },
+    {
+     "gamePk": 824930,
+     "gameGuid": "2422a147-a6a1-4216-8f5c-732bb5fb61e8",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-29T23:15:00Z",
+     "officialDate": "2026-04-29",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 144,
+        "name": "Atlanta Braves"
+       },
+       "score": 4,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 116,
+        "name": "Detroit Tigers"
+       },
+       "score": 3,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 4705,
+      "name": "Truist Park"
+     }
+    },
+    {
+     "gamePk": 823796,
+     "gameGuid": "03727caa-d3db-41ed-a67f-8e60ce4ca6b8",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-29T23:40:00Z",
+     "officialDate": "2026-04-29",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 158,
+        "name": "Milwaukee Brewers"
+       },
+       "score": 2,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 109,
+        "name": "Arizona Diamondbacks"
+       },
+       "score": 6,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 32,
+      "name": "American Family Field"
+     }
+    },
+    {
+     "gamePk": 825015,
+     "gameGuid": "3576f826-563e-448c-8ae9-7be9af7431fc",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-30T01:40:00Z",
+     "officialDate": "2026-04-29",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 133,
+        "name": "Athletics"
+       },
+       "score": 5,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 118,
+        "name": "Kansas City Royals"
+       },
+       "score": 2,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 2529,
+      "name": "Sutter Health Park"
+     }
+    },
+    {
+     "gamePk": 823471,
+     "gameGuid": "280c9390-aeee-420a-8619-18bfc123b2be",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-29T22:10:00Z",
+     "officialDate": "2026-04-30",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Postponed"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 143,
+        "name": "Philadelphia Phillies"
+       }
+      },
+      "away": {
+       "team": {
+        "id": 137,
+        "name": "San Francisco Giants"
+       }
+      }
+     },
+     "venue": {
+      "id": 2681,
+      "name": "Citizens Bank Park"
+     }
+    },
+    {
+     "gamePk": 824850,
+     "gameGuid": "85e9c7b4-a708-4c6a-b43a-3662ab374bd6",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-29T22:35:00Z",
+     "officialDate": "2026-04-30",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Postponed"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 110,
+        "name": "Baltimore Orioles"
+       }
+      },
+      "away": {
+       "team": {
+        "id": 117,
+        "name": "Houston Astros"
+       }
+      }
+     },
+     "venue": {
+      "id": 2,
+      "name": "Oriole Park at Camden Yards"
+     }
+    }
+   ]
+  },
+  {
+   "date": "2026-04-30",
+   "games": [
+    {
+     "gamePk": 824929,
+     "gameGuid": "482628e5-8f7e-463d-b96e-90f4471f492f",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-30T16:15:00Z",
+     "officialDate": "2026-04-30",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 144,
+        "name": "Atlanta Braves"
+       },
+       "score": 2,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 116,
+        "name": "Detroit Tigers"
+       },
+       "score": 5,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 4705,
+      "name": "Truist Park"
+     }
+    },
+    {
+     "gamePk": 824848,
+     "gameGuid": "e58bbe99-17ee-4e01-996d-327dfa7f80c3",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-30T16:35:00Z",
+     "officialDate": "2026-04-30",
+     "gameNumber": 1,
+     "doubleHeader": "Y",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 110,
+        "name": "Baltimore Orioles"
+       },
+       "score": 10,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 117,
+        "name": "Houston Astros"
+       },
+       "score": 3,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 2,
+      "name": "Oriole Park at Camden Yards"
+     }
+    },
+    {
+     "gamePk": 824850,
+     "gameGuid": "85e9c7b4-a708-4c6a-b43a-3662ab374bd6",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-30T16:40:00Z",
+     "officialDate": "2026-04-30",
+     "gameNumber": 2,
+     "doubleHeader": "Y",
+     "dayNight": "day",
+     "rescheduledFrom": "2026-04-29T22:35:00Z",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 110,
+        "name": "Baltimore Orioles"
+       },
+       "score": 5,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 117,
+        "name": "Houston Astros"
+       },
+       "score": 11,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 2,
+      "name": "Oriole Park at Camden Yards"
+     }
+    },
+    {
+     "gamePk": 823391,
+     "gameGuid": "4e52b770-96d8-43f5-bc70-b7ff57792376",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-30T16:35:00Z",
+     "officialDate": "2026-04-30",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 134,
+        "name": "Pittsburgh Pirates"
+       },
+       "score": 5,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 138,
+        "name": "St. Louis Cardinals"
+       },
+       "score": 10,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 31,
+      "name": "PNC Park"
+     }
+    },
+    {
+     "gamePk": 823472,
+     "gameGuid": "7a6f61d8-b7aa-4e74-a0d7-a2f0e97dfed2",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-30T16:35:00Z",
+     "officialDate": "2026-04-30",
+     "gameNumber": 1,
+     "doubleHeader": "S",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 143,
+        "name": "Philadelphia Phillies"
+       },
+       "score": 3,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 137,
+        "name": "San Francisco Giants"
+       },
+       "score": 2,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 2681,
+      "name": "Citizens Bank Park"
+     }
+    },
+    {
+     "gamePk": 823471,
+     "gameGuid": "280c9390-aeee-420a-8619-18bfc123b2be",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-30T21:35:00Z",
+     "officialDate": "2026-04-30",
+     "gameNumber": 2,
+     "doubleHeader": "S",
+     "dayNight": "night",
+     "rescheduledFrom": "2026-04-29T22:10:00Z",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 143,
+        "name": "Philadelphia Phillies"
+       },
+       "score": 6,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 137,
+        "name": "San Francisco Giants"
+       },
+       "score": 5,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 2681,
+      "name": "Citizens Bank Park"
+     }
+    },
+    {
+     "gamePk": 824524,
+     "gameGuid": "c5e5e642-7db6-4086-b815-1cc681caba5e",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-30T16:40:00Z",
+     "officialDate": "2026-04-30",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 113,
+        "name": "Cincinnati Reds"
+       },
+       "score": 6,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 115,
+        "name": "Colorado Rockies"
+       },
+       "score": 4,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 2602,
+      "name": "Great American Ball Park"
+     }
+    },
+    {
+     "gamePk": 823634,
+     "gameGuid": "0dfa56e8-1225-4ef2-a869-06584b001e70",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-30T17:10:00Z",
+     "officialDate": "2026-04-30",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 121,
+        "name": "New York Mets"
+       },
+       "score": 4,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 120,
+        "name": "Washington Nationals"
+       },
+       "score": 5,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 3289,
+      "name": "Citi Field"
+     }
+    },
+    {
+     "gamePk": 823795,
+     "gameGuid": "9058ba6d-1b09-4e9c-94f8-3fa59272fc73",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-30T17:40:00Z",
+     "officialDate": "2026-04-30",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 158,
+        "name": "Milwaukee Brewers"
+       },
+       "score": 13,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 109,
+        "name": "Arizona Diamondbacks"
+       },
+       "score": 1,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 32,
+      "name": "American Family Field"
+     }
+    },
+    {
+     "gamePk": 825016,
+     "gameGuid": "c374ed82-c92e-4b72-a48f-3ddf666929e4",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-30T19:05:00Z",
+     "officialDate": "2026-04-30",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "day",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 133,
+        "name": "Athletics"
+       },
+       "score": 6,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 118,
+        "name": "Kansas City Royals"
+       },
+       "score": 3,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 2529,
+      "name": "Sutter Health Park"
+     }
+    },
+    {
+     "gamePk": 823714,
+     "gameGuid": "f58adbc4-0d49-46ff-9fd5-dd5a6c39615e",
+     "gameType": "R",
+     "season": "2026",
+     "gameDate": "2026-04-30T23:40:00Z",
+     "officialDate": "2026-04-30",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 142,
+        "name": "Minnesota Twins"
+       },
+       "score": 7,
+       "isWinner": true
+      },
+      "away": {
+       "team": {
+        "id": 141,
+        "name": "Toronto Blue Jays"
+       },
+       "score": 1,
+       "isWinner": false
+      }
+     },
+     "venue": {
+      "id": 3312,
+      "name": "Target Field"
+     }
+    }
+   ]
+  }
+ ]
+}

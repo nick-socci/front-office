@@ -109,9 +109,9 @@ See [ADR 0013](../../adr/0013-isolation-is-proved-by-building-each-league-season
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0011](../../adr/0011-a-raw-response-is-identified-by-its-request-path-and-parameters.md) | The raw key gains the request path; partitions are stored for staging to read | proposed |
-| [0012](../../adr/0012-players-have-a-conformed-dimension-and-a-league-season-table.md) | `dim_players` is one row per player everywhere; `dim_player_league_seasons` holds what is per league-season | proposed |
-| [0013](../../adr/0013-isolation-is-proved-by-building-each-league-season-alone.md) | Isolation is a gate: every model, combined build against single builds | proposed |
+| [0011](../../adr/0011-a-raw-response-is-identified-by-its-request-path-and-parameters.md) | The raw key gains the request path; partitions are stored for staging to read | accepted |
+| [0012](../../adr/0012-players-have-a-conformed-dimension-and-a-league-season-table.md) | `dim_players` is one row per player everywhere; `dim_player_league_seasons` holds what is per league-season | accepted |
+| [0013](../../adr/0013-isolation-is-proved-by-building-each-league-season-alone.md) | Isolation is a gate: every model, combined build against single builds | accepted |
 
 ## Detailed design
 
@@ -392,3 +392,105 @@ Read-only checks of `data/raw/` and `data/warehouse.duckdb`, run 2026-10-04.
 
 ## Amendments
 
+### 2026-10-04 — the latest response is chosen in one pass, with `file_path` as tie-break
+
+Found in task 3, on the real season. The first implementation ranked narrow columns and
+joined the payloads back, the form `latest_boxscore_responses.sql` uses. At dbt's default
+four threads it ran DuckDB out of memory (23.9 GiB) in `stg_espn__player_game_stats` and
+`stg_mlb__batting_game_logs`; the code on `main` builds the same models on the same
+warehouse without error. A single `qualify row_number()` over league, season and period
+builds in the same time as `main` and passes. The macro's header records the measurement.
+The window orders by `fetched_at desc, file_path desc`: the design said only recency, and
+the project's rule is a deterministic tie-break. No decision changes.
+
+### 2026-10-04 — a relationship test to widen later in this build
+
+Task 4 left the `relationships` test from `stg_espn__matchup_periods.scoring_period` to
+`stg_espn__scoring_periods.scoring_period` on the value alone. With two league-seasons it
+would pass for a period that exists only in another league. It and any other
+single-column relationship between league-scoped models are widened in task 8, since the
+isolation check compares rows and cannot see a test that is too loose.
+
+### 2026-10-04 — order-dependent sums are made reproducible; the old warehouse is compared to nine decimals
+
+Found in task 5, and it is not caused by #28. `int_fantasy__category_scales` (built in
+#55) takes `sqrt(avg(margin * margin))` over 143 decimal values. The last digit of a
+floating-point sum depends on the order the rows arrive in, and that order changes from
+build to build: the same scale came out with three different last digits from the same
+data (the old warehouse, the new file, and the query run by hand). The value facts
+inherit it, and `total_value`, a sum of 17 scaled values, has the same weakness. On the
+real season four relations differ from the old warehouse in the last binary digit (at
+most 3.6e-15) and none differs at nine decimal places.
+
+This design's risk section said the problem had gone with #58's removal of
+`stddev_pop`. That was wrong: #58 replaced one order-dependent aggregate with another.
+
+It matters twice: R6.2 required exact equality with the old warehouse, and the isolation
+gate compares exact values on every run, so an order-dependent sum could fail it at
+random. The spec left this to the owner, who chose on 2026-10-04:
+
+- **the sums are computed in a fixed order** (R4.13): the scale's sum of squares ordered
+  by matchup, and the two `total_value` sums ordered by category. Every build then gives
+  the same digits, and the gate stays exact;
+- **the one-time comparison with the old warehouse is to nine decimal places** for
+  decimal columns (R6.2), because the old file's last digits are an accident of one
+  build. `compare_warehouses.py` has a `--round-doubles` option for that, off by default.
+
+The 2026 values move once by about 1e-15. No decision in an ADR changes.
+
+### 2026-10-04 — what task 5b settled that the design left open
+
+- `int_fantasy__transactions` had no join to teams, only a single-column `relationships`
+  test, which would pass for a team of another league. It is replaced by the singular
+  `int_fantasy__transactions_name_a_team_of_their_league_season`.
+- Free-agent days in `int_fantasy__replacement_levels` are also restricted to the MLB
+  season of the league-season (`int_mlb__player_game_days.season`), under R4.6.
+- `fct_transaction_impact` is unique on (`platform`, `league_id`, `season`,
+  `transaction_id`); its scoring bounds are left-joined, so a transaction in a
+  league-season with no matchup periods keeps its row and fails the window not-null
+  tests instead of vanishing.
+- The crosswalk's existing unit tests changed expected rows, because its grain changed:
+  a player rostered in two seasons or two leagues now has a row for each.
+
+### 2026-10-04 — the fixture, the check and the gate as built
+
+Tasks 6 to 9.
+
+- **The base fixture's ESPN sidecars hold a bare host as their URL**, so their request
+  path is empty. `111111`, 2026 is copied byte for byte and keeps it; the other three
+  league-seasons are written with the client's real URL shape
+  (`/apis/v3/games/flb/seasons/<season>/segments/0/leagues/<id>`, plus `/communication`).
+  The combined fixture therefore loads without collision and exercises real paths in
+  three of four league-seasons. Regenerating the base fixture with real URLs would need
+  the real landing zone and is left alone.
+- **The 2027 league-seasons have no transactions**: every fixture transaction is dated
+  September 2026, and none falls on the one 2027 day. Transaction windows across seasons
+  are therefore proved by unit tests (R4.3, R4.12), not by the fixture.
+- **The respelled player** is the lowest player id on every roster, with " Jr." appended
+  in `222222`, 2026: no fixture name has an accent to remove.
+- **The 2027 ESPN stamps are the 2026 ones plus 363 days**, not 364: the anchor reads the
+  settings stamp's date as the date of the latest period, which in a one-period season
+  is period 1. MLB games move a flat 364 days.
+- **A relation with `season` but no `league_id`** (`stg_mlb__games`,
+  `int_mlb__player_game_days`) is treated as league-free and checked one way. Only
+  `league_id` without `season` is reported as malformed.
+- **Single builds run `dbt seed` before `dbt run`**: models read seeds.
+- **A deliberate break was caught.** With the pool size counted over every league again,
+  the gate failed: the new unit test for pools of different sizes failed first, so the
+  combined build stopped before the row comparison ran. The row comparison itself is
+  covered by 13 pytest cases on the diff module.
+- **Gate time.** The isolation step takes about 84 seconds; the gates as a whole went
+  from about half a minute to 1 minute 54 seconds. The design expected "well under a
+  minute", which was wrong.
+- **Loose tests tightened in task 8**, none of which the row comparison could see: the
+  uniqueness keys of `fct_player_category_value` and `fct_player_season_value`;
+  `fct_player_season_value_day_counts_hold`; and three single-column `relationships`
+  tests in staging, replaced by `stg_espn__roster_teams_exist_in_their_league_season`
+  and `stg_espn__matchup_periods_use_their_own_scoring_periods`.
+- **The privacy guard** (`.agentic/pre-commit-guard`) scans the new fixture's ESPN folder
+  too. The change adds a path and removes nothing.
+- **`compare_warehouses.py --round-doubles N`** makes the rounded comparison the verdict:
+  a relation equal after rounding is reported and is not a failure.
+- **The loader's key checks** take about 4 seconds for a season-sized load of 2,688
+  captures, out of 3 minutes 35 seconds, nearly all of which is reading and parsing the
+  payloads.

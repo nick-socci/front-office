@@ -22,10 +22,16 @@ sources:
             description: mlb / espn / idmap.
           - name: endpoint
             description: Which endpoint produced the response, e.g. schedule, boxscore.
+          - name: request_path
+            description: URL path of the request, no host or query string; part of the key.
           - name: request_key
             description: Canonical (sorted) request parameters.
           - name: fetched_at
             description: UTC stamp, matching the landing filename.
+          - name: partitions
+            description: >-
+              Landing partitions as JSON, e.g. league_id and season for ESPN; staging
+              reads league and season from here.
           - name: payload
             description: The response body, unmodified.
           - name: file_path

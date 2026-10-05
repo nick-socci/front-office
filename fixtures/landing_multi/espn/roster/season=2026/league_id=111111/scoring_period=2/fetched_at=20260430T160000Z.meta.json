@@ -1,0 +1,16 @@
+{
+  "source": "espn",
+  "endpoint": "roster",
+  "partitions": {
+    "season": 2026,
+    "league_id": "111111",
+    "scoring_period": 2
+  },
+  "url": "https://lm-api-reads.fantasy.espn.com/",
+  "params": {
+    "view": "mRoster",
+    "scoringPeriodId": 2
+  },
+  "request_key": "scoringPeriodId=2&view=mRoster",
+  "fetched_at": "20260430T160000Z"
+}

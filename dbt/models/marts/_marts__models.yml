@@ -68,23 +68,32 @@ models:
           arguments:
             expression: "scored_categories > 0"
 
-  - name: dim_players
+  - name: dim_player_league_seasons
     description: >
-      One row per platform player id the league touched: everyone on a roster day plus
-      anyone only in the transaction log. A dim_ model describes a thing, here a player,
-      with one row per thing, and facts join to it for his attributes. Name, default
-      position and resolution come from his latest roster day; a transaction-only player
-      has no roster name or position, so he is resolved through the id map by id alone
-      and carries nulls there. replacement_group is SP or RP from the default position,
-      hitter for any other position, and for a player with no position the group his MLB
-      appearances over the whole season give by the shared replacement-group rule. It is
-      null only for a player with no MLBAM id. There is deliberately no MLB team column:
-      a player changes team within a season, so it is not an attribute of the player.
+      One row per player per league and season in which he was rostered or transacted
+      (#28, ADR 0012): everyone on a roster day of that league-season plus anyone only in
+      its transaction log. His MLBAM id and how it was resolved are those of THAT
+      league-season (an id-map match, a name match against that MLB season's players, or
+      unresolved). A transaction-only player has no roster name or position, so he is
+      resolved through the id map by id alone and carries nulls there. replacement_group is
+      SP or RP from the default position, hitter for any other position, and for a player
+      with no position the group his MLB appearances in that season alone give by the shared
+      replacement-group rule. It is null only for a player with no MLBAM id. There is
+      deliberately no MLB team column: a player changes team within a season.
     columns:
       - name: platform
         data_tests: [not_null]
+      - name: league_id
+        data_tests: [not_null]
+      - name: season
+        data_tests: [not_null]
       - name: platform_player_id
-        data_tests: [unique, not_null]
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_players')
+                field: platform_player_id
       - name: mlbam_player_id
         description: Null only for an unresolved player.
       - name: player_resolution
@@ -95,10 +104,10 @@ models:
               arguments:
                 values: [crosswalk_id, unambiguous_name, unresolved]
       - name: default_position
-        description: From his latest roster day; null for a transaction-only player.
+        description: From his latest roster day of the league-season; null for a transaction-only player.
       - name: replacement_group
         description: >
-          hitter, SP or RP, as the dimension description says. Read only to tell a hitter
+          hitter, SP or RP, as the model description says. Read only to tell a hitter
           from a pitcher, for the side a drop is credited on (R4.3, #52): SP versus RP no
           longer chooses a replacement level, the kind of outing does.
         data_tests:
@@ -106,11 +115,44 @@ models:
               arguments:
                 values: [hitter, SP, RP]
       - name: first_rostered_date
-        description: First roster day; null for a transaction-only player.
+        description: First roster day in the league-season; null for a transaction-only player.
       - name: last_rostered_date
-        description: Last roster day; null for a transaction-only player.
+        description: Last roster day in the league-season; null for a transaction-only player.
       - name: is_transaction_only
         data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, platform_player_id]
+
+  - name: dim_players
+    description: >
+      One row per platform player id, across every league and season loaded: a reference
+      for who a player is (#28, ADR 0012). His MLBAM id, resolution and name are copied from
+      his latest league-season row of dim_player_league_seasons (highest season, then latest
+      last_rostered_date, then lowest league_id). No league-season number reads from it:
+      position, replacement group and rostered dates are true of a player in a
+      league-season and live in dim_player_league_seasons.
+    columns:
+      - name: platform
+        data_tests: [not_null]
+      - name: platform_player_id
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_player_league_seasons')
+                field: platform_player_id
+      - name: mlbam_player_id
+        description: Null only for a player unresolved in his latest league-season.
+      - name: player_resolution
+        description: How the MLBAM id was found (crosswalk_id, unambiguous_name) or unresolved.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [crosswalk_id, unambiguous_name, unresolved]
 
   - name: fct_player_category_value
     description: >
@@ -154,7 +196,7 @@ models:
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
-            combination_of_columns: [platform_player_id, fantasy_team_id, category_key]
+            combination_of_columns: [platform, league_id, season, platform_player_id, fantasy_team_id, category_key]
 
   - name: fct_player_season_value
     description: >
@@ -178,31 +220,36 @@ models:
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
-            combination_of_columns: [platform_player_id, fantasy_team_id]
+            combination_of_columns: [platform, league_id, season, platform_player_id, fantasy_team_id]
 
   - name: fct_transaction_impact
     description: >
-      One row per transaction (an add or a drop) with the window of days it opens and what
-      the player produced in it, valued on the scale of fct_player_category_value, in matchup margins (ADR 0010). An add
+      One row per transaction of a league and season (an add or a drop) with the window of days it opens and what
+      the player produced in it, valued on the scale of fct_player_category_value, in matchup margins (ADR 0010).
+      Every window, level and scale is that of the transaction's own league and season (#28). An add
       is measured over the days the adding team started him until that team's next drop of
       him; a drop over the rest of the season, whoever had him. Components are summed over
       the window on the credited side. total_value is null for a dropped player with no
       MLBAM id, and where a replacement pool is empty.
     columns:
+      - name: platform
+        data_tests: [not_null]
+      - name: league_id
+        data_tests: [not_null]
+      - name: season
+        data_tests: [not_null]
       - name: transaction_id
-        data_tests:
-          - unique
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('int_fantasy__transactions')
-                field: transaction_id
+        data_tests: [not_null]
       - name: movement
         data_tests: [not_null]
       - name: window_start
         data_tests: [not_null]
       - name: window_end
         data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, transaction_id]
 
 # -----------------------------------------------------------------------------
 # Unit tests (#10). Each gives only the columns the model reads.
@@ -308,26 +355,26 @@ unit_tests:
         - {matchup_id: 9, home_team_id: 5, away_team_id: 6, scored_categories: 2, home_category_wins: 1, away_category_wins: 0, category_ties: 0, categories_undecided: 1, winner: null, has_unverified_inputs: true, playoff_tier: NONE}
 
 # -----------------------------------------------------------------------------
-# dim_players unit tests (#11).
+# dim_player_league_seasons unit tests (#11, moved from dim_players by #28).
 # -----------------------------------------------------------------------------
 
-  - name: dim_players_takes_attributes_from_the_latest_roster_day
+  - name: dim_player_league_seasons_takes_attributes_from_the_latest_roster_day
     description: >
       Id 10 moved from a 2B on team 1 to an SS on team 2 and takes the later row's name and
       position, and is a hitter. Id 11 has two rows on his last date, and the lower team id
       wins. Catches taking the first row, or letting input order decide a tie. Both are
       rostered, so neither is transaction-only, whatever the log says about id 10.
-    model: dim_players
+    model: dim_player_league_seasons
     given:
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {platform: espn, scoring_date: "2026-04-01", fantasy_team_id: 1, platform_player_id: 10, mlbam_player_id: 1000, player_resolution: crosswalk_id, player_name: "Old Name", default_position: "2B"}
-          - {platform: espn, scoring_date: "2026-04-05", fantasy_team_id: 2, platform_player_id: 10, mlbam_player_id: 1000, player_resolution: crosswalk_id, player_name: "Latest Name", default_position: "SS"}
-          - {platform: espn, scoring_date: "2026-04-05", fantasy_team_id: 3, platform_player_id: 11, mlbam_player_id: 1100, player_resolution: unambiguous_name, player_name: "Team Three", default_position: "OF"}
-          - {platform: espn, scoring_date: "2026-04-05", fantasy_team_id: 2, platform_player_id: 11, mlbam_player_id: 1100, player_resolution: unambiguous_name, player_name: "Team Two", default_position: "1B"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-01", fantasy_team_id: 1, platform_player_id: 10, mlbam_player_id: 1000, player_resolution: crosswalk_id, player_name: "Old Name", default_position: "2B"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-05", fantasy_team_id: 2, platform_player_id: 10, mlbam_player_id: 1000, player_resolution: crosswalk_id, player_name: "Latest Name", default_position: "SS"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-05", fantasy_team_id: 3, platform_player_id: 11, mlbam_player_id: 1100, player_resolution: unambiguous_name, player_name: "Team Three", default_position: "OF"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-05", fantasy_team_id: 2, platform_player_id: 11, mlbam_player_id: 1100, player_resolution: unambiguous_name, player_name: "Team Two", default_position: "1B"}
       - input: ref('int_fantasy__transactions')
         rows:
-          - {platform: espn, platform_player_id: 10}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 10}
       - input: ref('stg_idmap__players')
         rows: []
       - input: ref('int_mlb__player_game_days')
@@ -337,48 +384,48 @@ unit_tests:
         - {platform_player_id: 10, mlbam_player_id: 1000, player_name: "Latest Name", player_resolution: crosswalk_id, default_position: SS, replacement_group: hitter, first_rostered_date: "2026-04-01", last_rostered_date: "2026-04-05", is_transaction_only: false}
         - {platform_player_id: 11, mlbam_player_id: 1100, player_name: "Team Two", player_resolution: unambiguous_name, default_position: "1B", replacement_group: hitter, first_rostered_date: "2026-04-05", last_rostered_date: "2026-04-05", is_transaction_only: false}
 
-  - name: dim_players_transaction_only_group_comes_from_mlb_appearances
+  - name: dim_player_league_seasons_transaction_only_group_comes_from_mlb_appearances
     description: >
       Transaction-only players have no position, so the group is derived from MLB days over
-      the whole season. Id 20 only relieved (RP), id 21 only started (SP). Both resolve
+      the league-season's own MLB season. Id 20 only relieved (RP), id 21 only started (SP). Both resolve
       through the id map by id alone, with a null name. Catches every transaction-only
       player falling through to hitter, the failure the design review found.
-    model: dim_players
+    model: dim_player_league_seasons
     given:
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {platform: espn, scoring_date: "2026-04-01", fantasy_team_id: 1, platform_player_id: 10, mlbam_player_id: 1000, player_resolution: crosswalk_id, player_name: "Somebody", default_position: "SS"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-01", fantasy_team_id: 1, platform_player_id: 10, mlbam_player_id: 1000, player_resolution: crosswalk_id, player_name: "Somebody", default_position: "SS"}
       - input: ref('int_fantasy__transactions')
         rows:
-          - {platform: espn, platform_player_id: 20}
-          - {platform: espn, platform_player_id: 20}
-          - {platform: espn, platform_player_id: 21}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 20}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 20}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 21}
       - input: ref('stg_idmap__players')
         rows:
           - {espn_player_id: 20, mlbam_player_id: 2000}
           - {espn_player_id: 21, mlbam_player_id: 2100}
       - input: ref('int_mlb__player_game_days')
         rows:
-          - {mlbam_player_id: 2000, game_date: "2026-04-02", plate_appearances: 0, batters_faced: 4, outs_recorded: 3, games_pitched: 1, games_started: 0}
-          - {mlbam_player_id: 2000, game_date: "2026-04-03", plate_appearances: 0, batters_faced: 5, outs_recorded: 3, games_pitched: 1, games_started: 0}
-          - {mlbam_player_id: 2100, game_date: "2026-04-02", plate_appearances: 0, batters_faced: 25, outs_recorded: 18, games_pitched: 1, games_started: 1}
+          - {season: 2026, mlbam_player_id: 2000, game_date: "2026-04-02", plate_appearances: 0, batters_faced: 4, outs_recorded: 3, games_pitched: 1, games_started: 0}
+          - {season: 2026, mlbam_player_id: 2000, game_date: "2026-04-03", plate_appearances: 0, batters_faced: 5, outs_recorded: 3, games_pitched: 1, games_started: 0}
+          - {season: 2026, mlbam_player_id: 2100, game_date: "2026-04-02", plate_appearances: 0, batters_faced: 25, outs_recorded: 18, games_pitched: 1, games_started: 1}
     expect:
       rows:
         - {platform_player_id: 10, mlbam_player_id: 1000, player_name: "Somebody", player_resolution: crosswalk_id, default_position: SS, replacement_group: hitter, first_rostered_date: "2026-04-01", last_rostered_date: "2026-04-01", is_transaction_only: false}
         - {platform_player_id: 20, mlbam_player_id: 2000, player_name: null, player_resolution: crosswalk_id, default_position: null, replacement_group: RP, first_rostered_date: null, last_rostered_date: null, is_transaction_only: true}
         - {platform_player_id: 21, mlbam_player_id: 2100, player_name: null, player_resolution: crosswalk_id, default_position: null, replacement_group: SP, first_rostered_date: null, last_rostered_date: null, is_transaction_only: true}
 
-  - name: dim_players_keeps_a_transaction_only_player_the_id_map_lacks
+  - name: dim_player_league_seasons_keeps_a_transaction_only_player_the_id_map_lacks
     description: >
       A transaction-only player absent from the id map is kept, unresolved, with a null
       MLBAM id and a null group. Catches an inner join dropping him (R1.3).
-    model: dim_players
+    model: dim_player_league_seasons
     given:
       - input: ref('int_fantasy__roster_days')
         rows: []
       - input: ref('int_fantasy__transactions')
         rows:
-          - {platform: espn, platform_player_id: 22}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 22}
       - input: ref('stg_idmap__players')
         rows: []
       - input: ref('int_mlb__player_game_days')
@@ -386,6 +433,82 @@ unit_tests:
     expect:
       rows:
         - {platform_player_id: 22, mlbam_player_id: null, player_name: null, player_resolution: unresolved, default_position: null, replacement_group: null, is_transaction_only: true}
+
+  - name: dim_player_league_seasons_group_reads_only_the_rows_own_mlb_season
+    description: >
+      Player 30 is transaction-only in both seasons, with no default position. He relieves
+      in 2026 (RP) and starts in 2027 (SP): the 2026 row is RP and the 2027 row is SP, each
+      from its own season's appearances. Catches one season's appearances deciding another
+      season's group (R4.6), as summing every MLB day loaded would.
+    model: dim_player_league_seasons
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows: []
+      - input: ref('int_fantasy__transactions')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 30}
+          - {platform: espn, league_id: "1", season: 2027, platform_player_id: 30}
+      - input: ref('stg_idmap__players')
+        rows:
+          - {espn_player_id: 30, mlbam_player_id: 3000}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 3000, season: 2026, game_date: "2026-04-02", plate_appearances: 0, batters_faced: 4, outs_recorded: 3, games_pitched: 1, games_started: 0}
+          - {mlbam_player_id: 3000, season: 2027, game_date: "2027-04-02", plate_appearances: 0, batters_faced: 25, outs_recorded: 18, games_pitched: 1, games_started: 1}
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, platform_player_id: 30, mlbam_player_id: 3000, replacement_group: RP, is_transaction_only: true}
+        - {league_id: "1", season: 2027, platform_player_id: 30, mlbam_player_id: 3000, replacement_group: SP, is_transaction_only: true}
+
+  - name: dim_player_league_seasons_a_later_seasons_match_does_not_reach_back
+    description: >
+      Player 31 is absent from the id map. He appears only in 2026's transaction log, and is
+      rostered in 2027 under a name that matched an MLB player (the 2027 roster row carries
+      the crosswalk's resolution). His 2026 row is unresolved, with a null MLBAM id and a null
+      group; his 2027 row is resolved. Catches one season's data deciding another season's
+      row: a 2027 match reaching back to value a 2026 transaction.
+    model: dim_player_league_seasons
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2027, scoring_date: "2027-04-01", fantasy_team_id: 1, platform_player_id: 31, mlbam_player_id: 3100, player_resolution: unambiguous_name, player_name: "Late Match", default_position: "OF"}
+      - input: ref('int_fantasy__transactions')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 31}
+      - input: ref('stg_idmap__players')
+        rows: []
+      - input: ref('int_mlb__player_game_days')
+        rows: []
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, platform_player_id: 31, mlbam_player_id: null, player_resolution: unresolved, replacement_group: null, is_transaction_only: true}
+        - {league_id: "1", season: 2027, platform_player_id: 31, mlbam_player_id: 3100, player_resolution: unambiguous_name, replacement_group: hitter, is_transaction_only: false}
+
+  - name: dim_players_one_row_per_player_equal_to_his_latest_league_season
+    description: >
+      Player 40 is in league 1 and league 2 in 2026 and in league 1 in 2027. He has one row,
+      taken whole from his latest league-season: 2027, league 1. His MLBAM id, resolution and
+      name are all that row's, not the 2026 rows'. Player 41 is in two leagues in 2026 on the
+      same last date: the lower league id wins. Player 42 has a rostered 2026 row and a
+      transaction-only 2026 row in another league: the rostered one is later (a null date
+      sorts last). Catches a doubled player, and a name and an id taken from different
+      observations.
+    model: dim_players
+    given:
+      - input: ref('dim_player_league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 40, mlbam_player_id: 4000, player_resolution: crosswalk_id, player_name: "Old Name", last_rostered_date: "2026-09-01"}
+          - {platform: espn, league_id: "2", season: 2026, platform_player_id: 40, mlbam_player_id: null, player_resolution: unresolved, player_name: "Other League Name", last_rostered_date: "2026-09-20"}
+          - {platform: espn, league_id: "1", season: 2027, platform_player_id: 40, mlbam_player_id: 4001, player_resolution: unambiguous_name, player_name: "New Name", last_rostered_date: "2027-04-02"}
+          - {platform: espn, league_id: "2", season: 2026, platform_player_id: 41, mlbam_player_id: 4100, player_resolution: crosswalk_id, player_name: "League Two", last_rostered_date: "2026-09-01"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 41, mlbam_player_id: 4101, player_resolution: unambiguous_name, player_name: "League One", last_rostered_date: "2026-09-01"}
+          - {platform: espn, league_id: "2", season: 2026, platform_player_id: 42, mlbam_player_id: 4200, player_resolution: crosswalk_id, player_name: null, last_rostered_date: null}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 42, mlbam_player_id: 4201, player_resolution: unambiguous_name, player_name: "Rostered", last_rostered_date: "2026-05-01"}
+    expect:
+      rows:
+        - {platform_player_id: 40, mlbam_player_id: 4001, player_resolution: unambiguous_name, player_name: "New Name"}
+        - {platform_player_id: 41, mlbam_player_id: 4101, player_resolution: unambiguous_name, player_name: "League One"}
+        - {platform_player_id: 42, mlbam_player_id: 4201, player_resolution: unambiguous_name, player_name: "Rostered"}
 
 # -----------------------------------------------------------------------------
 # fct_player_category_value unit tests (#11): the per-category arithmetic, which lives in
@@ -427,11 +550,11 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
-          - {day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
-          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
-          - {day_kind: start, component: earned_runs, level_per_played_day: 3}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 3}
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 2}
@@ -469,9 +592,9 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
-          - {day_kind: start, component: earned_runs, level_per_played_day: 3}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 3}
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 0.5, side_denominator: 27}
@@ -507,8 +630,8 @@ unit_tests:
           - {platform: espn, stat_key: 27, part: numerator, component: batter_strikeouts, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
-          - {day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 2}
@@ -545,10 +668,10 @@ unit_tests:
           - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
-          - {day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
-          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 2}
@@ -582,8 +705,8 @@ unit_tests:
           - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 15}
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 0}
@@ -619,11 +742,11 @@ unit_tests:
           - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
-          - {day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
-          - {day_kind: relief, component: games_pitched, level_per_played_day: null}
-          - {day_kind: relief, component: outs_recorded, level_per_played_day: null}
-          - {day_kind: relief, component: earned_runs, level_per_played_day: null}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: games_pitched, level_per_played_day: null}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: null}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: null}
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
@@ -657,8 +780,8 @@ unit_tests:
           - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
-          - {day_kind: relief, component: outs_recorded, level_per_played_day: 3}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 15}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 3}
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
@@ -690,8 +813,8 @@ unit_tests:
           - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
-          - {day_kind: relief, component: outs_recorded, level_per_played_day: null}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 15}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: null}
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
@@ -726,8 +849,8 @@ unit_tests:
           - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
-          - {day_kind: relief, component: outs_recorded, level_per_played_day: 3}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 15}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 3}
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
@@ -763,9 +886,9 @@ unit_tests:
           - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
-          - {day_kind: relief, component: outs_recorded, level_per_played_day: 3}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: batter_strikeouts, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 15}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 3}
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 2}
@@ -798,8 +921,8 @@ unit_tests:
           - {platform: espn, stat_key: 27, part: numerator, component: batter_strikeouts, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
-          - {day_kind: batting, component: batter_strikeouts, level_per_played_day: 6}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: batter_strikeouts, level_per_played_day: 6}
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 3, side_denominator: null}
@@ -834,9 +957,9 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
-          - {day_kind: start, component: earned_runs, level_per_played_day: 3}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 3}
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 0.25, side_denominator: 108}
@@ -870,8 +993,8 @@ unit_tests:
           - {platform: espn, stat_key: 35, part: numerator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 15}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 15}
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: null, side_denominator: null}
@@ -910,40 +1033,40 @@ unit_tests:
     given:
       - input: ref('int_fantasy__transactions')
         rows:
-          - {platform: espn, transaction_id: "a1", transacted_at: "2026-04-03 10:00:00+00", transaction_date: "2026-04-03", platform_player_id: 1, fantasy_team_id: 1, movement: add}
-          - {platform: espn, transaction_id: "d1", transacted_at: "2026-04-07 10:00:00+00", transaction_date: "2026-04-07", platform_player_id: 1, fantasy_team_id: 1, movement: drop}
-          - {platform: espn, transaction_id: "a2", transacted_at: "2026-04-04 10:00:00+00", transaction_date: "2026-04-04", platform_player_id: 1, fantasy_team_id: 2, movement: add}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "a1", transacted_at: "2026-04-03 10:00:00+00", transaction_date: "2026-04-03", platform_player_id: 1, fantasy_team_id: 1, movement: add}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "d1", transacted_at: "2026-04-07 10:00:00+00", transaction_date: "2026-04-07", platform_player_id: 1, fantasy_team_id: 1, movement: drop}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "a2", transacted_at: "2026-04-04 10:00:00+00", transaction_date: "2026-04-04", platform_player_id: 1, fantasy_team_id: 2, movement: add}
       - input: ref('int_fantasy__matchup_periods')
         rows:
-          - {platform: espn, scoring_date: "2026-04-01"}
-          - {platform: espn, scoring_date: "2026-04-10"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-01"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-10"}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {platform: espn, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-02"}
-          - {platform: espn, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-03"}
-          - {platform: espn, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-04"}
-          - {platform: espn, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-05"}
-          - {platform: espn, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-06"}
-          - {platform: espn, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-07"}
-          - {platform: espn, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-08"}
-          - {platform: espn, platform_player_id: 1, fantasy_team_id: 2, scoring_date: "2026-04-04"}
-          - {platform: espn, platform_player_id: 1, fantasy_team_id: 2, scoring_date: "2026-04-05"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-02"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-03"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-04"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-05"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-06"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-07"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-08"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 2, scoring_date: "2026-04-04"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 2, scoring_date: "2026-04-05"}
       - input: ref('int_fantasy__started_player_days')
         rows:
-          - {platform: espn, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-03", slot_role: hitter, games_batted: 1, home_runs: 1}
-          - {platform: espn, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-05", slot_role: hitter, games_batted: 1, home_runs: 2}
-          - {platform: espn, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-07", slot_role: hitter, games_batted: 0, home_runs: 0}
-          - {platform: espn, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-08", slot_role: hitter, games_batted: 1, home_runs: 8}
-          - {platform: espn, platform_player_id: 1, fantasy_team_id: 2, scoring_date: "2026-04-05", slot_role: hitter, games_batted: 1, home_runs: 2}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-03", slot_role: hitter, games_batted: 1, home_runs: 1}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-05", slot_role: hitter, games_batted: 1, home_runs: 2}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-07", slot_role: hitter, games_batted: 0, home_runs: 0}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-08", slot_role: hitter, games_batted: 1, home_runs: 8}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 2, scoring_date: "2026-04-05", slot_role: hitter, games_batted: 1, home_runs: 2}
       - input: ref('int_mlb__player_game_days')
         rows:
           - {mlbam_player_id: 101, game_date: "2026-04-03", games_batted: 1, home_runs: 1}
           - {mlbam_player_id: 101, game_date: "2026-04-05", games_batted: 1, home_runs: 2}
           - {mlbam_player_id: 101, game_date: "2026-04-08", games_batted: 1, home_runs: 8}
           - {mlbam_player_id: 101, game_date: "2026-04-09", games_batted: 1, home_runs: 0}
-      - input: ref('dim_players')
+      - input: ref('dim_player_league_seasons')
         rows:
-          - {platform: espn, platform_player_id: 1, mlbam_player_id: 101, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, mlbam_player_id: 101, replacement_group: hitter}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
@@ -955,14 +1078,14 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
-          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
-          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
-          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
-          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
-          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 4}
       # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
       # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
       # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
@@ -993,29 +1116,29 @@ unit_tests:
     given:
       - input: ref('int_fantasy__transactions')
         rows:
-          - {platform: espn, transaction_id: "a3", transacted_at: "2026-04-02 10:00:00+00", transaction_date: "2026-04-02", platform_player_id: 2, fantasy_team_id: 3, movement: add}
-          - {platform: espn, transaction_id: "d2", transacted_at: "2026-04-03 10:00:00+00", transaction_date: "2026-04-03", platform_player_id: 2, fantasy_team_id: 1, movement: drop}
-          - {platform: espn, transaction_id: "a4", transacted_at: "2026-04-05 10:00:00+00", transaction_date: "2026-04-05", platform_player_id: 2, fantasy_team_id: 2, movement: add}
-          - {platform: espn, transaction_id: "a5", transacted_at: "2026-04-08 10:00:00+00", transaction_date: "2026-04-08", platform_player_id: 2, fantasy_team_id: 4, movement: add}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "a3", transacted_at: "2026-04-02 10:00:00+00", transaction_date: "2026-04-02", platform_player_id: 2, fantasy_team_id: 3, movement: add}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "d2", transacted_at: "2026-04-03 10:00:00+00", transaction_date: "2026-04-03", platform_player_id: 2, fantasy_team_id: 1, movement: drop}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "a4", transacted_at: "2026-04-05 10:00:00+00", transaction_date: "2026-04-05", platform_player_id: 2, fantasy_team_id: 2, movement: add}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "a5", transacted_at: "2026-04-08 10:00:00+00", transaction_date: "2026-04-08", platform_player_id: 2, fantasy_team_id: 4, movement: add}
       - input: ref('int_fantasy__matchup_periods')
         rows:
-          - {platform: espn, scoring_date: "2026-04-01"}
-          - {platform: espn, scoring_date: "2026-04-10"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-01"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-10"}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {platform: espn, platform_player_id: 9, fantasy_team_id: 9, scoring_date: "2026-04-01"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 9, fantasy_team_id: 9, scoring_date: "2026-04-01"}
       - input: ref('int_fantasy__started_player_days')
         rows:
-          - {platform: espn, platform_player_id: 9, fantasy_team_id: 9, scoring_date: "2026-04-01", slot_role: hitter, games_batted: 0, home_runs: 0}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 9, fantasy_team_id: 9, scoring_date: "2026-04-01", slot_role: hitter, games_batted: 0, home_runs: 0}
       - input: ref('int_mlb__player_game_days')
         rows:
           - {mlbam_player_id: 102, game_date: "2026-04-03", games_batted: 1, home_runs: 1}
           - {mlbam_player_id: 102, game_date: "2026-04-04", games_batted: 1, home_runs: 2}
           - {mlbam_player_id: 102, game_date: "2026-04-06", games_batted: 1, home_runs: 4}
           - {mlbam_player_id: 102, game_date: "2026-04-10", games_batted: 1, home_runs: 8}
-      - input: ref('dim_players')
+      - input: ref('dim_player_league_seasons')
         rows:
-          - {platform: espn, platform_player_id: 2, mlbam_player_id: 102, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, mlbam_player_id: 102, replacement_group: hitter}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
@@ -1027,14 +1150,14 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
-          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
-          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
-          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
-          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
-          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 4}
       # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
       # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
       # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
@@ -1064,32 +1187,32 @@ unit_tests:
     given:
       - input: ref('int_fantasy__transactions')
         rows:
-          - {platform: espn, transaction_id: "a6", transacted_at: "2026-03-28 10:00:00+00", transaction_date: "2026-03-28", platform_player_id: 3, fantasy_team_id: 1, movement: add}
-          - {platform: espn, transaction_id: "d4", transacted_at: "2026-03-30 10:00:00+00", transaction_date: "2026-03-30", platform_player_id: 4, fantasy_team_id: 1, movement: drop}
-          - {platform: espn, transaction_id: "a7", transacted_at: "2026-03-28 11:00:00+00", transaction_date: "2026-03-28", platform_player_id: 5, fantasy_team_id: 1, movement: add}
-          - {platform: espn, transaction_id: "d5", transacted_at: "2026-03-30 11:00:00+00", transaction_date: "2026-03-30", platform_player_id: 5, fantasy_team_id: 1, movement: drop}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "a6", transacted_at: "2026-03-28 10:00:00+00", transaction_date: "2026-03-28", platform_player_id: 3, fantasy_team_id: 1, movement: add}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "d4", transacted_at: "2026-03-30 10:00:00+00", transaction_date: "2026-03-30", platform_player_id: 4, fantasy_team_id: 1, movement: drop}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "a7", transacted_at: "2026-03-28 11:00:00+00", transaction_date: "2026-03-28", platform_player_id: 5, fantasy_team_id: 1, movement: add}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "d5", transacted_at: "2026-03-30 11:00:00+00", transaction_date: "2026-03-30", platform_player_id: 5, fantasy_team_id: 1, movement: drop}
       - input: ref('int_fantasy__matchup_periods')
         rows:
-          - {platform: espn, scoring_date: "2026-04-01"}
-          - {platform: espn, scoring_date: "2026-04-10"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-01"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-10"}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {platform: espn, platform_player_id: 3, fantasy_team_id: 1, scoring_date: "2026-04-02"}
-          - {platform: espn, platform_player_id: 5, fantasy_team_id: 1, scoring_date: "2026-04-01"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, fantasy_team_id: 1, scoring_date: "2026-04-02"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 5, fantasy_team_id: 1, scoring_date: "2026-04-01"}
       - input: ref('int_fantasy__started_player_days')
         rows:
-          - {platform: espn, platform_player_id: 3, fantasy_team_id: 1, scoring_date: "2026-04-02", slot_role: hitter, games_batted: 1, home_runs: 1}
-          - {platform: espn, platform_player_id: 5, fantasy_team_id: 1, scoring_date: "2026-04-01", slot_role: hitter, games_batted: 1, home_runs: 5}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, fantasy_team_id: 1, scoring_date: "2026-04-02", slot_role: hitter, games_batted: 1, home_runs: 1}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 5, fantasy_team_id: 1, scoring_date: "2026-04-01", slot_role: hitter, games_batted: 1, home_runs: 5}
       - input: ref('int_mlb__player_game_days')
         rows:
           - {mlbam_player_id: 104, game_date: "2026-04-01", games_batted: 1, home_runs: 2}
           - {mlbam_player_id: 104, game_date: "2026-03-31", games_batted: 1, home_runs: 100}
           - {mlbam_player_id: 104, game_date: "2026-04-10", games_batted: 1, home_runs: 0}
-      - input: ref('dim_players')
+      - input: ref('dim_player_league_seasons')
         rows:
-          - {platform: espn, platform_player_id: 3, mlbam_player_id: 103, replacement_group: hitter}
-          - {platform: espn, platform_player_id: 4, mlbam_player_id: 104, replacement_group: hitter}
-          - {platform: espn, platform_player_id: 5, mlbam_player_id: 105, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, mlbam_player_id: 103, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 4, mlbam_player_id: 104, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 5, mlbam_player_id: 105, replacement_group: hitter}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
@@ -1101,14 +1224,14 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
-          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
-          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
-          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
-          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
-          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 4}
       # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
       # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
       # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
@@ -1137,33 +1260,33 @@ unit_tests:
     given:
       - input: ref('int_fantasy__transactions')
         rows:
-          - {platform: espn, transaction_id: "a8", transacted_at: "2026-04-05 09:00:00+00", transaction_date: "2026-04-05", platform_player_id: 6, fantasy_team_id: 1, movement: add}
-          - {platform: espn, transaction_id: "d6", transacted_at: "2026-04-05 18:00:00+00", transaction_date: "2026-04-05", platform_player_id: 6, fantasy_team_id: 1, movement: drop}
-          - {platform: espn, transaction_id: "d7", transacted_at: "2026-04-05 08:00:00+00", transaction_date: "2026-04-05", platform_player_id: 7, fantasy_team_id: 1, movement: drop}
-          - {platform: espn, transaction_id: "a9", transacted_at: "2026-04-05 12:00:00+00", transaction_date: "2026-04-05", platform_player_id: 7, fantasy_team_id: 1, movement: add}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "a8", transacted_at: "2026-04-05 09:00:00+00", transaction_date: "2026-04-05", platform_player_id: 6, fantasy_team_id: 1, movement: add}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "d6", transacted_at: "2026-04-05 18:00:00+00", transaction_date: "2026-04-05", platform_player_id: 6, fantasy_team_id: 1, movement: drop}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "d7", transacted_at: "2026-04-05 08:00:00+00", transaction_date: "2026-04-05", platform_player_id: 7, fantasy_team_id: 1, movement: drop}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "a9", transacted_at: "2026-04-05 12:00:00+00", transaction_date: "2026-04-05", platform_player_id: 7, fantasy_team_id: 1, movement: add}
       - input: ref('int_fantasy__matchup_periods')
         rows:
-          - {platform: espn, scoring_date: "2026-04-01"}
-          - {platform: espn, scoring_date: "2026-04-10"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-01"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-10"}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {platform: espn, platform_player_id: 6, fantasy_team_id: 1, scoring_date: "2026-04-05"}
-          - {platform: espn, platform_player_id: 6, fantasy_team_id: 1, scoring_date: "2026-04-06"}
-          - {platform: espn, platform_player_id: 7, fantasy_team_id: 1, scoring_date: "2026-04-05"}
-          - {platform: espn, platform_player_id: 7, fantasy_team_id: 1, scoring_date: "2026-04-08"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 6, fantasy_team_id: 1, scoring_date: "2026-04-05"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 6, fantasy_team_id: 1, scoring_date: "2026-04-06"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 7, fantasy_team_id: 1, scoring_date: "2026-04-05"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 7, fantasy_team_id: 1, scoring_date: "2026-04-08"}
       - input: ref('int_fantasy__started_player_days')
         rows:
-          - {platform: espn, platform_player_id: 6, fantasy_team_id: 1, scoring_date: "2026-04-05", slot_role: hitter, games_batted: 1, home_runs: 1}
-          - {platform: espn, platform_player_id: 6, fantasy_team_id: 1, scoring_date: "2026-04-06", slot_role: hitter, games_batted: 1, home_runs: 100}
-          - {platform: espn, platform_player_id: 7, fantasy_team_id: 1, scoring_date: "2026-04-05", slot_role: hitter, games_batted: 1, home_runs: 2}
-          - {platform: espn, platform_player_id: 7, fantasy_team_id: 1, scoring_date: "2026-04-08", slot_role: hitter, games_batted: 1, home_runs: 4}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 6, fantasy_team_id: 1, scoring_date: "2026-04-05", slot_role: hitter, games_batted: 1, home_runs: 1}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 6, fantasy_team_id: 1, scoring_date: "2026-04-06", slot_role: hitter, games_batted: 1, home_runs: 100}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 7, fantasy_team_id: 1, scoring_date: "2026-04-05", slot_role: hitter, games_batted: 1, home_runs: 2}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 7, fantasy_team_id: 1, scoring_date: "2026-04-08", slot_role: hitter, games_batted: 1, home_runs: 4}
       - input: ref('int_mlb__player_game_days')
         rows:
           - {mlbam_player_id: 106, game_date: "2026-04-06", games_batted: 1, home_runs: 0}
-      - input: ref('dim_players')
+      - input: ref('dim_player_league_seasons')
         rows:
-          - {platform: espn, platform_player_id: 6, mlbam_player_id: 106, replacement_group: hitter}
-          - {platform: espn, platform_player_id: 7, mlbam_player_id: 107, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 6, mlbam_player_id: 106, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 7, mlbam_player_id: 107, replacement_group: hitter}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
@@ -1175,14 +1298,14 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
-          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
-          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
-          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
-          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
-          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 4}
       # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
       # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
       # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
@@ -1218,26 +1341,26 @@ unit_tests:
     given:
       - input: ref('int_fantasy__transactions')
         rows:
-          - {platform: espn, transaction_id: "d8", transacted_at: "2026-04-03 10:00:00+00", transaction_date: "2026-04-03", platform_player_id: 8, fantasy_team_id: 1, movement: drop}
-          - {platform: espn, transaction_id: "a10", transacted_at: "2026-04-02 10:00:00+00", transaction_date: "2026-04-02", platform_player_id: 9, fantasy_team_id: 1, movement: add}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "d8", transacted_at: "2026-04-03 10:00:00+00", transaction_date: "2026-04-03", platform_player_id: 8, fantasy_team_id: 1, movement: drop}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "a10", transacted_at: "2026-04-02 10:00:00+00", transaction_date: "2026-04-02", platform_player_id: 9, fantasy_team_id: 1, movement: add}
       - input: ref('int_fantasy__matchup_periods')
         rows:
-          - {platform: espn, scoring_date: "2026-04-01"}
-          - {platform: espn, scoring_date: "2026-04-10"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-01"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-10"}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {platform: espn, platform_player_id: 9, fantasy_team_id: 1, scoring_date: "2026-04-03"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 9, fantasy_team_id: 1, scoring_date: "2026-04-03"}
       - input: ref('int_fantasy__started_player_days')
         rows:
-          - {platform: espn, platform_player_id: 9, fantasy_team_id: 1, scoring_date: "2026-04-03", slot_role: pitcher, games_pitched: 1, games_started: 0, outs_recorded: 9, earned_runs: 1}
-          - {platform: espn, platform_player_id: 9, fantasy_team_id: 1, scoring_date: "2026-04-04", slot_role: hitter, games_batted: 1, home_runs: 1}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 9, fantasy_team_id: 1, scoring_date: "2026-04-03", slot_role: pitcher, games_pitched: 1, games_started: 0, outs_recorded: 9, earned_runs: 1}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 9, fantasy_team_id: 1, scoring_date: "2026-04-04", slot_role: hitter, games_batted: 1, home_runs: 1}
       - input: ref('int_mlb__player_game_days')
         rows:
           - {mlbam_player_id: 108, game_date: "2026-04-05", games_batted: 1, home_runs: 9, games_pitched: 1, games_started: 1, outs_recorded: 18, earned_runs: 3}
-      - input: ref('dim_players')
+      - input: ref('dim_player_league_seasons')
         rows:
-          - {platform: espn, platform_player_id: 8, mlbam_player_id: 108, replacement_group: SP}
-          - {platform: espn, platform_player_id: 9, mlbam_player_id: 109, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 8, mlbam_player_id: 108, replacement_group: SP}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 9, mlbam_player_id: 109, replacement_group: hitter}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
@@ -1249,14 +1372,14 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
-          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
-          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
-          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
-          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
-          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 4}
       # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
       # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
       # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
@@ -1287,25 +1410,25 @@ unit_tests:
     given:
       - input: ref('int_fantasy__transactions')
         rows:
-          - {platform: espn, transaction_id: "a11", transacted_at: "2026-04-02 10:00:00+00", transaction_date: "2026-04-02", platform_player_id: 11, fantasy_team_id: 1, movement: add}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "a11", transacted_at: "2026-04-02 10:00:00+00", transaction_date: "2026-04-02", platform_player_id: 11, fantasy_team_id: 1, movement: add}
       - input: ref('int_fantasy__matchup_periods')
         rows:
-          - {platform: espn, scoring_date: "2026-04-01"}
-          - {platform: espn, scoring_date: "2026-04-10"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-01"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-10"}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {platform: espn, platform_player_id: 11, fantasy_team_id: 1, scoring_date: "2026-04-03"}
-          - {platform: espn, platform_player_id: 11, fantasy_team_id: 1, scoring_date: "2026-04-04"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 11, fantasy_team_id: 1, scoring_date: "2026-04-03"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 11, fantasy_team_id: 1, scoring_date: "2026-04-04"}
       - input: ref('int_fantasy__started_player_days')
         rows:
-          - {platform: espn, platform_player_id: 11, fantasy_team_id: 1, scoring_date: "2026-04-03", slot_role: pitcher, games_pitched: 1, games_started: 1, outs_recorded: 18, earned_runs: 3}
-          - {platform: espn, platform_player_id: 11, fantasy_team_id: 1, scoring_date: "2026-04-04", slot_role: pitcher, games_pitched: 1, games_started: 0, outs_recorded: 3, earned_runs: 1}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 11, fantasy_team_id: 1, scoring_date: "2026-04-03", slot_role: pitcher, games_pitched: 1, games_started: 1, outs_recorded: 18, earned_runs: 3}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 11, fantasy_team_id: 1, scoring_date: "2026-04-04", slot_role: pitcher, games_pitched: 1, games_started: 0, outs_recorded: 3, earned_runs: 1}
       - input: ref('int_mlb__player_game_days')
         rows:
           - {mlbam_player_id: 111, game_date: "2026-04-03", games_pitched: 1, games_started: 1, outs_recorded: 18, earned_runs: 3}
-      - input: ref('dim_players')
+      - input: ref('dim_player_league_seasons')
         rows:
-          - {platform: espn, platform_player_id: 11, mlbam_player_id: 111, replacement_group: SP}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 11, mlbam_player_id: 111, replacement_group: SP}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
@@ -1317,14 +1440,14 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
-          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
-          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
-          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
-          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
-          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 4}
       # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
       # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
       # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
@@ -1354,25 +1477,25 @@ unit_tests:
     given:
       - input: ref('int_fantasy__transactions')
         rows:
-          - {platform: espn, transaction_id: "d12", transacted_at: "2026-04-03 10:00:00+00", transaction_date: "2026-04-03", platform_player_id: 12, fantasy_team_id: 1, movement: drop}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "d12", transacted_at: "2026-04-03 10:00:00+00", transaction_date: "2026-04-03", platform_player_id: 12, fantasy_team_id: 1, movement: drop}
       - input: ref('int_fantasy__matchup_periods')
         rows:
-          - {platform: espn, scoring_date: "2026-04-01"}
-          - {platform: espn, scoring_date: "2026-04-10"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-01"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-10"}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {platform: espn, platform_player_id: 9, fantasy_team_id: 9, scoring_date: "2026-04-01"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 9, fantasy_team_id: 9, scoring_date: "2026-04-01"}
       - input: ref('int_fantasy__started_player_days')
         rows:
-          - {platform: espn, platform_player_id: 9, fantasy_team_id: 9, scoring_date: "2026-04-01", slot_role: hitter, games_batted: 0, home_runs: 0}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 9, fantasy_team_id: 9, scoring_date: "2026-04-01", slot_role: hitter, games_batted: 0, home_runs: 0}
       - input: ref('int_mlb__player_game_days')
         rows:
           - {mlbam_player_id: 112, game_date: "2026-04-03", games_pitched: 1, games_started: 0, outs_recorded: 30, earned_runs: 0}
           - {mlbam_player_id: 112, game_date: "2026-04-05", games_pitched: 1, games_started: 1, outs_recorded: 15, earned_runs: 2}
           - {mlbam_player_id: 112, game_date: "2026-04-08", games_pitched: 1, games_started: 0, outs_recorded: 6, earned_runs: 1}
-      - input: ref('dim_players')
+      - input: ref('dim_player_league_seasons')
         rows:
-          - {platform: espn, platform_player_id: 12, mlbam_player_id: 112, replacement_group: RP}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 12, mlbam_player_id: 112, replacement_group: RP}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
@@ -1384,14 +1507,14 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
-          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
-          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
-          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
-          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
-          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 4}
       # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
       # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
       # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
@@ -1416,23 +1539,23 @@ unit_tests:
     given:
       - input: ref('int_fantasy__transactions')
         rows:
-          - {platform: espn, transaction_id: "d9", transacted_at: "2026-04-03 10:00:00+00", transaction_date: "2026-04-03", platform_player_id: 10, fantasy_team_id: 1, movement: drop}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "d9", transacted_at: "2026-04-03 10:00:00+00", transaction_date: "2026-04-03", platform_player_id: 10, fantasy_team_id: 1, movement: drop}
       - input: ref('int_fantasy__matchup_periods')
         rows:
-          - {platform: espn, scoring_date: "2026-04-01"}
-          - {platform: espn, scoring_date: "2026-04-10"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-01"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-10"}
       - input: ref('int_fantasy__roster_days')
         rows:
-          - {platform: espn, platform_player_id: 9, fantasy_team_id: 9, scoring_date: "2026-04-01"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 9, fantasy_team_id: 9, scoring_date: "2026-04-01"}
       - input: ref('int_fantasy__started_player_days')
         rows:
-          - {platform: espn, platform_player_id: 9, fantasy_team_id: 9, scoring_date: "2026-04-01", slot_role: hitter, games_batted: 0, home_runs: 0}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 9, fantasy_team_id: 9, scoring_date: "2026-04-01", slot_role: hitter, games_batted: 0, home_runs: 0}
       - input: ref('int_mlb__player_game_days')
         rows:
           - {mlbam_player_id: 102, game_date: "2026-04-04", games_batted: 1, home_runs: 2}
-      - input: ref('dim_players')
+      - input: ref('dim_player_league_seasons')
         rows:
-          - {platform: espn, platform_player_id: 10, mlbam_player_id: null, replacement_group: null}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 10, mlbam_player_id: null, replacement_group: null}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
@@ -1444,14 +1567,14 @@ unit_tests:
           - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
       - input: ref('int_fantasy__replacement_levels')
         rows:
-          - {day_kind: batting, component: games_batted, level_per_played_day: 1}
-          - {day_kind: batting, component: home_runs, level_per_played_day: 0.5}
-          - {day_kind: start, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: start, component: outs_recorded, level_per_played_day: 18}
-          - {day_kind: start, component: earned_runs, level_per_played_day: 2}
-          - {day_kind: relief, component: games_pitched, level_per_played_day: 1}
-          - {day_kind: relief, component: outs_recorded, level_per_played_day: 9}
-          - {day_kind: relief, component: earned_runs, level_per_played_day: 4}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 4}
       # The scales every test divides by (ADR 0010): HR is a count with margin scale 2, ERA a
       # rate with side denominator 18 outs and margin scale 1, so an ERA value is divided by
       # 18 * 1 = 18. The model must read these, not recompute them from the transactions.
@@ -1462,3 +1585,154 @@ unit_tests:
     expect:
       rows:
         - {transaction_id: d9, window_start: 2026-04-04, window_end: 2026-04-10, played_days: 0, home_runs: 0, total_value: null}
+
+  - name: transaction_impact_a_drop_in_a_short_season_ends_at_its_own_last_date
+    description: >
+      Two league-seasons of 2026: league 1 scores 04-01 to 04-10 and league 2 only to 04-05.
+      Player 50 (MLB 5000, HR on 04-03, 04-08 and 04-09) is dropped on 04-02 in each. The
+      league 2 drop's window ends on 04-05 and counts one HR; the league 1 drop's ends on
+      04-10 and counts three. Catches a window running to another season's end, as one
+      scoring-date range for everything loaded would give.
+    model: fct_transaction_impact
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, home_runs]
+        fo_pitching_columns: [games_pitched, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__transactions')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "ds1", transacted_at: "2026-04-02 10:00:00+00", transaction_date: "2026-04-02", platform_player_id: 50, fantasy_team_id: 1, movement: drop}
+          - {platform: espn, league_id: "2", season: 2026, transaction_id: "ds2", transacted_at: "2026-04-02 10:00:00+00", transaction_date: "2026-04-02", platform_player_id: 50, fantasy_team_id: 1, movement: drop}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-01"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-10"}
+          - {platform: espn, league_id: "2", season: 2026, scoring_date: "2026-04-01"}
+          - {platform: espn, league_id: "2", season: 2026, scoring_date: "2026-04-05"}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 5000, game_date: "2026-04-03", games_batted: 1, home_runs: 1}
+          - {mlbam_player_id: 5000, game_date: "2026-04-08", games_batted: 1, home_runs: 1}
+          - {mlbam_player_id: 5000, game_date: "2026-04-09", games_batted: 1, home_runs: 1}
+      - input: ref('dim_player_league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 50, mlbam_player_id: 5000, replacement_group: hitter}
+          - {platform: espn, league_id: "2", season: 2026, platform_player_id: 50, mlbam_player_id: 5000, replacement_group: hitter}
+      - input: ref('int_fantasy__roster_days')
+        rows: []
+      - input: ref('int_fantasy__started_player_days')
+        rows: []
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true}
+          - {platform: espn, league_id: "2", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
+          - {platform: espn, league_id: "2", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 5, part: numerator, component: home_runs, weight: 1}
+          - {platform: espn, stat_key: 47, part: numerator, component: earned_runs, weight: 27}
+          - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 4}
+          - {platform: espn, league_id: "2", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "2", season: 2026, day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {platform: espn, league_id: "2", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "2", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "2", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {platform: espn, league_id: "2", season: 2026, day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "2", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {platform: espn, league_id: "2", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 4}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, margin_scale: 2, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 1, side_denominator: 18}
+          - {platform: espn, league_id: "2", season: 2026, category_key: 5, margin_scale: 2, side_denominator: null}
+          - {platform: espn, league_id: "2", season: 2026, category_key: 47, margin_scale: 1, side_denominator: 18}
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, transaction_id: ds1, window_start: 2026-04-03, window_end: 2026-04-10, played_days: 3, home_runs: 3}
+        - {league_id: "2", season: 2026, transaction_id: ds2, window_start: 2026-04-03, window_end: 2026-04-05, played_days: 1, home_runs: 1}
+
+  - name: transaction_impact_an_earlier_seasons_drop_is_not_valued_through_a_later_match
+    description: >
+      Player 31 is absent from the id map: unresolved in 2026 (no MLBAM id, no group) and
+      matched in 2027 (MLBAM 3100, hitter). Dropped on 04-02 in both seasons, the 2026 drop
+      has a NULL total_value (an unresolved drop is unvalued, not valued at replacement) and
+      the 2027 drop is valued: 2 HR in one played day, 2 - 0.5 = 1.5, over the HR margin
+      scale 2 = 0.75. Catches an earlier season's transaction valued through a later
+      season's match.
+    model: fct_transaction_impact
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, home_runs]
+        fo_pitching_columns: [games_pitched, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__transactions')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "e26", transacted_at: "2026-04-02 10:00:00+00", transaction_date: "2026-04-02", platform_player_id: 31, fantasy_team_id: 1, movement: drop}
+          - {platform: espn, league_id: "1", season: 2027, transaction_id: "e27", transacted_at: "2027-04-02 10:00:00+00", transaction_date: "2027-04-02", platform_player_id: 31, fantasy_team_id: 1, movement: drop}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-01"}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-10"}
+          - {platform: espn, league_id: "1", season: 2027, scoring_date: "2027-04-01"}
+          - {platform: espn, league_id: "1", season: 2027, scoring_date: "2027-04-10"}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 3100, game_date: "2027-04-05", games_batted: 1, home_runs: 2}
+      - input: ref('dim_player_league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 31, mlbam_player_id: null, replacement_group: null}
+          - {platform: espn, league_id: "1", season: 2027, platform_player_id: 31, mlbam_player_id: 3100, replacement_group: hitter}
+      - input: ref('int_fantasy__roster_days')
+        rows: []
+      - input: ref('int_fantasy__started_player_days')
+        rows: []
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true}
+          - {platform: espn, league_id: "1", season: 2027, category_key: 5, category_label: HR, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2027, category_key: 47, category_label: ERA, is_lower_better: true}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 5, part: numerator, component: home_runs, weight: 1}
+          - {platform: espn, stat_key: 47, part: numerator, component: earned_runs, weight: 27}
+          - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 4}
+          - {platform: espn, league_id: "1", season: 2027, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2027, day_kind: batting, component: home_runs, level_per_played_day: 0.5}
+          - {platform: espn, league_id: "1", season: 2027, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2027, day_kind: start, component: outs_recorded, level_per_played_day: 18}
+          - {platform: espn, league_id: "1", season: 2027, day_kind: start, component: earned_runs, level_per_played_day: 2}
+          - {platform: espn, league_id: "1", season: 2027, day_kind: relief, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2027, day_kind: relief, component: outs_recorded, level_per_played_day: 9}
+          - {platform: espn, league_id: "1", season: 2027, day_kind: relief, component: earned_runs, level_per_played_day: 4}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, margin_scale: 2, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 1, side_denominator: 18}
+          - {platform: espn, league_id: "1", season: 2027, category_key: 5, margin_scale: 2, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2027, category_key: 47, margin_scale: 1, side_denominator: 18}
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, transaction_id: e26, played_days: 0, home_runs: 0, total_value: null}
+        - {league_id: "1", season: 2027, transaction_id: e27, played_days: 1, home_runs: 2, total_value: 0.75}

@@ -59,12 +59,7 @@ models:
       - name: espn_player_id
         data_tests: [not_null]
       - name: team_id
-        data_tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('stg_espn__teams')
-                field: team_id
+        data_tests: [not_null]
       - name: lineup_slot_id
         data_tests: [not_null]
     data_tests:
@@ -87,12 +82,7 @@ models:
       - name: espn_player_id
         data_tests: [not_null]
       - name: team_id
-        data_tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('stg_espn__teams')
-                field: team_id
+        data_tests: [not_null]
       - name: lineup_slot_id
         data_tests: [not_null]
       - name: lineup_slot
@@ -107,17 +97,21 @@ models:
 
   - name: stg_espn__scoring_periods
     description: >
-      One row per scoring period, mapping it to the calendar date it scored on
-      (US/Eastern boundary). The bridge between ESPN rosters and MLB game logs.
+      One row per (league, season, scoring period), from 1 to that league-season's own
+      final scoring period, mapping it to the calendar date it scored on (US/Eastern boundary). The bridge between ESPN rosters and MLB game logs.
     columns:
       - name: scoring_period
-        data_tests: [not_null, unique]
+        data_tests: [not_null]
       - name: scoring_date
-        data_tests: [not_null, unique]
+        data_tests: [not_null]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns: [league_id, season, scoring_period]
+      - dbt_utils.unique_combination_of_columns:
+          name: stg_espn__scoring_periods_one_period_per_date
+          arguments:
+            combination_of_columns: [league_id, season, scoring_date]
 
   - name: stg_espn__matchups
     description: One row per head-to-head matchup, with the category win/loss/tie tally.
@@ -153,12 +147,7 @@ models:
       - name: matchup_period
         data_tests: [not_null]
       - name: scoring_period
-        data_tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('stg_espn__scoring_periods')
-                field: scoring_period
+        data_tests: [not_null]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -237,16 +226,27 @@ models:
       One row per player movement (add, drop, waiver claim, trade), from every page of
       the newest capture. Lineup moves are excluded; a message type missing from
       espn_activity_types surfaces as a null activity and fails its not_null test.
-      Excludes the ESPN account GUID of the member who made the move.
+      Excludes the ESPN account GUID of the member who made the move. "Newest capture" is
+      per league and season. league_id and season come from the capture's partitions.
     config:
       contract:
         enforced: true
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, transaction_id]
     columns:
+      - name: league_id
+        data_type: varchar
+        data_tests: [not_null]
+      - name: season
+        data_type: integer
+        data_tests: [not_null]
       - name: topic_id
         data_type: varchar
       - name: transaction_id
         data_type: varchar
-        data_tests: [not_null, unique]
+        data_tests: [not_null]
       - name: transacted_at
         data_type: timestamp with time zone
       - name: transaction_date
@@ -285,6 +285,90 @@ models:
         data_type: timestamp
 
 unit_tests:
+  - name: transactions_keep_each_league_seasons_newest_run
+    description: >
+      Catches a global newest run. League A's newest run (fetched 09-01) is older than
+      league B's (09-15), so a single max(fetched_at) over every league would keep B's
+      pages and drop A's. Each keeps its own newest run, and A's older run (08-01, message
+      m-old) is not used.
+    model: stg_espn__transactions
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: view=x, fetched_at: "20260801T000000Z", file_path: a1, partitions: '{"season": 2026, "league_id": "A"}', payload: '{"topics": [{"id": "t0", "date": 1700000000000, "messages": [{"id": "m-old", "date": 1700000000000, "messageTypeId": 178, "targetId": 1, "to": 1}]}]}'}
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: view=x, fetched_at: "20260901T000000Z", file_path: a2, partitions: '{"season": 2026, "league_id": "A"}', payload: '{"topics": [{"id": "t1", "date": 1700000000000, "messages": [{"id": "m1", "date": 1700000000000, "messageTypeId": 178, "targetId": 2, "to": 1}]}]}'}
+          - {source: espn, endpoint: transactions, request_path: /b, request_key: view=x, fetched_at: "20260915T000000Z", file_path: b1, partitions: '{"season": 2026, "league_id": "B"}', payload: '{"topics": [{"id": "t2", "date": 1700000000000, "messages": [{"id": "m1", "date": 1700000000000, "messageTypeId": 178, "targetId": 3, "to": 1}]}]}'}
+      - input: ref('espn_activity_types')
+        rows:
+          - {message_type_id: 178, activity: "FA ADDED", is_transaction: true}
+    expect:
+      rows:
+        - {league_id: "A", season: 2026, transaction_id: "m1", espn_player_id: 2}
+        - {league_id: "B", season: 2026, transaction_id: "m1", espn_player_id: 3}
+
+  - name: transactions_a_message_on_two_pages_is_taken_from_the_first_page
+    description: >
+      Catches a missing or changed tie-break. Activity landing between two page requests
+      can put one message on both pages of a run, and every page of a run shares one
+      fetched_at, so recency cannot choose. The copy on the page with the lower
+      request_key is kept (offset=0 before offset=2000), whichever order the rows arrive
+      in: here the later page is listed first and carries a different target, so a
+      dedupe with no tie-break, or one that prefers the last page, returns player 9.
+    model: stg_espn__transactions
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: "limit=2000&offset=2000&view=x", fetched_at: "20260901T000000Z", file_path: a2, partitions: '{"season": 2026, "league_id": "A", "offset": 2000}', payload: '{"topics": [{"id": "t1", "date": 1700000000000, "messages": [{"id": "m1", "date": 1700000000000, "messageTypeId": 178, "targetId": 9, "to": 1}]}]}'}
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: "limit=2000&offset=0&view=x", fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2026, "league_id": "A"}', payload: '{"topics": [{"id": "t1", "date": 1700000000000, "messages": [{"id": "m1", "date": 1700000000000, "messageTypeId": 178, "targetId": 2, "to": 1}]}]}'}
+      - input: ref('espn_activity_types')
+        rows:
+          - {message_type_id: 178, activity: "FA ADDED", is_transaction: true}
+    expect:
+      rows:
+        - {league_id: "A", season: 2026, transaction_id: "m1", espn_player_id: 2}
+
+  - name: scoring_periods_run_to_each_leagues_own_final_period
+    description: >
+      Catches one series generated to the longest league's final period. Two league-seasons
+      with final periods 2 and 5 must produce 2 and 5 rows; a global maximum would give
+      both 5.
+    model: stg_espn__scoring_periods
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "A", season: 2026, latest_scoring_period: 1, final_scoring_period: 2, fetched_at: "2026-04-01 12:00:00"}
+          - {league_id: "B", season: 2026, latest_scoring_period: 1, final_scoring_period: 5, fetched_at: "2026-04-01 12:00:00"}
+    expect:
+      rows:
+        - {league_id: "A", season: 2026, scoring_period: 1}
+        - {league_id: "A", season: 2026, scoring_period: 2}
+        - {league_id: "B", season: 2026, scoring_period: 1}
+        - {league_id: "B", season: 2026, scoring_period: 2}
+        - {league_id: "B", season: 2026, scoring_period: 3}
+        - {league_id: "B", season: 2026, scoring_period: 4}
+        - {league_id: "B", season: 2026, scoring_period: 5}
+
+  - name: latest_response_is_chosen_per_league_and_season
+    description: >
+      Catches a global "latest". League 1 was captured earlier than league 2, so selecting
+      the single newest response would return league 2 alone and silently drop league 1.
+      Each league-season must keep its own newest capture: league 1 has two, and only the
+      later (final period 180) may be used, not the earlier one (final period 100).
+    model: stg_espn__league_settings
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: settings, request_path: /a, request_key: view=mSettings, fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2026, "league_id": "1"}', payload: '{"id": 1, "seasonId": 2026, "status": {"finalScoringPeriod": 100}}'}
+          - {source: espn, endpoint: settings, request_path: /a, request_key: view=mSettings, fetched_at: "20260902T000000Z", file_path: a2, partitions: '{"season": 2026, "league_id": "1"}', payload: '{"id": 1, "seasonId": 2026, "status": {"finalScoringPeriod": 180}}'}
+          - {source: espn, endpoint: settings, request_path: /b, request_key: view=mSettings, fetched_at: "20260915T000000Z", file_path: b1, partitions: '{"season": 2026, "league_id": "2"}', payload: '{"id": 2, "seasonId": 2026, "status": {"finalScoringPeriod": 150}}'}
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, final_scoring_period: 180}
+        - {league_id: "2", season: 2026, final_scoring_period: 150}
+
   - name: scoring_period_dates_use_the_eastern_day_boundary
     description: >
       A settings snapshot taken at 02:52 UTC belongs to the PREVIOUS Eastern day. If the

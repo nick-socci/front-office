@@ -200,10 +200,28 @@ def check_loaded(
         return [
             Finding(Severity.ERROR, "loaded", QUALIFIED, "table missing; run `front-office load`")
         ]
+    columns = {
+        name
+        for (name,) in con.execute(
+            "select column_name from information_schema.columns "
+            "where table_schema = ? and table_name = ?",
+            [SCHEMA, TABLE],
+        ).fetchall()
+    }
+    if "request_path" not in columns:
+        return [
+            Finding(
+                Severity.ERROR,
+                "loaded",
+                QUALIFIED,
+                "table has the old shape (no request_path column); rebuild into a new "
+                "warehouse file with `front-office load --db <new file>`",
+            )
+        ]
     loaded = {
         tuple(map(str, key))
         for key in con.execute(
-            f"select source, endpoint, request_key, fetched_at from {QUALIFIED}"
+            f"select source, endpoint, request_path, request_key, fetched_at from {QUALIFIED}"
         ).fetchall()
     }
 
@@ -213,6 +231,7 @@ def check_loaded(
         raw_key = (
             capture.source,
             capture.endpoint,
+            LandingZone.request_path(capture.meta.get("url")),
             str(capture.meta["request_key"]),
             capture.fetched_at,
         )

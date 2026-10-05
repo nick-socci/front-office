@@ -1,0 +1,13 @@
+{
+  "source": "idmap",
+  "endpoint": "player_id_map",
+  "partitions": {
+    "provider": "sfbb"
+  },
+  "url": "https://www.smartfantasybaseball.com/PLAYERIDMAPCSV",
+  "params": {
+    "provider": "sfbb"
+  },
+  "request_key": "provider=sfbb",
+  "fetched_at": "20260430T160000Z"
+}

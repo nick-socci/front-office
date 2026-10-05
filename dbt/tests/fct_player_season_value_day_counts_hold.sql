@@ -17,9 +17,15 @@
 -- from the wrong model, played days counted from the grain's any-appearance `played`
 -- flag, and the two facts disagreeing about how many days a pair played.
 
+-- The pair is (platform, league, season, player, team): the recomputation is keyed by all
+-- five, or a player on team 3 of two leagues would be compared with the sum of both (#28).
+
 with recomputed as (
 
     select
+        platform,
+        league_id,
+        season,
         platform_player_id,
         fantasy_team_id,
         count(*) as started_days,
@@ -27,14 +33,17 @@ with recomputed as (
         count(*) filter (where slot_role = 'hitter' and games_batted > 0) as hitter_played_days,
         count(*) filter (where slot_role = 'pitcher' and games_pitched > 0) as pitcher_played_days
     from {{ ref('int_fantasy__started_player_days') }}
-    group by platform_player_id, fantasy_team_id
+    group by platform, league_id, season, platform_player_id, fantasy_team_id
 
 )
 
 select fact.platform_player_id, fact.fantasy_team_id
 from {{ ref('fct_player_season_value') }} as fact
 left join recomputed
-    on recomputed.platform_player_id = fact.platform_player_id
+    on recomputed.platform = fact.platform
+    and recomputed.league_id = fact.league_id
+    and recomputed.season = fact.season
+    and recomputed.platform_player_id = fact.platform_player_id
     and recomputed.fantasy_team_id = fact.fantasy_team_id
 where fact.played_started_days > fact.started_days
     or fact.started_days_outside_matchups > fact.started_days
@@ -63,7 +72,10 @@ inner join (
     on category_sides.platform = categories.platform
     and category_sides.category_key = categories.category_key
 left join recomputed
-    on recomputed.platform_player_id = categories.platform_player_id
+    on recomputed.platform = categories.platform
+    and recomputed.league_id = categories.league_id
+    and recomputed.season = categories.season
+    and recomputed.platform_player_id = categories.platform_player_id
     and recomputed.fantasy_team_id = categories.fantasy_team_id
 where categories.played_days is distinct from
         case category_sides.side

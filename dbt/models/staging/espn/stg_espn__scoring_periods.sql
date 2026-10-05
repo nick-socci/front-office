@@ -35,7 +35,8 @@ periods as (
         anchor.anchor_date,
         generate_series as scoring_period
     from anchor,
-        generate_series(1, (select max(final_scoring_period) from anchor))
+        -- lateral: each league-season runs to its own final period, not to the longest
+        generate_series(1, anchor.final_scoring_period)
 
 )
 

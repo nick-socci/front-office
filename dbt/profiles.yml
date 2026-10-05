@@ -13,5 +13,5 @@ front_office:
     # Same SQL, tiny anonymised data, no credentials.
     ci:
       type: duckdb
-      path: ci.duckdb
+      path: "{{ env_var('FO_CI_DUCKDB_PATH', 'ci.duckdb') }}"
       threads: 4

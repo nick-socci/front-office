@@ -5,15 +5,20 @@
 -- where started_days differ, or total_value differs by more than 1e-9 (or is null on one
 -- side only).
 
+-- Scoped by league and season (#28): a pair is one player on one team of one league-season.
+
 with single_adds as (
 
     select
+        platform,
+        league_id,
+        season,
         platform_player_id,
         fantasy_team_id,
         max(transaction_id) as transaction_id
     from {{ ref('fct_transaction_impact') }}
     where movement = 'add'
-    group by platform_player_id, fantasy_team_id
+    group by platform, league_id, season, platform_player_id, fantasy_team_id
     having count(*) = 1
 
 ),
@@ -21,6 +26,9 @@ with single_adds as (
 covered as (
 
     select
+        impact.platform,
+        impact.league_id,
+        impact.season,
         impact.platform_player_id,
         impact.fantasy_team_id,
         impact.started_days as add_started_days,
@@ -31,7 +39,10 @@ covered as (
     inner join {{ ref('fct_transaction_impact') }} as impact
         on impact.transaction_id = single_adds.transaction_id
     inner join {{ ref('fct_player_season_value') }} as season
-        on season.platform_player_id = single_adds.platform_player_id
+        on season.platform = single_adds.platform
+        and season.league_id = single_adds.league_id
+        and season.season = single_adds.season
+        and season.platform_player_id = single_adds.platform_player_id
         and season.fantasy_team_id = single_adds.fantasy_team_id
         and season.first_started_date >= impact.window_start
         and season.last_started_date <= impact.window_end

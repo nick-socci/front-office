@@ -46,7 +46,7 @@
 -- two-way player only batted must charge no pitching replacement (R4.7).
 --
 -- Replacement level comes from int_fantasy__replacement_levels, per played day of the
--- kind. The arithmetic (contribution, value over replacement, scaled value) is in
+-- kind, of the pair's own league and season (#28). The arithmetic (contribution, value over replacement, scaled value) is in
 -- the fo_category_value macros, shared with fct_transaction_impact so the two facts cannot
 -- drift; see there for the rules and for what null means.
 --
@@ -156,7 +156,7 @@ kind_parts as (
         sum(rules.weight * totals.component_total) as part_total,
         case
             when bool_or(levels.level_per_played_day is null) then null
-            else sum(rules.weight * levels.level_per_played_day)
+            else sum(rules.weight * levels.level_per_played_day order by rules.component)
         end as part_replacement
     from kind_component_totals as totals
     inner join {{ ref('int_fantasy__stat_components') }} as rules
@@ -167,7 +167,10 @@ kind_parts as (
         -- a kind meets only the components of its own side
         and sides.side = case totals.day_kind when 'batting' then 'batting' else 'pitching' end
     left join {{ ref('int_fantasy__replacement_levels') }} as levels
-        on levels.component = totals.component
+        on levels.platform = totals.platform
+        and levels.league_id = totals.league_id
+        and levels.season = totals.season
+        and levels.component = totals.component
         and levels.day_kind = totals.day_kind
     group by
         {%- for key in pair_keys %}

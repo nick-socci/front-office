@@ -4,11 +4,14 @@
 -- him: the cost of letting him go. Neither is a counterfactual about the lineup, only a
 -- window of production measured against a free-agent replacement.
 --
--- Carries no league_id or season, like int_fantasy__transactions (#28): it assumes the one
--- league-season loaded, and #28 must land before a second is.
+-- Carries league_id and season, like int_fantasy__transactions (#28), and every join and
+-- window below stays inside them: the scoring bounds, the same team's next drop, the next
+-- add, roster and started days, the replacement levels, the category scales and the scored
+-- categories are all those of the transaction's own league-season. The MLBAM id and group
+-- come from that league-season's row of dim_player_league_seasons, not from dim_players.
 --
--- The window, both ends inclusive, from the first and last scoring dates of
--- int_fantasy__matchup_periods:
+-- The window, both ends inclusive, from the first and last scoring dates of the
+-- league-season's int_fantasy__matchup_periods:
 --   add   starts on greatest(transaction_date, first scoring date) and ends on the date of
 --         THAT TEAM's next drop of THAT PLAYER, else the last scoring date. "Next" is by
 --         transacted_at, not by date: the real season has same-day add-and-drops, and a
@@ -24,7 +27,7 @@
 -- Measures. An add counts, over the window: rostered_days (roster days of that player on
 -- that team), started_days, played_started_days (the credited-side appearance, as in
 -- fct_player_season_value) and the credited components of int_fantasy__started_player_days.
--- A drop counts MLB days from int_mlb__player_game_days for his dim_players.mlbam_player_id,
+-- A drop counts MLB days from int_mlb__player_game_days for his dim_player_league_seasons.mlbam_player_id,
 -- on the side his replacement_group is credited for only (hitter: batting columns and
 -- played_days = days with games_batted > 0; SP and RP: pitching columns and days with
 -- games_pitched > 0); the other side is 0. rostered_days, started_days and
@@ -36,8 +39,8 @@
 -- the same per-category arithmetic (the fo_category_value macros), the same replacement
 -- levels and the same margin scale and side denominator, READ from
 -- int_fantasy__category_scales, never recomputed over transactions, or a two-week window
--- and a season would not be comparable. Like the rest of this model, the join to the scales
--- is on category_key alone and assumes the one league-season loaded (#28).
+-- and a season would not be comparable. The scales are joined on platform, league, season
+-- and category_key.
 --
 -- KIND OF DAY (ADR 0008, #52), as in fct_player_category_value. A window's played days are
 -- grouped by kind and each kind is valued against its own replacement level: `batting` (a
@@ -46,7 +49,7 @@
 -- compared with what a free agent produced in a start, a relief day with what one produced
 -- in relief. On an add the days are the window's started days of that player for that team,
 -- the side of each being its slot's; on a drop they are his MLB days, the side being the
--- one his dim_players.replacement_group credits (hitter, or pitcher for SP and RP). That
+-- one his dim_player_league_seasons.replacement_group credits (hitter, or pitcher for SP and RP). That
 -- group now only tells a hitter from a pitcher: SP versus RP chooses nothing, the outing
 -- does. A day that is not a played day on its side belongs to no kind and adds nothing.
 --
@@ -66,9 +69,13 @@
 with scoring_bounds as (
 
     select
+        platform,
+        league_id,
+        season,
         min(scoring_date) as first_scoring_date,
         max(scoring_date) as last_scoring_date
     from {{ ref('int_fantasy__matchup_periods') }}
+    group by platform, league_id, season
 
 ),
 
@@ -82,17 +89,22 @@ transactions as (
 next_team_drops as (
 
     select
+        adds.platform,
+        adds.league_id,
+        adds.season,
         adds.transaction_id,
         min(drops.transaction_date) as next_drop_date
     from transactions as adds
     inner join transactions as drops
         on drops.platform = adds.platform
+        and drops.league_id = adds.league_id
+        and drops.season = adds.season
         and drops.platform_player_id = adds.platform_player_id
         and drops.fantasy_team_id = adds.fantasy_team_id
         and drops.movement = 'drop'
         and drops.transacted_at > adds.transacted_at
     where adds.movement = 'add'
-    group by adds.transaction_id
+    group by adds.platform, adds.league_id, adds.season, adds.transaction_id
 
 ),
 
@@ -111,11 +123,19 @@ windows as (
             when 'drop' then bounds.last_scoring_date
         end as window_end
     from transactions
-    cross join scoring_bounds as bounds
+    left join scoring_bounds as bounds
+        on bounds.platform = transactions.platform
+        and bounds.league_id = transactions.league_id
+        and bounds.season = transactions.season
     left join next_team_drops
-        on next_team_drops.transaction_id = transactions.transaction_id
-    left join {{ ref('dim_players') }} as players
+        on next_team_drops.platform = transactions.platform
+        and next_team_drops.league_id = transactions.league_id
+        and next_team_drops.season = transactions.season
+        and next_team_drops.transaction_id = transactions.transaction_id
+    left join {{ ref('dim_player_league_seasons') }} as players
         on players.platform = transactions.platform
+        and players.league_id = transactions.league_id
+        and players.season = transactions.season
         and players.platform_player_id = transactions.platform_player_id
 
 ),
@@ -123,22 +143,30 @@ windows as (
 add_rostered as (
 
     select
+        windows.platform,
+        windows.league_id,
+        windows.season,
         windows.transaction_id,
         count(*) as rostered_days
     from windows
     inner join {{ ref('int_fantasy__roster_days') }} as days
         on days.platform = windows.platform
+        and days.league_id = windows.league_id
+        and days.season = windows.season
         and days.platform_player_id = windows.platform_player_id
         and days.fantasy_team_id = windows.fantasy_team_id
         and days.scoring_date between windows.window_start and windows.window_end
     where windows.movement = 'add'
-    group by windows.transaction_id
+    group by windows.platform, windows.league_id, windows.season, windows.transaction_id
 
 ),
 
 add_started as (
 
     select
+        windows.platform,
+        windows.league_id,
+        windows.season,
         windows.transaction_id,
         count(*) as started_days,
         count(*) filter (where days.slot_role = 'hitter' and days.games_batted > 0) as hitter_played_days,
@@ -149,11 +177,13 @@ add_started as (
     from windows
     inner join {{ ref('int_fantasy__started_player_days') }} as days
         on days.platform = windows.platform
+        and days.league_id = windows.league_id
+        and days.season = windows.season
         and days.platform_player_id = windows.platform_player_id
         and days.fantasy_team_id = windows.fantasy_team_id
         and days.scoring_date between windows.window_start and windows.window_end
     where windows.movement = 'add'
-    group by windows.transaction_id
+    group by windows.platform, windows.league_id, windows.season, windows.transaction_id
 
 ),
 
@@ -161,6 +191,9 @@ add_started as (
 drop_games as (
 
     select
+        windows.platform,
+        windows.league_id,
+        windows.season,
         windows.transaction_id,
         count(*) filter (where windows.replacement_group = 'hitter' and games.games_batted > 0)
             as hitter_played_days,
@@ -179,7 +212,7 @@ drop_games as (
         on games.mlbam_player_id = windows.mlbam_player_id
         and games.game_date between windows.window_start and windows.window_end
     where windows.movement = 'drop'
-    group by windows.transaction_id
+    group by windows.platform, windows.league_id, windows.season, windows.transaction_id
 
 ),
 
@@ -188,21 +221,29 @@ drop_games as (
 next_adds as (
 
     select
+        platform,
+        league_id,
+        season,
         transaction_id,
         next_added_at,
         next_added_by_team_id
     from (
         select
+            drops.platform,
+            drops.league_id,
+            drops.season,
             drops.transaction_id,
             adds.transacted_at as next_added_at,
             adds.fantasy_team_id as next_added_by_team_id,
             row_number() over (
-                partition by drops.transaction_id
+                partition by drops.platform, drops.league_id, drops.season, drops.transaction_id
                 order by adds.transacted_at, adds.transaction_id
             ) as add_rank
         from transactions as drops
         inner join transactions as adds
             on adds.platform = drops.platform
+            and adds.league_id = drops.league_id
+            and adds.season = drops.season
             and adds.platform_player_id = drops.platform_player_id
             and adds.movement = 'add'
             and adds.transacted_at > drops.transacted_at
@@ -231,13 +272,25 @@ measured as (
         {%- endfor %}
     from windows
     left join add_rostered
-        on add_rostered.transaction_id = windows.transaction_id
+        on add_rostered.platform = windows.platform
+        and add_rostered.league_id = windows.league_id
+        and add_rostered.season = windows.season
+        and add_rostered.transaction_id = windows.transaction_id
     left join add_started
-        on add_started.transaction_id = windows.transaction_id
+        on add_started.platform = windows.platform
+        and add_started.league_id = windows.league_id
+        and add_started.season = windows.season
+        and add_started.transaction_id = windows.transaction_id
     left join drop_games
-        on drop_games.transaction_id = windows.transaction_id
+        on drop_games.platform = windows.platform
+        and drop_games.league_id = windows.league_id
+        and drop_games.season = windows.season
+        and drop_games.transaction_id = windows.transaction_id
     left join next_adds
-        on next_adds.transaction_id = windows.transaction_id
+        on next_adds.platform = windows.platform
+        and next_adds.league_id = windows.league_id
+        and next_adds.season = windows.season
+        and next_adds.transaction_id = windows.transaction_id
 
 ),
 
@@ -246,15 +299,22 @@ measured as (
 add_kinded_days as (
 
     select
+        windows.platform,
+        windows.league_id,
+        windows.season,
         windows.transaction_id,
         case days.slot_role
             when 'hitter' then case when days.games_batted > 0 then 'batting' end
             when 'pitcher' then {{ fo_pitching_day_kind('days.games_pitched', 'days.games_started') }}
         end as day_kind,
-        days.*
+        {%- for column in component_columns %}
+        days.{{ column }}{{ ',' if not loop.last }}
+        {%- endfor %}
     from windows
     inner join {{ ref('int_fantasy__started_player_days') }} as days
         on days.platform = windows.platform
+        and days.league_id = windows.league_id
+        and days.season = windows.season
         and days.platform_player_id = windows.platform_player_id
         and days.fantasy_team_id = windows.fantasy_team_id
         and days.scoring_date between windows.window_start and windows.window_end
@@ -266,6 +326,9 @@ add_kinded_days as (
 drop_kinded_days as (
 
     select
+        windows.platform,
+        windows.league_id,
+        windows.season,
         windows.transaction_id,
         case
             when windows.replacement_group = 'hitter'
@@ -273,7 +336,9 @@ drop_kinded_days as (
             when windows.replacement_group in ('SP', 'RP')
                 then {{ fo_pitching_day_kind('games.games_pitched', 'games.games_started') }}
         end as day_kind,
-        games.*
+        {%- for column in component_columns %}
+        games.{{ column }}{{ ',' if not loop.last }}
+        {%- endfor %}
     from windows
     inner join {{ ref('int_mlb__player_game_days') }} as games
         on games.mlbam_player_id = windows.mlbam_player_id
@@ -300,6 +365,9 @@ component_sides as (
 kind_days as (
 
     select
+        platform,
+        league_id,
+        season,
         transaction_id,
         day_kind,
         count(*) as played_days,
@@ -307,12 +375,12 @@ kind_days as (
         coalesce(sum({{ column }}), 0) as {{ column }}{{ ',' if not loop.last }}
         {%- endfor %}
     from (
-        select transaction_id, day_kind, {{ component_columns | join(', ') }} from add_kinded_days
+        select platform, league_id, season, transaction_id, day_kind, {{ component_columns | join(', ') }} from add_kinded_days
         union all
-        select transaction_id, day_kind, {{ component_columns | join(', ') }} from drop_kinded_days
+        select platform, league_id, season, transaction_id, day_kind, {{ component_columns | join(', ') }} from drop_kinded_days
     )
     where day_kind is not null
-    group by transaction_id, day_kind
+    group by platform, league_id, season, transaction_id, day_kind
 
 ),
 
@@ -322,6 +390,9 @@ kind_component_totals as (
 
     {%- for column in component_columns %}
     select
+        platform,
+        league_id,
+        season,
         transaction_id,
         day_kind,
         '{{ column }}' as component,
@@ -338,6 +409,9 @@ kind_component_totals as (
 kind_parts as (
 
     select
+        totals.platform,
+        totals.league_id,
+        totals.season,
         totals.transaction_id,
         totals.day_kind,
         rules.stat_key as category_key,
@@ -345,7 +419,7 @@ kind_parts as (
         sum(rules.weight * totals.component_total) as part_total,
         case
             when bool_or(levels.level_per_played_day is null) then null
-            else sum(rules.weight * levels.level_per_played_day)
+            else sum(rules.weight * levels.level_per_played_day order by rules.component)
         end as part_replacement
     from kind_component_totals as totals
     inner join {{ ref('int_fantasy__stat_components') }} as rules
@@ -355,15 +429,21 @@ kind_parts as (
         -- a kind meets only the components of its own side
         and sides.side = case totals.day_kind when 'batting' then 'batting' else 'pitching' end
     left join {{ ref('int_fantasy__replacement_levels') }} as levels
-        on levels.component = totals.component
+        on levels.platform = totals.platform
+        and levels.league_id = totals.league_id
+        and levels.season = totals.season
+        and levels.component = totals.component
         and levels.day_kind = totals.day_kind
-    group by totals.transaction_id, totals.day_kind, rules.stat_key, rules.part
+    group by totals.platform, totals.league_id, totals.season, totals.transaction_id, totals.day_kind, rules.stat_key, rules.part
 
 ),
 
 kind_parts_pivoted as (
 
     select
+        platform,
+        league_id,
+        season,
         transaction_id,
         day_kind,
         category_key,
@@ -372,22 +452,27 @@ kind_parts_pivoted as (
         max(part_replacement) filter (where part = 'numerator') as replacement_numerator,
         max(part_replacement) filter (where part = 'denominator') as replacement_denominator
     from kind_parts
-    group by transaction_id, day_kind, category_key
+    group by platform, league_id, season, transaction_id, day_kind, category_key
 
 ),
 
 -- A category is a rate if it has a denominator part, derived as fct_player_category_value
--- does.
+-- does. One set per league-season: each scores its own categories.
 scored_categories as (
 
     select
+        categories.platform,
+        categories.league_id,
+        categories.season,
         categories.category_key,
         categories.is_lower_better,
         coalesce(bool_or(rules.part = 'denominator'), false) as is_rate
     from {{ ref('int_fantasy__categories') }} as categories
     left join {{ ref('int_fantasy__stat_components') }} as rules
         on rules.stat_key = categories.category_key
-    group by categories.category_key, categories.is_lower_better
+    group by
+        categories.platform, categories.league_id, categories.season,
+        categories.category_key, categories.is_lower_better
 
 ),
 
@@ -395,6 +480,9 @@ scored_categories as (
 kind_values as (
 
     select
+        parts.platform,
+        parts.league_id,
+        parts.season,
         parts.transaction_id,
         parts.category_key,
         kind_days.played_days,
@@ -404,9 +492,15 @@ kind_values as (
         ) }} as value_over_replacement
     from kind_parts_pivoted as parts
     inner join scored_categories
-        on scored_categories.category_key = parts.category_key
+        on scored_categories.platform = parts.platform
+        and scored_categories.league_id = parts.league_id
+        and scored_categories.season = parts.season
+        and scored_categories.category_key = parts.category_key
     inner join kind_days
-        on kind_days.transaction_id = parts.transaction_id
+        on kind_days.platform = parts.platform
+        and kind_days.league_id = parts.league_id
+        and kind_days.season = parts.season
+        and kind_days.transaction_id = parts.transaction_id
         and kind_days.day_kind = parts.day_kind
 
 ),
@@ -416,6 +510,9 @@ kind_values as (
 summed_over_kinds as (
 
     select
+        platform,
+        league_id,
+        season,
         transaction_id,
         category_key,
         cast(sum(played_days) as bigint) as played_days,
@@ -424,7 +521,7 @@ summed_over_kinds as (
             else sum(value_over_replacement)
         end as value_over_replacement
     from kind_values
-    group by transaction_id, category_key
+    group by platform, league_id, season, transaction_id, category_key
 
 ),
 
@@ -433,6 +530,9 @@ summed_over_kinds as (
 with_value as (
 
     select
+        measured.platform,
+        measured.league_id,
+        measured.season,
         measured.transaction_id,
         scored_categories.category_key,
         coalesce(summed.played_days, 0) as played_days,
@@ -441,47 +541,69 @@ with_value as (
             else summed.value_over_replacement
         end as value_over_replacement
     from measured
-    cross join scored_categories
+    inner join scored_categories
+        on scored_categories.platform = measured.platform
+        and scored_categories.league_id = measured.league_id
+        and scored_categories.season = measured.season
     left join summed_over_kinds as summed
-        on summed.transaction_id = measured.transaction_id
+        on summed.platform = measured.platform
+        and summed.league_id = measured.league_id
+        and summed.season = measured.season
+        and summed.transaction_id = measured.transaction_id
         and summed.category_key = scored_categories.category_key
 
 ),
 
 -- Each value divided by its category's scale, read from int_fantasy__category_scales as the
 -- season fact does. A LEFT join: a category with no scale is worth 0 by the macro's rules,
--- not dropped. Assumes the one league-season loaded (#28), like the rest of this model.
+-- not dropped. Scale and category are those of the transaction's own league-season.
 scaled as (
 
     select
+        with_value.platform,
+        with_value.league_id,
+        with_value.season,
         with_value.transaction_id,
+        with_value.category_key,
         {{ fo_scaled_value(
             'with_value.value_over_replacement', 'with_value.played_days',
             'scales.margin_scale', 'scales.side_denominator', 'scored_categories.is_rate'
         ) }} as scaled_value
     from with_value
     inner join scored_categories
-        on scored_categories.category_key = with_value.category_key
+        on scored_categories.platform = with_value.platform
+        and scored_categories.league_id = with_value.league_id
+        and scored_categories.season = with_value.season
+        and scored_categories.category_key = with_value.category_key
     left join {{ ref('int_fantasy__category_scales') }} as scales
-        on scales.category_key = with_value.category_key
+        on scales.platform = with_value.platform
+        and scales.league_id = with_value.league_id
+        and scales.season = with_value.season
+        and scales.category_key = with_value.category_key
 
 ),
 
 total_values as (
 
     select
+        platform,
+        league_id,
+        season,
         transaction_id,
         case
             when count(*) filter (where scaled_value is null) > 0 then null
-            else sum(scaled_value)
+            -- in category order: a sum of doubles is only reproducible in a fixed order (#28)
+            else sum(scaled_value order by category_key)
         end as total_value
     from scaled
-    group by transaction_id
+    group by platform, league_id, season, transaction_id
 
 )
 
 select
     measured.platform,
+    measured.league_id,
+    measured.season,
     measured.transaction_id,
     measured.topic_id,
     measured.transacted_at,
@@ -508,4 +630,7 @@ select
     end as total_value
 from measured
 left join total_values
-    on total_values.transaction_id = measured.transaction_id
+    on total_values.platform = measured.platform
+    and total_values.league_id = measured.league_id
+    and total_values.season = measured.season
+    and total_values.transaction_id = measured.transaction_id
