@@ -4,39 +4,50 @@ Issue: #29 · Requirements: [requirements.md](requirements.md) · Tasks: [tasks.
 
 ## Overview
 
-A capture becomes a thing with one definition: a payload and a sidecar that are both in
-place and agree. The writer publishes the payload first and the sidecar last, each
-without replacing anything, so the sidecar's presence is the commit. Every reader, the
-fetch logic included, asks one function for committed captures. Anything else found
-under the landing root is moved to a quarantine directory beside it at the start of the
-next run, under a lock that allows one writer at a time, and the entity is fetched again.
-Nothing is deleted, and no file already landed changes.
+A capture becomes one directory holding its payload and its sidecar. The writer builds
+the directory under a temporary name and publishes it with a single rename, so a capture
+is visible complete or not at all, and a write whose destination exists is refused.
+Every reader, the fetch logic included, asks one function for committed captures.
+Whatever else is found under the landing root, in practice a temporary directory left by
+a killed run, is moved to a quarantine beside it at the start of the next run, under a
+lock that allows one writer at a time. The 5,118 captures already landed are moved into
+the new layout by rename alone, checked against a checksum manifest, and the warehouse
+is rebuilt beside the old one and compared. Nothing is deleted and no file's contents
+change.
+
+```
+before   …/game_pk=822678/fetched_at=20261005T121147Z.json
+         …/game_pk=822678/fetched_at=20261005T121147Z.meta.json
+
+after    …/game_pk=822678/fetched_at=20261005T121147Z/payload.json
+         …/game_pk=822678/fetched_at=20261005T121147Z/meta.json
+```
 
 ```mermaid
 sequenceDiagram
   participant W as LandingZone.write
-  participant T as temporary files
-  participant F as final paths
-  W->>F: 1. either final path exists? then collision, stop
-  W->>T: 2. write payload.tmp
-  W->>T: 3. write sidecar.tmp (with payload size and SHA-256)
-  W->>F: 4. link payload.tmp to payload (fails if it exists)
-  Note over F: payload present, no sidecar: NOT a capture
-  W->>F: 5. link sidecar.tmp to sidecar (fails if it exists)
-  Note over F: sidecar present: committed
-  W->>T: 6. remove both temporary files
+  participant T as fetched_at=S.tmp-PID/
+  participant F as fetched_at=S/
+  W->>F: 1. final directory exists? then collision, stop
+  W->>T: 2. create the temporary directory
+  W->>T: 3. write payload.json
+  W->>T: 4. write meta.json (with payload size and SHA-256)
+  W->>F: 5. rename the temporary directory to its final name
+  Note over F: the capture exists, complete
 ```
 
-A failure before step 4 leaves only temporary files. A failure between steps 4 and 5
-leaves a payload with no sidecar. Both are swept on the next run.
+A failure before step 5 leaves nothing, because the writer removes its temporary
+directory; a kill before step 5 leaves the temporary directory, which the next run
+sweeps. There is no step after 5.
 
 ### Python concepts this touches
 
 Nothing here is dbt. Two operating-system facilities carry the design:
 
-- **A hard link** (`os.link`) gives a file a second name. Creating it fails if the name
-  is taken, and it is atomic, so it is a publish that cannot replace anything.
-  `Path.replace`, used today, is atomic too but overwrites.
+- **Renaming a directory** (`os.rename`) is one atomic step: other processes see the old
+  name or the new one, never a mixture. Onto an existing non-empty directory it fails;
+  onto an existing *empty* one it succeeds and replaces it, which is why the writer
+  checks first.
 - **An advisory lock** (`fcntl.flock`) is held on an open file and released by the kernel
   when the process ends, however it ends.
 
@@ -44,234 +55,293 @@ Nothing here is dbt. Two operating-system facilities carry the design:
 
 ### How a pair is made to land together
 
-| | A — sidecar as commit marker (chosen) | B — a directory per capture | C — one envelope file | D — exclusive create on the final path |
+| | A — sidecar as commit marker | B — a directory per capture (chosen by the owner) | C — one envelope file | D — exclusive create on the final path |
 |---|---|---|---|---|
-| Pair is atomic | no, but a half-written pair is recognisable and never read | yes: one directory rename | yes: one file | no |
-| Existing 5,118 captures | untouched | every one moves | every one is rewritten | untouched |
+| Pair lands in one step | no; a half-written pair is recognisable and never read | yes: one rename | yes: one file | no |
+| Existing 5,118 captures | untouched | every one moves, by rename | every one is rewritten | untouched |
 | Payload saved exactly as it arrived | yes | yes | no | yes |
-| Refuses to replace | yes (`os.link`) | yes (rename onto a non-empty directory fails) | yes (`os.link`) | yes |
 | A reader can see a file mid-write | no | no | no | **yes** |
+| Recovery needed for | a lone payload, which would otherwise freeze an entity | a leftover temporary directory, which is only clutter | a leftover temporary file | a partial final file |
+| Other costs | none | the warehouse is rebuilt (its `file_path` values change); 84 fixture files move; the backup is refreshed | a new file format | none |
 
-See [ADR 0014](../../adr/0014-a-capture-is-committed-by-its-sidecar.md). B is the better
-shape for a new project; here it means migrating the landing zone, its readers and the
-backup to fix a window that the commit marker already makes harmless.
+A was the recommendation and what #29 had agreed. The owner chose **B** on 2026-10-05,
+preferring the more solid design once its cost was laid out: about twice the build, most
+of it a one-time migration, at the cheapest moment there will be. See
+[ADR 0014](../../adr/0014-a-capture-is-a-directory-published-by-one-rename.md).
 
-### What happens to a partial capture
+### What happens to what is not a capture
 
 | | A — sweep at the start of a backfill, under a lock (chosen) | B — leave it, readers ignore it | C — repair command only | D — delete |
 |---|---|---|---|---|
-| Entity is refetched | yes | yes | yes | yes |
 | Landing root stays clean | yes | no: audit errors accumulate | only if someone runs it | yes |
 | Can lose the only copy | no | no | no | **yes** |
 | Needs a lock | yes | no | yes | yes |
 
-See [ADR 0015](../../adr/0015-incomplete-captures-are-quarantined-under-a-writer-lock.md).
-B is correct and simplest, and is what the landing zone has effectively run on since
-September: 201 such files, and an audit that has reported 5 errors on every run.
+Under the directory layout nothing uncommitted can block a fetch, so B is correct and is
+a more defensible choice than it was under the old layout. A is chosen so that an audit
+error keeps meaning something. See
+[ADR 0015](../../adr/0015-incomplete-captures-are-quarantined-under-a-writer-lock.md).
 
 ## Decisions
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0014](../../adr/0014-a-capture-is-committed-by-its-sidecar.md) | The sidecar is the commit marker, published last by hard link; a collision stops the run; new sidecars record the payload's size and SHA-256 | proposed |
-| [0015](../../adr/0015-incomplete-captures-are-quarantined-under-a-writer-lock.md) | Uncommitted files are moved to a quarantine beside the landing root at the start of a backfill, under an exclusive `flock`; nothing is deleted | proposed |
+| [0014](../../adr/0014-a-capture-is-a-directory-published-by-one-rename.md) | A capture is a directory published by one rename; a collision stops the run; new sidecars record the payload's size and SHA-256; existing captures move by rename alone | proposed |
+| [0015](../../adr/0015-incomplete-captures-are-quarantined-under-a-writer-lock.md) | Anything that is not a capture is moved to a quarantine beside the landing root at the start of a backfill, under an exclusive `flock`, within a size limit; nothing is deleted; readers do not wait but warn | proposed |
+
+All nine points put to the owner were decided on 2026-10-05 and are recorded in the PR.
 
 ## Detailed design
 
-All in `ingestion/src/front_office/`. No dbt file changes.
+All in `ingestion/src/front_office/` and `scripts/`. No dbt model changes.
+
+### Layout
+
+A capture's directory is `<root>/<source>/<endpoint>/<key=value>…/fetched_at=<stamp>/`,
+holding exactly `payload.json` and `meta.json`. The partition folders are unchanged; the
+capture's name moves from a file stem to a directory name.
 
 ### `landing.py`
 
-**`LandingZone.write`** follows the six steps in the diagram.
+**`LandingZone.write`** follows the five steps in the diagram.
 
-- Temporary names stay as now (`<name>.tmp-<pid>`), beside the final file, so the link is
-  within one directory and one filesystem.
-- New sidecar fields: `payload_bytes` (int) and `payload_sha256` (hex), computed from the
-  exact bytes written. Existing fields and their order are unchanged; the two are added
-  at the end.
-- `LandingCollision(Exception)`: raised in step 1 if either final path exists, and in
-  step 4 or 5 if `os.link` raises `FileExistsError`. The message names the path. If step
-  5 collides after step 4 succeeded, the payload just published is unlinked again before
-  raising, so a collision publishes nothing (R1.3).
-- The temporary files are removed in a `finally`.
-- The payload is serialised once to bytes; that is what is written and hashed.
+- The temporary directory is `fetched_at=<stamp>.tmp-<pid>`, beside the final one, so
+  the rename is within one folder and one filesystem.
+- Step 1 refuses any existing final directory, empty or not, with `LandingCollision`
+  naming the path. Nothing has been written at that point.
+- New sidecar fields `payload_bytes` (int) and `payload_sha256` (hex), computed from the
+  exact bytes written; existing fields and their order are unchanged and the two are
+  added at the end. The payload is serialised once to bytes; that is what is written and
+  hashed.
+- The temporary directory is removed in a `finally` unless the rename succeeded.
+- If the rename itself raises because the destination appeared (possible only without
+  the lock), that is a `LandingCollision` too.
 
-**`LandingZone.committed(source=None, endpoint=None, partitions=None)`** (new): yields a
-`Capture` (path, parsed sidecar, and the payload loaded only when asked for) for every
-committed capture, sorted by path. With `partitions` given, only that entity's folder is
-examined, which is what the fetch logic needs.
+**`LandingZone.check(capture_dir, deep=False)`** is the one place that decides whether
+something is a committed capture, and returns either "committed" or the reason it is not.
+Shallow, the default:
 
-**`LandingZone.check(path, deep=False)`** (new) is the one place that decides, and
-returns either "committed" or the reason it is not. Shallow, the default:
-
-1. the payload and the sidecar both exist;
+1. the directory is named `fetched_at=<stamp>` and holds `payload.json` and `meta.json`,
+   and nothing else;
 2. the sidecar parses as JSON and has `source`, `endpoint`, `partitions` (a mapping),
    `request_key`, `fetched_at` and `url`, each of the expected type;
-3. the sidecar agrees with where the pair is: its source, endpoint, partitions and
+3. the sidecar agrees with where the capture is: its source, endpoint, partitions and
    `fetched_at` are the ones the path spells out. This is the audit's existing
-   `_sidecar_disagreement`, moved here, so a pair filed under the wrong entity is not
-   counted for that entity;
+   `_sidecar_disagreement`, moved here;
 4. if the sidecar has `payload_bytes`, the payload's size on disk equals it.
 
 Deep adds: the payload parses as JSON, and if the sidecar has `payload_sha256` the
-payload hashes to it. The shallow check reads one small file and stats another, so the
-fetch logic can afford it for every entity on every run; the deep check reads every
-payload (2.1 GB today) and is for the audit and `repair --deep`. A capture that passes
-shallow and fails deep is still committed, and is an audit error: for a capture written
-by this code the size check already rules out truncation, so it means corruption at
-rest, which a person should look at before anything moves. The loader, which parses
-each payload anyway, fails naming the file if one does not parse (R2.7).
+payload hashes to it. The shallow check reads one small file and stats another; the deep
+check reads every payload (2.1 GB today). Shallow is used by the fetch logic, the loader
+and the sweep; deep by the audit and `repair --deep`. A capture that passes shallow and
+fails deep is still committed, and is an audit error: it means corruption at rest, which
+a person should look at before anything moves. The loader, which parses each payload
+anyway, fails naming the file if one does not parse (R2.7).
 
-Every reader treats a file that vanishes between listing and reading as not committed
-(R2.8): a sweep may move an uncommitted file while `load` or `audit` is running, and
-neither holds the lock.
+**`LandingZone.committed(source=None, endpoint=None, partitions=None)`** yields a
+`Capture` (directory, parsed sidecar, and the payload loaded only when asked for) for
+every committed capture, sorted by path. With `partitions` given, only that entity's
+folder is examined, which is what the fetch logic needs. `has_landed` and `iter_landed`
+are rebuilt on it: `has_landed(source, endpoint, partitions)` is true when the entity's
+folder holds at least one committed capture.
 
-**`LandingZone.has_landed`** and **`iter_landed`** are rebuilt on `committed`:
-`has_landed(source, endpoint, partitions)` is true when the entity's folder holds at
-least one committed capture, whatever its name; `iter_landed` yields committed captures
-only (today it yields a lone payload with empty metadata).
+**`LandingZone.scan`** classifies every entry under the root as `committed`, `temp` (a
+`….tmp-<pid>` directory), `invalid` (a `fetched_at=` directory that fails the shallow
+check) or `loose` (any file outside a capture directory, which is what the old layout
+and the spike payloads are). The lock file and the quarantine are not under the root.
 
-**`LandingZone.scan`** keeps classifying every file (`committed`, `payload_only`,
-`sidecar_only`, `temp`, `other`) and gains `invalid` for a pair that exists but fails the
-committed test. It ignores nothing: the lock file and the quarantine are not under the
-root.
+Every reader treats an entry that vanishes between listing and reading as not committed
+(R2.8).
 
-**`LandingZone.sweep(run_stamp, dry_run=False, deep=False)`** (new): for every scanned
-file whose kind is not `committed`, move it to
-`<quarantine root>/<run_stamp>/<relative path>` with `os.rename` after creating the
-directories; for `invalid`, both files of the pair move; with `deep`, committed pairs
-that fail the deep check move too. Before the first move it creates the quarantine root
-and writes a `.gitignore` containing `*` into it, so the directory is ignored by git
-wherever the landing root is (R3.2); a `--raw-root` other than the default would
-otherwise put private payloads in a path the repository's own ignore rules do not
-cover.
-Returns the list of (kind, relative path). If the destination exists (the same stamp
-swept twice), a numeric suffix is added to the run directory; nothing is overwritten.
-`dry_run` returns the list and moves nothing. The quarantine root is
-`<landing root>_quarantine`, so `data/raw` sweeps to `data/raw_quarantine`, on the same
-filesystem (a rename, not a copy).
+**`LandingZone.sweep(run_stamp, dry_run=False, deep=False, force=False)`**: collects
+every scanned entry that is not `committed` (with `deep`, also committed captures that
+fail the deep check). If the count exceeds `max(50, 1% of the files under the root)` and
+`force` is false, it raises `SweepTooLarge` with the count and the first few paths and
+moves nothing (R3.6). Otherwise it creates the quarantine root, writes a `.gitignore`
+containing `*` into it, and moves each entry to
+`<quarantine root>/<run_stamp>/<relative path>` with `os.rename`; a directory moves
+whole. If the destination exists, a numeric suffix is added to the run directory;
+nothing is overwritten. The quarantine root is `<landing root>_quarantine`, on the same
+filesystem.
 
-**`LandingZone.writer_lock()`** (new): a context manager that opens
-`<landing root>.lock`, takes `fcntl.flock(LOCK_EX | LOCK_NB)`, and raises
-`LandingLocked` naming the lock file if another process holds it.
+**`LandingZone.writer_lock()`**: a context manager on `<landing root>.lock` taking
+`fcntl.flock(LOCK_EX | LOCK_NB)`, retrying for up to two seconds before raising
+`LandingLocked`. **`LandingZone.writer_active()`**: tries a shared lock without blocking
+and releases it at once; true if it could not get it. The brief retry in `writer_lock`
+exists because that probe holds the lock for an instant.
 
 ### Fetch logic
 
 `mlb/boxscore.py` and `espn/rosters.py` lose their private `_has_landed` helpers and call
-`zone.has_landed(...)` with the entity's partitions. `games_from_landed_schedule` already
-goes through `iter_landed`, so it reads committed schedules only once that changes.
-
-In the backfill loops, `LandingCollision` is re-raised alongside `AuthExpired`: it stops
-the run instead of being counted as one failed entity (R1.4).
+`zone.has_landed(...)` with the entity's partitions. In the backfill loops,
+`LandingCollision` is re-raised alongside `AuthExpired`: it stops the run (R1.4).
 
 ### `cli.py`
 
 - Every `backfill` subcommand runs inside `zone.writer_lock()`, sweeps first, logs what
-  moved, then fetches. `LandingLocked` and `LandingCollision` exit non-zero with their
-  message.
-- New `front-office repair [--raw-root] [--dry-run]`: takes the lock (not for
-  `--dry-run`), sweeps, and prints one line per file and a count.
-- `load` and `audit` are unchanged in what they lock: nothing.
+  moved, then fetches. `LandingLocked`, `LandingCollision` and `SweepTooLarge` exit
+  non-zero with their message; a backfill that cannot sweep fetches nothing.
+- `front-office repair [--raw-root] [--dry-run] [--deep] [--force]`: takes the lock
+  (not for `--dry-run`), sweeps, and prints one line per entry and a count.
+- `load` and `audit` take no lock and print one warning line if `writer_active()`.
 
 ### `load.py`
 
-Reads through `iter_landed`, so it loads committed captures only. Its own
-"no complete metadata sidecar" skip remains as a second check and should now never fire
-after a sweep.
+Reads through `iter_landed`, so it loads committed captures only. `file_path` is the
+capture's `payload.json`. Because existing rows carry the old paths and #28 made "same
+key, different path" a collision, the loader cannot be pointed at a warehouse built
+before the migration; the rebuild below is the supported path, and the loader's error in
+that case says so.
 
 ### `audit.py`
 
-- `check_landing` uses the same committed test as `LandingZone.committed`; its existing
-  errors for `payload_only`, `sidecar_only`, `temp` and unreadable pairs stay (R5.1).
-- New: for a committed capture whose sidecar has `payload_sha256`, hash the payload and
-  report a mismatch as an error (R5.2). Old captures are skipped, with one INFO line
-  counting how many could and could not be verified.
-- New: count files under the quarantine root; WARN if any, naming the run directories
-  (R5.3).
+- `check_landing` uses `LandingZone.check` and reports `temp`, `invalid` and `loose`
+  entries as errors (R5.1).
+- For a committed capture whose sidecar has `payload_sha256`, it runs the deep check and
+  reports a failure as an error (R5.2), with one INFO line counting how many captures
+  could and could not be checksum-verified.
+- It counts entries under the quarantine root and WARNs if any (R5.3).
+
+### The migration (`scripts/migrate_landing_layout.py`)
+
+One script, used on the real landing zone and on both fixture trees.
+
+- Under the writer lock. For every old-layout pair (`X.json` beside `X.meta.json`) whose
+  sidecar passes the old equivalent of the shallow check: create `X.tmp-<pid>/`, rename
+  the two files into it as `payload.json` and `meta.json`, then rename the directory to
+  `X/`. Only renames; no file is opened for writing.
+- It appends each move, old path and new path, to
+  `<landing root>_migration-<stamp>.tsv` before making it, so a kill mid-way leaves a
+  record of exactly what was done.
+- `--dry-run` lists the moves and what would be left behind. `--reverse <tsv>` undoes a
+  recorded migration.
+- Anything that is not an old-layout pair is left where it is and reported (R6.3). After
+  #21 there should be nothing; if the 201 spike payloads are still there they stay
+  loose, and the sweep's size limit then stops the first backfill until a person
+  decides.
+- Run on a tree already migrated, it finds no old-layout pairs and does nothing (R6.4).
+
+`scripts/make_fixtures.py` and `scripts/make_multi_fixtures.py` write the new layout.
+The committed fixture trees are moved by the migration script, so their file contents
+are unchanged and only paths differ in the diff.
+
+### Verifying the real migration
+
+`scripts/verify_migration.py <manifest> <tsv> <root>`: for every line of the checksum
+manifest taken on 2026-10-05, the file at the path the move list maps it to must exist
+and hash to the same value; no file under the root may be absent from that mapping. The
+201 spike payloads are in the manifest and gone from the tree after #21; the script
+takes the list of deleted paths (`.review/spike-files.txt`) and requires the two to
+account for every manifest line exactly.
+
+### Rebuilding the warehouse
+
+As in #28, and for the same reason: the raw table is derived, so a change is a rebuild.
+
+```bash
+uv run front-office load --db data/warehouse_r3.duckdb
+cd dbt && FO_DUCKDB_PATH=../data/warehouse_r3.duckdb DBT_PROFILES_DIR=. uv run dbt build
+cd .. && uv run python scripts/compare_warehouses.py data/warehouse.duckdb data/warehouse_r3.duckdb
+```
+
+The comparison is exact, with no rounding: builds have been reproducible since #28. The
+owner swaps the files.
 
 ### `.gitignore`
 
-Add `data/raw_quarantine/` and `data/*.lock`. Today's rules ignore `data/raw/` and
-top-level `data/*.json`, which would not cover a payload several folders deep in a
-sibling directory. This is the second line of defence; the first is the ignore file the
-sweep writes inside the quarantine itself, which also covers a non-default root.
+Add `data/raw_quarantine/`, `data/*.lock` and `data/*_migration-*.tsv`. The quarantine's
+own ignore file is the first line of defence and covers a non-default root; the move
+list holds paths, which include the league id.
 
-### Order with #21
+### Order of work on the real data (owner's decision)
 
-#21 archives and deletes the 201 spike payloads; the owner has approved that and it is
-waiting on the NAS backup. This build should start after it. If it has not happened, the
-first sweep moves exactly those 201 files to `data/raw_quarantine/`, which loses nothing
-and changes #21 into "archive the quarantine".
+1. The owner backs up the current layout to the NAS and verifies it (#20).
+2. #21: the spike payloads are deleted, their archive being on the NAS.
+3. This build; then the migration, its verification, the warehouse rebuild and compare.
+4. The owner swaps the warehouse and refreshes the NAS backup.
 
 ## Test strategy
 
-All pytest, in temporary directories; no real landing zone is written.
+All pytest, in temporary directories. The real landing zone is touched only by the
+migration, in the last tasks.
 
 | Requirement | Test | Catches |
 |---|---|---|
-| R1.1 | the order of publishes, observed by wrapping `os.link` | a sidecar published before its payload |
-| R1.2, R1.3 | write the same capture twice: `LandingCollision`; both existing files byte-identical afterwards; no temporary file left | today's silent overwrite |
-| R1.3 | a sidecar already present but no payload, and the reverse: collision, nothing published | a collision at the second publish leaving the first published |
+| R1.1, R1.2 | a written capture is a directory with exactly the two files; while the write is in progress (observed by wrapping `os.rename`) the final name does not exist | a capture visible half-built |
+| R1.3 | a second write to the same capture raises `LandingCollision` and leaves both existing files byte-identical and no temporary directory | today's silent overwrite |
+| R1.3 | an existing **empty** final directory is also a collision | the rename silently replacing an empty directory |
 | R1.4 | a backfill whose second game collides stops with the error, and the third game is not fetched | a collision counted as one failed game |
 | R1.5 | the sidecar's size and SHA-256 equal those of the payload on disk | a hash of something other than the bytes written |
-| R1.6, R3 | **fault injection on a settled boxscore, one case per point**, each with its own expected state (table below), then a second backfill | the R3 defect at every boundary, not only the first |
-| R2.1 | a pair whose payload size differs from `payload_bytes` is not committed; a sidecar that is not JSON, lacks a required field, or names another partition than its folder is not committed, and is not counted as landed for either entity | a pair that exists but does not agree; a capture filed under the wrong entity |
-| R2.6 | the deep check reports a payload that is not JSON and one whose hash differs; the shallow check on the same pairs says committed; `needs_fetch` reads no payload (asserted by making payload reads raise) | the fetch logic made slow; corruption unnoticed |
-| R2.7 | the loader raises, naming the file, for a committed capture whose payload is not JSON | a silently skipped capture |
-| R2.8 | a file removed between listing and reading is skipped by `committed`, `iter_landed`, the loader and the audit without an error | a reader crashing because a sweep ran |
-| R2.2 | a settled game with a lone payload needs fetching; a closed roster period likewise | the fetch logic counting any payload (today: `needs_fetch` is false) |
-| R2.3, R2.4 | the loader inserts nothing for a lone payload; the newest schedule is the newest committed one when a newer lone payload exists | a reader with its own idea of landed |
+| R1.6, R3 | **fault injection on a settled boxscore, one case per point** (table below), then a second backfill | a failure at any boundary leaving something a reader could mistake for a capture |
+| R2.1 | a capture directory missing a file, holding an extra file, with a sidecar that is not JSON, lacks a field, names another partition, or records a different size, is not committed and is not counted as landed for any entity | a capture that exists but does not agree; one filed under the wrong entity |
+| R2.2 | a settled game whose only trace is a temporary directory, or a loose old-layout payload, needs fetching; a closed roster period likewise | the fetch logic counting debris (today: `needs_fetch` is false for a lone payload) |
+| R2.3, R2.4 | the loader inserts nothing for debris; the newest schedule is the newest committed one | a reader with its own idea of landed |
 | R2.5 | a sidecar with no size or checksum is committed | old captures rejected |
-| R3.1–R3.3 | the sweep moves each kind, keeps relative paths, never overwrites (sweeping twice with one stamp), and `--dry-run` moves nothing | a deleted or overwritten file |
-| R3.2 | the quarantine root is not under the landing root; with the landing root at an arbitrary path inside a git work tree, `git check-ignore` passes for a file nested in its quarantine | private data in a committable place, including under a non-default `--raw-root` |
-| R3.5 | `front-office repair --dry-run` lists and exits 0 with the tree unchanged | a dry run that moves |
-| R4.1–R4.3 | a second writer is refused while the first holds the lock; after the first process is killed the lock is free | a stale lock; two writers |
-| R4.4, R4.5 | the lock file is beside the root; `load` and `audit` run while the lock is held | a lock in the scanned tree; readers blocked |
-| R5.1–R5.3 | the audit reports a lone payload as an error, a checksum mismatch as an error, and a non-empty quarantine as a warning | silent corruption; forgotten quarantine |
+| R2.6 | the deep check reports a payload that is not JSON and one whose hash differs; the shallow check on the same captures says committed; `needs_fetch` reads no payload (asserted by making payload reads raise) | the fetch logic made slow; corruption unnoticed |
+| R2.7 | the loader raises, naming the file, for a committed capture whose payload is not JSON | a silently skipped capture |
+| R2.8 | an entry removed between listing and reading is skipped by `committed`, `iter_landed`, the loader and the audit without an error | a reader crashing because a sweep ran |
+| R3.1–R3.3 | the sweep moves each kind whole, keeps relative paths, never overwrites (sweeping twice with one stamp), and `--dry-run` moves nothing | a deleted or overwritten file |
+| R3.2 | with the landing root at an arbitrary path inside a git work tree, `git check-ignore` passes for a file nested in its quarantine | private data in a committable place |
+| R3.5 | `repair --dry-run` lists and exits 0 with the tree unchanged; `--deep` moves a capture whose checksum fails | a dry run that moves |
+| R3.6 | 51 loose files in a tree of 100 captures: the sweep raises and moves nothing; with `force` it moves them; 3 temporary directories move without `force` | a mass move caused by a bug or an unmigrated tree |
+| R4.1–R4.3 | a second writer is refused while the first holds the lock; after the first process is killed the lock is free; a writer still gets the lock while a reader probes it | a stale lock; two writers; a writer refused by a reader's probe |
+| R4.4–R4.6 | the lock file is beside the root; `load` and `audit` run while the lock is held and print the warning; no warning when it is free | a lock in the scanned tree; readers blocked; a silent incomplete load |
+| R5.1–R5.3 | the audit reports debris as an error, a checksum mismatch as an error, and a non-empty quarantine as a warning | silent corruption; forgotten quarantine |
+| R6.1, R6.3 | the migration moves a tree of old-layout pairs, leaves a lone payload where it is and reports it; `--dry-run` moves nothing | a spike payload paired with the wrong sidecar; a dry run that moves |
+| R6.1 | every file's SHA-256 is the same before and after, and no file was opened for writing (the tree is made read-only except for directory entries) | the migration changing contents |
+| R6.2 | a migration killed half-way (simulated) has a move list that matches what moved; `--reverse` restores the original tree byte for byte, including from the half-way state | an irreversible or unrecorded move |
+| R6.4 | the migration run twice does nothing the second time | double nesting |
+| R6.5 | both generators reproduce their committed trees byte for byte in the new layout; the privacy test and the pre-commit guard still cover every ESPN payload | a hand-moved fixture; a payload escaping the privacy checks under its new name |
 
 Fault-injection cases and what each must leave. "Second run" is a backfill of the same
 settled game with a later stamp.
 
 | Failure point | On disk afterwards | After the second run |
 |---|---|---|
-| writing the payload temp | nothing: the `finally` removed the temp | fetched; committed once; quarantine empty |
-| writing the sidecar temp | nothing | fetched; committed once; quarantine empty |
-| publishing the payload (an error other than a collision) | nothing | fetched; committed once; quarantine empty |
-| publishing the sidecar | the payload alone, under its final name | the lone payload is in quarantine; fetched; committed once |
-| removing the temps, after both publishes | a committed capture and one or two temp files; `write` returns normally and logs a warning, because the capture is complete | the temps are in quarantine; **not** fetched again; committed once |
-| the process killed between any two steps (simulated by leaving the files as that step would) | temps, and from step 4 a lone payload | all of it in quarantine; fetched unless step 5 had completed; committed once |
+| creating the temporary directory | nothing | fetched; committed once; quarantine empty |
+| writing `payload.json` | nothing: the `finally` removed the temporary directory | fetched; committed once; quarantine empty |
+| writing `meta.json` | nothing | fetched; committed once; quarantine empty |
+| the rename (an error other than a collision) | nothing | fetched; committed once; quarantine empty |
+| the process killed after any step before the rename (simulated by leaving the temporary directory as that step would) | a temporary directory with zero, one or two files | the temporary directory is in quarantine; fetched; committed once |
+| the process killed after the rename | a committed capture | not fetched again; committed once; quarantine empty |
 
 "Committed once" is asserted on an entity endpoint. Snapshot endpoints (schedule,
 settings, teams, matchups) add a capture on every run by design, so for them the
 assertion is that no run leaves anything uncommitted.
 
-The existing `test_crash_mid_write_leaves_no_partial_file` fails only the first write; it
-is replaced by this matrix. Tests are written before the code they test.
+The existing `test_crash_mid_write_leaves_no_partial_file` is replaced by this matrix.
+Tests that assert old paths are rewritten to the new layout. Tests are written before
+the code they test.
 
 ## Risks
 
-- **A filesystem without hard links.** The landing zone is on btrfs, where the publish
-  was checked. A FAT or some network mounts would make every write fail, loudly.
-- **`flock` over NFS.** Linux emulates it, but if the landing root ever moves to a
-  network share the lock needs re-checking. Stated, not designed for.
-- **The first real sweep.** It moves files in the real landing zone. The build runs
-  `repair --dry-run` on it and shows the list before any backfill is run with the new
-  code; the expected list is empty after #21.
-- **A reader mid-write or mid-sweep.** `load` can run during a backfill and see a payload
-  whose sidecar is not yet published, or list a file the sweep then moves. It skips it;
-  the next load picks up whatever was committed (R2.8).
-- **Old and new sidecars differ.** Only captures written from now on can be checksum
-  verified. Rewriting 5,118 sidecars to add hashes is a no-go; the backup manifest
-  covers them.
+- **The migration moves every file in the real landing zone.** Mitigated by: the owner's
+  verified NAS backup beforehand; renames only; a move list written before each move;
+  verification of every file against the manifest; and a tested reversal.
+- **The roster captures cannot be re-created** if lost, which is why the backup comes
+  first.
+- **A second warehouse rebuild and swap.** About five minutes of machine time, compared
+  exactly.
+- **A large, mechanical diff.** 84 fixture files move and about 80 test lines that name
+  paths change. Contents of fixture files do not change, which the generators' byte-for-
+  byte tests show.
+- **The rename onto an empty directory.** Handled by the explicit check under the lock;
+  without the lock (a foreign writer) an empty directory could be replaced, which loses
+  nothing.
+- **`flock` over NFS**, and filesystems where a directory rename is not atomic. The
+  landing zone is on btrfs. Stated, not designed for.
+- **The first real sweep.** Dry-run first and shown to the owner; expected to be empty.
+- **A load during a backfill** is correct but incomplete; it now says so.
 
 ## Open questions
 
-- **Should `load` also refuse to run while a backfill holds the lock?** Designed as no:
-  readers never block. The owner may prefer a warning.
-- **Whether quarantined files are ever cleared.** Not by the package. A person reads the
-  audit's warning and archives or deletes them; no retention rule is designed.
+- **Whether quarantined items are ever cleared.** Not by the package. No retention rule
+  is designed.
 - **How a collision is resolved once seen.** As in #28: it stops the run, and choosing
-  between two files is left until one has been observed.
+  between two captures is left until one has been observed.
+- **The sweep's limit** (the larger of 50 and 1%) is a judgement, not a measurement.
+- **Durability across a power cut** (`fsync` of the files and the directory before the
+  rename) is not designed. A torn capture would fail the size check and be swept.
 
 ## Evidence
 
@@ -282,11 +352,13 @@ Probes in temporary directories and a read-only scan of `data/raw/`, 2026-10-05.
 | The orphan | with the sidecar write made to fail, the directory holds only the payload; `needs_fetch` for that settled game returns False; `load_landing_zone` inserts 0; `scan` reports `payload_only` |
 | The overwrite | two writes to one path leave the second payload and raise nothing |
 | The mismatched pair | a second write that fails at its sidecar leaves the second payload beside the first sidecar, and `scan` reports `committed` |
-| The landing zone now | 5,118 committed, 201 `payload_only`, 0 `sidecar_only`, 0 `temp` |
-| Where the 201 are | `espn/roster_matchup` 194, `settings` 2, `teams` 2, `transactions` 2, `matchups` 1; none in a folder the roster or boxscore skip logic consults |
-| No-replace publish | on `data/` (btrfs), `os.link` onto an existing name raises `FileExistsError` |
-| Skip logic | `mlb/boxscore.py::_has_landed` and `espn/rosters.py::_has_landed` each return true for any `*.json` that is not a sidecar; `LandingZone.has_landed` checks one exact path |
-| Readers | `iter_landed` yields a lone payload with empty metadata; the loader then skips it; the audit alone uses `scan` |
+| The landing zone now | 5,118 committed (10,236 files), 201 `payload_only`, 0 `sidecar_only`, 0 `temp`; 2,129,565,147 bytes in 10,437 files |
+| Where the 201 are | `espn/roster_matchup` 194, `settings` 2, `teams` 2, `transactions` 2, `matchups` 1 |
+| Directory rename | on `data/` (btrfs): onto a non-empty directory, "Directory not empty"; onto an empty directory, it replaces it without error |
+| Manifest | SHA-256 of every file under `data/raw/` taken 2026-10-05; the manifest's own SHA-256 is `59b4bf092510fe53db367d4aa7d005314e2bbc0dd47a3159d656b060ed618f8c` |
+| What names the old layout | in the package: 10 mentions of `.meta.json`, 27 of `fetched_at=`; in tests 11 and 66; in scripts 10 and 3; in dbt, none |
+| `file_path` | stored on every raw row; since #28 the loader raises on the same key with a different path; no dbt model exposes it (the latest-response macro uses it only as a tie-break) |
+| Fixtures | 84 tracked files in two trees |
 | Git | `.gitignore` covers `data/raw/`, `data/*.csv`, `data/*.json` and `*.duckdb`; a nested file under `data/raw_quarantine/` would not be ignored |
 | A long-held lock is realistic | the 2026-10-05 refresh ran 9.5 hours because the machine was suspended for 8 of them |
 
@@ -294,10 +366,10 @@ Probes in temporary directories and a read-only scan of `data/raw/`, 2026-10-05.
 
 | Source | Finding | Resolution |
 |---|---|---|
-| design-review 2026-10-05 | F1 (P0): the ignore rule covered only `data/raw_quarantine/`, so a non-default `--raw-root` would put private payloads in a path git does not ignore | Changed: the sweep writes an ignore-everything file into the quarantine before moving anything (R3.2); tested under an arbitrary root |
-| design-review | F2 (P1): the committed test checked keys and size but not that the sidecar describes its path or that the payload is readable, so readers would still disagree | Changed: one `LandingZone.check`, shallow for every reader (now including path agreement) and deep for the audit and `repair --deep`; the loader fails on an unparseable payload (R2.1, R2.6, R2.7) |
-| design-review | F3 (P1): the fault-injection matrix demanded quarantine debris and exactly one capture after every failure, which the write sequence cannot give | Changed: each failure point has its own expected state; a cleanup failure after commit is a successful capture with a warning; "once" is asserted on an entity endpoint |
-| design-review | F4 (P2): readers do not hold the lock and could read a path the sweep has moved | Changed: readers treat a vanished file as not committed (R2.8), with a test |
+| design-review 2026-10-05, first pass (on the commit-marker design, since replaced) | F1 (P0): the ignore rule covered only `data/raw_quarantine/`, so a non-default `--raw-root` would put private payloads in a path git does not ignore | Kept in this design: the sweep writes an ignore-everything file into the quarantine before moving anything (R3.2) |
+| design-review, first pass | F2 (P1): the committed test did not require the sidecar to describe its path or the payload to be readable | Kept: one `LandingZone.check`, shallow and deep (R2.1, R2.6, R2.7) |
+| design-review, first pass | F3 (P1): the fault-injection matrix demanded outcomes the write sequence could not give | Kept in spirit: each failure point has its own expected state, rewritten for the rename protocol |
+| design-review, first pass | F4 (P2): readers could read a path the sweep had moved | Kept: readers treat a vanished entry as not committed (R2.8) |
 
 ## Amendments
 
