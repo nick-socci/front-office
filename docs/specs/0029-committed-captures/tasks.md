@@ -22,8 +22,9 @@ them.
      vanished entry; the loader fails on an unparseable committed payload.
    - Verify: pytest, including "`needs_fetch` reads no payload".
 4. The sweep, its limit and the writer lock — `impl` — R3.1–R3.3, R3.6, R4.1–R4.4
-   - pytest first: each kind moved whole with its relative path, empty directories
-     included; never overwritten; dry
+   - pytest first: one complete plan (folders left empty included, nothing counted
+     twice) that the dry run prints, the limit checks and the sweep moves; each kind
+     moved whole with its relative path; never overwritten; dry
      run; `deep`; the size limit and `force`; the ignore file under an arbitrary root; a
      second writer refused; the lock free after the holder is killed; a writer not
      refused by a reader's probe. Add the three `.gitignore` entries.
@@ -39,8 +40,8 @@ them.
    - pytest first: moves by rename only with contents unchanged; a lone payload left and
      reported; dry run; the begin/done journal in an ignored directory; resumption after
      a kill at each of a capture's four steps; reversal from a finished and from each
-     interrupted state; a second run does nothing; `backfill` and `repair` refuse while
-     a migration is unfinished. `scripts/verify_migration.py` (files and raw rows);
+     interrupted state; a second run does nothing; reverse then migrate again;
+     `backfill` and `repair` refuse unless the tree is wholly in the directory layout. `scripts/verify_migration.py` (files and raw rows);
      `compare_warehouses.py --strict-columns`.
    - Verify: pytest.
 8. Move the fixtures and update the generators — `impl` — R6.5
@@ -57,8 +58,8 @@ them.
    - Verify: `.agentic/gates` green.
 10. Dry-run the migration on the real landing zone — `judgment` — R6.1
     - `migrate_landing_layout.py --dry-run` only. Show the owner the list and wait.
-      (`front-office repair --dry-run` at this point is expected to refuse: an
-      unmigrated landing zone is some 10,236 loose files, far over the sweep's limit.)
+      (`front-office repair --dry-run` at this point is expected to refuse, naming the
+      migration: the landing zone still holds old-layout pairs.)
     - Verify: 5,118 captures to move, 0 left behind; posted on #29.
 11. Migrate the real landing zone and verify it — `judgment` — R6.1, R6.2
     - With the owner's go-ahead. Then `verify_migration.py` against the manifest, and

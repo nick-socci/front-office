@@ -122,8 +122,9 @@ has no single answer until this is fixed.
   dry-run mode that lists what would move and a deep mode that also moves committed
   captures failing R2.6.
 - R3.6 IF a sweep would move more items than the larger of 50 and 1% of the files under
-  the landing root THEN THE SYSTEM SHALL move nothing and exit non-zero saying how many
-  and why, unless told explicitly to proceed.
+  the landing root, counting the folders it would leave empty, THEN THE SYSTEM SHALL move
+  nothing and exit non-zero saying how many and why, unless told explicitly to proceed.
+  The dry run reports that same complete list.
 
 ### R4. One writer
 
@@ -158,8 +159,10 @@ has no single answer until this is fixed.
 - R6.6 WHEN the migration is interrupted THE SYSTEM SHALL, on being run again, first
   finish any capture the journal shows begun and not completed, from whatever state its
   files are in, and only then continue.
-- R6.7 WHILE a migration has been started and not finished THE SYSTEM SHALL refuse to run
-  a backfill or a sweep, saying that the migration must be completed or reversed first.
+- R6.7 WHILE the landing zone is not wholly in the directory layout, because a migration
+  was started and not finished, or was reversed, or because old-layout pairs are present
+  with no migration at all, THE SYSTEM SHALL refuse to run a backfill or a sweep, saying
+  that the migration must be run to completion first.
 - R6.3 THE SYSTEM SHALL leave anything that is not a committed capture where it is during
   the migration, and report it.
 - R6.4 WHEN the migration is run on a landing zone already in the directory layout THE
@@ -179,7 +182,7 @@ Real landing zone, `data/raw/`, on 2026-10-05 after the settle-window refresh.
 | The rename this design relies on | onto a non-empty directory it fails; onto an empty directory it silently replaces it, so the writer checks first | reproduced on the landing zone's filesystem (btrfs) |
 | Before the migration | #21 done: 0 payloads with no sidecar; 10,236 files; the owner's NAS backup of the old layout verified | scan; the owner's confirmation on #8 |
 | Migration, dry run | 5,118 captures to move; 0 items left behind | `--dry-run` |
-| Sweep dry run **before** the migration | refuses: about 10,236 loose files is over the limit, exit non-zero, nothing moved. This is the expected state of an unmigrated landing zone, not a failure | `front-office repair --dry-run` |
+| Sweep dry run **before** the migration | refuses, naming the migration: the landing zone holds old-layout pairs (R6.7). Exit non-zero, nothing moved. This is the expected state of an unmigrated landing zone, not a failure | `front-office repair --dry-run` |
 | After the migration | 5,118 capture directories, each with `payload.json` and `meta.json`; 10,236 files; 0 loose files | scan |
 | Contents unchanged | every file's SHA-256 equals its entry in the manifest of 2026-10-05 (`59b4bf09…618f8c`) under its old path, through the recorded move list; no file missing or added | comparison script |
 | Reversal | applied to a copy of the fixture tree, the reverse of the migration restores the original tree byte for byte | pytest |

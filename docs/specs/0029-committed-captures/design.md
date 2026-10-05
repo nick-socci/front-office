@@ -163,11 +163,14 @@ Every reader treats an entry that vanishes between listing and reading as not co
 (R2.8).
 
 **`LandingZone.sweep(run_stamp, dry_run=False, deep=False, force=False)`**: refuses
-with `MigrationUnfinished` if a migration is in progress (below). Otherwise it collects
-every scanned entry that is not `committed` (with `deep`, also committed captures that
-fail the deep check). An `empty` directory is moved like anything else, and the scan is
-repeated until nothing new turns up, since moving a folder's last entry leaves the
-folder empty. If the count exceeds `max(50, 1% of the files under the root)` and
+with `NotMigrated` if the landing zone is not wholly in the directory layout (below).
+Otherwise it builds the **complete plan** before doing anything: every scanned entry
+that is not `committed` (with `deep`, also committed captures that fail the deep check),
+plus every folder that would be left with nothing in it once those are gone, worked out
+on paper up the tree, not by moving and rescanning. Where a folder and everything in it
+are both in the plan, the folder alone is listed and moves whole, so nothing is counted
+or moved twice. The dry run prints that plan and the size limit is applied to it, so
+what is reported, what is checked and what is moved are the same list. If the count exceeds `max(50, 1% of the files under the root)` and
 `force` is false, it raises `SweepTooLarge` with the count and the first few paths and
 moves nothing (R3.6). Otherwise it creates the quarantine root, writes a `.gitignore`
 containing `*` into it, and moves each entry to
@@ -207,8 +210,9 @@ that case says so.
 
 ### `audit.py`
 
-- `check_landing` uses `LandingZone.check` and reports `temp`, `invalid` and `loose`
-  entries as errors (R5.1).
+- `check_landing` uses `LandingZone.check` and reports `temp`, `invalid`, `loose` and
+  `empty` entries as errors (R5.1), and says so in one line when the landing zone is not
+  wholly in the directory layout.
 - For a committed capture whose sidecar has `payload_sha256`, it runs the deep check and
   reports a failure as an error (R5.2), with one INFO line counting how many captures
   could and could not be checksum-verified.
@@ -235,14 +239,22 @@ One script, used on the real landing zone and on both fixture trees.
   both files may already be inside `X.migrating/`, or the final rename may already have
   happened. Each of those states has a test. Only then does it continue with captures
   not yet begun.
-- **The interlock (R6.7).** A journal with `start` and no `finished` means a migration is
-  in progress. `LandingZone.sweep`, and therefore every backfill and `repair`, refuses
-  to run in that state. Without this, a backfill after an interrupted migration would
-  sweep the half-moved capture's pieces into quarantine and fetch the entity again,
-  silently replacing a historical capture with a fresh one.
+- **Journal states.** `start` with no `finished`: in progress. `finished`: migrated.
+  `reversed` after either: back in the old layout. A migration run again after a
+  reversal appends a new `start`, so the last bracket in the file is the one that counts.
+- **The interlock (R6.7).** `LandingZone.sweep`, and therefore every backfill and
+  `repair`, refuses to run unless the landing zone is wholly in the directory layout.
+  It is not when the journal's last state is in progress or reversed, or when any
+  old-layout pair (`X.json` beside `X.meta.json`) is found under the root, journal or
+  no journal. The second condition does not depend on size, so a small unmigrated tree
+  such as a fixture is protected as well as a large one. Without the interlock, a
+  backfill on such a tree would sweep historical captures, or the pieces of a half-moved
+  one, into quarantine and fetch the entities again, silently replacing history with
+  fresh captures.
 - `--dry-run` lists the moves and what would be left behind. `--reverse` reads the
   journal and undoes every capture it shows begun, from whatever state it is in, then
-  marks the journal reversed.
+  appends `reversed`. The package cannot use the reversed tree; the only way forward
+  from there is to migrate again, which is tested.
 - Anything that is not an old-layout pair is left where it is and reported (R6.3). After
   #21 there should be nothing; if the 201 spike payloads are still there they stay
   loose, and the sweep's size limit then stops the first backfill until a person
@@ -287,7 +299,7 @@ As in #28, and for the same reason: the raw table is derived, so a change is a r
 ```bash
 uv run front-office load --db data/warehouse_r3.duckdb
 cd dbt && FO_DUCKDB_PATH=../data/warehouse_r3.duckdb DBT_PROFILES_DIR=. uv run dbt build
-cd .. && uv run python scripts/compare_warehouses.py data/warehouse.duckdb data/warehouse_r3.duckdb
+cd .. && uv run python scripts/compare_warehouses.py --strict-columns data/warehouse.duckdb data/warehouse_r3.duckdb
 ```
 
 The comparison is exact, with no rounding: builds have been reproducible since #28.
@@ -334,7 +346,8 @@ migration, in the last tasks.
 | R3.1, R5.1 | an empty `fetched_at=` directory is `invalid`; an empty partition folder is `empty`; both are swept and both are audit errors; a partition folder that becomes empty because its last entry was swept goes in the same sweep | debris that holds no file and so is never seen |
 | R3.2 | with the landing root at an arbitrary path inside a git work tree, `git check-ignore` passes for a file nested in its quarantine | private data in a committable place |
 | R3.5 | `repair --dry-run` lists and exits 0 with the tree unchanged; `--deep` moves a capture whose checksum fails | a dry run that moves |
-| R3.6 | 51 loose files in a tree of 100 captures: the sweep raises and moves nothing; with `force` it moves them; 3 temporary directories move without `force` | a mass move caused by a bug or an unmigrated tree |
+| R3.6 | 51 stray files in a tree of 100 captures: the sweep raises and moves nothing; with `force` it moves them; 3 temporary directories move without `force` | a mass move caused by a bug |
+| R3.5, R3.6 | 49 temporary directories, each alone in its own partition folder: the plan lists the 49 folders, not 98 items, the dry run prints exactly what the real sweep then moves, and the count used for the limit is that list's | a limit and a dry run that undercount what moves |
 | R4.1–R4.3 | a second writer is refused while the first holds the lock; after the first process is killed the lock is free; a writer still gets the lock while a reader probes it | a stale lock; two writers; a writer refused by a reader's probe |
 | R4.4–R4.6 | the lock file is beside the root; `load` and `audit` run while the lock is held and print the warning; no warning when it is free | a lock in the scanned tree; readers blocked; a silent incomplete load |
 | R5.1–R5.3 | the audit reports debris as an error, a checksum mismatch as an error, and a non-empty quarantine as a warning | silent corruption; forgotten quarantine |
@@ -342,7 +355,7 @@ migration, in the last tasks.
 | R6.1 | every file's SHA-256 is the same before and after, and no file was opened for writing (the tree is made read-only except for directory entries) | the migration changing contents |
 | R6.2 | `--reverse` restores the original tree byte for byte, from a finished migration and from each interrupted state; with the root at an arbitrary path inside a git work tree, `git check-ignore` passes for the journal | an irreversible move; a list of private paths left committable |
 | R6.6 | a migration killed after each of its four steps for one capture (simulated by stopping there): a second run completes that capture and the rest, and the result equals an uninterrupted migration | a capture left in pieces |
-| R6.7 | with a journal started and not finished, `backfill` and `repair` exit non-zero naming the migration and move nothing; after the migration finishes, or is reversed, they run | a backfill sweeping a half-moved historical capture and replacing it with a fresh fetch |
+| R6.7 | `backfill` and `repair` exit non-zero naming the migration, and move nothing, in each of: a journal started and not finished; a journal reversed; a small tree of old-layout pairs with no journal at all. After the migration finishes they run. A tree migrated, reversed and migrated again equals one migrated once | a backfill sweeping historical captures, or a half-moved one, and replacing them with fresh fetches; a reversed tree left unusable or, worse, usable |
 | R6.2, all | the raw-row comparison reports a changed payload, a changed partition and a `file_path` that does not map; `compare_warehouses.py --strict-columns` fails on a column present on one side only | a comparison that proves less than it says |
 | R6.4 | the migration run twice does nothing the second time | double nesting |
 | R6.5 | `make_multi_fixtures.py` reproduces its committed tree byte for byte in the new layout (pytest); `make_fixtures.py` is run against a migrated copy and, later, the real root, with any difference reported; the privacy test and the pre-commit guard still cover every ESPN payload | a hand-moved fixture; a payload escaping the privacy checks under its new name |
@@ -432,6 +445,10 @@ Probes in temporary directories and a read-only scan of `data/raw/`, 2026-10-05.
 | design-review, second pass | F4 (P2): the prescribed comparison covers model relations only and passes over column differences | Changed: a raw-row comparison through the journal, and `--strict-columns` |
 | design-review, second pass | F5 (P2): the sweep's dry run before the migration exceeds the limit, and the task did not say that was expected | Changed: the expected refusal is an expected value; task 10 runs only the migration's dry run before, and the sweep's after |
 | design-review, second pass | F6 (P2): empty and unexpected directories had no classification | Changed: `invalid` covers an empty capture directory, a new kind `empty` covers the rest, both swept and audited |
+| design-review 2026-10-05, third pass | F1 (P1): a reversed migration either blocked backfill for ever or let it sweep the old layout | Changed: journal states are defined; the interlock refuses unless the tree is wholly in the directory layout, which also covers old-layout pairs with no journal; reverse then migrate again is tested |
+| design-review, third pass | F2 (P1): the sweep counted before moving and then moved newly empty folders, so its limit and dry run undercounted | Changed: one complete plan, including folders that would be left empty, is what is printed, limited and moved |
+| design-review, third pass | F3 (P2): the audit's list omitted the new `empty` kind | Changed |
+| design-review, third pass | F4 (P2): the comparison command omitted `--strict-columns` | Changed |
 
 ## Amendments
 
