@@ -147,8 +147,9 @@ pull requests.
 
 **Known gaps.** A [code review](docs/reviews/2026-09-27-code-review.md) on 2026-09-27
 found defects that these passing checks do not cover: the skip logic does not yet
-guarantee a final capture, raw keys do not yet separate leagues and seasons, and one
-reconciliation test cannot fail on the fixtures. The fixes are sequenced there.
+guarantee a final capture, and one reconciliation test cannot fail on the fixtures. The
+fixes are sequenced there. A third, that raw keys did not separate leagues and seasons,
+is fixed ([#28](https://github.com/nick-socci/front-office/issues/28)).
 
 ## Roadmap
 
@@ -163,9 +164,10 @@ reconciliation test cannot fail on the fixtures. The fixes are sequenced there.
    freshness tests and the settle window stop being theoretical.
 
 Not planned: a multi-user portal. It would mean holding other people's ESPN session
-cookies, which is a security problem I have no interest in owning. The intermediate
-interfaces carry league and season identity and read scoring rules as data, but raw
-loading does not yet (see known gaps), and no second platform has tested the interface.
+cookies, which is a security problem I have no interest in owning. Raw storage and every
+league-scoped model carry league and season identity and read scoring rules as data, and
+a gate proves that two leagues by two seasons build the same together as alone. But only
+one real league-season has been loaded, and no second platform has tested the interface.
 
 The design docs behind each of these, written before the work and annotated afterwards
 where reality disagreed, are in [`docs/`](docs/).
