@@ -86,8 +86,8 @@ error keeps meaning something. See
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0014](../../adr/0014-a-capture-is-a-directory-published-by-one-rename.md) | A capture is a directory published by one rename; a collision stops the run; new sidecars record the payload's size and SHA-256; existing captures move by rename alone | proposed |
-| [0015](../../adr/0015-incomplete-captures-are-quarantined-under-a-writer-lock.md) | Anything that is not a capture is moved to a quarantine beside the landing root at the start of a backfill, under an exclusive `flock`, within a size limit; nothing is deleted; readers do not wait but warn | proposed |
+| [0014](../../adr/0014-a-capture-is-a-directory-published-by-one-rename.md) | A capture is a directory published by one rename; a collision stops the run; new sidecars record the payload's size and SHA-256; existing captures move by rename alone | accepted |
+| [0015](../../adr/0015-incomplete-captures-are-quarantined-under-a-writer-lock.md) | Anything that is not a capture is moved to a quarantine beside the landing root at the start of a backfill, under an exclusive `flock`, within a size limit; nothing is deleted; readers do not wait but warn | accepted |
 
 All nine points put to the owner were decided on 2026-10-05 and are recorded in the PR.
 

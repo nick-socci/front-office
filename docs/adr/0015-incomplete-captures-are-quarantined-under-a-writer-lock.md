@@ -1,6 +1,6 @@
 # 0015. Anything that is not a capture is quarantined at the start of a run, under a writer lock
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-05
 - Spec: [0029-committed-captures](../specs/0029-committed-captures/design.md) · Issue: #29
 
