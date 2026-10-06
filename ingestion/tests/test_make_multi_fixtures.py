@@ -28,7 +28,7 @@ def tree(root: Path) -> dict[str, bytes]:
 
 
 def sidecars(root: Path) -> list[Path]:
-    return sorted(root.rglob("*.meta.json"))
+    return sorted(root.rglob("meta.json"))
 
 
 def test_generator_reproduces_the_committed_tree_byte_for_byte(tmp_path):
@@ -92,7 +92,9 @@ def test_2027_has_one_roster_period_per_league_and_a_one_period_season():
             m for m in espn_meta(COMMITTED, league, 2027) if m["endpoint"] == "settings"
         )
         path = COMMITTED / "espn/settings/season=2027" / f"league_id={league}"
-        payload = json.loads((path / f"fetched_at={settings['fetched_at']}.json").read_text())
+        payload = json.loads(
+            (path / f"fetched_at={settings['fetched_at']}" / "payload.json").read_text()
+        )
         assert payload["seasonId"] == 2027 and payload["id"] == league
         assert payload["status"]["finalScoringPeriod"] == 1
         assert payload["status"]["latestScoringPeriod"] == 1
@@ -100,7 +102,7 @@ def test_2027_has_one_roster_period_per_league_and_a_one_period_season():
 
 def roster_names(league: str, season: int, period: int) -> dict[int, str]:
     folder = COMMITTED / f"espn/roster/season={season}/league_id={league}/scoring_period={period}"
-    payload = json.loads(next(p for p in folder.glob("*.json") if "meta" not in p.name).read_text())
+    payload = json.loads(next(folder.glob("*/payload.json")).read_text())
     return {
         e["playerId"]: e["playerPoolEntry"]["player"]["fullName"]
         for t in payload["teams"]

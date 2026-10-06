@@ -5,6 +5,11 @@ scrubbing a full payload. A denylist would eventually miss a field, and for ESPN
 means a league member's name landing in a public repo. Rebuilding cannot leak a field
 nobody listed.
 
+Reads the real landing zone through LandingZone.committed (so only committed captures,
+whatever else is lying around) and writes each fixture as a capture directory,
+`fetched_at=<stamp>/payload.json` beside `meta.json`, with the sidecar as it always was.
+The real landing zone must already be in the directory layout (ADR 0014).
+
 Usage:  uv run python scripts/make_fixtures.py [--date 2026-04-30]
 """
 
@@ -14,6 +19,8 @@ import argparse
 import json
 from pathlib import Path
 from typing import Any
+
+from front_office.landing import LandingZone
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RAW_ROOT = REPO_ROOT / "data/raw"
@@ -251,12 +258,22 @@ def rebuild(source: dict[str, Any], fields: tuple[str, ...]) -> dict[str, Any]:
     return out
 
 
+def landed(source: str, endpoint: str, **partitions: Any) -> list[Path]:
+    """payload.json of every committed capture of an endpoint (or one entity), by path.
+
+    The real root is looked up on each call, not at import, so a test can point it elsewhere.
+    """
+    zone = LandingZone(RAW_ROOT)
+    return [
+        capture.payload_path
+        for capture in zone.committed(
+            source=source, endpoint=endpoint, partitions=partitions or None
+        )
+    ]
+
+
 def latest_landed(source: str, endpoint: str) -> Path:
-    candidates = sorted(
-        p
-        for p in (RAW_ROOT / source / endpoint).rglob("*.json")
-        if not p.name.endswith(".meta.json")
-    )
+    candidates = landed(source, endpoint)
     if not candidates:
         raise SystemExit(f"no landed {source}/{endpoint} responses under {RAW_ROOT}")
     return candidates[-1]
@@ -274,8 +291,9 @@ def write_fixture(
     path = FIXTURE_ROOT / source / endpoint
     for key, value in partitions.items():
         path = path / f"{key}={value}"
+    path = path / f"fetched_at={fetched_at}"
     path.mkdir(parents=True, exist_ok=True)
-    payload_path = path / f"fetched_at={fetched_at}.json"
+    payload_path = path / "payload.json"
     payload_path.write_text(json.dumps(payload, indent=1) + "\n")
     meta = {
         "source": source,
@@ -286,7 +304,7 @@ def write_fixture(
         "request_key": "&".join(f"{k}={request['params'][k]}" for k in sorted(request["params"])),
         "fetched_at": fetched_at,
     }
-    payload_path.with_suffix(".meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+    (path / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
     return payload_path
 
 
@@ -341,8 +359,7 @@ def build_mlb_boxscores(dates: tuple[str, ...]) -> list[Path]:
     ]
     written: list[Path] = []
     for game_pk in sorted(set(game_pks))[:FIXTURE_BOXSCORE_GAMES]:
-        landed = RAW_ROOT / "mlb/boxscore" / "season=2026" / f"game_pk={game_pk}"
-        payloads = sorted(p for p in landed.glob("*.json") if not p.name.endswith(".meta.json"))
+        payloads = landed("mlb", "boxscore", season=2026, game_pk=game_pk)
         if not payloads:
             print(f"mlb/boxscore: game_pk={game_pk} not landed yet, skipping")
             continue
@@ -404,7 +421,7 @@ def first_batter_with_a_hit(side: dict[str, Any]) -> dict[str, Any]:
 
 
 def write_boxscore_correction(original: Path) -> Path:
-    meta = json.loads(original.with_suffix(".meta.json").read_text())
+    meta = json.loads((original.parent / "meta.json").read_text())
     path = write_fixture(
         source="mlb",
         endpoint="boxscore",
@@ -423,14 +440,12 @@ def espn_team_alias(team_id: int) -> dict[str, str]:
 
 
 def latest_espn(endpoint: str, scoring_period: int | None = None) -> dict[str, Any]:
-    base = RAW_ROOT / "espn" / endpoint
+    # committed() leaves out anything that is not a complete capture, such as the spike
+    # backups, which have no sidecar and a different layout.
     candidates = [
         path
-        for path in base.rglob("*.json")
-        if not path.name.endswith(".meta.json")
-        and (scoring_period is None or f"scoring_period={scoring_period}/" in str(path))
-        # Spike backups have no metadata sidecar and a different layout; ignore them.
-        and path.with_suffix(".meta.json").exists()
+        for path in landed("espn", endpoint)
+        if scoring_period is None or f"scoring_period={scoring_period}/" in str(path)
     ]
     if not candidates:
         raise SystemExit(f"no landed espn/{endpoint} response (period={scoring_period})")
@@ -571,11 +586,9 @@ def build_espn_matchups() -> Path:
 
 def newest_transactions_first_page() -> dict[str, Any]:
     """Page 0 (offset=0) of the newest paged transaction run."""
-    pages = sorted(
-        path
-        for path in (RAW_ROOT / "espn/transactions").rglob("offset=0/*.json")
-        if not path.name.endswith(".meta.json") and path.with_suffix(".meta.json").exists()
-    )
+    pages = [
+        path for path in landed("espn", "transactions") if path.parent.parent.name == "offset=0"
+    ]
     if not pages:
         raise SystemExit("no paged espn/transactions capture: run `front-office backfill espn`")
     return json.loads(pages[-1].read_text())

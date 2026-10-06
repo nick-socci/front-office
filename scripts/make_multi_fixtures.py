@@ -47,21 +47,21 @@ Capture = tuple[dict[str, Any], Any]  # (sidecar, payload)
 
 def read_captures(root: Path, *folders: str) -> list[Capture]:
     out: list[Capture] = []
-    for sidecar in sorted((root.joinpath(*folders)).rglob("*.meta.json")):
-        payload_path = sidecar.with_name(sidecar.name.removesuffix(".meta.json") + ".json")
+    for sidecar in sorted((root.joinpath(*folders)).rglob("meta.json")):
+        payload_path = sidecar.with_name("payload.json")
         out.append((json.loads(sidecar.read_text()), json.loads(payload_path.read_text())))
     return out
 
 
 def write_capture(root: Path, meta: dict[str, Any], payload: Any) -> None:
-    """Write a payload and sidecar the way scripts/make_fixtures.py::write_fixture does."""
+    """Write a capture directory the way scripts/make_fixtures.py::write_fixture does."""
     path = root / meta["source"] / meta["endpoint"]
     for key, value in meta["partitions"].items():
         path = path / f"{key}={value}"
+    path = path / f"fetched_at={meta['fetched_at']}"
     path.mkdir(parents=True, exist_ok=True)
-    payload_path = path / f"fetched_at={meta['fetched_at']}.json"
-    payload_path.write_text(json.dumps(payload, indent=1) + "\n")
-    payload_path.with_suffix(".meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+    (path / "payload.json").write_text(json.dumps(payload, indent=1) + "\n")
+    (path / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
 
 
 def request_key(params: dict[str, Any]) -> str:
