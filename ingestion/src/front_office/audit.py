@@ -4,7 +4,9 @@ Passing dbt tests cannot show that an input is complete: a missing boxscore beco
 player-day of zeros, not a failure. So before a reconciliation result is believed, this
 checks the files themselves:
 
-  landing  every file is a readable payload/sidecar pair that agrees with its path
+  landing  everything under the root is a committed capture (one directory holding a
+           payload and a sidecar that agrees with its path) whose payload matches its
+           checksum; nothing is waiting in quarantine
   loaded   every committed capture is a row in raw.api_responses, with no key collisions
   mlb      every played game in the newest schedule has a boxscore, and one was captured
            after the game's settle window closed
@@ -32,14 +34,13 @@ from zoneinfo import ZoneInfo
 import duckdb
 
 from front_office.espn import transactions as espn_transactions
-from front_office.landing import LandingZone
+from front_office.landing import META_FILE, VANISHED, LandingZone
 from front_office.load import QUALIFIED, SCHEMA, TABLE
 from front_office.mlb import boxscore as mlb_boxscore
 
 # ESPN's scoring day rolls over at midnight Eastern; see the fo_eastern_date dbt macro.
 EASTERN = ZoneInfo("America/New_York")
 EXAMPLES = 3
-REQUIRED_META = ("source", "endpoint", "partitions", "request_key", "fetched_at")
 LEAGUE_SNAPSHOTS = ("settings", "teams", "matchups", "transactions")
 
 
@@ -59,7 +60,7 @@ class Finding:
 
 @dataclass(frozen=True)
 class Capture:
-    """A committed payload/sidecar pair whose sidecar has been read."""
+    """A committed capture whose sidecar has been read; `path` is its payload.json."""
 
     path: Path
     meta: Mapping[str, Any]
@@ -114,75 +115,97 @@ def run_audit(
 # -- landing ---------------------------------------------------------------------------
 
 _FILE_PROBLEMS = {
-    "payload_only": (
+    "temp": (Severity.ERROR, "temporary director(y/ies) left by an interrupted write"),
+    "invalid": (Severity.ERROR, "capture director(y/ies) that fail the capture check"),
+    "loose": (Severity.ERROR, "loose file(s) outside any capture directory (old layout?)"),
+    "empty": (Severity.ERROR, "empty director(y/ies)"),
+    "corrupt": (
         Severity.ERROR,
-        "payload(s) with no sidecar: never loaded, but roster and boxscore skip logic "
-        "would count them as landed",
+        "capture(s) whose payload is unreadable or does not match its checksum",
     ),
-    "sidecar_only": (Severity.ERROR, "sidecar(s) whose payload is missing"),
-    "temp": (Severity.ERROR, "temporary file(s) left by an interrupted write"),
-    "other": (Severity.WARN, "file(s) the ingestion package never writes"),
-    "unreadable": (Severity.ERROR, "capture(s) whose payload or sidecar is not valid JSON"),
-    "inconsistent": (Severity.ERROR, "sidecar(s) that disagree with their file's path"),
 }
 
 
 def check_landing(zone: LandingZone) -> tuple[list[Finding], list[Capture]]:
-    """Classify and parse every file. Returns findings and the usable committed captures."""
+    """Classify everything under the root. Returns findings and the usable captures.
+
+    A usable capture passes the shared check, shallow and deep. One that passes shallow
+    and fails deep is reported and withheld, so the checks that read payloads never meet
+    it.
+    """
     problems: dict[tuple[str, str], list[str]] = defaultdict(list)
     committed: Counter[str] = Counter()
     captures: list[Capture] = []
+    verified = unverified = 0
 
     for scanned in zone.scan():
         group = _group(zone, scanned.path)
         example = str(scanned.path.relative_to(zone.root))
         if scanned.kind != "committed":
-            problems[(scanned.kind, group)].append(example)
+            reason = zone.check(scanned.path) if scanned.kind == "invalid" else None
+            problems[(scanned.kind, group)].append(f"{example} ({reason})" if reason else example)
+            continue
+        if zone.check(scanned.path, deep=True) is not None:
+            problems[("corrupt", group)].append(example)
             continue
         try:
-            meta = json.loads(scanned.path.with_suffix(".meta.json").read_text())
-            json.loads(scanned.path.read_text())
-        except (OSError, ValueError):
-            problems[("unreadable", group)].append(example)
-            continue
-        reason = _sidecar_disagreement(zone, scanned.path, meta)
-        if reason:
-            problems[("inconsistent", group)].append(f"{example} ({reason})")
-            continue
+            meta = json.loads((scanned.path / META_FILE).read_bytes())
+        except (*VANISHED, ValueError):
+            continue  # swept between the check and the read
+        if meta.get("payload_sha256") is None:
+            unverified += 1
+        else:
+            verified += 1
         committed[group] += 1
-        captures.append(Capture(path=scanned.path, meta=meta))
+        captures.append(Capture(path=scanned.path / "payload.json", meta=meta))
 
     findings = [
         Finding(Severity.INFO, "landing", group, f"{count} committed capture(s)")
         for group, count in sorted(committed.items())
     ]
+    findings.append(
+        Finding(
+            Severity.INFO,
+            "landing",
+            "checksums",
+            f"{verified} capture(s) checksum-verified, {unverified} with no recorded checksum",
+        )
+    )
     for (kind, group), examples in sorted(problems.items()):
         severity, message = _FILE_PROBLEMS[kind]
         findings.append(
             Finding(severity, "landing", group, f"{len(examples)} {message}; {_sample(examples)}")
         )
+    layout = zone.layout_problem()
+    if layout:
+        findings.append(Finding(Severity.ERROR, "landing", "layout", layout))
+    findings += _check_quarantine(zone)
     return findings, captures
+
+
+def _check_quarantine(zone: LandingZone) -> list[Finding]:
+    """Anything waiting in quarantine is a warning: someone should look, then clear it."""
+    try:
+        held = sorted(p for p in zone.quarantine_root.iterdir() if p.name != ".gitignore")
+    except VANISHED:
+        return []
+    if not held:
+        return []
+    files = sum(1 for run in held for p in run.rglob("*") if p.is_file())
+    runs = ", ".join(p.name for p in held)
+    return [
+        Finding(
+            Severity.WARN,
+            "landing",
+            "quarantine",
+            f"{files} file(s) in {len(held)} run director(y/ies) of {zone.quarantine_root}: "
+            f"{runs}; look, then clear by hand",
+        )
+    ]
 
 
 def _group(zone: LandingZone, path: Path) -> str:
     return "/".join(path.relative_to(zone.root).parts[:2])
-
-
-def _sidecar_disagreement(zone: LandingZone, path: Path, meta: Any) -> str | None:
-    if not isinstance(meta, dict):
-        return "sidecar is not an object"
-    missing = [key for key in REQUIRED_META if key not in meta]
-    if missing:
-        return f"missing {', '.join(missing)}"
-    expected = zone.path_for(
-        source=meta["source"],
-        endpoint=meta["endpoint"],
-        partitions=meta["partitions"],
-        name=f"fetched_at={meta['fetched_at']}",
-    )
-    if expected != path:
-        return f"sidecar describes {expected.relative_to(zone.root)}"
-    return None
 
 
 # -- loaded ----------------------------------------------------------------------------
