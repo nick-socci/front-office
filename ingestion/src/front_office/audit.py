@@ -213,7 +213,9 @@ def _quarantined_items(run: Path) -> int:
     below = list(run.rglob("*"))
     if not below:
         return 1
-    return sum(1 for p in below if p.is_file() or (p.is_dir() and not any(p.iterdir())))
+    # Anything that is not a directory is an item, whatever it is (a file, a symlink, even
+    # a dangling one); a directory is an item only when it holds nothing.
+    return sum(1 for p in below if p.is_symlink() or not p.is_dir() or not any(p.iterdir()))
 
 
 def _group(zone: LandingZone, path: Path) -> str:

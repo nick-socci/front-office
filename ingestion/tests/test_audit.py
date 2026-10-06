@@ -666,6 +666,19 @@ def test_the_quarantine_counts_files_and_empty_directories(zone):
     assert "2 item(s)" in warnings.detail
 
 
+def test_the_quarantine_counts_anything_that_is_not_a_directory(zone):
+    """Catches an item count that only sees regular files.
+
+    A dangling symlink is neither a regular file nor a directory, and a run holding only
+    that used to be reported as zero items (#64 review, round 2).
+    """
+    run = zone.quarantine_root / "20260930T000000Z"
+    run.mkdir(parents=True)
+    (run / "dangling").symlink_to(run / "nowhere")
+    (warnings,) = quarantine_warnings(zone)
+    assert "1 item(s)" in warnings.detail
+
+
 def test_an_empty_run_directory_counts_as_one_item(zone):
     """Catches a run directory that exists but holds nothing passing unnoticed."""
     (zone.quarantine_root / "20260930T000000Z").mkdir(parents=True)
