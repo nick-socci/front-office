@@ -22,6 +22,9 @@ dbt/ci.duckdb
 *.duckdb.wal
 *.duckdb.tmp/
 data/raw/
+data/raw_quarantine/
+data/raw_migration/
+data/*.lock
 data/*.csv
 data/*.json
 

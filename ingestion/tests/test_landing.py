@@ -139,7 +139,7 @@ def test_a_rename_that_finds_the_destination_non_empty_is_a_collision(zone, monk
     monkeypatch.setattr("front_office.landing.os.rename", occupied)
     with pytest.raises(LandingCollision):
         write(zone)
-    assert list(entity_folder(zone).iterdir()) == []
+    assert list(zone.root.rglob("*")) == [], "no temporary directory and no new folders"
 
 
 def _fail_mkdir_of_temp(monkeypatch):
@@ -237,3 +237,36 @@ def test_request_path_is_the_url_path_only(url, expected):
     host and parameters and must not differ by a trailing slash.
     """
     assert LandingZone.request_path(url) == expected
+
+
+def test_a_failed_first_write_leaves_no_new_folders(zone, monkeypatch):
+    """Catches a failed write leaving the source/endpoint/partition folders it created as
+    empty directories for the next sweep to report."""
+    _fail_write_of(monkeypatch, "write_bytes", "payload.json")
+    with pytest.raises(OSError):
+        write(zone)
+    monkeypatch.undo()
+    assert list(zone.root.rglob("*")) == []
+    assert zone.root.is_dir(), "the root itself is never removed"
+
+
+def test_a_failed_write_beside_an_existing_capture_leaves_the_folder_alone(zone, monkeypatch):
+    """Catches cleanup removing a folder it did not create, or an existing capture."""
+    first = write(zone, stamp="20260926T000000Z")
+    before = sorted(str(p) for p in zone.root.rglob("*"))
+    _fail_rename(monkeypatch)
+    with pytest.raises(OSError):
+        write(zone, stamp="20260927T000000Z")
+    monkeypatch.undo()
+    assert sorted(str(p) for p in zone.root.rglob("*")) == before
+    assert first.is_dir()
+
+
+def test_a_failed_write_removes_only_the_folders_it_created(zone, monkeypatch):
+    """Catches cleanup walking above the first folder that already existed."""
+    write(zone, partitions={"season": 2025})
+    _fail_rename(monkeypatch)
+    with pytest.raises(OSError):
+        write(zone, partitions={"season": 2026})
+    monkeypatch.undo()
+    assert [p.name for p in (zone.root / "mlb/schedule").iterdir()] == ["season=2025"]

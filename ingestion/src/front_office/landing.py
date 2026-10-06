@@ -15,15 +15,22 @@ asks it, directly or through `committed`, `has_landed` and `iter_landed`.
 from __future__ import annotations
 
 import errno
+import fcntl
 import hashlib
 import json
+import logging
+import math
 import os
 import shutil
+import time
 from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+
+logger = logging.getLogger(__name__)
 
 PayloadType = Mapping[str, Any] | list[Any]
 
@@ -33,10 +40,27 @@ CAPTURE_PREFIX = "fetched_at="
 TEMP_MARKER = ".tmp-"
 # Raised by a reader that races a sweep: the entry vanished between listing and reading.
 VANISHED = (FileNotFoundError, NotADirectoryError)
+JOURNAL_FILE = "journal.tsv"
+SWEEP_FLOOR = 50
+SWEEP_FRACTION = 0.01
+LOCK_WAIT_S = 2.0
+LOCK_RETRY_S = 0.1
 
 
 class LandingCollision(Exception):
     """A capture's final directory already exists; nothing was written."""
+
+
+class LandingLocked(Exception):
+    """Another process holds the writer lock."""
+
+
+class NotMigrated(Exception):
+    """The landing zone is not wholly in the directory layout; the migration must finish."""
+
+
+class SweepTooLarge(Exception):
+    """A sweep would move more than the limit allows; nothing was moved."""
 
 
 class PayloadNotJson(ValueError):
@@ -106,6 +130,20 @@ class LandingZone:
     def __init__(self, root: Path) -> None:
         self.root = Path(root)
 
+    @property
+    def quarantine_root(self) -> Path:
+        """Where the sweep moves what is not a capture: beside the root, never inside it."""
+        return self.root.with_name(self.root.name + "_quarantine")
+
+    @property
+    def lock_path(self) -> Path:
+        return self.root.with_name(self.root.name + ".lock")
+
+    @property
+    def migration_dir(self) -> Path:
+        """Holds the migration's journal (`journal.tsv`); written by the migration script."""
+        return self.root.with_name(self.root.name + "_migration")
+
     @staticmethod
     def request_key(params: Mapping[str, Any] | None) -> str:
         """A canonical string for a request's parameters, independent of their order."""
@@ -157,7 +195,6 @@ class LandingZone:
         final = self.path_for(source=source, endpoint=endpoint, partitions=partitions, name=name)
         if final.exists():
             raise LandingCollision(f"capture already exists: {final}")
-        final.parent.mkdir(parents=True, exist_ok=True)
         tmp = final.with_name(f"{final.name}{TEMP_MARKER}{os.getpid()}")
 
         body = json.dumps(payload).encode()
@@ -173,9 +210,17 @@ class LandingZone:
             "payload_sha256": hashlib.sha256(body).hexdigest(),
         }
 
+        # Folders this call will create, outermost first; the root itself is never one.
+        made: list[Path] = []
+        for folder in (final.parent, *final.parent.parents):
+            if folder.exists() or folder == self.root or self.root not in folder.parents:
+                break
+            made.insert(0, folder)
+
         published = False
         created = False
         try:
+            final.parent.mkdir(parents=True, exist_ok=True)
             tmp.mkdir()
             created = True
             (tmp / PAYLOAD_FILE).write_bytes(body)
@@ -190,6 +235,12 @@ class LandingZone:
         finally:
             if created and not published:
                 shutil.rmtree(tmp, ignore_errors=True)
+            if not published:
+                for folder in reversed(made):
+                    try:
+                        folder.rmdir()
+                    except OSError:
+                        break  # not empty (or gone): everything above is in use too
         return final
 
     # -- the one definition of committed --------------------------------------------------
@@ -362,6 +413,181 @@ class LandingZone:
                 yield ScannedFile(kind=kind, path=entry)
             else:
                 yield from self._scan_folder(entry, is_root=False)
+
+    # -- the layout interlock -------------------------------------------------------------
+
+    def layout_problem(self) -> str | None:
+        """Why the landing zone is not wholly in the directory layout, or None.
+
+        It is not when the migration journal's last bracket is in progress or reversed, or
+        when any old-layout pair (`X.json` beside `X.meta.json`) is found, journal or not.
+        Journal records are tab-separated, one per line, the first field the type:
+        `start`, `begin<TAB>old<TAB>new`, `done<TAB>old`, `finished`, `reversed`.
+        """
+        state = None
+        journal = self.migration_dir / JOURNAL_FILE
+        try:
+            text = journal.read_text()
+        except FileNotFoundError:
+            text = ""
+        for line in text.splitlines():
+            record = line.split("\t", 1)[0]
+            if record == "start":
+                state = "in progress"
+            elif record == "finished":
+                state = "migrated"
+            elif record == "reversed":
+                state = "reversed"
+        fix = "run scripts/migrate_landing_layout.py to completion first"
+        if state in ("in progress", "reversed"):
+            return f"the layout migration is {state} ({journal}); {fix}"
+        for folder, _dirs, names in os.walk(self.root):
+            held = set(names)
+            for name in sorted(held):
+                is_payload = name.endswith(".json") and not name.endswith(".meta.json")
+                if is_payload and name[: -len(".json")] + ".meta.json" in held:
+                    return f"old-layout capture pair found at {Path(folder) / name}; {fix}"
+        return None
+
+    # -- sweeping -------------------------------------------------------------------------
+
+    def _file_count(self) -> int:
+        return sum(len(names) for _folder, _dirs, names in os.walk(self.root))
+
+    def sweep_limit(self) -> int:
+        """The most items a sweep may move without `force`: the larger of 50 and 1% of files."""
+        return max(SWEEP_FLOOR, math.ceil(SWEEP_FRACTION * self._file_count()))
+
+    def _plan(self, *, deep: bool) -> list[tuple[str, Path]]:
+        """Everything a sweep would move, worked out on paper: the complete plan.
+
+        Each non-committed entry; with `deep`, committed captures failing the deep check;
+        and each folder left with nothing in it once those are gone. Where a folder and
+        everything in it are in the plan, only the folder is listed.
+        """
+        flagged: dict[Path, str] = {}
+        for scanned in self.scan():
+            if scanned.kind != "committed":
+                flagged[scanned.path] = scanned.kind
+            elif deep and self.check(scanned.path, deep=True) is not None:
+                flagged[scanned.path] = "corrupt"
+
+        def visit(folder: Path) -> tuple[bool, list[tuple[str, Path]]]:
+            """(whether `folder` ends up empty, the plan entries beneath it)."""
+            emptied = True
+            entries: list[tuple[str, Path]] = []
+            for entry in sorted(folder.iterdir()):
+                if entry in flagged:
+                    entries.append((flagged[entry], entry))
+                elif entry.is_dir() and not (
+                    entry.name.startswith(CAPTURE_PREFIX) or TEMP_MARKER in entry.name
+                ):
+                    gone, below = visit(entry)
+                    if gone:
+                        entries.append(("empty", entry))
+                    else:
+                        entries += below
+                        emptied = False
+                else:
+                    emptied = False
+            return emptied, entries
+
+        if not self.root.is_dir():
+            return []
+        _gone, entries = visit(self.root)
+        return [(kind, path.relative_to(self.root)) for kind, path in entries]
+
+    def sweep(
+        self,
+        run_stamp: str,
+        *,
+        dry_run: bool = False,
+        deep: bool = False,
+        force: bool = False,
+    ) -> list[tuple[str, Path]]:
+        """Move whatever is not a committed capture to the quarantine. Returns the plan.
+
+        The plan is (kind, path relative to the root) and is the same list that is limited,
+        reported by a dry run and moved. Raises NotMigrated if the landing zone is not
+        wholly in the directory layout, and SweepTooLarge (moving nothing) when the plan
+        exceeds `sweep_limit()` and `force` is false; a dry run only reports.
+        """
+        problem = self.layout_problem()
+        if problem:
+            raise NotMigrated(problem)
+        plan = self._plan(deep=deep)
+        if dry_run or not plan:
+            return plan
+        limit = self.sweep_limit()
+        if len(plan) > limit and not force:
+            first = ", ".join(str(path) for _kind, path in plan[:3])
+            raise SweepTooLarge(
+                f"sweep would move {len(plan)} items, over the limit of {limit} "
+                f"(the larger of {SWEEP_FLOOR} and 1% of the files under {self.root}); "
+                f"first: {first}. Nothing was moved; inspect with `front-office repair "
+                "--dry-run`, then `--force` if it is right."
+            )
+
+        self.quarantine_root.mkdir(parents=True, exist_ok=True)
+        (self.quarantine_root / ".gitignore").write_text("*\n")
+        run_dir = self.quarantine_root / run_stamp
+        suffix = 1
+        while True:
+            try:
+                run_dir.mkdir()
+                break
+            except FileExistsError:
+                suffix += 1
+                run_dir = self.quarantine_root / f"{run_stamp}-{suffix}"
+        for kind, relative in plan:
+            destination = run_dir / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            os.rename(self.root / relative, destination)  # noqa: PTH104 - a move, named on purpose
+            logger.warning("quarantined %s %s -> %s", kind, relative, destination)
+        return plan
+
+    # -- the writer lock ------------------------------------------------------------------
+
+    @contextmanager
+    def writer_lock(self) -> Iterator[None]:
+        """Hold the exclusive writer lock (`flock`) for the block, or raise LandingLocked.
+
+        The operating system releases it when the process ends, however it ends. It waits
+        up to two seconds, because a reader's `writer_active` probe holds the lock for an
+        instant.
+        """
+        self.lock_path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor = os.open(self.lock_path, os.O_RDWR | os.O_CREAT, 0o644)
+        try:
+            deadline = time.monotonic() + LOCK_WAIT_S
+            while True:
+                try:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise LandingLocked(
+                            f"another writer holds {self.lock_path}; wait for it to finish"
+                        ) from None
+                    time.sleep(LOCK_RETRY_S)
+            yield
+        finally:
+            os.close(descriptor)  # closing releases the lock
+
+    def writer_active(self) -> bool:
+        """True when a writer holds the lock. Never waits, never creates the lock file."""
+        try:
+            descriptor = os.open(self.lock_path, os.O_RDONLY)
+        except FileNotFoundError:
+            return False
+        try:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+            return False
+        finally:
+            os.close(descriptor)
 
 
 def _sidecar_problem(meta: Any) -> str | None:
