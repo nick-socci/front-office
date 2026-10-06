@@ -18,7 +18,7 @@ from typing import Any
 
 from front_office.espn.client import league_url
 from front_office.http_client import AuthExpired, HttpClient
-from front_office.landing import LandingZone
+from front_office.landing import LandingCollision, LandingZone
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,11 @@ def needs_fetch(
 ) -> bool:
     if refresh:
         return True
-    if not _has_landed(zone, season=season, league_id=league_id, period=period):
+    if not zone.has_landed(
+        source=SOURCE,
+        endpoint=ENDPOINT,
+        partitions={"season": season, "league_id": league_id, "scoring_period": period},
+    ):
         return True
     return not period_is_over(period, status)
 
@@ -95,8 +99,9 @@ def backfill_rosters(
                 period=period,
                 fetched_at=fetched_at,
             )
-        except AuthExpired:
+        except (AuthExpired, LandingCollision):
             # Every remaining period would be rejected too: stop, don't log 180 failures.
+            # A collision likewise stops the run; it is not one failed period.
             raise
         except Exception:
             logger.exception("roster fetch failed for scoring period %s", period)
@@ -131,15 +136,3 @@ def _fetch_one(
         },
         fetched_at=fetched_at,
     )
-
-
-def _has_landed(zone: LandingZone, *, season: int, league_id: str, period: int) -> bool:
-    directory = zone.path_for(
-        source=SOURCE,
-        endpoint=ENDPOINT,
-        partitions={"season": season, "league_id": league_id, "scoring_period": period},
-        name="unused",
-    ).parent
-    if not directory.exists():
-        return False
-    return any(not path.name.endswith(".meta.json") for path in directory.glob("*.json"))

@@ -11,20 +11,16 @@ A response is identified by source, endpoint, request path, parameters and fetch
 from __future__ import annotations
 
 import json
-import logging
 from collections.abc import Sequence
 from pathlib import Path
 
 import duckdb
 
-from front_office.landing import LandingZone
-
-logger = logging.getLogger(__name__)
+from front_office.landing import VANISHED, LandingZone
 
 SCHEMA = "raw"
 TABLE = "api_responses"
 QUALIFIED = f"{SCHEMA}.{TABLE}"
-REQUIRED_META = ("source", "endpoint", "fetched_at", "url")
 KEY_COLUMNS = ("source", "endpoint", "request_path", "request_key", "fetched_at")
 
 CREATE_SQL = f"""
@@ -60,28 +56,25 @@ def load_landing_zone(
 ) -> int:
     """Insert every landed response not already present. Returns the number inserted.
 
-    Raises RawSchemaOutdated if the raw table has the pre-request_path shape, and
-    RawKeyCollision if two different files share a key; in both cases nothing is changed.
+    Raises RawSchemaOutdated if the raw table has the pre-request_path shape,
+    RawKeyCollision if two different files share a key, and PayloadNotJson if a committed
+    capture's payload is not JSON; in every case nothing is changed.
     """
     _refuse_old_table(con)
     con.execute(CREATE_SQL)
 
+    # iter_landed yields committed captures only (LandingZone.check): anything else under
+    # the root, such as a temporary directory or an old-layout file, is not loaded. A
+    # committed capture whose payload does not parse is corruption at rest, so it fails
+    # the load (PayloadNotJson names the file) instead of being skipped; no row from
+    # this run is inserted. A capture that vanishes mid-read (a sweep moved it) is not
+    # committed any more and is passed over.
     rows = []
-    skipped = 0
     for landed in zone.iter_landed(source=source, endpoint=endpoint):
-        # A response with no complete metadata sidecar has no key: it was landed outside
-        # the ingestion package (e.g. by a throwaway spike script). Those files are
-        # backups, not pipeline inputs, so they are skipped rather than loaded with empty
-        # keys. request_key and partitions are legitimately empty for some endpoints, so
-        # they only have to be present, not truthy.
         meta = landed.meta
-        loadable = (
-            "request_key" in meta
-            and isinstance(meta.get("partitions"), dict)
-            and all(meta.get(field) for field in REQUIRED_META)
-        )
-        if not loadable:
-            skipped += 1
+        try:
+            payload = json.dumps(landed.payload)
+        except VANISHED:
             continue
         rows.append(
             (
@@ -91,12 +84,10 @@ def load_landing_zone(
                 meta["request_key"],
                 meta["fetched_at"],
                 json.dumps(meta["partitions"]),
-                json.dumps(landed.payload),
+                payload,
                 str(landed.path),
             )
         )
-    if skipped:
-        logger.warning("skipped %s landed file(s) with no complete metadata sidecar", skipped)
     if not rows:
         return 0
 

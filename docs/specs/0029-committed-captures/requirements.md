@@ -1,6 +1,6 @@
 # Committed captures: a payload and its sidecar land together, or not at all — requirements
 
-Issue: #29 · Tier: M · Status: draft
+Issue: #29 · Tier: M · Status: approved 2026-10-05
 
 ## Problem
 

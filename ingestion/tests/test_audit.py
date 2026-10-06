@@ -7,6 +7,8 @@ before the run that captured them.
 """
 
 import datetime as dt
+import json
+import shutil
 
 import duckdb
 import pytest
@@ -35,6 +37,21 @@ def land(zone, source, endpoint, partitions, payload, *, fetched_at=RUN, params=
     )
 
 
+def captures_of(zone, pattern):
+    """Capture directories under the root matching a glob such as `mlb/boxscore/**`."""
+    return sorted(zone.root.glob(f"{pattern}/fetched_at=*"))
+
+
+def drop(zone, pattern, stamp="*"):
+    """Remove whole captures (a capture is a directory) and any folder that leaves empty."""
+    for directory in sorted(zone.root.glob(f"{pattern}/fetched_at={stamp}")):
+        shutil.rmtree(directory)
+        parent = directory.parent
+        while parent != zone.root and not any(parent.iterdir()):
+            parent.rmdir()
+            parent = parent.parent
+
+
 def schedule_game(pk, date, detailed="Final", **extra):
     # As MLB reports them: over-but-unplayed games are abstractGameState Final too.
     state = (
@@ -50,6 +67,8 @@ def schedule_game(pk, date, detailed="Final", **extra):
 
 
 def land_schedule(zone, games):
+    # A capture is never overwritten now, so "the schedule changed" replaces the capture.
+    drop(zone, "mlb/schedule/**")
     land(
         zone,
         "mlb",
@@ -158,47 +177,147 @@ def test_capture_dates_are_eastern_like_the_scoring_day():
 
 
 def test_a_payload_without_a_sidecar_is_an_error(zone):
-    orphan = zone.root / "espn/roster_matchup/season=2026/fetched_at=20260321T000000Z.json"
-    orphan.parent.mkdir(parents=True)
-    orphan.write_text("{}")
-    findings, _ = check_landing(zone)
-    assert "1 payload(s) with no sidecar" in details(findings, Severity.ERROR)
-
-
-def test_a_sidecar_without_a_payload_is_an_error(zone):
-    payload = next(zone.root.glob("mlb/boxscore/**/*Z.json"))
-    payload.unlink()
+    """Was `payload_only`. A capture directory holding only its payload fails the capture
+    check, which is the same condition in the directory layout."""
+    sidecar = captures_of(zone, "mlb/boxscore/**")[0] / "meta.json"
+    sidecar.unlink()
     findings, captures = check_landing(zone)
-    assert "1 sidecar(s) whose payload is missing" in details(findings, Severity.ERROR)
+    assert "1 capture director(y/ies) that fail the capture check" in details(
+        findings, Severity.ERROR
+    )
     assert all(capture.endpoint != "boxscore" for capture in captures)
 
 
-def test_a_leftover_temp_file_is_an_error(zone):
-    (zone.root / "mlb/boxscore/fetched_at=x.json.tmp-123").write_text("{")
+def test_a_sidecar_without_a_payload_is_an_error(zone):
+    """Was `sidecar_only`; likewise a capture directory that fails the capture check."""
+    (captures_of(zone, "mlb/boxscore/**")[0] / "payload.json").unlink()
+    findings, captures = check_landing(zone)
+    assert "1 capture director(y/ies) that fail the capture check" in details(
+        findings, Severity.ERROR
+    )
+    assert all(capture.endpoint != "boxscore" for capture in captures)
+
+
+def test_a_leftover_temp_directory_is_an_error(zone):
+    """Was a temporary file; a write is now a temporary directory."""
+    (zone.root / "mlb/boxscore/fetched_at=x.tmp-123").mkdir()
     findings, _ = check_landing(zone)
-    assert "1 temporary file(s)" in details(findings, Severity.ERROR)
+    assert "1 temporary director(y/ies) left by an interrupted write" in details(
+        findings, Severity.ERROR
+    )
 
 
 def test_an_unreadable_payload_is_an_error_and_not_a_capture(zone):
-    payload = next(zone.root.glob("mlb/boxscore/**/*Z.json"))
-    payload.write_text('{"truncated": ')
+    """A truncated payload no longer has the size its sidecar records, so it fails the
+    capture check itself; it must be an error and withheld from the captures."""
+    directory = captures_of(zone, "mlb/boxscore/**")[0]
+    (directory / "payload.json").write_text('{"truncated": ')
+    assert zone.check(directory) is not None
     findings, captures = check_landing(zone)
-    assert "1 capture(s) whose payload or sidecar is not valid JSON" in details(
+    assert "1 capture director(y/ies) that fail the capture check" in details(
         findings, Severity.ERROR
     )
     assert all(capture.endpoint != "boxscore" for capture in captures)
 
 
 def test_a_sidecar_that_disagrees_with_its_path_is_an_error(zone):
-    payload = next(zone.root.glob("mlb/boxscore/**/*Z.json"))
-    moved = payload.parent.parent / "game_pk=2" / payload.name
+    directory = captures_of(zone, "mlb/boxscore/**")[0]
+    moved = directory.parent.parent / "game_pk=2" / directory.name
     moved.parent.mkdir()
-    payload.rename(moved)
-    payload.with_suffix(".meta.json").rename(moved.with_suffix(".meta.json"))
+    directory.rename(moved)
+    directory.parent.rmdir()
     findings, _ = check_landing(zone)
     assert "sidecar describes mlb/boxscore/season=2026/game_pk=1/" in details(
         findings, Severity.ERROR
     )
+
+
+def test_a_payload_that_changed_but_kept_its_size_is_a_deep_error_only(zone):
+    """Catches corruption at rest going unreported: shallow says committed, the audit's
+    deep check (R5.2) says error."""
+    directory = captures_of(zone, "mlb/boxscore/**")[0]
+    payload = directory / "payload.json"
+    body = payload.read_text()
+    payload.write_text(body.replace("{", "[", 1).replace("}", "]", 1))
+    assert zone.check(directory) is None
+    findings, captures = check_landing(zone)
+    assert "1 capture(s) whose payload is unreadable or does not match its checksum" in details(
+        findings, Severity.ERROR
+    )
+    assert all(capture.endpoint != "boxscore" for capture in captures)
+
+
+def test_a_payload_that_is_not_json_is_a_deep_error(zone):
+    """Catches an unparseable payload passing because its size matches."""
+    directory = captures_of(zone, "mlb/boxscore/**")[0]
+    meta_path = directory / "meta.json"
+    meta = json.loads(meta_path.read_text())
+    (directory / "payload.json").write_text("not json")
+    meta.pop("payload_sha256")
+    meta["payload_bytes"] = len("not json")
+    meta_path.write_text(json.dumps(meta))
+    assert zone.check(directory) is None
+    findings, _ = check_landing(zone)
+    assert "1 capture(s) whose payload is unreadable or does not match its checksum" in details(
+        findings, Severity.ERROR
+    )
+
+
+def test_a_loose_file_and_an_empty_directory_are_errors(zone):
+    """Catches debris that holds no capture: an old-layout file, an empty folder (R5.1)."""
+    (zone.root / "mlb/schedule/stray.json").write_text("{}")
+    (zone.root / "espn/roster/season=2026/league_id=9").mkdir(parents=True)
+    findings, _ = check_landing(zone)
+    errors = details(findings, Severity.ERROR)
+    assert "1 loose file(s) outside any capture directory (old layout?)" in errors
+    assert "1 empty director(y/ies)" in errors
+
+
+def test_an_old_layout_pair_says_the_migration_must_run(zone):
+    """Catches an unmigrated tree audited as merely untidy (R6.7)."""
+    folder = zone.root / "mlb/schedule/season=2026/game_type=R"
+    (folder / "fetched_at=20260101T000000Z.json").write_text("{}")
+    (folder / "fetched_at=20260101T000000Z.meta.json").write_text("{}")
+    findings, _ = check_landing(zone)
+    layout = [f for f in findings if f.subject == "layout"]
+    assert len(layout) == 1 and layout[0].severity == Severity.ERROR
+    assert "migrate_landing_layout.py" in layout[0].detail
+
+
+def test_a_clean_tree_has_no_layout_line_and_counts_checksums(zone):
+    findings, _ = check_landing(zone)
+    assert not [f for f in findings if f.subject == "layout"]
+    info = details(findings, Severity.INFO)
+    assert "8 capture(s) checksum-verified, 0 with no recorded checksum" in info
+
+
+def test_a_capture_with_no_recorded_checksum_is_counted_not_failed(zone):
+    directory = captures_of(zone, "mlb/boxscore/**")[0]
+    meta_path = directory / "meta.json"
+    meta = json.loads(meta_path.read_text())
+    meta.pop("payload_sha256")
+    meta.pop("payload_bytes")
+    meta_path.write_text(json.dumps(meta))
+    findings, _ = check_landing(zone)
+    assert problems(findings) == []
+    assert "7 capture(s) checksum-verified, 1 with no recorded checksum" in details(
+        findings, Severity.INFO
+    )
+
+
+def test_a_non_empty_quarantine_is_a_warning_and_an_empty_one_is_not(zone):
+    """Catches a forgotten quarantine (R5.3), and a warning for a quarantine that holds
+    nothing (absent, or only its ignore file)."""
+    assert [f for f in problems(check_landing(zone)[0])] == []
+    zone.quarantine_root.mkdir()
+    (zone.quarantine_root / ".gitignore").write_text("*\n")
+    assert problems(check_landing(zone)[0]) == []
+    (zone.quarantine_root / "20260930T000000Z" / "mlb").mkdir(parents=True)
+    (zone.quarantine_root / "20260930T000000Z" / "mlb" / "x.json").write_text("{}")
+    findings, _ = check_landing(zone)
+    warnings = [f for f in findings if f.severity == Severity.WARN]
+    assert len(warnings) == 1 and warnings[0].subject == "quarantine"
+    assert "20260930T000000Z" in warnings[0].detail
 
 
 # -- loaded ----------------------------------------------------------------------------
@@ -349,8 +468,7 @@ def test_a_postponed_game_that_was_made_up_is_played(zone):
     ],
 )
 def test_settle_evidence_needs_a_capture_after_the_window(zone, captured, today, expected):
-    next(zone.root.glob("mlb/boxscore/**/*Z.json")).unlink()
-    next(zone.root.glob("mlb/boxscore/**/*.meta.json")).unlink()
+    drop(zone, "mlb/boxscore/**")
     land_boxscore(zone, 1, captured)
     findings = audit(zone, today=today)
     reported = details(findings, Severity.WARN) + details(findings, Severity.INFO)
@@ -363,8 +481,7 @@ def test_settle_evidence_needs_a_capture_after_the_window(zone, captured, today,
 def test_a_resumed_game_settles_from_its_resume_date(zone):
     """Captured eight days after the official date, but only seven after resumption."""
     land_schedule(zone, [schedule_game(1, "2026-03-25", resumeGameDate="2026-03-26")])
-    for path in zone.root.glob("mlb/boxscore/**/*.json"):
-        path.unlink()
+    drop(zone, "mlb/boxscore/**")
     land_boxscore(zone, 1, "20260402T160000Z")
     findings = audit(zone)
     assert "captured only inside their settle window" in details(findings, Severity.WARN)
@@ -387,8 +504,7 @@ def test_period_one_must_be_mlb_opening_day(zone):
 
 
 def test_a_scoring_period_without_a_roster_is_an_error(zone):
-    for path in zone.root.glob("espn/roster/**/scoring_period=2/*"):
-        path.unlink()
+    drop(zone, "espn/roster/**/scoring_period=2")
     assert "1 scoring period(s) with no roster; e.g. 2" in details(audit(zone), Severity.ERROR)
 
 
@@ -396,16 +512,14 @@ def test_a_roster_captured_while_its_period_was_current_is_unproven(zone):
     """Period 2 was the latest period in the earlier run, so its lineup could still change."""
     early = "20260326T160000Z"
     land_settings(zone, latest=2, fetched_at=early)
-    for path in zone.root.glob("espn/roster/**/scoring_period=2/*"):
-        path.unlink()
+    drop(zone, "espn/roster/**/scoring_period=2")
     land_roster(zone, 2, fetched_at=early)
     assert "1 roster(s) with no capture shown final" in details(audit(zone), Severity.WARN)
 
 
 def test_a_roster_with_no_same_run_settings_is_unproven(zone):
     land_roster(zone, 2, fetched_at="20260401T160000Z")
-    for path in zone.root.glob(f"espn/roster/**/scoring_period=2/fetched_at={RUN}*"):
-        path.unlink()
+    drop(zone, "espn/roster/**/scoring_period=2", RUN)
     assert "1 roster(s) with no capture shown final" in details(audit(zone), Severity.WARN)
 
 
@@ -423,15 +537,12 @@ def test_league_snapshots_taken_before_the_season_ended_are_flagged(zone):
     early = "20260326T160000Z"
     land_settings(zone, latest=2, fetched_at=early)
     land(zone, "espn", "teams", {"season": SEASON, "league_id": LEAGUE}, {}, fetched_at=early)
-    for path in zone.root.glob(f"espn/teams/**/fetched_at={RUN}*"):
-        path.unlink()
+    drop(zone, "espn/teams/**", RUN)
     assert f"newest teams capture ({early})" in details(audit(zone), Severity.WARN)
 
 
 def clear_transactions(zone):
-    for path in zone.root.glob("espn/transactions/**/*"):
-        if path.is_file():
-            path.unlink()
+    drop(zone, "espn/transactions/**")
 
 
 def test_a_topic_short_of_its_total_is_an_error(zone):
@@ -529,3 +640,55 @@ def test_cli_without_a_warehouse_is_an_error(zone, tmp_path):
     assert result.exit_code == 1
     assert "no warehouse" in result.output
     assert not missing.exists()
+
+
+def quarantine_warnings(zone):
+    return [f for f in check_landing(zone)[0] if f.severity == Severity.WARN]
+
+
+def test_a_quarantine_holding_only_an_empty_directory_is_a_warning(zone):
+    """Catches counting files only: swept empty directories are quarantined items too."""
+    zone.quarantine_root.mkdir()
+    (zone.quarantine_root / ".gitignore").write_text("*\n")
+    (zone.quarantine_root / "20260930T000000Z" / "mlb").mkdir(parents=True)
+    (warnings,) = quarantine_warnings(zone)
+    assert warnings.subject == "quarantine"
+    assert "1 item(s)" in warnings.detail and "20260930T000000Z" in warnings.detail
+
+
+def test_the_quarantine_counts_files_and_empty_directories(zone):
+    """Catches an item count that skips either kind."""
+    run = zone.quarantine_root / "20260930T000000Z"
+    (run / "mlb").mkdir(parents=True)
+    (run / "mlb" / "x.json").write_text("{}")
+    (run / "espn").mkdir()
+    (warnings,) = quarantine_warnings(zone)
+    assert "2 item(s)" in warnings.detail
+
+
+def test_the_quarantine_counts_anything_that_is_not_a_directory(zone):
+    """Catches an item count that only sees regular files.
+
+    A dangling symlink is neither a regular file nor a directory, and a run holding only
+    that used to be reported as zero items (#64 review, round 2).
+    """
+    run = zone.quarantine_root / "20260930T000000Z"
+    run.mkdir(parents=True)
+    (run / "dangling").symlink_to(run / "nowhere")
+    (warnings,) = quarantine_warnings(zone)
+    assert "1 item(s)" in warnings.detail
+
+
+def test_an_empty_run_directory_counts_as_one_item(zone):
+    """Catches a run directory that exists but holds nothing passing unnoticed."""
+    (zone.quarantine_root / "20260930T000000Z").mkdir(parents=True)
+    (warnings,) = quarantine_warnings(zone)
+    assert "1 item(s)" in warnings.detail
+
+
+def test_an_absent_quarantine_or_one_holding_only_its_ignore_file_is_quiet(zone):
+    """Catches a warning with nothing to look at."""
+    assert quarantine_warnings(zone) == []
+    zone.quarantine_root.mkdir()
+    (zone.quarantine_root / ".gitignore").write_text("*\n")
+    assert quarantine_warnings(zone) == []

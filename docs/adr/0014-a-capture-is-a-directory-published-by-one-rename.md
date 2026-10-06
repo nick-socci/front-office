@@ -1,6 +1,6 @@
 # 0014. A capture is a directory, published by one rename
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-05
 - Spec: [0029-committed-captures](../specs/0029-committed-captures/design.md) · Issue: #29
 

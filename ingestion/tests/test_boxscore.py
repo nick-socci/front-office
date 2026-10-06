@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from front_office.http_client import AuthExpired, HttpClient, SourceLimits
-from front_office.landing import LandingZone
+from front_office.landing import LandingCollision, LandingZone
 from front_office.mlb.boxscore import (
     ScheduledGame,
     backfill_boxscores,
@@ -181,7 +181,7 @@ def test_backfill_lands_one_file_per_game_and_records_the_game_pk(zone):
     assert len(landed) == 2
     # The payload carries no gamePk, so the request metadata must preserve it.
     assert {
-        json.loads(r.path.with_suffix(".meta.json").read_text())["request_key"] for r in landed
+        json.loads((r.path.parent / "meta.json").read_text())["request_key"] for r in landed
     } == {
         "gamePk=11",
         "gamePk=12",
@@ -252,3 +252,38 @@ def test_backfill_honours_a_limit(zone):
         zone=zone, client=client, season=2026, fetched_at="20260926T120000Z", today=TODAY, limit=3
     )
     assert summary.fetched == 3
+
+
+def test_a_collision_stops_the_backfill_and_no_later_game_is_fetched(zone):
+    """Catches a collision counted as one failed game while the run carries on (R1.4)."""
+    recent = (TODAY - dt.timedelta(days=1)).isoformat()
+    land_schedule(zone, [game(n, date=recent) for n in (11, 12, 13)])
+    # Game 12 already has a capture at the stamp this run will use: its write collides.
+    land_boxscore_at(zone, 12, "20260926T120000Z")
+    requested = []
+
+    def handler(request):
+        requested.append(request.url.path)
+        return httpx.Response(200, json={"teams": {}})
+
+    with pytest.raises(LandingCollision):
+        backfill_boxscores(
+            zone=zone,
+            client=make_client(handler),
+            season=2026,
+            fetched_at="20260926T120000Z",
+            today=TODAY,
+        )
+    assert requested == ["/api/v1/game/11/boxscore", "/api/v1/game/12/boxscore"]
+
+
+def land_boxscore_at(zone, game_pk, stamp):
+    return zone.write(
+        source="mlb",
+        endpoint="boxscore",
+        partitions={"season": 2026, "game_pk": game_pk},
+        name=f"fetched_at={stamp}",
+        payload={"teams": {}},
+        request={"url": "https://example.test", "params": {"gamePk": game_pk}},
+        fetched_at=stamp,
+    )

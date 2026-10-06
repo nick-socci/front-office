@@ -15,7 +15,7 @@ from front_office.espn import rosters as espn_rosters
 from front_office.espn import settings as espn_settings
 from front_office.espn.client import EspnCredentials, MissingCredentials
 from front_office.http_client import AuthExpired, HttpClient, SourceLimits
-from front_office.landing import LandingZone
+from front_office.landing import LandingCollision, LandingZone
 
 LEAGUE_ID = "73677"
 SEASON = 2026
@@ -110,15 +110,15 @@ def test_refresh_forces_a_refetch(zone):
     )
 
 
-def land_roster(zone, *, period):
+def land_roster(zone, *, period, stamp="20260901T000000Z"):
     return zone.write(
         source="espn",
         endpoint="roster",
         partitions={"season": SEASON, "league_id": LEAGUE_ID, "scoring_period": period},
-        name="fetched_at=20260901T000000Z",
+        name=f"fetched_at={stamp}",
         payload={"teams": []},
         request={"url": "https://example.test", "params": {"scoringPeriodId": period}},
-        fetched_at="20260901T000000Z",
+        fetched_at=stamp,
     )
 
 
@@ -193,7 +193,7 @@ def test_roster_backfill_records_the_scoring_period_in_metadata(zone):
         fetched_at="20260101T000000Z",
     )
     landed = sorted(zone.iter_landed(source="espn", endpoint="roster"), key=lambda r: str(r.path))
-    keys = [json.loads(r.path.with_suffix(".meta.json").read_text())["request_key"] for r in landed]
+    keys = [json.loads((r.path.parent / "meta.json").read_text())["request_key"] for r in landed]
     assert all("scoringPeriodId=" in key for key in keys)
 
 
@@ -241,6 +241,28 @@ def test_roster_backfill_stops_when_authentication_expires(zone):
         )
     assert requested == ["1", "2"], "no period after the rejected one is requested"
     assert len(list(zone.iter_landed(source="espn", endpoint="roster"))) == 1
+
+
+def test_roster_backfill_stops_on_a_collision(zone):
+    """Catches a collision counted as one failed period while later periods are fetched."""
+    land_roster(zone, period=2, stamp="20260101T000000Z")
+    requested = []
+
+    def handler(request):
+        requested.append(request.url.params.get("scoringPeriodId"))
+        return httpx.Response(200, json={"teams": []})
+
+    with pytest.raises(LandingCollision):
+        espn_rosters.backfill_rosters(
+            zone=zone,
+            client=make_client(handler),
+            season=SEASON,
+            league_id=LEAGUE_ID,
+            status={"latestScoringPeriod": 3, "finalScoringPeriod": 180},
+            fetched_at="20260101T000000Z",
+            refresh=True,
+        )
+    assert requested == ["1", "2"], "no period after the collision is requested"
 
 
 def test_backfill_espn_exits_non_zero_when_authentication_expires(tmp_path, monkeypatch):

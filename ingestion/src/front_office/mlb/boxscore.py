@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from front_office.http_client import AuthExpired, HttpClient
-from front_office.landing import LandingZone
+from front_office.landing import LandingCollision, LandingZone
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,11 @@ def needs_fetch(
     """True when this game's boxscore should be fetched (again)."""
     if refresh:
         return True
-    if not _has_landed(zone, scheduled):
+    if not zone.has_landed(
+        source=SOURCE,
+        endpoint=ENDPOINT,
+        partitions={"season": scheduled.season, "game_pk": scheduled.game_pk},
+    ):
         return True
     # Inclusive: a game exactly `settle_window` old is still refetched. One extra
     # fetch is cheaper than freezing a late stat correction out of the warehouse.
@@ -120,7 +124,7 @@ def backfill_boxscores(
     refresh: bool = False,
 ) -> BackfillSummary:
     """Fetch and land boxscores for a season. One game's failure never stops the run;
-    rejected credentials do, because no later request can succeed either."""
+    rejected credentials and a landing collision do."""
     today = today or dt.datetime.now(dt.UTC).date()
     summary = BackfillSummary()
     for scheduled in games_from_landed_schedule(zone, season=season):
@@ -131,7 +135,9 @@ def backfill_boxscores(
             continue
         try:
             _fetch_one(zone=zone, client=client, scheduled=scheduled, fetched_at=fetched_at)
-        except AuthExpired:
+        except (AuthExpired, LandingCollision):
+            # Rejected credentials fail every later request; a collision means two
+            # writers or a clock fault. Either way, stop rather than count one failure.
             raise
         except Exception:
             logger.exception("boxscore fetch failed for game_pk=%s", scheduled.game_pk)
@@ -157,18 +163,6 @@ def _fetch_one(
         request={"url": str(response.request.url), "params": {"gamePk": scheduled.game_pk}},
         fetched_at=fetched_at,
     )
-
-
-def _has_landed(zone: LandingZone, scheduled: ScheduledGame) -> bool:
-    directory = zone.path_for(
-        source=SOURCE,
-        endpoint=ENDPOINT,
-        partitions={"season": scheduled.season, "game_pk": scheduled.game_pk},
-        name="unused",
-    ).parent
-    if not directory.exists():
-        return False
-    return any(not path.name.endswith(".meta.json") for path in directory.glob("*.json"))
 
 
 def _to_scheduled_game(raw: dict[str, Any]) -> ScheduledGame | None:

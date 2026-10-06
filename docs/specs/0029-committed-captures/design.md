@@ -86,8 +86,8 @@ error keeps meaning something. See
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0014](../../adr/0014-a-capture-is-a-directory-published-by-one-rename.md) | A capture is a directory published by one rename; a collision stops the run; new sidecars record the payload's size and SHA-256; existing captures move by rename alone | proposed |
-| [0015](../../adr/0015-incomplete-captures-are-quarantined-under-a-writer-lock.md) | Anything that is not a capture is moved to a quarantine beside the landing root at the start of a backfill, under an exclusive `flock`, within a size limit; nothing is deleted; readers do not wait but warn | proposed |
+| [0014](../../adr/0014-a-capture-is-a-directory-published-by-one-rename.md) | A capture is a directory published by one rename; a collision stops the run; new sidecars record the payload's size and SHA-256; existing captures move by rename alone | accepted |
+| [0015](../../adr/0015-incomplete-captures-are-quarantined-under-a-writer-lock.md) | Anything that is not a capture is moved to a quarantine beside the landing root at the start of a backfill, under an exclusive `flock`, within a size limit; nothing is deleted; readers do not wait but warn | accepted |
 
 All nine points put to the owner were decided on 2026-10-05 and are recorded in the PR.
 
@@ -452,3 +452,34 @@ Probes in temporary directories and a read-only scan of `data/raw/`, 2026-10-05.
 
 ## Amendments
 
+### 2026-10-05 — the code is reviewed before the real landing zone is migrated
+
+Owner's decision, at task 10. The plan ran the real migration (tasks 11 to 13) before the
+pull request. It is reordered: the pull request is opened and reviewed first, and the
+real landing zone is migrated only once the review is clean, so that every file the
+owner has is moved by reviewed code. The pull request's real-data evidence until then is
+a rehearsal: the migration run on a reflink copy of the landing zone in an ignored
+directory, verified against the 2026-10-05 manifest (10,437 lines: 10,236 verified, 201
+deleted as listed, 0 problems), with the base fixture generator reproducing the
+committed fixtures byte for byte from that copy.
+
+### 2026-10-05 — what the build settled that the design left open
+
+- `path_for` keeps its name and returns the capture directory; `write` returns it too.
+- `LandingZone.check` returns `None` for a committed capture, or the reason as text.
+- A failed write also removes any parent folders it created itself that are now empty,
+  so a failure leaves nothing for the sweep to find.
+- In the sweep's plan, a folder that holds only debris is listed alone and moves whole,
+  labelled by what it holds (`temp`, `invalid`, `loose`, `corrupt`, or `mixed`); `empty`
+  is kept for a folder that is really empty. This collapses upward as far as it goes.
+- `sweep(dry_run=True)` returns the plan and never refuses for size; `repair --dry-run`
+  says when the plan is over the limit.
+- An empty plan creates no quarantine directory.
+- The migration's working directory is `X.migrating`; before writing any journal record
+  it refuses if any capture's final directory already exists; `--reverse` undoes the
+  latest bracket only.
+- `verify_migration.py files` also requires the journal to end `finished`.
+- The loader's "skipped N files with no sidecar" warning is gone: `iter_landed` no longer
+  yields anything that is not a capture, so there is nothing to count.
+- `.gitignore` also covers a lock, quarantine or journal beside a fixture tree.
+- Gate time is about 2 minutes 45 seconds, from under 2 minutes.

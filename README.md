@@ -22,6 +22,14 @@ SFBB id map    ─┘    (landing zone)        (one row per         (one row per
 unchanged, with a metadata sidecar recording the request, then loaded into a single
 append-only table. A parsing mistake costs a rebuild, not a re-download of the season.
 
+A response and its sidecar are one *capture*: a directory, `…/fetched_at=<stamp>/`,
+holding `payload.json` and `meta.json`, written under a temporary name and published by
+a single rename. So a capture is on disk complete or not at all, and one that already
+exists is never replaced: a second write to the same place stops the run. One function
+decides what counts as a capture, and the fetch logic, the loader and the audit all ask
+it. Only one command may write at a time, enforced by a lock the operating system
+releases if the process dies.
+
 The intermediate layer now builds platform-facing interfaces, roster days, MLB player
 days (including doubleheader aggregation), and started-player attribution. Marts and
 full-season matchup reconciliation are still pending.
@@ -75,6 +83,22 @@ so several leagues and seasons can share one warehouse. Two things enforce it:
 - `scripts/check_tenant_isolation.py`, part of the gates, builds a fixture of two leagues
   by two seasons together and each one alone, and fails if any model gives a
   league-season different rows.
+
+### What a killed run leaves behind
+
+At most a temporary directory. The next `backfill` moves anything under the landing zone
+that is not a capture into a quarantine beside it (`data/raw_quarantine/`) before it
+fetches, and then fetches whatever is missing. Nothing is ever deleted, and the audit
+warns while the quarantine is not empty. A sweep that would move more than a handful of
+things refuses, since that means a bug and not a crash.
+
+```bash
+uv run front-office repair --dry-run     # what would move, without moving it
+uv run front-office repair               # the same sweep, without fetching
+uv run front-office repair --deep        # also move captures whose payload fails its checksum
+```
+
+`load` and `audit` never wait for a running backfill; they say so if one is in progress.
 
 ### Rebuilding the warehouse after the raw table changes shape
 

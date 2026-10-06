@@ -24,7 +24,13 @@ from front_office.espn import transactions as espn_transactions
 from front_office.espn.client import EspnCredentials, espn_client, load_env_file
 from front_office.http_client import AuthExpired, HttpClient
 from front_office.idmap import sfbb
-from front_office.landing import LandingZone
+from front_office.landing import (
+    LandingCollision,
+    LandingLocked,
+    LandingZone,
+    NotMigrated,
+    SweepTooLarge,
+)
 from front_office.load import RawKeyCollision, RawSchemaOutdated, connect, load_landing_zone
 from front_office.mlb import boxscore as mlb_boxscore
 from front_office.mlb import schedule as mlb_schedule
@@ -63,6 +69,33 @@ def exit_on_expired_auth() -> Iterator[None]:
         raise typer.Exit(code=1) from None
 
 
+@contextmanager
+def writing_session(zone: LandingZone, run_stamp: str) -> Iterator[None]:
+    """Hold the writer lock, sweep what is not a capture, then let the run fetch.
+
+    Anything that stops the run safely (another writer, a sweep over its limit, an
+    unmigrated landing zone, a capture collision) is a one-line error and exit 1, with
+    nothing fetched if it happened before the fetch.
+    """
+    try:
+        with zone.writer_lock():
+            moved = zone.sweep(run_stamp)
+            for kind, path in moved:
+                typer.echo(f"quarantined {kind}  {path}")
+            if moved:
+                typer.echo(f"quarantined {len(moved)} item(s) to {zone.quarantine_root}")
+            yield
+    except (LandingLocked, LandingCollision, SweepTooLarge, NotMigrated) as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(code=1) from None
+
+
+def warn_if_writing(zone: LandingZone) -> None:
+    """One line on stderr when a backfill holds the lock: a read now may be incomplete."""
+    if zone.writer_active():
+        typer.echo("warning: a backfill is in progress; the result may be incomplete", err=True)
+
+
 @backfill_app.command("mlb")
 def backfill_mlb(
     season: Annotated[int, typer.Option("--season", help="Season year, e.g. 2026.")],
@@ -87,7 +120,7 @@ def backfill_mlb(
 
     zone = LandingZone(root=raw_root)
     fetched_at = utc_stamp()
-    with exit_on_expired_auth(), HttpClient("mlb") as client:
+    with writing_session(zone, fetched_at), exit_on_expired_auth(), HttpClient("mlb") as client:
         if only in (None, "schedule"):
             path = mlb_schedule.backfill_schedule(
                 zone=zone, client=client, season=season, fetched_at=fetched_at
@@ -125,7 +158,11 @@ def backfill_espn(
     zone = LandingZone(root=raw_root)
     fetched_at = utc_stamp()
 
-    with exit_on_expired_auth(), espn_client(credentials) as client:
+    with (
+        writing_session(zone, fetched_at),
+        exit_on_expired_auth(),
+        espn_client(credentials) as client,
+    ):
         settings_path, settings_payload = espn_settings.backfill_settings(
             zone=zone,
             client=client,
@@ -197,15 +234,55 @@ def backfill_espn(
 def backfill_idmap(raw_root: RawRoot = DEFAULT_RAW_ROOT) -> None:
     """Fetch the SFBB player id map: the ESPN <-> MLBAM crosswalk."""
     zone = LandingZone(root=raw_root)
-    with HttpClient("idmap") as client:
-        path, rows = sfbb.backfill_player_id_map(zone=zone, client=client, fetched_at=utc_stamp())
+    fetched_at = utc_stamp()
+    with writing_session(zone, fetched_at), HttpClient("idmap") as client:
+        path, rows = sfbb.backfill_player_id_map(zone=zone, client=client, fetched_at=fetched_at)
     typer.echo(f"landed {rows} id-map rows -> {path}")
+
+
+@app.command("repair")
+def repair(
+    raw_root: RawRoot = DEFAULT_RAW_ROOT,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="List what would move; move nothing.")
+    ] = False,
+    deep: Annotated[
+        bool,
+        typer.Option("--deep", help="Also move captures whose payload fails its checksum."),
+    ] = False,
+    force: Annotated[
+        bool, typer.Option("--force", help="Move even more than the sweep limit allows.")
+    ] = False,
+) -> None:
+    """Move everything that is not a committed capture to the quarantine; fetch nothing."""
+    zone = LandingZone(root=raw_root)
+    try:
+        if dry_run:
+            plan = zone.sweep(utc_stamp(), dry_run=True, deep=deep)
+            for kind, path in plan:
+                typer.echo(f"{kind:<8}{path}")
+            typer.echo(f"{len(plan)} item(s) would move to {zone.quarantine_root}")
+            limit = zone.sweep_limit()
+            if len(plan) > limit:
+                typer.echo(
+                    f"that is over the limit of {limit}: a real run would refuse without --force"
+                )
+            return
+        with zone.writer_lock():
+            plan = zone.sweep(utc_stamp(), deep=deep, force=force)
+        for kind, path in plan:
+            typer.echo(f"{kind:<8}{path}")
+        typer.echo(f"moved {len(plan)} item(s) to {zone.quarantine_root}")
+    except (LandingLocked, SweepTooLarge, NotMigrated) as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(code=1) from None
 
 
 @app.command("load")
 def load(raw_root: RawRoot = DEFAULT_RAW_ROOT, db: DbPath = DEFAULT_DB) -> None:
     """Load landed JSON into raw.api_responses (safe to rerun)."""
     zone = LandingZone(root=raw_root)
+    warn_if_writing(zone)
     with connect(db) as con:
         try:
             inserted = load_landing_zone(con, zone)
@@ -227,6 +304,7 @@ def audit(
 ) -> None:
     """Check that landed data is complete, loaded and final. Exits 1 on any ERROR."""
     zone = LandingZone(root=raw_root)
+    warn_if_writing(zone)
     as_of = dt.date.fromisoformat(today) if today else dt.datetime.now(landing_audit.EASTERN).date()
     if db.exists():
         with duckdb.connect(str(db), read_only=True) as con:

@@ -180,3 +180,49 @@ def test_keep_refuses_a_directory_that_is_not_empty(tmp_path: Path) -> None:
         check_tenant_isolation.main(["--keep", str(precious)])
 
     assert (precious / "notes.txt").read_text() == "do not delete"
+
+
+def test_strict_columns_fails_on_a_column_on_one_side_only(tmp_path, capsys):
+    """Catches `--strict-columns` passing over a column present on one side only, which is
+    right for a change meant to alter columns and wrong for one meant to alter none."""
+    import compare_warehouses
+
+    build(tmp_path / "old_wh.duckdb", ["create table marts.t as select 1 as a, 2 as b"])
+    build(tmp_path / "new_wh.duckdb", ["create table marts.t as select 1 as a"])
+    old, new = str(tmp_path / "old_wh.duckdb"), str(tmp_path / "new_wh.duckdb")
+    assert compare_warehouses.main([old, new]) == 0
+    capsys.readouterr()
+    assert compare_warehouses.main([old, new, "--strict-columns"]) == 1
+    out = capsys.readouterr().out
+    assert "columns only in OLD: b" in out
+    assert "1 with columns on one side only" in out
+
+
+def test_strict_columns_passes_when_the_columns_match(tmp_path):
+    """Catches `--strict-columns` failing a comparison whose columns are the same."""
+    import compare_warehouses
+
+    for name in ("old_wh", "new_wh"):
+        build(tmp_path / f"{name}.duckdb", ["create table marts.t as select 1 as a"])
+    old, new = str(tmp_path / "old_wh.duckdb"), str(tmp_path / "new_wh.duckdb")
+    assert compare_warehouses.main([old, new, "--strict-columns"]) == 0
+
+
+def test_strict_columns_fails_on_a_relation_only_in_new(tmp_path, capsys):
+    """Catches `--strict-columns` passing a NEW warehouse with an extra relation, which
+    leaves it unable to show that the two hold the same relations. Without the flag an
+    extra relation stays a report (#28 relied on that)."""
+    import compare_warehouses
+
+    build(tmp_path / "old_wh.duckdb", ["create table marts.t as select 1 as a"])
+    build(
+        tmp_path / "new_wh.duckdb",
+        ["create table marts.t as select 1 as a", "create table marts.extra as select 1 as a"],
+    )
+    old, new = str(tmp_path / "old_wh.duckdb"), str(tmp_path / "new_wh.duckdb")
+    assert compare_warehouses.main([old, new]) == 0
+    capsys.readouterr()
+    assert compare_warehouses.main([old, new, "--strict-columns"]) == 1
+    out = capsys.readouterr().out
+    assert "only in NEW" in out
+    assert "1 only in NEW" in out
