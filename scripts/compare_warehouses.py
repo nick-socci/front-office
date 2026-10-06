@@ -1,6 +1,6 @@
 """Compare two warehouse files, relation by relation (spec 0028, R6.1).
 
-Usage:  uv run python scripts/compare_warehouses.py OLD NEW [--round-doubles N]
+Usage:  uv run python scripts/compare_warehouses.py OLD NEW [--round-doubles N] [--strict-columns]
 
 First the relation names (tables and views of staging, intermediate, marts and
 reconciliation); then for every relation in both, row counts, EXCEPT ALL both ways over the
@@ -12,6 +12,10 @@ not a failure.
 DOUBLE/FLOAT columns to N decimals and, for each relation that differs exactly, says whether
 it still differs; a relation equal after rounding is then not a failure. It is off by default;
 exact comparison is what the isolation check uses.
+
+--strict-columns makes a column present on only one side of a relation a failure (exit 1),
+counted in the summary. Without it such a column is printed and passed over, which suits a
+change that is meant to alter columns; use it where none should change.
 
 The two files need distinct names: each is attached under its file stem (see warehouse_diff).
 """
@@ -39,6 +43,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("old", type=Path)
     parser.add_argument("new", type=Path)
     parser.add_argument("--round-doubles", type=int, default=None, metavar="N")
+    parser.add_argument(
+        "--strict-columns",
+        action="store_true",
+        help="a column on one side only is a failure",
+    )
     args = parser.parse_args(argv)
     if args.old.stem == args.new.stem:
         parser.error("the two warehouse files need different names (they are attached by stem)")
@@ -54,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     for name in sorted(new_names - old_names):
         print(f"only in NEW (not a failure): {name}")
 
-    compared = same = last_digit = 0
+    compared = same = last_digit = column_only = 0
     for name in sorted(old_names & new_names):
         compared += 1
         diff = compare_relation(con, old, new, name)
@@ -82,11 +91,16 @@ def main(argv: list[str] | None = None) -> int:
             same += 1
         for note in notes:
             print(f"  {name}: {note}")
+        if args.strict_columns and notes:
+            column_only += 1
+            failed = True
 
     differ = compared - same - last_digit
     summary = f"compared {compared} relations: {same} identical, {differ} differ"
     if args.round_doubles is not None:
         summary += f", {last_digit} equal only after rounding doubles to {args.round_doubles}"
+    if args.strict_columns:
+        summary += f"; {column_only} with columns on one side only"
     print(summary)
     return 1 if failed else 0
 

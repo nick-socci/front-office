@@ -281,12 +281,9 @@ class LandingZone:
             return reason
 
         payload = capture_dir / PAYLOAD_FILE
-        size = payload.stat().st_size
-        recorded = meta.get("payload_bytes")
-        if recorded is not None and (
-            not isinstance(recorded, int) or isinstance(recorded, bool) or recorded != size
-        ):
-            return f"payload is {size} bytes, sidecar records {recorded!r}"
+        reason = _size_problem(meta, payload.stat().st_size)
+        if reason:
+            return reason
         if not deep:
             return None
 
@@ -299,6 +296,25 @@ class LandingZone:
         if digest is not None and hashlib.sha256(body).hexdigest() != digest:
             return "payload does not match its recorded SHA-256"
         return None
+
+    def old_layout_problem(self, stem: Path) -> str | None:
+        """None when `<stem>.json` beside `<stem>.meta.json` is a usable old-layout capture.
+
+        The old equivalent of the shallow check, for the layout migration: the stem is named
+        `fetched_at=<stamp>`, the sidecar parses and has the required fields, describes the
+        path the stem is at, and, where it records the payload's size, the payload has it.
+        """
+        name = stem.name
+        if not name.startswith(CAPTURE_PREFIX) or len(name) == len(CAPTURE_PREFIX):
+            return f"not named {CAPTURE_PREFIX}<stamp>"
+        try:
+            meta = json.loads(stem.with_name(f"{name}.meta.json").read_bytes())
+            size = stem.with_name(f"{name}.json").stat().st_size
+        except VANISHED:
+            return "vanished while being read"
+        except ValueError:
+            return "sidecar is not valid JSON"
+        return _sidecar_problem(meta) or self._disagreement(stem, meta) or _size_problem(meta, size)
 
     def _disagreement(self, capture_dir: Path, meta: Mapping[str, Any]) -> str | None:
         """The sidecar must describe the path the capture is at."""
@@ -472,29 +488,36 @@ class LandingZone:
             elif deep and self.check(scanned.path, deep=True) is not None:
                 flagged[scanned.path] = "corrupt"
 
-        def visit(folder: Path) -> tuple[bool, list[tuple[str, Path]]]:
-            """(whether `folder` ends up empty, the plan entries beneath it)."""
+        def visit(folder: Path) -> tuple[bool, list[tuple[str, Path]], set[str]]:
+            """(whether `folder` ends up empty, the plan entries beneath it, their kinds).
+
+            The kinds are those of the debris the folder holds, nested empty folders
+            aside: they label a folder that is planned only because everything in it is.
+            """
             emptied = True
             entries: list[tuple[str, Path]] = []
+            kinds: set[str] = set()
             for entry in sorted(folder.iterdir()):
                 if entry in flagged:
                     entries.append((flagged[entry], entry))
+                    kinds.add(flagged[entry])
                 elif entry.is_dir() and not (
                     entry.name.startswith(CAPTURE_PREFIX) or TEMP_MARKER in entry.name
                 ):
-                    gone, below = visit(entry)
+                    gone, below, held = visit(entry)
                     if gone:
-                        entries.append(("empty", entry))
+                        entries.append((_collapsed_kind(held), entry))
+                        kinds |= held
                     else:
                         entries += below
                         emptied = False
                 else:
                     emptied = False
-            return emptied, entries
+            return emptied, entries, kinds
 
         if not self.root.is_dir():
             return []
-        _gone, entries = visit(self.root)
+        _gone, entries, _kinds = visit(self.root)
         return [(kind, path.relative_to(self.root)) for kind, path in entries]
 
     def sweep(
@@ -588,6 +611,24 @@ class LandingZone:
             return False
         finally:
             os.close(descriptor)
+
+
+def _collapsed_kind(held: set[str]) -> str:
+    """The plan label for a folder moved whole because everything in it is moving."""
+    held = held - {"empty"}  # an empty folder inside is nothing to name
+    if not held:
+        return "empty"
+    return next(iter(held)) if len(held) == 1 else "mixed"
+
+
+def _size_problem(meta: Mapping[str, Any], size: int) -> str | None:
+    """Why the payload's size disagrees with the one the sidecar records, or None."""
+    recorded = meta.get("payload_bytes")
+    if recorded is not None and (
+        not isinstance(recorded, int) or isinstance(recorded, bool) or recorded != size
+    ):
+        return f"payload is {size} bytes, sidecar records {recorded!r}"
+    return None
 
 
 def _sidecar_problem(meta: Any) -> str | None:

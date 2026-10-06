@@ -220,9 +220,29 @@ def test_a_folder_that_becomes_empty_only_because_its_last_entry_goes_is_in_the_
     loose.parent.mkdir(parents=True)
     loose.write_text("{}")
     plan = zone.sweep(STAMP)
-    assert plan == [("empty", Path("mlb/schedule"))]
+    assert plan == [("loose", Path("mlb/schedule"))]
     assert not (zone.root / "mlb/schedule").exists()
     assert zone.sweep("20260927T000000Z") == []
+
+
+def test_a_collapsed_folder_is_labelled_with_what_it_holds(zone):
+    """Catches a folder that is planned only because its contents are, shown as `empty`
+    when it holds debris: one kind names the kind, several say `mixed`, only a folder
+    with nothing in it says `empty`. The folder still moves whole."""
+    land(zone, 1)
+    temp_dir(zone, 2, files=1)  # game_pk=2 holds only a temp directory
+    mixed = zone.root / "mlb/boxscore/season=2026/game_pk=3"
+    (mixed / "fetched_at=20260926T010000Z.tmp-5").mkdir(parents=True)
+    (mixed / "stray.json").write_text("{}")
+    (zone.root / "espn/settings/season=2026").mkdir(parents=True)
+    plan = dict((str(path), kind) for kind, path in zone.sweep(STAMP, dry_run=True))
+    assert plan == {
+        "mlb/boxscore/season=2026/game_pk=2": "temp",
+        "mlb/boxscore/season=2026/game_pk=3": "mixed",
+        "espn": "empty",
+    }
+    zone.sweep(STAMP)
+    assert (zone.quarantine_root / STAMP / "mlb/boxscore/season=2026/game_pk=2").is_dir()
 
 
 # -- the layout interlock ----------------------------------------------------------------------
