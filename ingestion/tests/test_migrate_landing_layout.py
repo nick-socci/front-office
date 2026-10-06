@@ -654,3 +654,33 @@ def test_verify_rows_fails_on_a_missing_and_an_extra_row(root, warehouses, capsy
     )
     assert verify_rows(root, warehouses) != 0
     assert "1 extra" in capsys.readouterr().out
+
+
+def set_both(warehouses, column, old_text, new_text):
+    where = "where request_path like '%player_id_map'"
+    for db, text in ((warehouses[0], old_text), (warehouses[1], new_text)):
+        with duckdb.connect(str(db)) as con:
+            con.execute(f"update raw.api_responses set {column} = ? {where}", [text])
+
+
+@pytest.mark.parametrize("column", ["payload", "partitions"])
+def test_verify_rows_accepts_json_that_differs_only_in_spacing_and_key_order(
+    root, warehouses, column
+):
+    """Catches the text fallback rejecting the same JSON spaced or ordered differently."""
+    set_both(warehouses, column, '{"a": 1, "b": [1, 2]}', '{ "b":[1,2],"a":1 }')
+    assert verify_rows(root, warehouses) == 0
+
+
+@pytest.mark.parametrize("column", ["payload", "partitions"])
+@pytest.mark.parametrize(
+    ("old_text", "new_text"),
+    [('{"a": true}', '{"a": 1}'), ('{"a": 1}', '{"a": 1.0}'), ('{"a": [1, 2]}', '{"a": [2, 1]}')],
+)
+def test_verify_rows_reports_json_of_a_different_type_or_order_as_changed(
+    root, warehouses, capsys, column, old_text, new_text
+):
+    """Catches Python `==` on parsed JSON, under which true == 1 and 1 == 1.0."""
+    set_both(warehouses, column, old_text, new_text)
+    assert verify_rows(root, warehouses) != 0
+    assert f"changed {column}" in capsys.readouterr().out

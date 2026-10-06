@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from front_office.landing import LandingZone
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 INPUT_ROOT = REPO_ROOT / "fixtures/landing"
 OUTPUT_ROOT = REPO_ROOT / "fixtures/landing_multi"
@@ -45,12 +47,12 @@ EASTERN = ZoneInfo("America/New_York")
 Capture = tuple[dict[str, Any], Any]  # (sidecar, payload)
 
 
-def read_captures(root: Path, *folders: str) -> list[Capture]:
-    out: list[Capture] = []
-    for sidecar in sorted((root.joinpath(*folders)).rglob("meta.json")):
-        payload_path = sidecar.with_name("payload.json")
-        out.append((json.loads(sidecar.read_text()), json.loads(payload_path.read_text())))
-    return out
+def read_captures(root: Path, source: str) -> list[Capture]:
+    """The committed captures of one source, through the landing-zone API, in path order."""
+    return [
+        (json.loads(json.dumps(capture.meta)), capture.payload)
+        for capture in LandingZone(root).committed(source=source)
+    ]
 
 
 def write_capture(root: Path, meta: dict[str, Any], payload: Any) -> None:

@@ -206,3 +206,23 @@ def test_strict_columns_passes_when_the_columns_match(tmp_path):
         build(tmp_path / f"{name}.duckdb", ["create table marts.t as select 1 as a"])
     old, new = str(tmp_path / "old_wh.duckdb"), str(tmp_path / "new_wh.duckdb")
     assert compare_warehouses.main([old, new, "--strict-columns"]) == 0
+
+
+def test_strict_columns_fails_on_a_relation_only_in_new(tmp_path, capsys):
+    """Catches `--strict-columns` passing a NEW warehouse with an extra relation, which
+    leaves it unable to show that the two hold the same relations. Without the flag an
+    extra relation stays a report (#28 relied on that)."""
+    import compare_warehouses
+
+    build(tmp_path / "old_wh.duckdb", ["create table marts.t as select 1 as a"])
+    build(
+        tmp_path / "new_wh.duckdb",
+        ["create table marts.t as select 1 as a", "create table marts.extra as select 1 as a"],
+    )
+    old, new = str(tmp_path / "old_wh.duckdb"), str(tmp_path / "new_wh.duckdb")
+    assert compare_warehouses.main([old, new]) == 0
+    capsys.readouterr()
+    assert compare_warehouses.main([old, new, "--strict-columns"]) == 1
+    out = capsys.readouterr().out
+    assert "only in NEW" in out
+    assert "1 only in NEW" in out

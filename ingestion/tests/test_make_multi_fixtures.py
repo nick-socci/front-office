@@ -135,3 +135,27 @@ def test_combined_tree_loads_with_no_collision_and_every_capture():
         pytest.fail(str(err))
     rows = con.execute("select count(*) from raw.api_responses").fetchone()[0]
     assert rows == len(sidecars(COMMITTED))
+
+
+def test_generator_ignores_a_stray_directory_that_is_not_a_capture(tmp_path):
+    """Catches pairing meta.json and payload.json by hand: a directory that merely holds a
+    sidecar-shaped file is not a committed capture, so no tenant may be derived from it.
+    (The verbatim copy of the base tree still carries the stray files across.)"""
+    copy = tmp_path / "landing"
+    shutil.copytree(SINGLE, copy)
+    source = next(copy.glob("espn/roster/season=2026/league_id=111111/scoring_period=1/*"))
+    stray = source.parent / "stray"
+    stray.mkdir()
+    meta = json.loads((source / "meta.json").read_text())
+    meta["partitions"]["scoring_period"] = 99
+    meta["fetched_at"] = "20260101T000000Z"
+    (stray / "meta.json").write_text(json.dumps(meta))
+    (stray / "payload.json").write_bytes((source / "payload.json").read_bytes())
+
+    out = tmp_path / "out"
+    generate(copy, out)
+
+    expected = tree(COMMITTED)
+    for name in ("meta.json", "payload.json"):
+        expected[str((stray / name).relative_to(copy))] = (stray / name).read_bytes()
+    assert tree(out) == expected

@@ -245,14 +245,21 @@ def same_json(
     key: list[object],
     column: str,
 ) -> bool:
-    """Whether one row's column parses to equal JSON on both sides."""
+    """Whether one row's column is the same JSON on both sides: the same types at every node
+    (`true` is not `1`, `1` is not `1.0`), the same keys, the same array order. Python `==`
+    on parsed values would equate those, so both sides are re-serialised canonically and the
+    strings compared."""
     where = " and ".join(f"o.{c} = ?" for c in KEY)
     row = con.execute(
         f"select o.{column}::varchar, n.{column}::varchar from {quote(old)}.{table} o "
         f"join {quote(new)}.{table} n on {on} where {where}",
         key,
     ).fetchone()
-    return row is not None and json.loads(row[0]) == json.loads(row[1])
+    return row is not None and canonical(row[0]) == canonical(row[1])
+
+
+def canonical(text: str) -> str:
+    return json.dumps(json.loads(text), sort_keys=True, separators=(",", ":"))
 
 
 def mapped_row_path(

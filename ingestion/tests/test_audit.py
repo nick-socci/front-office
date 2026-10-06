@@ -640,3 +640,42 @@ def test_cli_without_a_warehouse_is_an_error(zone, tmp_path):
     assert result.exit_code == 1
     assert "no warehouse" in result.output
     assert not missing.exists()
+
+
+def quarantine_warnings(zone):
+    return [f for f in check_landing(zone)[0] if f.severity == Severity.WARN]
+
+
+def test_a_quarantine_holding_only_an_empty_directory_is_a_warning(zone):
+    """Catches counting files only: swept empty directories are quarantined items too."""
+    zone.quarantine_root.mkdir()
+    (zone.quarantine_root / ".gitignore").write_text("*\n")
+    (zone.quarantine_root / "20260930T000000Z" / "mlb").mkdir(parents=True)
+    (warnings,) = quarantine_warnings(zone)
+    assert warnings.subject == "quarantine"
+    assert "1 item(s)" in warnings.detail and "20260930T000000Z" in warnings.detail
+
+
+def test_the_quarantine_counts_files_and_empty_directories(zone):
+    """Catches an item count that skips either kind."""
+    run = zone.quarantine_root / "20260930T000000Z"
+    (run / "mlb").mkdir(parents=True)
+    (run / "mlb" / "x.json").write_text("{}")
+    (run / "espn").mkdir()
+    (warnings,) = quarantine_warnings(zone)
+    assert "2 item(s)" in warnings.detail
+
+
+def test_an_empty_run_directory_counts_as_one_item(zone):
+    """Catches a run directory that exists but holds nothing passing unnoticed."""
+    (zone.quarantine_root / "20260930T000000Z").mkdir(parents=True)
+    (warnings,) = quarantine_warnings(zone)
+    assert "1 item(s)" in warnings.detail
+
+
+def test_an_absent_quarantine_or_one_holding_only_its_ignore_file_is_quiet(zone):
+    """Catches a warning with nothing to look at."""
+    assert quarantine_warnings(zone) == []
+    zone.quarantine_root.mkdir()
+    (zone.quarantine_root / ".gitignore").write_text("*\n")
+    assert quarantine_warnings(zone) == []

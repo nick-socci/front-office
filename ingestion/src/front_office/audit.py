@@ -184,24 +184,36 @@ def check_landing(zone: LandingZone) -> tuple[list[Finding], list[Capture]]:
 
 
 def _check_quarantine(zone: LandingZone) -> list[Finding]:
-    """Anything waiting in quarantine is a warning: someone should look, then clear it."""
+    """Anything waiting in quarantine is a warning: someone should look, then clear it.
+
+    An item is a file or a directory holding nothing (a swept directory is evidence too); a
+    run directory that is itself empty counts as one item."""
     try:
         held = sorted(p for p in zone.quarantine_root.iterdir() if p.name != ".gitignore")
     except VANISHED:
         return []
     if not held:
         return []
-    files = sum(1 for run in held for p in run.rglob("*") if p.is_file())
+    items = sum(_quarantined_items(run) for run in held)
     runs = ", ".join(p.name for p in held)
     return [
         Finding(
             Severity.WARN,
             "landing",
             "quarantine",
-            f"{files} file(s) in {len(held)} run director(y/ies) of {zone.quarantine_root}: "
+            f"{items} item(s) in {len(held)} run director(y/ies) of {zone.quarantine_root}: "
             f"{runs}; look, then clear by hand",
         )
     ]
+
+
+def _quarantined_items(run: Path) -> int:
+    if not run.is_dir():
+        return 1
+    below = list(run.rglob("*"))
+    if not below:
+        return 1
+    return sum(1 for p in below if p.is_file() or (p.is_dir() and not any(p.iterdir())))
 
 
 def _group(zone: LandingZone, path: Path) -> str:
