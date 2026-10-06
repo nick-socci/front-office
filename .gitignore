@@ -25,6 +25,10 @@ data/raw/
 data/raw_quarantine/
 data/raw_migration/
 data/*.lock
+# A writer lock, quarantine or migration journal beside a fixture tree, if a command is run on one
+fixtures/*.lock
+fixtures/*_quarantine/
+fixtures/*_migration/
 data/*.csv
 data/*.json
 
