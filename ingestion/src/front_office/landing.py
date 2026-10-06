@@ -316,9 +316,7 @@ class LandingZone:
             elif recurse:
                 yield from LandingZone._capture_dirs(entry, recurse=True)
 
-    def has_landed(
-        self, *, source: str, endpoint: str, partitions: Mapping[str, Any]
-    ) -> bool:
+    def has_landed(self, *, source: str, endpoint: str, partitions: Mapping[str, Any]) -> bool:
         """True when the entity's folder holds at least one committed capture."""
         return any(
             True for _ in self.committed(source=source, endpoint=endpoint, partitions=partitions)

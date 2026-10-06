@@ -41,7 +41,9 @@ def test_path_convention_snapshot(zone, tmp_path):
         partitions={"season": 2026, "league_id": 73677},
         name="fetched_at=20260926T142726Z",
     )
-    assert path == tmp_path / "espn/settings/season=2026/league_id=73677/fetched_at=20260926T142726Z"
+    assert path == (
+        tmp_path / "espn/settings/season=2026/league_id=73677/fetched_at=20260926T142726Z"
+    )
 
 
 def test_path_convention_entity(zone, tmp_path):

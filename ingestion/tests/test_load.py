@@ -5,12 +5,12 @@ it sees will already be in the table.
 """
 
 import json
-import logging
+import shutil
 
 import duckdb
 import pytest
 
-from front_office.landing import LandingZone
+from front_office.landing import LandingZone, PayloadNotJson
 from front_office.load import (
     RawKeyCollision,
     RawSchemaOutdated,
@@ -58,7 +58,7 @@ def test_creates_table_and_loads_row(zone, con):
     assert json.loads(partitions) == {"season": 2026}
     assert fetched_at == "20260926T000000Z"
     assert '"dates"' in payload
-    assert file_path.endswith("fetched_at=20260926T000000Z.json")
+    assert file_path.endswith("fetched_at=20260926T000000Z/payload.json")
 
 
 def test_second_load_is_a_no_op(zone, con):
@@ -158,13 +158,20 @@ def test_partitions_are_stored_as_written(zone, con):
 
 
 def duplicate_into_other_folder(zone):
-    """Copy the one landed capture under a different partition folder: same full key."""
-    original = next(zone.root.glob("espn/**/fetched_at=*Z.json"))
+    """Copy the one landed capture under a different partition folder: same full key.
+
+    Returns the two payload.json paths, which is what the loader stores as file_path.
+    """
+    original = next(zone.root.glob("espn/**/fetched_at=*Z"))
     copy = original.parent.parent / "league_id=copy" / original.name
     copy.parent.mkdir(parents=True)
-    copy.write_text(original.read_text())
-    copy.with_suffix(".meta.json").write_text(original.with_suffix(".meta.json").read_text())
-    return original, copy
+    shutil.copytree(original, copy)
+    # The sidecar still names the original folder, which the committed check would reject;
+    # point it at the copy so the two captures are both committed and share one key.
+    meta = json.loads((copy / "meta.json").read_text())
+    meta["partitions"]["league_id"] = "copy"
+    (copy / "meta.json").write_text(json.dumps(meta))
+    return original / "payload.json", copy / "payload.json"
 
 
 def test_two_files_with_one_key_in_a_batch_fail_and_insert_nothing(zone, con):
@@ -244,19 +251,32 @@ def test_an_old_shape_table_is_refused_and_left_alone(zone, con):
 
 
 @pytest.mark.parametrize("missing", ["url", "partitions"])
-def test_a_sidecar_missing_url_or_partitions_is_skipped_with_a_warning(zone, con, caplog, missing):
+def test_a_sidecar_missing_url_or_partitions_is_not_committed_so_not_loaded(zone, con, missing):
     """Catches loading a capture whose request path or partitions cannot be known."""
     land_one(zone)
-    land_one(zone, name="fetched_at=20260927T000000Z")
-    meta_path = zone.path_for(
-        source="mlb",
-        endpoint="schedule",
-        partitions={"season": 2026},
-        name="fetched_at=20260927T000000Z",
-    ).with_suffix(".meta.json")
-    meta = json.loads(meta_path.read_text())
+    bad = land_one(zone, name="fetched_at=20260927T000000Z")
+    meta = json.loads((bad / "meta.json").read_text())
     del meta[missing]
-    meta_path.write_text(json.dumps(meta))
-    with caplog.at_level(logging.WARNING):
-        assert load_landing_zone(con, zone) == 1
-    assert "skipped 1 landed file(s)" in caplog.text
+    (bad / "meta.json").write_text(json.dumps(meta))
+    assert load_landing_zone(con, zone) == 1
+
+
+def test_a_temp_directory_and_a_loose_old_layout_file_are_not_loaded(zone, con):
+    """Catches the loader reading anything but committed captures (R2.3)."""
+    good = land_one(zone)
+    shutil.copytree(good, good.with_name("fetched_at=20260927T000000Z.tmp-1"))
+    (good.parent / "fetched_at=20260928T000000Z.json").write_text("{}")
+    (good.parent / "fetched_at=20260928T000000Z.meta.json").write_text("{}")
+    assert load_landing_zone(con, zone) == 1
+
+
+def test_a_committed_capture_with_an_unparseable_payload_fails_the_load(zone, con):
+    """Catches an unreadable committed payload being skipped instead of reported (R2.7)."""
+    land_one(zone)
+    bad = land_one(zone, name="fetched_at=20260927T000000Z")
+    size = (bad / "payload.json").stat().st_size
+    (bad / "payload.json").write_bytes(b"?" * size)
+    with pytest.raises(PayloadNotJson) as excinfo:
+        load_landing_zone(con, zone)
+    assert str(bad / "payload.json") in str(excinfo.value)
+    assert row_count(con) == 0, "nothing from a failed run is inserted"

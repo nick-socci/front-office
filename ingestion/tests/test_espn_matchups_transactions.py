@@ -208,7 +208,7 @@ def test_id_map_csv_becomes_json_rows(zone):
         fetched_at="20260101T000000Z",
     )
     assert count == 1
-    rows = json.loads(path.read_text())
+    rows = json.loads((path / "payload.json").read_text())
     assert rows == [
         {"IDPLAYER": "abc01", "PLAYERNAME": "Some Player", "MLBID": "430911", "ESPNID": "5933"}
     ]
