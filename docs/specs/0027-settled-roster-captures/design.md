@@ -143,9 +143,9 @@ to read the matchup schedule, and an edit made the day after a matchup ends is m
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0016](../../adr/0016-a-roster-period-is-settled-by-the-status-in-its-own-response.md) | A roster period is settled by the status recorded from its own response | proposed; option chosen by the owner 2026-10-06 |
-| [0017](../../adr/0017-a-legacy-roster-capture-is-judged-by-its-runs-settings.md) | A roster capture with no recorded status is judged by its run's settings capture | proposed; option chosen by the owner 2026-10-06 |
-| [0018](../../adr/0018-a-closed-roster-period-is-rechecked-for-seven-periods.md) | A closed roster period is fetched again for seven periods | proposed |
+| [0016](../../adr/0016-a-roster-period-is-settled-by-the-status-in-its-own-response.md) | A roster period is settled by the status recorded from its own response | accepted |
+| [0017](../../adr/0017-a-legacy-roster-capture-is-judged-by-its-runs-settings.md) | A roster capture with no recorded status is judged by its run's settings capture | accepted |
+| [0018](../../adr/0018-a-closed-roster-period-is-rechecked-for-seven-periods.md) | A closed roster period is fetched again for seven periods | accepted |
 
 ## Detailed design
 
