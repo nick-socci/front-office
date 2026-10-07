@@ -72,8 +72,8 @@ that agrees with anything.
 - *Deriving dates from transaction timestamps* → transactions carry an instant and no
   period; they are dated by this mapping, not the other way round.
 - *Moving the model to the intermediate layer because it now reads two sources* → a
-  rename through two models and five tests for no change in behaviour. Left for the
-  owner as a separate choice.
+  rename through two models and five tests for no change in behaviour. The owner chose
+  on 2026-10-07 to leave it in staging until #73.
 
 ## Requirements
 
