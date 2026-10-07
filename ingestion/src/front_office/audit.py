@@ -462,17 +462,21 @@ def check_mlb(
                 ),
             )
         )
-    # Opening day is the model's rule (stg_espn__scoring_periods): the earliest official date
-    # of any game in the newest schedule, played or not, so it exists before the first pitch.
-    opening_day = min(
-        (
-            dt.date.fromisoformat(entry["officialDate"])
-            for day in schedule.payload().get("dates", [])
-            for entry in day.get("games", [])
-            if isinstance(entry.get("officialDate"), str)
-        ),
-        default=None,
-    )
+    # Opening day is the model's rule (stg_espn__scoring_periods over stg_mlb__games): each
+    # game counts once, at the official date of its played or still-scheduled entry when it
+    # has one, so a postponed opener is dated by its makeup. Played or not, so the date
+    # exists before the first pitch.
+    official_dates: dict[int, tuple[bool, dt.date]] = {}
+    for day in schedule.payload().get("dates", []):
+        for entry in day.get("games", []):
+            official_date = entry.get("officialDate")
+            if not isinstance(official_date, str):
+                continue
+            pk = int(entry["gamePk"])
+            not_played = entry.get("status", {}).get("detailedState", "") in mlb_boxscore.NOT_PLAYED
+            if pk not in official_dates or (official_dates[pk][0] and not not_played):
+                official_dates[pk] = (not_played, dt.date.fromisoformat(official_date))
+    opening_day = min((date for _, date in official_dates.values()), default=None)
     return findings, opening_day
 
 
@@ -601,24 +605,39 @@ def _check_league(
             )
         )
 
-    newest_status = status_by_run[max(status_by_run)]
+    newest_run = max(status_by_run)
+    if newest_run in unreadable:
+        # Everything below is judged from the newest status. Without its counters the audit
+        # cannot say which periods exist or whether the season is over, and says so.
+        findings.append(
+            Finding(
+                Severity.ERROR,
+                "espn",
+                subject,
+                f"the newest settings capture ({newest_run}) has no usable period counters; "
+                "roster finality and league snapshots are not checked",
+            )
+        )
+        return findings
+    newest_status = status_by_run[newest_run]
     latest = int(newest_status.get("latestScoringPeriod", 0))
     final = int(newest_status.get("finalScoringPeriod", latest))
     first = int(newest_status.get("firstScoringPeriod", 1))
     season_over = latest > final
 
-    def closed_at_run(run: str, period: int) -> bool:
-        status = status_by_run.get(run)
-        return status is not None and int(status.get("latestScoringPeriod", 0)) > period
-
     # The same function the fetch logic uses decides which rosters are closed, so the two
     # cannot disagree (ADR 0016). A settings capture counts only with an integer counter.
-    settings_latest_by_run = {
+    settings_latest_by_run: dict[str, int] = {
         run: status["latestScoringPeriod"]
         for run, status in status_by_run.items()
         if isinstance(status.get("latestScoringPeriod"), int)
         and not isinstance(status.get("latestScoringPeriod"), bool)
     }
+
+    def closed_at_run(run: str, period: int) -> bool:
+        # A run whose settings counter is unusable is not shown to postdate anything.
+        return settings_latest_by_run.get(run, 0) > period
+
     evidence = settled_through(
         [capture.meta for capture in league if capture.endpoint == "roster"],
         settings_latest_by_run,

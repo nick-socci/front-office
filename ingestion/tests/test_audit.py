@@ -1007,3 +1007,60 @@ def test_an_absent_quarantine_or_one_holding_only_its_ignore_file_is_quiet(zone)
     zone.quarantine_root.mkdir()
     (zone.quarantine_root / ".gitignore").write_text("*\n")
     assert quarantine_warnings(zone) == []
+
+
+def test_a_postponed_opener_is_dated_by_its_makeup_as_the_model_dates_it(zone):
+    """Catches the audit taking opening day from a postponed entry's original date.
+
+    stg_mlb__games keeps the played entry of a postponed game, so the model's opening day
+    is the makeup's date. An in-progress capture that implies that date must not be an error.
+    """
+    land_schedule(
+        zone,
+        [
+            schedule_game(1, "2026-03-24", detailed="Postponed"),
+            schedule_game(1, "2026-03-25"),
+        ],
+    )
+    drop(zone, "espn/settings/**")
+    land_settings(zone, latest=3, final=180)
+    findings = audit(zone)
+    assert "period 1" not in details(findings, Severity.ERROR)
+    assert "imply period 1 = 2026-03-25" in details(findings, Severity.INFO)
+
+
+def test_a_postponed_opener_not_yet_made_up_is_dated_by_its_scheduled_makeup(zone):
+    """Catches the played-entry preference being applied only to games already played."""
+    land_schedule(
+        zone,
+        [
+            schedule_game(1, "2026-03-24", detailed="Postponed"),
+            schedule_game(1, "2026-03-25", detailed="Scheduled"),
+        ],
+    )
+    drop(zone, "espn/settings/**")
+    land_settings(zone, latest=1, final=180, fetched_at="20260325T160000Z")
+    findings = audit(zone)
+    assert "period 1" not in details(findings, Severity.ERROR)
+    assert "imply period 1 = 2026-03-25" in details(findings, Severity.INFO)
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        {"firstScoringPeriod": 1, "latestScoringPeriod": 3, "finalScoringPeriod": None},
+        {"firstScoringPeriod": 1, "finalScoringPeriod": 2},
+    ],
+)
+def test_an_unusable_newest_status_is_reported_and_does_not_crash_the_audit(zone, status):
+    """Catches the roster-finality block converting the newest capture's counters blindly.
+
+    The newest capture decides which periods exist. If its counters are unusable the audit
+    warns of the capture, says finality is not checked, and does not raise.
+    """
+    land_status(zone, status, "20260328T160000Z")
+    findings = audit(zone)
+    assert "20260328T160000Z" in details(findings, Severity.WARN)
+    errors = details(findings, Severity.ERROR)
+    assert "newest settings capture (20260328T160000Z) has no usable period counters" in errors
+    assert "roster finality and league snapshots are not checked" in errors

@@ -292,8 +292,12 @@ date; the stamp itself stays, since changing it would rename every fixture captu
   reports it as such, where it used to report `period 1 = 2026-03-25`. The fixture is
   unchanged, because the roster-finality tests depend on it; the in-progress finding has
   its own tests.
-- 2026-10-07, R4.7: the audit takes opening day from every entry of the newest landed
-  schedule, which is the `game_type=R` capture. A postponed game's entry under its
-  original date counts, where the model uses each game's one deduplicated row. The two
-  differ only if every game of opening day is postponed, the case ADR 0021 already
-  accepts.
+- 2026-10-07, R4.7 (review round 1, F1): the audit counts each game once when it takes
+  opening day, at the official date of its played or still-scheduled entry when it has
+  one, as `stg_mlb__games` does. A postponed opener is then dated by its makeup in both.
+- 2026-10-07, R4.8 (review round 1, F2): when the newest settings capture is the one
+  with unusable counters, the audit reports the R4.8 warning and an error saying roster
+  finality and league snapshots are not checked, and stops for that league. Everything
+  after the date comparison is judged from the newest status, and the spec did not say
+  what to do without it. Falling back to an older capture's status was the alternative;
+  it would have the audit vouch for finality on a status that is not the newest.
