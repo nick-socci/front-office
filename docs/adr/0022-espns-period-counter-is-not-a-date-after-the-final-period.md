@@ -16,8 +16,13 @@ What the counter means once the season is over is not documented by ESPN. Observ
 2026, with the final period at 180: 186 on 2026-09-26 and 188 on 2026-09-28, each the
 right period for its date, then 188 on 2026-10-06 and 2026-10-07. MLB's last
 regular-season day, 2026-09-27, would be period 187. So the counter ran past the league's
-final period to the day after MLB's season and stopped. One season shows this, and no
-capture exists from 2026-09-29 to 2026-10-05.
+final period to the day after MLB's season and stopped. No capture exists from
+2026-09-29 to 2026-10-05.
+
+ESPN's game-level season resource, checked on 2026-10-07 (see ADR 0021), explains it: the
+counter is game-wide, not the league's. It reports `currentScoringPeriod` 188, and the
+last period with a pro game in 2026 is 187. Whether it stops one past the last game in
+other seasons was not checked.
 
 The check has a use in season: daily runs in 2027 will take a settings capture a day,
 and a counter that disagrees with opening day then would mean the mapping, or the
@@ -38,7 +43,7 @@ Eastern-day boundary, is wrong.
 
 ## Decision
 
-Proposed: **option 1**. Not yet decided by the owner.
+Chosen: **option 1**, by the owner on 2026-10-07.
 
 A settings capture is in progress when its `latestScoringPeriod` is at most its
 `finalScoringPeriod`. The audit compares the date an in-progress capture implies for
@@ -47,8 +52,9 @@ the final period is not compared with anything; the audit reports how many there
 `latest_scoring_period` stays a column of `stg_espn__league_settings`, described as
 ESPN's counter and not as a date.
 
-Option 2 keeps the three 2026 captures that happen to agree, on a rule read off one
-season. Option 3 loses the only in-season cross-check. Option 4 leaves a permanent
+Option 2 keeps the three 2026 captures that agree, and the game-wide schedule makes its
+rule plausible, but it ties the audit to the date of MLB's last game for evidence the
+game-line test already gives. Option 3 loses the only in-season cross-check. Option 4 leaves a permanent
 warning on every finished season, which teaches the reader to ignore it.
 
 ## Consequences
