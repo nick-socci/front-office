@@ -25,6 +25,15 @@ the number of distinct ESPN games equals the number of played MLB games on all 1
 periods that have any, and the 3 periods without one fall on days with no MLB game. At a
 shift of one day either way, 47 periods match.
 
+ESPN also publishes the mapping, on an endpoint that is not landed. Checked on 2026-10-07
+with four unauthenticated requests, nothing landed: the game-level season resource
+(`view=proTeamSchedules_wl`) lists every pro game with its start time and scoring
+period. In 2026, 2025, 2024 and 2018 every period with a game falls on one Eastern date
+and on a line of one period per day from period 1. Period 1 is the first regular-season
+game, including the Tokyo (2025-03-18) and Seoul (2024-03-20) openers a week before the
+rest. For 2026 all 184 periods with a game are on the date option 1 gives. Periods are
+game-wide, not per league.
+
 ## Decision drivers
 
 - A date must not depend on when, or how often, settings were fetched.
@@ -39,11 +48,11 @@ shift of one day either way, 47 periods match.
 2. **The earliest settings capture** as the anchor instead of the newest.
 3. **Only captures with `latest <= final`** as anchors; no dates without one.
 4. **Fit the offset** at which ESPN's game lines match MLB's game days.
-5. **A date ESPN publishes**, from an endpoint not yet landed.
+5. **The dates ESPN publishes**, from its pro schedule, which is not landed.
 
 ## Decision
 
-Proposed: **option 1**. Not yet decided by the owner.
+Chosen: **option 1**, by the owner on 2026-10-07, with option 5 as a follow-up (#73).
 
 Scoring period 1 of a league-season is the earliest official date among that season's
 regular-season MLB games, and period *p* is *p* − 1 days later. The settings capture
@@ -54,8 +63,9 @@ Option 2 is right for 2026 only because the first capture happened to be taken w
 counter moved; it is wrong for any season first fetched later. Option 3 leaves 2026
 with no dates at all. Option 4 is the strongest evidence but a poor rule: it needs every
 roster parsed before any date exists, has no answer for a league-season with no rosters,
-and hides a disagreement that should stop the build. Option 5 may be the proper source,
-but it is new ingestion and unverified.
+and hides a disagreement that should stop the build. Option 5 is ESPN's own answer and
+agrees with option 1 on every period checked, but it is a new endpoint, staging model
+and fixture, and the warehouse is on hold until this is fixed.
 
 ## Consequences
 
@@ -67,10 +77,11 @@ but it is new ingestion and unverified.
 - Bad / accepted cost: the opening-day test stops being independent evidence, since the
   model is now built from opening day.
 - Bad / accepted cost: it assumes ESPN starts scoring on MLB's first regular-season game
-  and scores one period per calendar day. Both hold for 2026. A season opened by
-  international games played days before the rest is not verified; the game-line test
-  would fail there, but only for a league-season with rosters landed.
+  and scores one period per calendar day. ESPN's pro schedule shows both for 2018, 2024,
+  2025 and 2026. What is not verified is MLB's side for 2024 and 2025: if its schedule
+  does not file the Tokyo and Seoul openers as regular season, the rule starts those
+  seasons a week late. Only 2026 is landed.
 - Bad / accepted cost: if every game of opening day were postponed, the earliest official
   date would be a day late. Not observed.
 - Follow-ups: [ADR 0022](0022-espns-period-counter-is-not-a-date-after-the-final-period.md)
-  for what the counter is still used for. Option 5 is worth verifying before #57.
+  for what the counter is still used for. #73 lands ESPN's pro schedule, before #57.

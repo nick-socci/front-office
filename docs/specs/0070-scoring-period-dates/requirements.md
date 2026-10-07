@@ -47,8 +47,8 @@ that agrees with anything.
 
 ## No-gos
 
-- **No new ingestion and no request to ESPN.** A date ESPN publishes itself (option E in
-  the design) is not landed, and whether it exists is not verified.
+- **No new ingestion.** ESPN publishes the dates itself (option E in the design, checked
+  on 2026-10-07), but landing them is #73.
 - **No change to the grain, name or columns of `stg_espn__scoring_periods` or
   `stg_espn__league_settings`.** `latest_scoring_period` stays a column; only its
   description changes.
@@ -66,8 +66,9 @@ that agrees with anything.
   rule no longer needs it. Recorded as an open question.
 - *Fitting the period-to-date offset from the data on every build* (option D) → the same
   evidence is used as a test instead, where a disagreement fails the build.
-- *Proving period 1 is MLB's first game in every past season* (international openers) →
-  only 2026 is landed with rosters. The test in R3 answers it for any season that is.
+- *Proving period 1 is MLB's first game in every past season* → ESPN's pro schedule
+  shows it for 2018, 2024 and 2025, international openers included. MLB's side of those
+  seasons is not landed; #57 and #73.
 - *Deriving dates from transaction timestamps* → transactions carry an instant and no
   period; they are dated by this mapping, not the other way round.
 - *Moving the model to the intermediate layer because it now reads two sources* → a

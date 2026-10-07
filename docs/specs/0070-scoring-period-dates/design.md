@@ -19,10 +19,10 @@ downstream is edited.
 
 ## Alternatives considered
 
-| | A — MLB opening day (chosen) | B — earliest settings capture | C — only captures with `latest <= final` | D — fit the offset to ESPN's game lines | E — a date ESPN publishes |
+| | A — MLB opening day (chosen) | B — earliest settings capture | C — only captures with `latest <= final` | D — fit the offset to ESPN's game lines | E — the dates ESPN publishes |
 |---|---|---|---|---|---|
-| Right for 2026 | yes | yes, because the first capture was taken while the counter moved | no dates: all 5 captures are past the final period | yes | unverified |
-| Right for a season first fetched after it ended (#57) | yes | no | no dates | only with rosters landed | unverified |
+| Right for 2026 | yes | yes, because the first capture was taken while the counter moved | no dates: all 5 captures are past the final period | yes | yes: agrees with A on all 184 periods with a game |
+| Right for a season first fetched after it ended (#57) | yes | no | no dates | only with rosters landed | yes: 2018, 2024 and 2025 checked |
 | Depends on when or how often settings are fetched | no | yes, on the first fetch | yes | no | no |
 | Reads another source | MLB schedule | no | no | MLB schedule and every roster payload | new ESPN endpoint |
 | A wrong mapping is caught by | the game-line test (R3.1) | the opening-day test, period 1 only | the same | nothing: it is the evidence | the game-line test |
@@ -50,10 +50,14 @@ should be a test: as the rule, a mismatch could only move the dates quietly, eve
 would wait on parsing 180 roster payloads of 2.3 MB, and a league-season without rosters
 would have no dates.
 
-**E — a date ESPN publishes.** ESPN's game-level API is believed to list pro games by
-scoring period with their dates. That would be ESPN's own answer. It is not landed, not
-verified, and new ingestion is out of scope for a P1 that holds the warehouse. Worth
-checking before #57.
+**E — the dates ESPN publishes.** ESPN's game-level season resource
+(`view=proTeamSchedules_wl`) lists every pro game with its start time and scoring
+period, without credentials. Checked on 2026-10-07 for 2026, 2025, 2024 and 2018 (four
+requests, nothing landed): every period with a game is one Eastern date, one period per
+day from period 1, and period 1 is the first regular-season game, international openers
+included. It is ESPN's own answer and it agrees with A everywhere it was checked. It
+loses for now on scope alone: a new endpoint, staging model and fixture, while a P1
+holds the warehouse. The owner chose A now and E as a follow-up (#73).
 
 ## Decisions
 
@@ -226,9 +230,10 @@ date; the stamp itself stays, since changing it would rename every fixture captu
 
 ## Risks
 
-- ESPN does not start scoring on MLB's first regular-season game in some season —
-  unknown for past seasons, held for 2026 — the game-line test fails for any
-  league-season with rosters; accepted for one without (ADR 0021).
+- MLB's schedule does not file an international opener as regular season, so opening
+  day is a week late for 2024 or 2025 — unknown, only 2026 is landed; ESPN's side is
+  checked for 2018, 2024, 2025 and 2026 — the game-line test fails for a league-season
+  with rosters; for one without, #73 and #57 (ADR 0021).
 - The game-line test proves nothing in CI — certain — stated in the test's header; the
   unit tests cover the rule and the real-season build covers the mapping.
 - An ESPN line for a suspended game is scored on the day it resumed, not its official
@@ -250,11 +255,13 @@ date; the stamp itself stays, since changing it would rename every fixture captu
 - **The roster re-check needs `latest > period + 7`** (ADR 0018). The counter stopped at
   final + 8 in 2026, just enough. A league whose final period is closer to the end of
   MLB's season could never settle its last periods. Not this spec; worth its own issue.
-- **Whether ESPN publishes period dates** (option E). Not verified: no request was made.
+- **Whether MLB files the Tokyo and Seoul openers as `game_type = 'R'`.** Matters for
+  2024 and 2025 only; for #57.
 - **Whether the model belongs in the intermediate layer** now that it reads two sources.
   The owner's choice; nothing here depends on it.
 - **`firstScoringPeriod`** is 1 in all five captures and the model generates from 1, as
-  it does today. A league that starts later is not handled, and was not before.
+  it does today. Periods are game-wide, so a league that starts at a later period would
+  still have the right dates for the periods it has, and rows for periods it does not.
 
 ## Review log
 
