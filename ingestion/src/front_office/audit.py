@@ -520,12 +520,28 @@ def _check_league(
     # capture records is what ESPN reported when that run's other captures were taken.
     # Status only moves forward, so it is a conservative bound for anything fetched later
     # in the same run.
+    # A status that is not an object is kept as an empty one: it has no counters, and is
+    # reported with the other unusable ones below.
     status_by_run = {
-        capture.fetched_at: capture.payload().get("status", {})
+        capture.fetched_at: status if isinstance(status, dict) else {}
         for capture in league
         if capture.endpoint == "settings"
+        for status in [capture.payload().get("status")]
     }
     findings = []
+
+    def transaction_findings() -> list[Finding]:
+        # Independent of the league status, so it runs whatever the status says.
+        transactions = _newest(league, "espn", "transactions")
+        if transactions is None:
+            return []
+        pages = [
+            capture
+            for capture in league
+            if (capture.source, capture.endpoint) == ("espn", "transactions")
+            and capture.fetched_at == transactions.fetched_at
+        ]
+        return _check_transactions(pages, subject)
 
     # The scoring-date anchor: an in-progress snapshot implies a date for period 1, which must
     # be MLB opening day or stg_espn__scoring_periods shifts. Only in-progress snapshots are
@@ -535,13 +551,13 @@ def _check_league(
     past_final = []
     unreadable = []
     for stamp, status in sorted(status_by_run.items()):
-        latest_period, final_period = (
-            status.get("latestScoringPeriod"),
-            status.get("finalScoringPeriod"),
-        )
-        if any(
-            not isinstance(value, int) or isinstance(value, bool)
-            for value in (latest_period, final_period)
+        latest_period = status.get("latestScoringPeriod")
+        final_period = status.get("finalScoringPeriod")
+        if (
+            not isinstance(latest_period, int)
+            or not isinstance(final_period, int)
+            or isinstance(latest_period, bool)
+            or isinstance(final_period, bool)
         ):
             unreadable.append(stamp)
         elif latest_period <= final_period:
@@ -618,7 +634,7 @@ def _check_league(
                 "roster finality and league snapshots are not checked",
             )
         )
-        return findings
+        return findings + transaction_findings()
     newest_status = status_by_run[newest_run]
     latest = int(newest_status.get("latestScoringPeriod", 0))
     final = int(newest_status.get("finalScoringPeriod", latest))
@@ -738,16 +754,7 @@ def _check_league(
                     )
                 )
 
-    transactions = _newest(league, "espn", "transactions")
-    if transactions is not None:
-        run = [
-            capture
-            for capture in league
-            if (capture.source, capture.endpoint) == ("espn", "transactions")
-            and capture.fetched_at == transactions.fetched_at
-        ]
-        findings += _check_transactions(run, subject)
-    return findings
+    return findings + transaction_findings()
 
 
 def _check_transactions(run: list[Capture], subject: str) -> list[Finding]:

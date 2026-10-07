@@ -1050,6 +1050,8 @@ def test_a_postponed_opener_not_yet_made_up_is_dated_by_its_scheduled_makeup(zon
     [
         {"firstScoringPeriod": 1, "latestScoringPeriod": 3, "finalScoringPeriod": None},
         {"firstScoringPeriod": 1, "finalScoringPeriod": 2},
+        None,
+        "closed",
     ],
 )
 def test_an_unusable_newest_status_is_reported_and_does_not_crash_the_audit(zone, status):
@@ -1064,3 +1066,13 @@ def test_an_unusable_newest_status_is_reported_and_does_not_crash_the_audit(zone
     errors = details(findings, Severity.ERROR)
     assert "newest settings capture (20260328T160000Z) has no usable period counters" in errors
     assert "roster finality and league snapshots are not checked" in errors
+
+
+def test_transactions_are_still_checked_when_the_newest_status_is_unusable(zone):
+    """Catches the unusable-status stop also dropping the transaction check, which does not
+    depend on the league status."""
+    before = [f.detail for f in audit(zone) if "transactions" in f.detail]
+    assert before, "the clean world reports its transaction log"
+    land_status(zone, {"firstScoringPeriod": 1, "finalScoringPeriod": None}, "20260328T160000Z")
+    after = [f.detail for f in audit(zone) if "transactions" in f.detail]
+    assert after == before
