@@ -35,13 +35,14 @@ made.
 
 ## Decision
 
-Chosen: **option 1**.
+Chosen: **option 1**, by the owner on 2026-10-06.
 
 The roster fetcher copies `latestScoringPeriod` and `finalScoringPeriod` from the response
 it is landing into the sidecar, as `source_status: {latest_scoring_period,
-final_scoring_period}`. Period P is settled if and only if some committed roster capture
-of P records `latest_scoring_period > P`. The current run's status decides only which
-periods exist; it settles nothing. A response with no usable status lands with a null
+final_scoring_period}`. Period P is closed if and only if some committed roster capture
+of P records `latest_scoring_period > P`. How long a closed period goes on being fetched
+is [ADR 0018](0018-a-closed-roster-period-is-rechecked-for-seven-periods.md). The
+current run's status decides only which periods exist; it settles nothing. A response with no usable status lands with a null
 value and is evidence of nothing.
 
 The roster and the counter arrive in one response, so there is no interval between them
@@ -61,6 +62,6 @@ Option 3 is as safe as option 2 and tighter, for twice the requests.
 - Bad / accepted cost: the ingestion package copies two fields out of a response it
   otherwise never interprets.
 - Bad / accepted cost: each period is captured at least twice in daily operation, about
-  0.9 GB a season.
-- Follow-ups: an in-season check in 2027 that a settled capture equals a later refresh;
+  0.9 GB a season before ADR 0018's re-check.
+- Follow-ups: #66, an in-season check in 2027 that a closing capture equals a later one;
   #30 can record a boxscore's game state under the same sidecar key.

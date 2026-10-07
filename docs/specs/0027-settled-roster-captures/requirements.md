@@ -25,20 +25,23 @@ schedule. #29 gave the fetch logic one definition of a committed capture to buil
 - The fetch logic and the audit give the same answer, from one definition.
 - A period that should be final and cannot be shown final is fetched again and reported,
   never quietly accepted.
+- A commissioner's correction to a recently closed period is picked up without anyone
+  asking for it.
 
 ## No-gos
 
 - **Not R4** (#30). Boxscore settle windows are a different rule on a different source.
   The sidecar field introduced here is named so that #30 can use it.
 - **No change to any dbt model, seed, fixture or to the raw table.** Staging already
-  takes the latest capture per period (`fo_espn_latest`), which is the settled one.
+  takes the latest capture per period (`fo_espn_latest`), which is the one taken last.
 - **No existing sidecar is rewritten.** The 180 captures of 2026 keep the sidecars they
   have (AGENTS.md: nothing in the landing zone is replaced).
 - **No request to ESPN by an agent.** Tests use a fake transport. The real season is
   verified by reading the landing zone; a live run is the owner's, with the credentials.
-- **No detection of edits made after a period closed.** If a commissioner can change a
-  past period's roster, a capture taken after the close can still go stale. `--refresh`
-  remains the way to pick that up (see design.md, open questions).
+- **No detection of which periods were edited.** A commissioner can change a past
+  period's roster (the owner, 2026-10-06). Recently closed periods are simply fetched
+  again for a fixed number of periods (R6); an edit older than that is picked up only by
+  `--refresh`, and the audit says when a finished season has not had one.
 - **No change to how often the current period is fetched.** It is fetched on every run
   today and still is.
 - **No dates.** Settled is never decided from today's date, from a `fetched_at`
@@ -50,8 +53,10 @@ schedule. #29 gave the fetch logic one definition of a committed capture to buil
   period counter, not a time.
 - *Comparing two captures of a period to see whether anything changed* → reads 2.3 MB
   payloads on every run, and "unchanged so far" is not "final".
-- *Pruning the superseded mid-day captures* → nothing is deleted; they cost about 2.4 MB
-  per period and dbt ignores them.
+- *Pruning the superseded captures* → nothing is deleted; each costs about 2.4 MB and dbt
+  reads only the newest.
+- *Finding edits in ESPN's activity log, or landing a re-check only when it differs* →
+  both make ingestion interpret payloads; a fixed window does not.
 - *A general "settled" framework for every endpoint* → one rule for rosters; #30 writes
   its own for boxscores.
 - *Backfilling `source_status` into old sidecars* → they are not rewritten; a legacy rule
@@ -76,12 +81,13 @@ So that a capture carries its own evidence of when it was taken, in ESPN's terms
 
 ### R2. A period is settled only by evidence
 
-- R2.1 THE SYSTEM SHALL treat scoring period P of a league-season as settled if and only
+- R2.1 THE SYSTEM SHALL treat scoring period P of a league-season as closed if and only
   if some committed roster capture of P, for that season and league, is evidence of a
-  latest scoring period greater than P.
+  latest scoring period greater than P, and as settled if and only if some such capture
+  is evidence of a latest scoring period greater than P plus the re-check window (R6).
 - R2.2 WHERE a roster sidecar has a `source_status` key THE SYSTEM SHALL take its
-  `latest_scoring_period` as the evidence when it is an integer, and as no evidence
-  otherwise.
+  `latest_scoring_period` as the evidence when the value is an object and the counter an
+  integer, and SHALL treat any other shape as no evidence, without raising.
 - R2.3 WHEN a backfill runs without `--refresh` THE SYSTEM SHALL fetch every period from
   1 to the latest that exists which is not settled, and skip every period that is.
 - R2.4 WHEN a backfill runs with `--refresh` THE SYSTEM SHALL fetch every period.
@@ -107,11 +113,28 @@ The 180 captures of 2026, and the two fixture captures, have no `source_status`.
 
 ### R4. What cannot be shown final stays visible
 
-- R4.1 WHEN a backfill finishes THE SYSTEM SHALL report the periods below the run's
-  latest scoring period that are still not settled, and exit non-zero if there are any.
+- R4.1 WHEN a backfill finishes THE SYSTEM SHALL report the periods that exist (1 to the
+  smaller of the run's latest and final period) and lie below the run's latest scoring
+  period that are still not closed, and exit non-zero if there are any.
+  (The owner, 2026-10-06: exit non-zero for now; revisit if it fails persistently in
+  season.)
 - R4.2 THE SYSTEM SHALL have the audit judge roster finality by the same function the
-  fetch logic uses, reporting how many required periods are settled, which have no
-  roster (error) and which have a roster but no evidence (warning).
+  fetch logic uses, reporting how many required periods are closed, which have no
+  roster (error) and which have a roster but no capture showing them closed (warning).
+
+### R6. Re-check recently closed periods
+
+So that a commissioner's correction to a recent day reaches the warehouse.
+
+- R6.1 THE SYSTEM SHALL use a re-check window of 7 scoring periods, held as one named
+  constant.
+- R6.2 WHILE a period is closed and not settled THE SYSTEM SHALL fetch it on every run;
+  this is not a failure and does not affect the exit code.
+- R6.3 THE SYSTEM SHALL have the audit report, as information, how many closed periods
+  are still inside the re-check window.
+- R6.4 WHEN a season is over (the newest settings capture's latest period is greater
+  than its final period) THE SYSTEM SHALL have the audit warn of every period with no
+  capture that is evidence of a latest period greater than the final period.
 
 ### R5. Tests
 
@@ -119,7 +142,8 @@ The 180 captures of 2026, and the two fixture captures, have no `source_status`.
   tests of transitions: a period captured while current, then after it closed, then on
   repeated later runs.
 - R5.2 THE SYSTEM SHALL have tests for a scheduler outage spanning several periods, for
-  a status that lags the roster (recovery), and for a legacy capture in both directions.
+  a status that lags the roster (recovery), for a legacy capture in both directions, and
+  for a period fetched on each daily run until the window has passed and never after.
 
 ## Expected values
 
@@ -128,9 +152,11 @@ Measured on the real landing zone on 2026-10-06. The first four rows are read-on
 | Check | Expected | How to verify |
 |---|---|---|
 | Committed roster captures, 2026 | 180, one per period 1–180, all from run `20260926T162307Z`, none with `source_status` | `LandingZone.committed(source="espn", endpoint="roster")` |
-| Periods settled by R3.1 | 180 of 180; 0 missing; 0 without evidence | the new evidence function over the real landing zone |
-| Periods the fetch logic would fetch, no `--refresh`, status latest 188 | 0 of 180 | call the fetch decision for each period; no network |
-| Audit roster line | `scoring periods 1-180, latest 188; 180 of 180 rosters captured after their period closed`, as today | `uv run front-office audit --season 2026` before and after |
+| Periods closed, by R3.1 (evidence 186) | 180 of 180; 0 missing; 0 without evidence | the new evidence function over the real landing zone |
+| Periods settled (186 > P + 7) | 178: periods 1–178. For 179 and 180 the evidence, 186, is not greater than the period plus 7 | the same |
+| Periods the fetch logic would fetch, no `--refresh`, status latest 188 or more | 2 of 180: 179 and 180 | call the fetch decision for each period; no network |
+| Audit roster line | `scoring periods 1-180, latest 188; 180 of 180 rosters captured after their period closed`, as today, plus information that 2 are inside the re-check window | `uv run front-office audit --season 2026` before and after |
+| Audit season-close warning (R6.4) | none: every period has evidence 186 > 180 | the same |
 | Each roster payload's own `status` (cross-check of R3.1, not used at run time) | latest 186, final 180 in all 180; the same-run settings capture says 186 | one-off script, results on #27 |
 | Files changed under `dbt/` or `fixtures/` | none | `git diff --stat main` |
 | Sidecars of non-roster endpoints written after the change | same key set as before | pytest |

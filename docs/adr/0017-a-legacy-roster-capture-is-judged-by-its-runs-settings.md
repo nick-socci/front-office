@@ -33,7 +33,7 @@ payloads total 436 MB; a settings payload is 6 KB.
 
 ## Decision
 
-Chosen: **option 1**.
+Chosen: **option 1**, by the owner on 2026-10-06.
 
 A roster sidecar with no `source_status` key takes as its evidence the
 `status.latestScoringPeriod` of a committed settings capture with the same season, league
@@ -52,7 +52,7 @@ request's time.
 
 ## Consequences
 
-- Good: 180 of 180 periods of 2026 are settled with no request to ESPN.
+- Good: 180 of 180 periods of 2026 are shown closed with no request to ESPN.
 - Good: one 6 KB payload is read per legacy run; no roster payload is read.
 - Bad / accepted cost: the rule depends on settings having been fetched before rosters in
   the legacy runs. That is how every run has worked, and the payload cross-check confirms

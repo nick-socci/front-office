@@ -6,11 +6,11 @@ Issue: #27 · Requirements: [requirements.md](requirements.md) · Tasks: [tasks.
 
 Every ESPN roster response already carries the league's `status` block, with the period
 ESPN counts as current (`latestScoringPeriod`). The roster fetcher copies that number
-into the capture's sidecar as `source_status`. A period is then settled when one of its
+into the capture's sidecar as `source_status`. A period is *closed* when one of its
 committed captures records a latest period greater than itself: the league had moved on
-when that roster was served. The fetch logic skips settled periods and fetches everything
-else, so a period captured while current is fetched once more after it closes and never
-again. Captures made before this change have no `source_status`; for them the evidence is
+when that roster was served. Because a commissioner can still correct a recent day, a
+closed period goes on being fetched until a capture records a latest period more than 7
+past it; then it is *settled* and skipped. Captures made before this change have no `source_status`; for them the evidence is
 the settings capture of the same run, which is the rule the audit applies today and which
 shows all 180 periods of 2026 final. The audit and the fetch logic call one function.
 
@@ -19,18 +19,20 @@ What states a period moves through, and what moves it:
 ```mermaid
 stateDiagram-v2
   [*] --> never_landed
-  never_landed --> unsettled: capture records latest at or below P
-  never_landed --> settled: capture records latest above P
-  unsettled --> unsettled: another capture, latest at or below P
-  unsettled --> settled: capture records latest above P
+  never_landed --> open: capture records latest at or below P
+  never_landed --> closed: capture records latest from P+1 to P+7
+  never_landed --> settled: capture records latest above P+7
+  open --> closed: capture records latest from P+1 to P+7
+  open --> settled: capture records latest above P+7
+  closed --> settled: capture records latest above P+7
   settled --> settled: refresh adds a capture
-  note right of unsettled: fetched on every run
+  note right of open: fetched on every run, reported if the league is past P
+  note right of closed: fetched on every run, final unless a commissioner edits it
   note right of settled: skipped unless refresh is asked for
 ```
 
 Nothing here is dbt. Staging already reads the newest capture per period through
-`fo_espn_latest`, and the newest capture of a settled period is the one taken after it
-closed.
+`fo_espn_latest`, and the newest capture of a closed period was taken after it closed.
 
 ## Evidence
 
@@ -103,12 +105,47 @@ fixtures and any capture restored from backup would still need a legacy rule, it
 **D — a date.** Ruled out by the reviewer's follow-up, and `fetched_at` is the run's
 stamp, not the request's.
 
+### How a commissioner's edit to a closed period is picked up
+
+The owner confirmed on 2026-10-06 that a commissioner can edit a past period's roster,
+and asked for it to be accommodated if that is not too expensive. Costs assume one run a
+day and 2.4 MB per roster capture.
+
+| | A — re-check for 7 periods after the close (recommended) | B — nothing automatic; `--refresh` by hand | C — refresh every period on every run | D — find edits in the activity log | E — re-check until the period's matchup ends |
+|---|---|---|---|---|---|
+| Requests per daily run | 9 | 2 | up to 180 | 2, plus those triggered | 2 to 9 |
+| Stored per season | about 3.9 GB | about 0.9 GB | about 39 GB | about 0.9 GB | between A and B; depends on matchup lengths, not worked out |
+| Edit within a week of the day | caught next run | missed until someone refreshes | caught | caught, if logged | caught only inside the same matchup |
+| Edit older than that | `--refresh`; the audit warns if a finished season never had one | the same | caught | caught, if logged | `--refresh` |
+| Ingestion interprets a payload | no | no | no | yes: activity types and the period they apply to | yes: the matchup schedule |
+
+**A — a fixed window.** One constant and one comparison added to the rule already there:
+settled means evidence greater than P + 7 instead of greater than P. Seven periods is a
+scoring week, which is when a lineup mistake still matters to a matchup. Nothing new is
+read or interpreted.
+
+**B — by hand.** The cheapest, and what the first draft of this spec proposed. It loses
+because the owner wants edits accommodated and a manual step is the one that is
+forgotten.
+
+**C — everything, every run.** Catches every edit at any age, for about 40 times the storage of B
+and 180 requests a day against a private API.
+
+**D — the activity log.** The right signal in principle. Not checked: whether a
+commissioner's lineup edit appears in the log at all, and whether it names the period it
+changes. The 2026 log holds 3,098 topics; staging keeps only adds and drops. Reading it
+in the fetcher would also break "ingestion never interprets".
+
+**E — until the matchup ends.** Fits the reason edits happen, but the fetcher would have
+to read the matchup schedule, and an edit made the day after a matchup ends is missed.
+
 ## Decisions
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0016](../../adr/0016-a-roster-period-is-settled-by-the-status-in-its-own-response.md) | A roster period is settled by the status recorded from its own response | proposed |
-| [0017](../../adr/0017-a-legacy-roster-capture-is-judged-by-its-runs-settings.md) | A roster capture with no recorded status is judged by its run's settings capture | proposed |
+| [0016](../../adr/0016-a-roster-period-is-settled-by-the-status-in-its-own-response.md) | A roster period is settled by the status recorded from its own response | proposed; option chosen by the owner 2026-10-06 |
+| [0017](../../adr/0017-a-legacy-roster-capture-is-judged-by-its-runs-settings.md) | A roster capture with no recorded status is judged by its run's settings capture | proposed; option chosen by the owner 2026-10-06 |
+| [0018](../../adr/0018-a-closed-roster-period-is-rechecked-for-seven-periods.md) | A closed roster period is fetched again for seven periods | proposed |
 
 ## Detailed design
 
@@ -151,11 +188,16 @@ def settled_through(
     """For each scoring period, the highest latest-period any of its captures is evidence of."""
 ```
 
-For each roster sidecar: if it has a `source_status` key, its evidence is
-`latest_scoring_period` when that is an integer, else nothing (R2.2, R3.4). If it has no
+For each roster sidecar: if it has a `source_status` key, its evidence is that value's
+`latest_scoring_period` when the value is a mapping and the counter is an `int` and not
+a `bool`; any other shape (null, a list, a string, a missing or non-integer counter) is
+no evidence and never an error (R2.2, R3.4). If it has no
 such key, its evidence is `settings_latest_by_run.get(meta["fetched_at"])` (R3.1, R3.2).
-The result maps period to the largest evidence found. `is_settled(period, evidence)` is
-`evidence.get(period, 0) > period`.
+The result maps period to the largest evidence found. Two predicates read it, with
+`RECHECK_PERIODS = 7` a module constant:
+
+- `is_closed(period, evidence)` is `evidence.get(period, 0) > period`;
+- `is_settled(period, evidence)` is `evidence.get(period, 0) > period + RECHECK_PERIODS`.
 
 The caller passes sidecars of one league-season only (R2.7), and builds
 `settings_latest_by_run` from the committed settings captures of that league-season.
@@ -179,34 +221,39 @@ period with no capture has no evidence. `period_is_over` is deleted: the current
 status no longer settles anything (R2.5) and is used only by `last_period`.
 
 After each successful fetch the loop adds the status it just recorded to `evidence`.
-When the loop ends, `summary.unsettled` is every period below the run's
-`latestScoringPeriod` that is still not settled: a failed fetch, a response with no
+When the loop ends, `summary.unproven` is every period that exists and that the league
+is past, that is every P from 1 to `last_period(status)` with P below the run's
+`latestScoringPeriod`, that is still not closed: a failed fetch, a response with no
 usable status, or a status that lagged. The command prints them to stderr and exits 1
-(R4.1). The period in progress is expected to be unsettled and is not listed.
+(R4.1). The period in progress is expected to be open and is not listed; a period that
+is closed and inside the re-check window is not a failure either (R6.2).
 
 How the cases in the issue play out:
 
 | Run | Status at run | Period 100 before | Action | After |
 |---|---|---|---|---|
-| day 100 | latest 100 | never landed | fetch; records 100 | unsettled |
-| day 100, evening | latest 100 | unsettled | fetch; records 100 | unsettled |
-| day 101 | latest 101 | unsettled | fetch; records 101 | settled |
-| day 102 | latest 102 | settled | skip | settled |
-| day 105 after an outage since day 100 | latest 105 | unsettled | fetch 100–105; 100–104 record 105 | 100–104 settled, 105 unsettled |
-| a response whose status lags (says 100 on day 101) | latest 101 | unsettled | fetch; records 100; reported, exit 1 | unsettled; settled by the next run |
+| day 100 | latest 100 | never landed | fetch; records 100 | open |
+| day 100, evening | latest 100 | open | fetch; records 100 | open |
+| day 101 | latest 101 | open | fetch; records 101 | closed |
+| days 102–107 | latest 102–107 | closed | fetch; records the day | closed; an edit made meanwhile is landed |
+| day 108 | latest 108 | closed | fetch; records 108 | settled |
+| day 109 | latest 109 | settled | skip | settled |
+| day 105 after an outage since day 100 | latest 105 | open | fetch 100–105; 100–104 record 105 | 100–104 closed, 105 open |
+| a past season, first run after it ended | latest 186 | never landed | fetch 1–180; all record 186 | 1–178 settled; 179, 180 closed until one more run |
+| a response whose status lags (says 100 on day 101) | latest 101 | open | fetch; records 100; reported, exit 1 | open; closed by the next run |
 
-### Settled, and the capture dbt reads
+### Closed, and the capture dbt reads
 
-Settled is a fact about the period, proved by *some* capture; `fo_espn_latest` reads the
+Closed and settled are facts about the period, proved by *some* capture; `fo_espn_latest` reads the
 *newest* capture, ordered by `fetched_at`. The two agree because a period, once closed,
 stays closed: any capture landed after the one that proved the period closed was itself
 taken after the close, whatever its own sidecar records. Runs cannot interleave (the
 writer lock, ADR 0015) and a later run has a later stamp, so "landed after" and "newer
 `fetched_at`" are the same order. A newer capture with a missing or lagging status
-(a `--refresh` whose response lacks `status`, say) therefore leaves the period settled
-and is still a post-close roster. It could differ from the proving capture only if a
-closed period's roster can change, which is the commissioner-edit question below, and
-there the newer capture is the more correct one.
+(a `--refresh` whose response lacks `status`, say) therefore leaves the period as it
+was and is still a post-close roster. It differs from the proving capture only when a
+commissioner has edited the period in between, and then the newer capture is the more
+correct one, which is the point of the re-check.
 
 ### The audit
 
@@ -216,13 +263,19 @@ read, in place of `closed_at_run`. The closure itself stays: the league-snapshot
 further down (settings, teams, matchups, transactions after the final period) still uses
 it and is not changed. Its three findings keep their severities and wording; the warning's text
 changes from "no capture shown final by same-run settings" to "no capture shown final",
-since the evidence may now be the capture's own.
+since the evidence may now be the capture's own. Two findings are new: information
+giving the number of closed periods still inside the re-check window (R6.3), and, once
+the season is over, a warning listing periods with no capture whose evidence is greater
+than the final period (R6.4). The second is what tells the owner a finished season still
+needs its closing `--refresh`; 2026 has had it.
 
 ### What it costs in a season
 
-Each period is captured at least twice in daily operation, once while current and once
-after it closes: about 4.8 MB per day, 0.9 GB per season. The current period is already
-fetched on every run today, so this adds one capture per period over today's behaviour.
+With one run a day each period is captured nine times: once while current, then on each
+of the eight following days, the last of which settles it. That is 9 requests and about
+22 MB per run, 3.9 GB per season, against one request and 0.4 GB under today's unsafe
+rule. Without the re-check window it would be two captures and 0.9 GB. dbt reads the
+newest capture of each period, so the warehouse does not grow.
 
 ## Test strategy
 
@@ -234,7 +287,11 @@ All in pytest with a fake transport; no dbt test changes.
 | R1.2 | a response with no `status`, and one with a string or boolean counter, lands with null and warns | a crash losing the capture; a non-integer compared as a number |
 | R1.3 | settings, teams, matchups, transactions, boxscore and id-map sidecars have today's key set | the field leaking to other endpoints; fixtures drifting |
 | R1.4 | captures with, without and with a malformed `source_status` are all committed | a new way for a capture to be quarantined |
-| R2.1, R5.1 | active → closed → repeated closed: fetched, fetched, skipped, skipped | the R1 defect itself |
+| R2.1, R5.1 | a period captured while current, then on the next run: both fetch, and the second closes it; it is fetched on every run through P + 8 and skipped from P + 9 | the R1 defect itself |
+| R2.2 | `source_status` that is a list, a string, null, or a mapping without the counter: the capture is committed and is no evidence; nothing raises | one odd sidecar stopping a backfill or the audit |
+| R4.1 | a finished season (latest 188, final 180) with all 180 closed reports nothing and exits 0; periods 181–187 are never asked about | periods that do not exist reported as unproven |
+| R6.1, R6.2, R5.2 | nine daily runs over one period: fetched on each, skipped on the tenth, exit code 0 throughout; evidence exactly at P + 7 is not settled | an off-by-one in the window; the re-check treated as a failure |
+| R6.3, R6.4 | audit: a closed period inside the window is counted as information; a finished season with a period never captured after the final period warns; 2026-shaped data (all evidence 186, final 180) does not | the closing refresh silently skipped; noise on a clean season |
 | R2.1 | a period settled by one capture, then given a newer capture with a null status: still settled, skipped on the next run | "newest capture" used instead of "some capture"; a refresh un-settling a period |
 | R2.3, R5.2 | an outage: periods 100–104 landed or missing in a mix, run at latest 105 | a closed period skipped because a mid-day file exists |
 | R2.4 | `--refresh` fetches settled periods | refresh ignored |
@@ -260,19 +317,23 @@ All in pytest with a fake transport; no dbt test changes.
   ADR 0016; the in-season check below is what would confirm or refute it.
 - A response without a usable status makes its period fetch on every run — low — it is
   reported and exits non-zero each time, so it cannot go unnoticed.
-- The settled rule is stricter than today's, so a season already half-landed by daily
-  runs would refetch every closed period once — none exists; 2026 is unaffected.
+- The rule is stricter than today's, so a season already half-landed by daily runs
+  would refetch every closed period once — none exists. For 2026 the owner's next run
+  fetches periods 179 and 180 once more, because their evidence (186) is inside the
+  window.
+- Seven is a judgment, not a measurement: no commissioner edit has been observed in the
+  data — a later edit is missed until a `--refresh` — it is one constant, and #66 gives
+  the first evidence of how often re-check captures differ.
 
 ## Open questions
 
 - **Does a period's roster stop changing at the moment `latestScoringPeriod` passes it?**
   Not verifiable in the off-season. Proposed check in the first week of 2027: for a few
-  periods, compare the first capture that settled the period with a `--refresh` capture
-  from a day later; the roster entries should be identical. The owner decides whether to
-  track it as an issue.
-- **Can a commissioner edit a past period's roster?** If so, a settled capture can go
-  stale and only `--refresh` picks it up (a no-go here). The owner knows the league's
-  tools; whether that needs its own issue is theirs to say.
+  periods, compare the first capture that closed the period with a later capture of it;
+  the roster entries should be identical. Tracked as #66; the re-check captures supply
+  the later capture without an extra run.
+- **Is 7 the right window?** The owner's to confirm (ADR 0018). It is long enough for a
+  correction inside a scoring week and costs 3 GB a season more than no window.
 - **Is `status` in every roster response in 2027?** It is in all 180 of 2026. If it
   disappears, R1.2 and R4.1 make every run fail loudly rather than freeze anything.
 
@@ -283,5 +344,8 @@ All in pytest with a fake transport; no dbt test changes.
 | design-review | F1 (P1): an older capture can settle a period while dbt reads a newer capture with no evidence | Not a rule change. Added "Settled, and the capture dbt reads": anything landed after the proving capture was also taken after the close, so the newest capture is a post-close roster. The reviewer's sequence is now a test (R2.1 row). |
 | design-review | F2 (P1): one response does not prove the roster and status are from the same instant, and the only check is in-season | Escalated to the owner as the decision in ADR 0016. Risks now separates the boundary-instant case, which the conservative option B avoids, from a stale cached roster, which no option avoids. |
 | design-review | F3 (P2): `closed_at_run` is also used by the league-snapshot check | Fixed: the closure stays; only its roster-finality use is replaced. |
+| design-review, second pass | F1 (P1): a malformed `source_status` (not a mapping) is committed but its handling was unspecified | Fixed: any shape other than a mapping with an integer counter is no evidence and never an error; tested (R2.2). |
+| design-review, second pass | F2 (P2): "every period below latest" would report periods 181–187 after the season | Fixed: R4.1 and the fetch path limit it to periods that exist; tested on a finished season. |
+| design-review, second pass | F3 (P2): a test row still described the pre-window sequence | Fixed: the row now fetches through P + 8 and skips from P + 9. |
 
 ## Amendments

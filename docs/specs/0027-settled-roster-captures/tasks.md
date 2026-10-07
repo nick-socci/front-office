@@ -20,35 +20,40 @@ them.
      the run's status; no `status`, a string counter and a boolean counter land with null
      and a warning.
    - Verify: `uv run pytest ingestion/tests/test_espn.py`.
-4. `settled_through` and `is_settled` — `impl` — R2.1, R2.2, R2.7, R3.1, R3.2, R3.4
-   - pytest first, on plain dicts: own status past, at and below the period; two captures
-     of one period; legacy with and without same-run settings; key present but null does
-     not fall back.
+4. `settled_through`, `is_closed` and `is_settled` — `impl` — R2.1, R2.2, R2.7, R3.1, R3.2, R3.4, R6.1
+   - pytest first, on plain dicts: own status past, at and below the period; exactly at
+     and one past the window; two captures of one period; legacy with and without
+     same-run settings; key present but null does not fall back.
    - Verify: `uv run pytest ingestion/tests/test_espn.py`.
-5. The fetch path uses the evidence — `impl` — R2.3–R2.7, R3.3, R4.1, R5.1, R5.2
+5. The fetch path uses the evidence — `impl` — R2.3–R2.7, R3.3, R4.1, R5.1, R5.2, R6.2
    - pytest first: delete `test_roster_is_skipped_once_its_period_is_over` and
      `test_period_is_over`; add the transition, outage, lagging-status and cross-league
-     tests from design.md; re-point the two roster tests in `test_landing_check.py` at
+     tests from design.md, and nine daily runs over one period (fetched on each of the
+     first nine, skipped on the tenth, exit code 0 throughout); re-point the two roster tests in `test_landing_check.py` at
      the new signature, keeping "roster payload reads raise"; settings payloads without a
      legacy stamp raise when read.
    - Then: the evidence pass in `backfill_rosters`, the pure `needs_fetch`,
-     `summary.unsettled`, `period_is_over` removed, and the command's stderr line and
+     `summary.unproven`, `period_is_over` removed, and the command's stderr line and
      exit code.
    - Verify: `uv run pytest ingestion/tests`; ruff; mypy.
-6. The audit calls the same function — `impl` — R4.2
+6. The audit calls the same function — `impl` — R4.2, R6.3, R6.4
    - pytest first: one new test where the evidence is `source_status` and no settings
-     capture shares the run; the existing roster-finality tests pass unchanged.
+     capture shares the run; the count inside the re-check window; a finished season
+     with a period never captured after the final period warns; the existing
+     roster-finality tests pass unchanged.
    - Verify: `uv run pytest ingestion/tests/test_audit.py`.
 7. Describe it — `impl` — goals
    - `espn/rosters.py` module docstring; the README's capture paragraph gains one
      sentence on `source_status`; no status tables.
    - Verify: `.agentic/gates`.
 8. (last) Verify against the real season, reading only — `judgment` — all
-   - The evidence function over the real landing zone: 180 settled, 0 missing, 0 without
-     evidence; the fetch decision says 0 of 180; the audit's roster line is unchanged;
+   - The evidence function over the real landing zone: 180 closed, 178 settled, 0
+     missing, 0 without evidence; the fetch decision says 2 of 180 (179 and 180); the
+     audit's roster line is unchanged, with 2 inside the re-check window and no
+     season-close warning;
      the one-off payload cross-check (latest 186 in all 180); `git diff --stat main`
      shows nothing under `dbt/` or `fixtures/`.
    - No request is made to ESPN. A live `backfill-espn` is the owner's to run; expected
-     output is `rosters: fetched=0 skipped=180 failed=0`, and its settings, teams,
+     output is `rosters: fetched=2 skipped=178 failed=0`, after which all 180 are settled, and its settings, teams,
      matchups and transactions captures land as on any run.
    - Verify: commands and results posted as a comment on #27.
