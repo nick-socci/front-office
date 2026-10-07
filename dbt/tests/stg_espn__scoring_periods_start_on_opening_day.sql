@@ -1,9 +1,9 @@
--- Cross-source check: each league-season's fantasy scoring period 1 is MLB's opening day
--- of that same season.
+-- Each league-season's fantasy scoring period 1 is MLB's opening day of that same season.
 --
--- The mapping is derived purely from ESPN's own status block, so agreeing with the MLB
--- schedule -- a source with no knowledge of the fantasy league -- is real evidence that
--- the anchor and the Eastern-time boundary are right.
+-- The model is built from opening day, so this is no longer two independent sources
+-- agreeing; the independent check is stg_espn__scoring_periods_agree_with_espn_game_lines.
+-- This test catches an error in the period arithmetic (an off-by-one in period 1) and a
+-- league-season with no MLB season loaded.
 --
 -- Compared per season: with two seasons loaded, holding a 2027 league to 2026's opening
 -- day (the earliest MLB date of everything loaded) would fail for the wrong reason, or
