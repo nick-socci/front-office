@@ -395,12 +395,15 @@ def check_mlb(
             except ValueError:
                 unreadable += 1
         first = mlb_boxscore.first_final(stamps, game.last_start)
-        if not stamps:
-            # Nothing to compare with the start: reported below, with the unreadable stamps.
-            unstamped.append(game.game_pk)
-        elif game.last_start is None:
+        # Two independent faults, each reported whatever the other is: no readable start,
+        # and no readable stamp. Only a game with both a start and a stamp is compared.
+        if game.last_start is None:
             no_start.append(game.game_pk)
-        elif first is None:
+        if not stamps:
+            unstamped.append(game.game_pk)
+        if game.last_start is None or not stamps:
+            continue
+        if first is None:
             before_start.append(game.game_pk)
         elif mlb_boxscore.is_settled(stamps, game.last_start):
             continue

@@ -558,6 +558,17 @@ def test_a_game_whose_every_stamp_is_unreadable_is_not_called_captured_before_it
     assert "settle window closed" not in warning
 
 
+def test_an_unreadable_start_and_unreadable_stamps_are_both_reported(zone):
+    """Catches one fault hiding the other when a game has neither a start nor a stamp."""
+    land_schedule(zone, [schedule_game(1, "2026-03-25", gameDate=None)])
+    only_boxscores(zone, "2026-04-20")
+    warning = details(audit(zone, as_of=LATER), Severity.WARN)
+    assert "1 game(s) with an unreadable gameDate in the schedule" in warning
+    assert "1 game(s) have no other capture, so cannot settle; e.g. 1" in warning
+    assert "before their last scheduled start" not in warning
+    assert "settle window closed" not in warning
+
+
 def test_a_resumed_game_is_judged_by_the_guard_not_by_resume_game_date(zone):
     """Catches resumeGameDate starting the clock for captures from before the later session."""
     land_schedule(
