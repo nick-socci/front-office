@@ -51,7 +51,7 @@ owner's decision (AGENTS.md).
 
 ## Decision
 
-Chosen: **option 1**.
+Chosen: **option 1**, by the owner on 2026-10-07, after the evidence above.
 
 A game's first-final capture is its earliest committed capture with a `fetched_at`
 later than the latest `gameDate` among all of the game's entries in the newest landed

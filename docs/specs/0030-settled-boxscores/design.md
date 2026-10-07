@@ -146,7 +146,7 @@ entry with each capture. More to store and read for no case A misses.
 | ADR | Decision | Status |
 |---|---|---|
 | [0019](../../adr/0019-a-boxscores-settle-window-runs-from-its-first-capture.md) | A boxscore's settle window runs from the game's first capture | proposed; option chosen by the owner 2026-10-07 |
-| [0020](../../adr/0020-a-capture-before-a-games-last-scheduled-start-does-not-count.md) | A capture taken before a game's last scheduled start does not start the settle window | proposed |
+| [0020](../../adr/0020-a-capture-before-a-games-last-scheduled-start-does-not-count.md) | A capture taken before a game's last scheduled start does not start the settle window | proposed; option chosen by the owner 2026-10-07 |
 
 ## Detailed design
 
