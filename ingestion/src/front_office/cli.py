@@ -301,18 +301,26 @@ def audit(
     db: DbPath = DEFAULT_DB,
     today: Annotated[
         str | None,
-        typer.Option("--today", help="Eastern date to judge settle windows by (YYYY-MM-DD)."),
+        typer.Option(
+            "--today",
+            help="Judge whether a settle window has closed at the end of this Eastern date "
+            "(YYYY-MM-DD). Only that threshold moves: captures taken after it still count.",
+        ),
     ] = None,
 ) -> None:
     """Check that landed data is complete, loaded and final. Exits 1 on any ERROR."""
     zone = LandingZone(root=raw_root)
     warn_if_writing(zone)
-    as_of = dt.date.fromisoformat(today) if today else dt.datetime.now(landing_audit.EASTERN).date()
+    as_of = (
+        landing_audit.end_of_eastern_day(dt.date.fromisoformat(today))
+        if today
+        else dt.datetime.now(dt.UTC)
+    )
     if db.exists():
         with duckdb.connect(str(db), read_only=True) as con:
-            findings = landing_audit.run_audit(zone, con, season=season, today=as_of)
+            findings = landing_audit.run_audit(zone, con, season=season, as_of=as_of)
     else:
-        findings = landing_audit.run_audit(zone, None, season=season, today=as_of)
+        findings = landing_audit.run_audit(zone, None, season=season, as_of=as_of)
     typer.echo(landing_audit.format_report(findings))
     if any(finding.severity == landing_audit.Severity.ERROR for finding in findings):
         raise typer.Exit(code=1)

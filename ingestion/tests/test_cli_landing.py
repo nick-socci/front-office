@@ -18,6 +18,7 @@ from front_office.landing import LandingZone
 
 FIRST = "20260927T000000Z"
 SECOND = "20260928T000000Z"
+WEEK_LATER = "20261004T000000Z"  # 7 days after FIRST
 runner = CliRunner()
 
 
@@ -26,6 +27,7 @@ def game(pk, date="2026-04-14"):
         "gamePk": pk,
         "season": "2026",
         "officialDate": date,
+        "gameDate": f"{date}T18:00:00Z",
         "gameType": "R",
         "status": {"abstractGameState": "Final", "detailedState": "Final"},
     }
@@ -186,19 +188,21 @@ def test_a_process_killed_before_the_rename_is_swept_and_refetched(
 def test_a_process_killed_after_the_rename_is_not_fetched_again(zone, requested, monkeypatch):
     """Catches a committed capture fetched again, or quarantined, on the next run."""
     stamps(monkeypatch, SECOND)
-    zone.write(
-        source="mlb",
-        endpoint="boxscore",
-        partitions={"season": 2026, "game_pk": 11},
-        name=f"fetched_at={FIRST}",
-        payload={"teams": {}},
-        request={"url": "https://example.test", "params": {"gamePk": 11}},
-        fetched_at=FIRST,
-    )
+    # One capture no longer settles a game: two a week apart, both after its start, do.
+    for stamp in (FIRST, WEEK_LATER):
+        zone.write(
+            source="mlb",
+            endpoint="boxscore",
+            partitions={"season": 2026, "game_pk": 11},
+            name=f"fetched_at={stamp}",
+            payload={"teams": {}},
+            request={"url": "https://example.test", "params": {"gamePk": 11}},
+            fetched_at=stamp,
+        )
     result = backfill(zone)
     assert result.exit_code == 0, result.output
     assert requested == []
-    assert len(boxscores(zone)) == 1
+    assert len(boxscores(zone)) == 2
     assert quarantine_entries(zone) == []
 
 

@@ -2,7 +2,8 @@
 
 Each test builds a small world that audits clean, breaks one thing, and checks that the
 audit names it. The clean world: one MLB game on opening day (2026-03-25), boxscore
-captured well after its settle window; one ESPN league whose two scoring periods closed
+captured on 2026-04-10 with its settle window still open at the audit's as-of instant,
+2026-04-12; one ESPN league whose two scoring periods closed
 before the run that captured them.
 """
 
@@ -29,7 +30,8 @@ from front_office.load import load_landing_zone
 SEASON = 2026
 LEAGUE = "1"
 RUN = "20260327T160000Z"  # noon Eastern, 2026-03-27: period 3 is current
-TODAY = dt.date(2026, 5, 1)
+AS_OF = dt.datetime(2026, 4, 12, 12, 0, tzinfo=dt.UTC)  # the clean world's boxscore window is open
+LATER = dt.datetime(2026, 5, 1, 12, 0, tzinfo=dt.UTC)
 
 
 def land(
@@ -80,6 +82,7 @@ def schedule_game(pk, date, detailed="Final", **extra):
         "gamePk": pk,
         "season": str(SEASON),
         "officialDate": date,
+        "gameDate": f"{date}T18:00:00Z",
         "status": {"abstractGameState": state, "detailedState": detailed},
         **extra,
     }
@@ -163,11 +166,11 @@ def zone(tmp_path):
     return zone
 
 
-def audit(zone, *, load=True, today=TODAY):
+def audit(zone, *, load=True, as_of=AS_OF):
     con = duckdb.connect()
     if load:
         load_landing_zone(con, zone)
-    return run_audit(zone, con, season=SEASON, today=today)
+    return run_audit(zone, con, season=SEASON, as_of=as_of)
 
 
 def problems(findings):
@@ -347,7 +350,7 @@ def test_an_unloaded_capture_is_an_error(zone):
     con = duckdb.connect()
     load_landing_zone(con, zone)
     land_boxscore(zone, 1, "20260420T160000Z")
-    findings = run_audit(zone, con, season=SEASON, today=TODAY)
+    findings = run_audit(zone, con, season=SEASON, as_of=AS_OF)
     assert "1 committed capture(s) not in raw.api_responses" in details(findings, Severity.ERROR)
 
 
@@ -361,7 +364,7 @@ def test_captures_that_share_a_raw_key_are_an_error(zone):
     con = duckdb.connect()
     load_landing_zone(con, zone)
     land_settings(zone, latest=3, league="2")
-    findings = run_audit(zone, con, season=SEASON, today=TODAY)
+    findings = run_audit(zone, con, season=SEASON, as_of=AS_OF)
     assert "2 captures share raw key" in details(findings, Severity.ERROR)
 
 
@@ -377,7 +380,7 @@ def test_a_capture_is_not_loaded_because_another_leagues_row_has_its_old_key(zon
     land_settings_at(zone, league="2")
     load_landing_zone(con, zone)
     land_settings_at(zone, league="3")
-    findings = run_audit(zone, con, season=SEASON, today=TODAY)
+    findings = run_audit(zone, con, season=SEASON, as_of=AS_OF)
     assert "1 committed capture(s) not in raw.api_responses" in details(findings, Severity.ERROR)
 
 
@@ -400,7 +403,7 @@ def test_an_old_shape_raw_table_is_an_error_not_a_crash(zone):
         "create schema raw; create table raw.api_responses (source varchar, endpoint varchar, "
         "request_key varchar, fetched_at varchar, payload json, file_path varchar)"
     )
-    findings = run_audit(zone, con, season=SEASON, today=TODAY)
+    findings = run_audit(zone, con, season=SEASON, as_of=AS_OF)
     errors = details(findings, Severity.ERROR)
     assert "old shape" in errors
     assert "new warehouse file" in errors
@@ -478,34 +481,132 @@ def test_a_postponed_game_that_was_made_up_is_played(zone):
     assert problems(audit(zone)) == []
 
 
-@pytest.mark.parametrize(
-    ("captured", "today", "expected"),
-    [
-        # Day 7 is the window's last day: a capture then may predate a correction.
-        ("20260401T160000Z", dt.date(2026, 4, 2), "captured only inside their settle window"),
-        ("20260402T160000Z", dt.date(2026, 4, 3), None),
-        ("20260326T160000Z", dt.date(2026, 3, 30), "1 game(s) still in settle window"),
-    ],
-)
-def test_settle_evidence_needs_a_capture_after_the_window(zone, captured, today, expected):
-    drop(zone, "mlb/boxscore/**")
-    land_boxscore(zone, 1, captured)
-    findings = audit(zone, today=today)
-    reported = details(findings, Severity.WARN) + details(findings, Severity.INFO)
-    if expected is None:
-        assert "settle window" not in reported
-    else:
-        assert expected in reported
+def settle_findings(findings):
+    """The WARN and INFO text of the boxscore settle checks."""
+    return details(findings, Severity.WARN) + " | " + details(findings, Severity.INFO)
 
 
-def test_a_resumed_game_settles_from_its_resume_date(zone):
-    """Captured eight days after the official date, but only seven after resumption."""
-    land_schedule(zone, [schedule_game(1, "2026-03-25", resumeGameDate="2026-03-26")])
+def only_boxscores(zone, *stamps):
     drop(zone, "mlb/boxscore/**")
-    land_boxscore(zone, 1, "20260402T160000Z")
+    for stamp in stamps:
+        land_boxscore(zone, 1, stamp)
+
+
+def test_a_settled_game_is_not_reported(zone):
+    """Catches a game with a capture exactly 7 days after its first-final one being flagged."""
+    only_boxscores(zone, "20260326T160000Z", "20260402T160000Z")
     findings = audit(zone)
-    assert "captured only inside their settle window" in details(findings, Severity.WARN)
-    assert "1 resumed game(s)" in details(findings, Severity.INFO)
+    assert problems(findings) == []
+    assert "settle window" not in settle_findings(findings)
+
+
+def test_a_game_whose_window_closed_without_a_later_capture_warns_and_names_the_command(zone):
+    """Catches a closed window going unreported, or advice that needs --refresh."""
+    only_boxscores(zone, "20260326T160000Z", "20260330T160000Z")
+    warning = details(audit(zone, as_of=LATER), Severity.WARN)
+    assert "1 game(s) not captured after their settle window closed" in warning
+    assert "`front-office backfill mlb --season 2026`" in warning
+    assert "--refresh" not in warning
+    assert "e.g. 1" in warning
+
+
+def test_a_game_inside_its_window_is_information_not_a_warning(zone):
+    """Catches an open window being reported as a problem."""
+    only_boxscores(zone, "20260326T160000Z")
+    findings = audit(zone, as_of=dt.datetime(2026, 3, 30, 12, 0, tzinfo=dt.UTC))
+    assert problems(findings) == []
+    assert "1 game(s) still in settle window" in details(findings, Severity.INFO)
+
+
+def test_captures_only_before_the_last_start_warn(zone):
+    """Catches a capture from before the game's last start counting as settle evidence."""
+    land_schedule(zone, [schedule_game(1, "2026-03-25", gameDate="2026-03-25T18:00:00Z")])
+    only_boxscores(zone, "20260325T100000Z", "20260325T120000Z")
+    warning = details(audit(zone), Severity.WARN)
+    assert "1 game(s) captured only before their last scheduled start; e.g. 1" in warning
+    assert "settle window closed" not in warning
+    assert "unreadable gameDate" not in warning
+
+
+def test_a_game_with_no_readable_start_is_reported_as_such_and_never_settled(zone):
+    """Catches an unreadable gameDate reported as 'captured before the start', or settling."""
+    land_schedule(zone, [schedule_game(1, "2026-03-25", gameDate=None)])
+    only_boxscores(zone, "20260326T160000Z", "20260420T160000Z")
+    warning = details(audit(zone), Severity.WARN)
+    assert "1 game(s) with an unreadable gameDate in the schedule" in warning
+    assert "they cannot settle; e.g. 1" in warning
+    assert "before their last scheduled start" not in warning
+    assert "settle window closed" not in warning
+
+
+def test_a_capture_whose_stamp_is_not_a_utc_stamp_is_reported_and_not_counted(zone):
+    """Catches one odd fetched_at crashing the audit, or counting as the settling capture."""
+    only_boxscores(zone, "20260326T160000Z", "2026-04-20")
+    findings = audit(zone, as_of=LATER)
+    warning = details(findings, Severity.WARN)
+    assert "1 boxscore capture(s) with a fetched_at that is not a UTC stamp" in warning
+    assert "1 game(s) not captured after their settle window closed" in warning
+
+
+def test_a_game_whose_every_stamp_is_unreadable_is_not_called_captured_before_its_start(zone):
+    """Catches a comparison with the start claimed for a game that has no readable stamp."""
+    only_boxscores(zone, "2026-04-20")
+    warning = details(audit(zone, as_of=LATER), Severity.WARN)
+    assert "1 boxscore capture(s) with a fetched_at that is not a UTC stamp" in warning
+    assert "1 game(s) have no other capture, so cannot settle; e.g. 1" in warning
+    assert "before their last scheduled start" not in warning
+    assert "settle window closed" not in warning
+
+
+def test_an_unreadable_start_and_unreadable_stamps_are_both_reported(zone):
+    """Catches one fault hiding the other when a game has neither a start nor a stamp."""
+    land_schedule(zone, [schedule_game(1, "2026-03-25", gameDate=None)])
+    only_boxscores(zone, "2026-04-20")
+    warning = details(audit(zone, as_of=LATER), Severity.WARN)
+    assert "1 game(s) with an unreadable gameDate in the schedule" in warning
+    assert "1 game(s) have no other capture, so cannot settle; e.g. 1" in warning
+    assert "before their last scheduled start" not in warning
+    assert "settle window closed" not in warning
+
+
+def test_a_resumed_game_is_judged_by_the_guard_not_by_resume_game_date(zone):
+    """Catches resumeGameDate starting the clock for captures from before the later session."""
+    land_schedule(
+        zone,
+        [
+            schedule_game(1, "2026-03-25", resumeGameDate="2026-03-26"),
+            schedule_game(1, "2026-03-25", gameDate="2026-04-05T18:00:00Z"),
+        ],
+    )
+    only_boxscores(zone, "20260401T160000Z", "20260403T160000Z")
+    findings = audit(zone)
+    assert "1 game(s) captured only before their last scheduled start" in details(
+        findings, Severity.WARN
+    )
+    assert "resumed" not in settle_findings(findings)
+
+
+def cli_audit(zone, tmp_path, today):
+    db = tmp_path / f"{today}.duckdb"
+    with duckdb.connect(str(db)) as con:
+        load_landing_zone(con, zone)
+    args = ["audit", "--season", "2026", "--raw-root", str(zone.root), "--db", str(db)]
+    return CliRunner().invoke(app, [*args, "--today", today]).output
+
+
+def test_today_judges_the_window_by_the_end_of_that_eastern_day(zone, tmp_path):
+    """Catches the as-of instant off by a day: the window closes 2026-04-02T16:00Z."""
+    only_boxscores(zone, "20260326T160000Z")
+    assert "1 game(s) still in settle window" in cli_audit(zone, tmp_path, "2026-04-01")
+    closed = cli_audit(zone, tmp_path, "2026-04-02")
+    assert "1 game(s) not captured after their settle window closed" in closed
+
+
+def test_a_settling_capture_taken_after_today_still_counts(zone, tmp_path):
+    """Catches --today read as a time machine that hides later captures."""
+    only_boxscores(zone, "20260326T160000Z", "20260410T160000Z")
+    output = cli_audit(zone, tmp_path, "2026-03-28")
+    assert "settle window" not in output
 
 
 # -- espn ------------------------------------------------------------------------------
@@ -726,12 +827,12 @@ def test_cli_exits_nonzero_only_on_errors(zone, tmp_path):
         load_landing_zone(con, zone)
     args = ["audit", "--season", "2026", "--raw-root", str(zone.root), "--db", str(db)]
 
-    clean = CliRunner().invoke(app, [*args, "--today", "2026-05-01"])
+    clean = CliRunner().invoke(app, [*args, "--today", "2026-04-12"])
     assert clean.exit_code == 0, clean.output
     assert "0 error(s), 0 warning(s)" in clean.output
 
     land_schedule(zone, [schedule_game(1, "2026-03-25"), schedule_game(2, "2026-03-26")])
-    broken = CliRunner().invoke(app, [*args, "--today", "2026-05-01"])
+    broken = CliRunner().invoke(app, [*args, "--today", "2026-04-12"])
     assert broken.exit_code == 1
     assert "played game(s) with no boxscore" in broken.output
 

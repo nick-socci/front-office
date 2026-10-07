@@ -1,6 +1,6 @@
 # Settled boxscores: a game is final only when a capture postdates its settle window — requirements
 
-Issue: #30 · Tier: M · Status: draft
+Issue: #30 · Tier: M · Status: approved 2026-10-07
 
 ## Problem
 

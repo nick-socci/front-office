@@ -1,6 +1,6 @@
 # 0019. A boxscore's settle window runs from the game's first capture
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-07
 - Spec: [0030-settled-boxscores](../specs/0030-settled-boxscores/design.md) · Issue: #30
 

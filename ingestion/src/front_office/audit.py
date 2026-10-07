@@ -9,7 +9,8 @@ checks the files themselves:
            checksum; nothing is waiting in quarantine
   loaded   every committed capture is a row in raw.api_responses, with no key collisions
   mlb      every played game in the newest schedule has a boxscore, and one was captured
-           after the game's settle window closed
+           a settle window (7 days) after its first capture that postdates the game's last
+           scheduled start, by the same functions the backfill uses (specs/0030)
   espn     every scoring period has a roster captured after the period closed; the
            scoring-date anchor is stable across snapshots and lands on MLB opening day;
            league snapshots postdate the season; the transaction log is not truncated
@@ -92,12 +93,18 @@ def eastern_date(fetched_at: str) -> dt.date:
     return instant.astimezone(EASTERN).date()
 
 
+def end_of_eastern_day(day: dt.date) -> dt.datetime:
+    """The first instant after `day` ends in Eastern time, as an aware UTC instant."""
+    midnight = dt.datetime.combine(day + dt.timedelta(days=1), dt.time.min, tzinfo=EASTERN)
+    return midnight.astimezone(dt.UTC)
+
+
 def run_audit(
     zone: LandingZone,
     con: duckdb.DuckDBPyConnection | None,
     *,
     season: int,
-    today: dt.date,
+    as_of: dt.datetime,
 ) -> list[Finding]:
     """Every check, in order. `con` is None when there is no warehouse to check."""
     findings, captures = check_landing(zone)
@@ -107,7 +114,7 @@ def run_audit(
         )
     else:
         findings += check_loaded(zone, captures, con)
-    mlb_findings, opening_day = check_mlb(zone, captures, season=season, today=today)
+    mlb_findings, opening_day = check_mlb(zone, captures, season=season, as_of=as_of)
     findings += mlb_findings
     findings += check_espn(captures, season=season, opening_day=opening_day)
     return findings
@@ -323,7 +330,7 @@ def check_loaded(
 
 
 def check_mlb(
-    zone: LandingZone, captures: list[Capture], *, season: int, today: dt.date
+    zone: LandingZone, captures: list[Capture], *, season: int, as_of: dt.datetime
 ) -> tuple[list[Finding], dt.date | None]:
     """Boxscore coverage and settle evidence. Also returns opening day, for the ESPN check.
 
@@ -338,19 +345,12 @@ def check_mlb(
     played_pks = {game.game_pk for game in played}
     findings = []
 
-    # Unplayed games need an explicit disposition, not silence. Resumed games finished
-    # after their official date, so their settle window runs from the resume date.
+    # Unplayed games need an explicit disposition, not silence.
     last_state: dict[int, str] = {}
-    completed = {game.game_pk: game.official_date for game in played}
-    resumed = set()
     for day in schedule.payload().get("dates", []):
         for entry in day.get("games", []):
             pk = int(entry["gamePk"])
             last_state[pk] = entry.get("status", {}).get("detailedState", "")
-            resume = entry.get("resumeGameDate")
-            if resume and pk in completed:
-                completed[pk] = max(completed[pk], dt.date.fromisoformat(resume))
-                resumed.add(pk)
     unplayed = Counter(state for pk, state in last_state.items() if pk not in played_pks)
     dispositions = ", ".join(f"{state} {n}" for state, n in sorted(unplayed.items()))
     findings.append(
@@ -382,40 +382,84 @@ def check_mlb(
         )
     findings += _unplayed_boxscores(captures, boxscores.keys() - played_pks, last_state, subject)
 
-    # Settled: some capture was taken on a later Eastern day than the window's last day.
-    unsettled, pending = [], 0
-    for pk in sorted(played_pks & boxscores.keys()):
-        window_closes = completed[pk] + mlb_boxscore.SETTLE_WINDOW
-        if any(eastern_date(stamp) > window_closes for stamp in boxscores[pk]):
+    # Settlement is judged by the fetch logic's own functions, over the captures held here.
+    closed, pending, before_start, no_start, unreadable, unstamped = [], 0, [], [], 0, []
+    for game in played:
+        if game.game_pk not in boxscores:
             continue
-        if today > window_closes:
-            unsettled.append(pk)
+        # A stamp that does not parse is no evidence, as in the backfill's capture_stamps.
+        stamps = []
+        for stamp in boxscores[game.game_pk]:
+            try:
+                stamps.append(mlb_boxscore.parse_stamp(stamp))
+            except ValueError:
+                unreadable += 1
+        first = mlb_boxscore.first_final(stamps, game.last_start)
+        # Two independent faults, each reported whatever the other is: no readable start,
+        # and no readable stamp. Only a game with both a start and a stamp is compared.
+        if game.last_start is None:
+            no_start.append(game.game_pk)
+        if not stamps:
+            unstamped.append(game.game_pk)
+        if game.last_start is None or not stamps:
+            continue
+        if first is None:
+            before_start.append(game.game_pk)
+        elif mlb_boxscore.is_settled(stamps, game.last_start):
+            continue
+        elif first + mlb_boxscore.SETTLE_WINDOW <= as_of:
+            closed.append(game.game_pk)
         else:
             pending += 1
-    if unsettled:
+    if closed:
         findings.append(
             Finding(
                 Severity.WARN,
                 "mlb",
                 subject,
-                f"{len(unsettled)} game(s) captured only inside their settle window, which has "
-                f"closed; a late correction may be missing (review R4). Run "
-                f"`front-office backfill mlb --season {season} --refresh`; "
-                f"{_sample(map(str, unsettled))}",
+                f"{len(closed)} game(s) not captured after their settle window closed; a late "
+                f"correction may be missing (review R4). Run "
+                f"`front-office backfill mlb --season {season}`; {_sample(map(str, closed))}",
             )
         )
     if pending:
         findings.append(
             Finding(Severity.INFO, "mlb", subject, f"{pending} game(s) still in settle window")
         )
-    if resumed:
+    if before_start:
         findings.append(
             Finding(
-                Severity.INFO,
+                Severity.WARN,
                 "mlb",
                 subject,
-                f"{len(resumed)} resumed game(s) settle from their resume date, taken as the "
-                f"completion date; {_sample(map(str, sorted(resumed)))}",
+                f"{len(before_start)} game(s) captured only before their last scheduled start; "
+                f"{_sample(map(str, before_start))}",
+            )
+        )
+    if no_start:
+        findings.append(
+            Finding(
+                Severity.WARN,
+                "mlb",
+                subject,
+                f"{len(no_start)} game(s) with an unreadable gameDate in the schedule, so no "
+                f"last scheduled start: they cannot settle; {_sample(map(str, no_start))}",
+            )
+        )
+    if unreadable:
+        findings.append(
+            Finding(
+                Severity.WARN,
+                "mlb",
+                subject,
+                f"{unreadable} boxscore capture(s) with a fetched_at that is not a UTC stamp; "
+                "not counted as settle evidence"
+                + (
+                    f"; {len(unstamped)} game(s) have no other capture, so cannot settle; "
+                    f"{_sample(map(str, unstamped))}"
+                    if unstamped
+                    else ""
+                ),
             )
         )
     opening_day = min((game.official_date for game in played), default=None)

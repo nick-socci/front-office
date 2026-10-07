@@ -145,8 +145,8 @@ entry with each capture. More to store and read for no case A misses.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0019](../../adr/0019-a-boxscores-settle-window-runs-from-its-first-capture.md) | A boxscore's settle window runs from the game's first capture | proposed; option chosen by the owner 2026-10-07 |
-| [0020](../../adr/0020-a-capture-before-a-games-last-scheduled-start-does-not-count.md) | A capture taken before a game's last scheduled start does not start the settle window | proposed; option chosen by the owner 2026-10-07 |
+| [0019](../../adr/0019-a-boxscores-settle-window-runs-from-its-first-capture.md) | A boxscore's settle window runs from the game's first capture | accepted |
+| [0020](../../adr/0020-a-capture-before-a-games-last-scheduled-start-does-not-count.md) | A capture taken before a game's last scheduled start does not start the settle window | accepted |
 
 ## Detailed design
 
@@ -330,3 +330,18 @@ All in pytest with a fake transport; no dbt test changes.
 | design-review | F5 (P2): the functions take an iterable but read it twice | Fixed: they read it once into a list; tested with a generator. |
 
 ## Amendments
+
+- **2026-10-07 — R4.1, one more test encoded "one capture settles a game".** R4.1 names
+  six tests to replace. A seventh, `test_a_process_killed_after_the_rename_is_not_fetched_again`
+  in `test_cli_landing.py`, also relied on a single committed capture being enough. It is
+  kept, with its purpose unchanged (a capture that survived the kill is counted and not
+  quarantined), and now lands two captures a week apart, which is what settles a game
+  under R2.1. Within the goals; no decision changes.
+
+- **2026-10-07 — R1.3 and R3.4, what the audit says about a game with no readable start
+  (review round 1).** R3.4 covers games whose captures all predate their last scheduled
+  start; the design counted a game with an unreadable `gameDate` in the same warning,
+  which claims a start that does not exist. Built: such a game gets its own warning,
+  `game(s) with an unreadable gameDate in the schedule … they cannot settle`. A boxscore
+  capture whose `fetched_at` is not a UTC stamp is not counted as evidence and is
+  reported, as the fetch path already ignores it. Within the goals; no decision changes.

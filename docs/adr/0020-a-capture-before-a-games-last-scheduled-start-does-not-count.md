@@ -1,6 +1,6 @@
 # 0020. A capture taken before a game's last scheduled start does not start the settle window
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-07
 - Spec: [0030-settled-boxscores](../specs/0030-settled-boxscores/design.md) · Issue: #30
 
