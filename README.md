@@ -129,8 +129,10 @@ later milestone re-runnable offline, which mattered: ESPN rolls leagues over in 
 offseason, so the 2026 data could not be re-fetched later.
 
 **Snapshot vs immutable, per endpoint.** A boxscore is not final when the game ends;
-official scorers revise hits and errors for days, so boxscores stay refetchable for a
-7-day settle window. An ESPN roster is settled once its scoring period is over, judged
+official scorers revise hits and errors for days, so a boxscore is refetched until a
+capture is at least 7 days newer than the game's first capture taken after its last
+scheduled start. That is judged from capture timestamps alone, not the game's date, so a
+missed week of runs repairs itself. An ESPN roster is settled once its scoring period is over, judged
 against the league's own status rather than the period number.
 
 **Components, never rates.** AVG, ERA and WHIP are ratios; averaging per-game ratios

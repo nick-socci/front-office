@@ -6,8 +6,16 @@ to decide what to fetch. Two rules govern re-fetching:
 * A game is only worth fetching once it has been played.
 * A played game is NOT immutable immediately. MLB's official scorers revise hits, errors
   and occasionally earned runs for days afterwards, and ESPN applies those corrections to
-  fantasy results. So a game stays refetchable for a settle window (7 days) and is
-  treated as final after that.
+  fantasy results. So a game stays refetchable until it is settled: some capture is at
+  least the settle window (7 days) later than the game's first capture taken after its
+  last scheduled start.
+
+The settle window runs from that first capture, not from the game's date. A boxscore is
+only fetched for a game the schedule shows as played, so the first capture after the last
+scheduled start is itself evidence the game was over by then; a capture from before that
+start cannot have seen a suspended game finish. Everything is a comparison of `fetched_at`
+stamps, so the decision needs no dates, timezones or clock, and the audit calls the same
+functions (`first_final`, `is_settled`). Why: ADRs 0019 and 0020.
 
 The payload itself carries no gamePk -- the identifier lives in the URL path -- so the
 game_pk is recorded in the request metadata, which is what staging reads it from.
