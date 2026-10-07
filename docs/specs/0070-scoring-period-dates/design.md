@@ -280,3 +280,20 @@ date; the stamp itself stays, since changing it would rename every fixture captu
 | design-review | F4 (P2): a count inequality cannot catch every misalignment | Changed: R3.5 and the design call it a partial signal; the player-level reconciliation (22 rows) is added to the expected values |
 
 ## Amendments
+
+- 2026-10-07, task 1 and task 7: the before picture for the `EXCEPT` comparison is the
+  180 rows saved as a table in `data/pre70_scoring_periods.duckdb`, not the model in
+  `data/warehouse_pre70.duckdb`. The model is a view, and the views in a copied file name
+  the catalog `warehouse`, so they cannot be queried beside the live file. The full copy
+  is still the way back, and its tables are what the marts were compared with.
+- 2026-10-07, R5.4: one more audit test changed its assertion,
+  `test_the_clean_world_audits_clean`. Its settings capture has `latestScoringPeriod` 3
+  and `finalScoringPeriod` 2, so under R4.1 it is past the final period and the audit
+  reports it as such, where it used to report `period 1 = 2026-03-25`. The fixture is
+  unchanged, because the roster-finality tests depend on it; the in-progress finding has
+  its own tests.
+- 2026-10-07, R4.7: the audit takes opening day from every entry of the newest landed
+  schedule, which is the `game_type=R` capture. A postponed game's entry under its
+  original date counts, where the model uses each game's one deduplicated row. The two
+  differ only if every game of opening day is postponed, the case ADR 0021 already
+  accepts.
