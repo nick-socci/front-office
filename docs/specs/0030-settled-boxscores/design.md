@@ -181,8 +181,12 @@ Pure functions, no I/O, so the audit can call them with its own objects:
 def parse_stamp(fetched_at: str) -> dt.datetime:
     """A capture's compact UTC stamp (20260926T162307Z) as an aware instant."""
 
-def first_final(stamps: Iterable[dt.datetime], last_start: dt.datetime | None) -> dt.datetime | None:
+
+def first_final(
+    stamps: Iterable[dt.datetime], last_start: dt.datetime | None
+) -> dt.datetime | None:
     """The earliest capture taken after the game's last scheduled start, or None."""
+
 
 def is_settled(
     stamps: Iterable[dt.datetime],
@@ -212,7 +216,9 @@ boxscore capture whose `season` partition matches, grouped by `game_pk`
 function:
 
 ```python
-def needs_fetch(scheduled: ScheduledGame, stamps: Iterable[dt.datetime], *, refresh: bool = False) -> bool:
+def needs_fetch(
+    scheduled: ScheduledGame, stamps: Iterable[dt.datetime], *, refresh: bool = False
+) -> bool:
     return refresh or not is_settled(stamps, scheduled.last_start)
 ```
 
