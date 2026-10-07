@@ -12,15 +12,27 @@ requested only for a game listed as played. A suspended game tests that ground. 
 lists a suspended game as final before it resumes, its boxscore would be captured with
 the resumed innings missing, and seven days later it would be settled that way. How MLB
 lists such a game cannot be read from what is landed: the one suspension of 2026 was in
-June and the first schedule capture is from September.
+June and the first schedule capture is from September. MLB's status table says a
+suspended game is `Live`, which would keep it out of the backfill; no capture confirms it.
 
 What the landed schedule does show, for game 824912: two entries with official date
 2026-06-16, one with `gameDate` 2026-06-16T23:15:00Z and `resumeDate`
 2026-06-17T18:00:00Z, the other with `gameDate` 2026-06-17T18:00:00Z and `resumedFrom`
 2026-06-16T23:15:00Z. For all 28 postponed games the played entry's `gameDate` equals
-the postponed entry's `rescheduleDate`. So `gameDate` is the scheduled start of that
-entry's session, and `resumeDate` is a restart, not a completion. What an MLB field
-means is the owner's decision (AGENTS.md).
+the postponed entry's `rescheduleDate`.
+
+The owner asked for more evidence than one season's schedule, so MLB's public API was
+read on 2026-10-07 (details in the spec's design.md). All 15 resumed games of 2022–2025
+have the same two-entry shape, the first entry's `resumeDate` equal to the second's
+`gameDate`. In the live feeds of four resumed games the first play starts within three
+minutes of the first entry's `gameDate`; in three, the last play ends about two hours
+after the second entry's `gameDate`; the fourth (716404, 2023) was never resumed and was
+declared complete, its last play three days before the listed resume start. MLB's status
+table classes all 34 `Suspended` states as `Live`, where the backfill takes only `Final`.
+
+So `gameDate` is the scheduled start of that entry's session, and `resumeDate` is a
+planned restart: not a completion, and not always played. What an MLB field means is the
+owner's decision (AGENTS.md).
 
 ## Decision drivers
 
@@ -66,6 +78,7 @@ Option 4 treats a restart as a completion.
   are ignored until one is later still. It can only delay settling.
 - Bad / accepted cost: if MLB lists a suspended game as played before its later session
   is in the schedule, the game can be settled on a partial boxscore until that session
-  appears.
-- Follow-ups: the first suspension of 2027 will show how such a game is listed; nothing
-  needs to change either way.
+  appears. MLB's status table says it does not; the owner accepted the gap on 2026-10-07.
+- Bad / accepted cost: a resume that is listed and never played (716404) leaves the last
+  scheduled start later than the real end, which delays settling.
+- Follow-ups: #69 checks the first suspension of 2027.

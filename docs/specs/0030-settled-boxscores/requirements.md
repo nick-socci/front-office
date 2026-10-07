@@ -57,8 +57,9 @@ rule, so the fetch logic and the audit can disagree.
   the boxscore response carries no status, so it would be a copy of the schedule the
   rule already reads.
 - *Per-timezone "day 7"* → instants only; a day is 24 hours.
-- *Finding out how MLB codes a suspended game before it resumes* → not in what is
-  landed; R1.2 and R2.7 hold the game open, or reopen it, once its later session is listed.
+- *Proving how MLB lists a suspended game before it resumes* → its status table says
+  `Live`, nothing landed shows it, and #69 will; R1.2 and R2.7 hold the game open, or
+  reopen it, once its later session is listed.
 
 ## Requirements
 
@@ -106,7 +107,7 @@ rule, so the fetch logic and the audit can disagree.
   settle window is still open.
 - R3.4 THE SYSTEM SHALL have the audit warn of every played game whose captures all
   predate its last scheduled start.
-- R3.5 THE SYSTEM SHALL decide whether an unsettled game's window has closed against
+- R3.5 (The owner, 2026-10-07: a threshold only.) THE SYSTEM SHALL decide whether an unsettled game's window has closed against
   the current instant by default, and against the end of the given Eastern date when
   `--today` is passed. `--today` moves only that threshold: every committed capture is
   still counted, whenever it was taken.

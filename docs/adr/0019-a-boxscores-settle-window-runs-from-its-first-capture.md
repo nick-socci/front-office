@@ -36,7 +36,7 @@ landed schedule lists as played. `fetched_at` is the stamp of the run.
 
 ## Decision
 
-Chosen: **option 1**.
+Chosen: **option 1**, by the owner on 2026-10-07.
 
 A game is settled if and only if some committed capture of it has a `fetched_at` at
 least 7 days (168 hours) later than that of its first capture. Which captures can be

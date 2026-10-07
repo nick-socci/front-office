@@ -53,6 +53,36 @@ Read from the real landing zone on 2026-10-07; nothing was fetched.
   start.
 - **How a suspended game is listed before it resumes is not in the landed data**: the
   first schedule capture is from September, three months after the only suspension.
+
+Checked against MLB's public API on 2026-10-07, at the owner's request for more than the
+2026 schedule. These responses were read for the spec and are not landed.
+
+- **Resumed games, 2022–2025** (`/api/v1/schedule`, one request per season): 15 games.
+  Every one has exactly two entries sharing the original official date; the first has
+  `resumeDate` and the second `resumedFrom`, and in 15 of 15 the first entry's
+  `resumeDate` equals the second entry's `gameDate`. Game 746942 has official date
+  2024-06-26 and a second entry starting 2024-08-26T18:05:00Z, two months later.
+- **Actual play times** (`/api/v1.1/game/{pk}/feed/live`) for four of them:
+
+  | Game | First entry `gameDate` | First play | Second entry `gameDate` | Last play ended |
+  |---|---|---|---|---|
+  | 746942 | 2024-06-26T23:10Z | 23:12Z | 2024-08-26T18:05Z | 2024-08-26T20:24Z |
+  | 777861 | 2025-05-19T23:40Z | 23:40Z | 2025-05-21T17:10Z | 2025-05-21T19:16Z |
+  | 824912 | 2026-06-16T23:15Z | 23:16Z | 2026-06-17T18:00Z | 2026-06-17T20:01Z |
+  | 716404 | 2023-09-28T23:10Z | 23:10Z | 2023-10-02T17:10Z | 2023-09-29T01:22Z |
+
+  So `gameDate` is the scheduled start of a session, to within three minutes of the
+  first pitch. In the three games that were resumed, the last play ended about two hours
+  after the second entry's `gameDate`, with innings played on that day. Game 716404 was
+  never resumed: it was declared `Completed Early: Rain` and its last play is from the
+  original night, three days before the listed resume start. A resume date is therefore
+  neither a completion nor even a promise of more play, and the latest `gameDate` can be
+  later than the real end, which only delays the window.
+- **MLB's status table** (`/api/v1/gameStatus`, 210 rows): all 34 `Suspended` states have
+  `abstractGameState` `Live`. The backfill takes only games whose abstract state is
+  `Final`, so by MLB's own classification a suspended game is not fetched until it is
+  finished or declared complete. This is a reference table, not an observation of a
+  suspended game in a schedule; #69 tracks the observation.
 - **Under the rule below**, 2,402 games are settled. 27 are not: games of 2026-09-26 and
   2026-09-27 first captured `20260928T215618Z` and last captured `20261005T121147Z`,
   6.6 days later. The audit's present date rule calls all 2,429 settled.
@@ -103,9 +133,10 @@ that start has not seen the finished game, whatever the schedule called it at th
 `gameDate` is used only as a lower bound, which is the one thing a scheduled start
 proves.
 
-**B.** Correct if a suspended game is listed as in progress until it finishes. That may
-well be so, but the landed data cannot show it, and being wrong would freeze a boxscore
-missing its resumed innings.
+**B.** Correct if a suspended game is listed as in progress until it finishes. MLB's
+status table says it is (every `Suspended` state is `Live`), but no schedule capture has
+ever shown a suspended game, and being wrong would freeze a boxscore missing its resumed
+innings. The guard costs one comparison on a field already read.
 
 **C.** Catches the same case and more, by comparing schedule captures or storing the
 entry with each capture. More to store and read for no case A misses.
@@ -114,7 +145,7 @@ entry with each capture. More to store and read for no case A misses.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0019](../../adr/0019-a-boxscores-settle-window-runs-from-its-first-capture.md) | A boxscore's settle window runs from the game's first capture | proposed |
+| [0019](../../adr/0019-a-boxscores-settle-window-runs-from-its-first-capture.md) | A boxscore's settle window runs from the game's first capture | proposed; option chosen by the owner 2026-10-07 |
 | [0020](../../adr/0020-a-capture-before-a-games-last-scheduled-start-does-not-count.md) | A capture taken before a game's last scheduled start does not start the settle window | proposed |
 
 ## Detailed design
@@ -272,10 +303,12 @@ All in pytest with a fake transport; no dbt test changes.
 
 ## Open questions
 
-- **How MLB lists a suspended game before it resumes.** Not in the landed data. If it is
-  listed as played before its later session appears in the schedule, the game can settle
-  on a partial boxscore until that session appears, and is then reopened (R2.7). The
-  first suspension of 2027 would show which happens.
+- **How MLB lists a suspended game before it resumes.** MLB's status table classes every
+  suspended state as `Live`, so the game should not be fetched until it is over; this has
+  not been observed in a schedule. If it were listed as played before its later session
+  appears, the game could settle on a partial boxscore until that session appears, and
+  is then reopened (R2.7). The owner accepted this on 2026-10-07; #69 checks it on the
+  first suspension of 2027.
 - **Whether corrections ever land after 7 days.** Unmeasured. Comparing a game's
   captures across its window, which this design now collects, would be the evidence;
   not built here.
