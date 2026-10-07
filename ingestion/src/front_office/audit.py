@@ -34,6 +34,7 @@ from zoneinfo import ZoneInfo
 import duckdb
 
 from front_office.espn import transactions as espn_transactions
+from front_office.espn.rosters import RECHECK_PERIODS, is_closed, is_settled, settled_through
 from front_office.landing import META_FILE, VANISHED, LandingZone
 from front_office.load import QUALIFIED, SCHEMA, TABLE
 from front_office.mlb import boxscore as mlb_boxscore
@@ -526,16 +527,35 @@ def _check_league(
         status = status_by_run.get(run)
         return status is not None and int(status.get("latestScoringPeriod", 0)) > period
 
-    rosters: dict[int, list[str]] = defaultdict(list)
-    for capture in league:
-        if capture.endpoint == "roster":
-            rosters[int(capture.partition("scoring_period") or 0)].append(capture.fetched_at)
+    # The same function the fetch logic uses decides which rosters are closed, so the two
+    # cannot disagree (ADR 0016). A settings capture counts only with an integer counter.
+    settings_latest_by_run = {
+        run: status["latestScoringPeriod"]
+        for run, status in status_by_run.items()
+        if isinstance(status.get("latestScoringPeriod"), int)
+        and not isinstance(status.get("latestScoringPeriod"), bool)
+    }
+    evidence = settled_through(
+        [capture.meta for capture in league if capture.endpoint == "roster"],
+        settings_latest_by_run,
+    )
+    captured = {
+        int(capture.partition("scoring_period") or 0)
+        for capture in league
+        if capture.endpoint == "roster"
+    }
     required = range(first, min(latest, final) + 1)
-    missing = [period for period in required if period not in rosters]
+    missing = [period for period in required if period not in captured]
     unproven = [
+        period for period in required if period in captured and not is_closed(period, evidence)
+    ]
+    rechecking = [
         period
         for period in required
-        if period in rosters and not any(closed_at_run(run, period) for run in rosters[period])
+        if is_closed(period, evidence) and not is_settled(period, evidence)
+    ]
+    unclosed_season = [
+        period for period in required if period in captured and evidence.get(period, 0) <= final
     ]
     findings.append(
         Finding(
@@ -562,8 +582,30 @@ def _check_league(
                 Severity.WARN,
                 "espn",
                 subject,
-                f"{len(unproven)} roster(s) with no capture shown final by same-run settings "
+                f"{len(unproven)} roster(s) with no capture shown final "
                 f"(review R1); {_sample(map(str, unproven))}",
+            )
+        )
+    if rechecking:
+        findings.append(
+            Finding(
+                Severity.INFO,
+                "espn",
+                subject,
+                f"{len(rechecking)} closed roster period(s) inside the {RECHECK_PERIODS}-period "
+                f"re-check window; the next run fetches them again; "
+                f"{_sample(map(str, rechecking))}",
+            )
+        )
+    if season_over and unclosed_season:
+        findings.append(
+            Finding(
+                Severity.WARN,
+                "espn",
+                subject,
+                f"{len(unclosed_season)} roster(s) never captured after the final scoring "
+                f"period; run backfill-espn --refresh to close the season; "
+                f"{_sample(map(str, unclosed_season))}",
             )
         )
 
