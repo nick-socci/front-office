@@ -22,7 +22,7 @@ def zone(tmp_path):
     return LandingZone(root=tmp_path / "raw")
 
 
-def land(zone, *, stamp=STAMP, payload=None, **entity):
+def land(zone, *, stamp=STAMP, payload=None, source_status=None, **entity):
     entity = entity or BOX
     return zone.write(
         source=entity["source"],
@@ -32,6 +32,7 @@ def land(zone, *, stamp=STAMP, payload=None, **entity):
         payload={"x": 1} if payload is None else payload,
         request={"url": "https://example.test/x", "params": {"gamePk": 1}},
         fetched_at=stamp,
+        source_status=source_status,
     )
 
 
@@ -130,6 +131,23 @@ def test_a_capture_that_does_not_agree_is_not_committed(zone, damage):
     assert isinstance(zone.check(path), str)
     assert not has_landed(zone)
     assert list(zone.committed()) == []
+
+
+def test_a_source_status_of_any_shape_does_not_change_whether_a_capture_is_committed(zone):
+    """Catches a new way for a capture to be quarantined: the check must not look inside
+    source_status, present, absent or malformed (R1.4)."""
+    plain = land(zone, stamp="20260926T000001Z")
+    given = land(
+        zone,
+        stamp="20260926T000002Z",
+        source_status={"latest_scoring_period": 5, "final_scoring_period": 180},
+    )
+    malformed = land(zone, stamp="20260926T000003Z", source_status={"latest_scoring_period": 5})
+    edit_meta(malformed, source_status=["not", "a", "mapping"])  # size and hash stay valid
+    for path in (plain, given, malformed):
+        assert zone.check(path) is None
+        assert zone.check(path, deep=True) is None
+    assert len(list(zone.committed())) == 3
 
 
 def test_an_empty_capture_directory_is_not_committed(zone):
