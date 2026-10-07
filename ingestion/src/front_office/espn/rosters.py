@@ -13,6 +13,7 @@ still change.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -25,6 +26,8 @@ logger = logging.getLogger(__name__)
 SOURCE = "espn"
 ENDPOINT = "roster"
 VIEWS = ("mRoster",)
+# A closed period is fetched again on each run until the league is this many periods past it.
+RECHECK_PERIODS = 7
 
 
 @dataclass
@@ -45,6 +48,45 @@ def last_period(status: dict[str, Any]) -> int:
 def period_is_over(period: int, status: dict[str, Any]) -> bool:
     """True when `period` can no longer change."""
     return period < int(status.get("latestScoringPeriod", 0))
+
+
+def settled_through(
+    roster_metas: Iterable[Mapping[str, Any]],
+    settings_latest_by_run: Mapping[str, int],
+) -> dict[int, int]:
+    """For each scoring period, the highest latest-period any of its captures is evidence of.
+
+    A sidecar with a `source_status` key is evidence by its own counter alone: any other
+    shape is no evidence and does not fall back to the settings. A legacy sidecar (no such
+    key) is evidence by the settings captured in the same run. Periods with no evidence
+    are absent. The caller passes the sidecars of one league-season only.
+    """
+    evidence: dict[int, int] = {}
+    for meta in roster_metas:
+        if "source_status" in meta:
+            status = meta["source_status"]
+            latest = (
+                _integer(status.get("latest_scoring_period"))
+                if isinstance(status, Mapping)
+                else None
+            )
+        else:
+            latest = _integer(settings_latest_by_run.get(meta["fetched_at"]))
+        if latest is None:
+            continue
+        period = int(meta["partitions"]["scoring_period"])
+        evidence[period] = max(latest, evidence.get(period, 0))
+    return evidence
+
+
+def is_closed(period: int, evidence: Mapping[int, int]) -> bool:
+    """True when some capture was taken after the league had moved past `period`."""
+    return evidence.get(period, 0) > period
+
+
+def is_settled(period: int, evidence: Mapping[int, int]) -> bool:
+    """True when the league is more than RECHECK_PERIODS past `period`: stop re-checking."""
+    return evidence.get(period, 0) > period + RECHECK_PERIODS
 
 
 def needs_fetch(

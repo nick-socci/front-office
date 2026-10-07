@@ -326,3 +326,112 @@ def test_a_roster_response_without_a_usable_status_still_lands_and_warns(zone, c
         meta = _land_one_roster(zone, response)
     assert meta["source_status"]["latest_scoring_period"] is None
     assert any("scoring period 1" in record.getMessage() for record in caplog.records)
+
+
+# -- the evidence: settled_through, is_closed, is_settled ----------------------------------
+
+
+def _meta(period, stamp="20260101T000000Z", **status):
+    """A roster sidecar as a plain dict; pass source_status=... to include that key."""
+    meta = {"partitions": {"season": 2026, "league_id": LEAGUE_ID, "scoring_period": period}}
+    meta["fetched_at"] = stamp
+    meta.update(status)
+    return meta
+
+
+def _own(latest):
+    return {"source_status": {"latest_scoring_period": latest, "final_scoring_period": 180}}
+
+
+@pytest.mark.parametrize(
+    ("latest", "closed"), [(99, False), (100, False), (101, True)], ids=["below", "equal", "above"]
+)
+def test_a_capture_closes_its_period_only_when_its_own_status_is_past_it(latest, closed):
+    """Catches `>=` for `>`: a day still in progress counted as closed (R2.1)."""
+    evidence = espn_rosters.settled_through([_meta(100, **_own(latest))], {})
+    assert espn_rosters.is_closed(100, evidence) is closed
+
+
+def test_evidence_at_period_plus_seven_is_closed_not_settled_and_plus_eight_is_settled():
+    """Catches an off-by-one in the re-check window (R6.1)."""
+    at_seven = espn_rosters.settled_through([_meta(100, **_own(107))], {})
+    at_eight = espn_rosters.settled_through([_meta(100, **_own(108))], {})
+    assert espn_rosters.RECHECK_PERIODS == 7
+    assert espn_rosters.is_closed(100, at_seven)
+    assert not espn_rosters.is_settled(100, at_seven)
+    assert espn_rosters.is_settled(100, at_eight)
+
+
+def test_a_newer_capture_with_a_null_status_does_not_unprove_the_period():
+    """Catches 'newest capture' used instead of 'some capture' as the evidence (R2.1)."""
+    metas = [
+        _meta(100, stamp="20260102T000000Z", **_own(108)),
+        _meta(100, stamp="20260103T000000Z", source_status={"latest_scoring_period": None}),
+    ]
+    evidence = espn_rosters.settled_through(metas, {})
+    assert espn_rosters.is_closed(100, evidence)
+    assert espn_rosters.is_settled(100, evidence)
+
+
+def test_the_highest_evidence_across_captures_and_periods_is_kept_per_period():
+    """Catches evidence mixed up between periods, or the last capture winning over the best."""
+    metas = [_meta(100, **_own(105)), _meta(100, **_own(103)), _meta(101, **_own(102))]
+    assert espn_rosters.settled_through(metas, {}) == {100: 105, 101: 102}
+
+
+@pytest.mark.parametrize(
+    ("settings_latest", "closed"),
+    [(101, True), (100, False), (None, False)],
+    ids=["above", "equal", "no entry"],
+)
+def test_a_legacy_capture_is_judged_by_the_settings_of_its_own_run(settings_latest, closed):
+    """Catches legacy captures all trusted, or all refetched (R3.1, R3.2)."""
+    by_run = {} if settings_latest is None else {"20260101T000000Z": settings_latest}
+    by_run["20260105T000000Z"] = 500  # another run's settings prove nothing here
+    evidence = espn_rosters.settled_through([_meta(100)], by_run)
+    assert espn_rosters.is_closed(100, evidence) is closed
+
+
+def test_a_null_source_status_does_not_fall_back_to_the_settings_rule():
+    """Catches the fallback papering over a bad status (R3.4)."""
+    meta = _meta(100, source_status={"latest_scoring_period": None})
+    evidence = espn_rosters.settled_through([meta], {"20260101T000000Z": 200})
+    assert not espn_rosters.is_closed(100, evidence)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        ["a"],
+        "101",
+        None,
+        {},
+        {"final_scoring_period": 180},
+        {"latest_scoring_period": "101"},
+        {"latest_scoring_period": True},
+        {"latest_scoring_period": 101.5},
+    ],
+    ids=[
+        "list",
+        "string",
+        "none",
+        "empty",
+        "no counter",
+        "string counter",
+        "bool counter",
+        "float",
+    ],
+)
+def test_a_malformed_source_status_is_no_evidence_and_never_an_error(value):
+    """Catches one odd sidecar stopping a backfill or the audit, or a non-integer used (R2.2)."""
+    evidence = espn_rosters.settled_through(
+        [_meta(100, source_status=value)], {"20260101T000000Z": 200}
+    )
+    assert not espn_rosters.is_closed(100, evidence)
+    assert not espn_rosters.is_settled(100, evidence)
+
+
+def test_a_period_with_no_captures_is_neither_closed_nor_settled():
+    """Catches 'never landed' needing a separate branch from 'no evidence'."""
+    assert not espn_rosters.is_closed(7, {})
+    assert not espn_rosters.is_settled(7, {})
