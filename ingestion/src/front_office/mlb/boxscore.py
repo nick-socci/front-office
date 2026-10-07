@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from front_office.http_client import AuthExpired, HttpClient
@@ -46,6 +46,9 @@ class ScheduledGame:
     official_date: dt.date
     state: str
     detailed_state: str
+    # Latest gameDate over every entry of this game in the newest schedule, as a UTC
+    # instant; None when any entry's gameDate is unreadable (see games_from_landed_schedule).
+    last_start: dt.datetime | None = None
 
 
 @dataclass
@@ -63,6 +66,11 @@ def games_from_landed_schedule(zone: LandingZone, *, season: int) -> list[Schedu
     two share a game_pk and only the played one has a boxscore. This mirrors the
     tie-break in stg_mlb__games. A postponed game with no makeup, or a cancelled game,
     was never played, so it is dropped too rather than fetched on every run.
+
+    Each game also gets `last_start`: the latest `gameDate` over ALL its entries, played
+    or not, since a session that is only scheduled still means the game is not over. If
+    any entry's `gameDate` is missing or unreadable it might be the latest, so the game
+    gets no `last_start` (and a warning): it is still fetched, but never settles.
     """
     responses = [
         landed
@@ -77,8 +85,11 @@ def games_from_landed_schedule(zone: LandingZone, *, season: int) -> list[Schedu
     newest = max(responses, key=lambda landed: str(landed.meta.get("fetched_at", "")))
 
     best: dict[int, ScheduledGame] = {}
+    starts: dict[int, dt.datetime] = {}
+    unreadable: set[int] = set()
     for day in newest.payload.get("dates", []):
         for raw in day.get("games", []):
+            _note_start(raw, starts, unreadable)
             scheduled = _to_scheduled_game(raw)
             if scheduled is None:
                 continue
@@ -88,7 +99,34 @@ def games_from_landed_schedule(zone: LandingZone, *, season: int) -> list[Schedu
                 and scheduled.detailed_state not in NOT_PLAYED
             ):
                 best[scheduled.game_pk] = scheduled
-    return [best[pk] for pk in sorted(best) if best[pk].detailed_state not in NOT_PLAYED]
+    games = []
+    for pk in sorted(best):
+        if best[pk].detailed_state in NOT_PLAYED:
+            continue
+        if pk in unreadable:
+            logger.warning("game_pk=%s has an unreadable gameDate; it will never settle", pk)
+            games.append(best[pk])
+        else:
+            games.append(replace(best[pk], last_start=starts.get(pk)))
+    return games
+
+
+def _note_start(raw: dict[str, Any], starts: dict[int, dt.datetime], unreadable: set[int]) -> None:
+    """Fold one schedule entry's gameDate into the latest start seen for its game."""
+    try:
+        pk = int(raw["gamePk"])
+    except (KeyError, TypeError, ValueError):
+        return
+    try:
+        start = dt.datetime.fromisoformat(raw["gameDate"])
+        if start.utcoffset() is None:
+            raise ValueError("gameDate has no offset")
+    except (KeyError, TypeError, ValueError):
+        unreadable.add(pk)
+        return
+    start = start.astimezone(dt.UTC)
+    if pk not in starts or start > starts[pk]:
+        starts[pk] = start
 
 
 def needs_fetch(

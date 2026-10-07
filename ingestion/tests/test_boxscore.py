@@ -36,14 +36,24 @@ def land_schedule(zone, games):
     )
 
 
-def game(pk, *, date="2026-04-14", state="Final", detailed="Final"):
-    return {
+_UNSET = object()
+
+
+def game(pk, *, date="2026-04-14", state="Final", detailed="Final", start=_UNSET):
+    """A schedule entry. `start` is its gameDate; omit it for 18:00Z on the official date,
+    pass None to leave the field out."""
+    entry = {
         "gamePk": pk,
         "season": "2026",
         "officialDate": date,
         "gameType": "R",
         "status": {"abstractGameState": state, "detailedState": detailed},
     }
+    if start is _UNSET:
+        start = f"{date}T18:00:00Z"
+    if start is not None:
+        entry["gameDate"] = start
+    return entry
 
 
 @pytest.fixture
@@ -87,6 +97,92 @@ def test_drops_a_cancelled_game(zone):
     """MLB marks a cancelled game Final; it was never played (2026: game 823490)."""
     land_schedule(zone, [game(7, detailed="Cancelled"), game(8, detailed="Completed Early")])
     assert [g.game_pk for g in games_from_landed_schedule(zone, season=2026)] == [8]
+
+
+def utc(*args):
+    return dt.datetime(*args, tzinfo=dt.UTC)
+
+
+def last_start_of(zone, pk):
+    return {g.game_pk: g.last_start for g in games_from_landed_schedule(zone, season=2026)}[pk]
+
+
+def test_last_start_is_the_game_date_of_a_single_entry(zone):
+    """Catches last_start left unset or parsed without its UTC offset."""
+    land_schedule(zone, [game(1, start="2026-04-14T23:05:00Z")])
+    assert last_start_of(zone, 1) == utc(2026, 4, 14, 23, 5)
+    assert last_start_of(zone, 1).utcoffset() == dt.timedelta(0)
+
+
+def test_last_start_of_a_postponed_then_played_game_is_the_makeup(zone):
+    """Catches the first (postponed) entry's start being used instead of the makeup's."""
+    land_schedule(
+        zone,
+        [
+            game(7, date="2026-04-30", detailed="Postponed", start="2026-04-30T23:05:00Z"),
+            game(7, date="2026-05-20", start="2026-05-20T17:10:00Z"),
+        ],
+    )
+    assert last_start_of(zone, 7) == utc(2026, 5, 20, 17, 10)
+
+
+def test_last_start_of_a_resumed_game_is_its_later_session(zone):
+    """Catches a resumed game (two played entries) keeping its first session's start."""
+    land_schedule(
+        zone,
+        [
+            game(9, date="2026-06-16", start="2026-06-16T23:15:00Z"),
+            game(9, date="2026-06-16", start="2026-06-17T18:00:00Z"),
+        ],
+    )
+    assert last_start_of(zone, 9) == utc(2026, 6, 17, 18, 0)
+
+
+def test_last_start_counts_a_later_session_that_is_still_scheduled(zone):
+    """Catches only played entries being considered: a pending session must hold the game open."""
+    land_schedule(
+        zone,
+        [
+            game(9, date="2026-06-16", start="2026-06-16T23:15:00Z"),
+            game(
+                9,
+                date="2026-06-16",
+                state="Preview",
+                detailed="Scheduled",
+                start="2026-06-20T18:00:00Z",
+            ),
+        ],
+    )
+    assert last_start_of(zone, 9) == utc(2026, 6, 20, 18, 0)
+
+
+def test_a_missing_game_date_gives_no_last_start_and_a_warning(zone, caplog):
+    """Catches a crash, or a start guessed for a game with no gameDate; the game is kept."""
+    land_schedule(zone, [game(3, start=None)])
+    assert last_start_of(zone, 3) is None
+    assert caplog.text.count("3") >= 1
+    assert [r.levelname for r in caplog.records].count("WARNING") == 1
+
+
+def test_an_unparseable_game_date_gives_no_last_start_and_a_warning(zone, caplog):
+    """Catches a crash on junk, and a start taken from a gameDate with no offset."""
+    land_schedule(zone, [game(3, start="not a date"), game(4, start="2026-04-14T18:00:00")])
+    starts = {g.game_pk: g.last_start for g in games_from_landed_schedule(zone, season=2026)}
+    assert starts == {3: None, 4: None}
+    assert [r.levelname for r in caplog.records].count("WARNING") == 2
+
+
+def test_an_unreadable_later_entry_leaves_a_resumed_game_with_no_last_start(zone, caplog):
+    """Catches the readable first session being trusted when the later one cannot be read."""
+    land_schedule(
+        zone,
+        [
+            game(9, date="2026-06-16", start="2026-06-16T23:15:00Z"),
+            game(9, date="2026-06-16", start="garbage"),
+        ],
+    )
+    assert last_start_of(zone, 9) is None
+    assert "9" in caplog.text
 
 
 def test_fetches_a_game_that_has_never_been_landed(zone):
