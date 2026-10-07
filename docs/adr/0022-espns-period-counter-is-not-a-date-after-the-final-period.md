@@ -1,6 +1,6 @@
 # 0022. ESPN's period counter is not read as a date after the final period
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-07
 - Spec: [0070-scoring-period-dates](../specs/0070-scoring-period-dates/design.md) · Issue: #70
 

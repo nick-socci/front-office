@@ -63,8 +63,8 @@ holds the warehouse. The owner chose A now and E as a follow-up (#73).
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0021](../../adr/0021-a-scoring-period-is-dated-from-mlbs-schedule.md) | A scoring period is dated from MLB's schedule, not from ESPN's period counter | proposed |
-| [0022](../../adr/0022-espns-period-counter-is-not-a-date-after-the-final-period.md) | ESPN's period counter is not read as a date after the final period | proposed |
+| [0021](../../adr/0021-a-scoring-period-is-dated-from-mlbs-schedule.md) | A scoring period is dated from MLB's schedule, not from ESPN's period counter | accepted |
+| [0022](../../adr/0022-espns-period-counter-is-not-a-date-after-the-final-period.md) | ESPN's period counter is not read as a date after the final period | accepted |
 
 ## Detailed design
 

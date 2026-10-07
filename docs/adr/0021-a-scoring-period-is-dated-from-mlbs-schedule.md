@@ -1,6 +1,6 @@
 # 0021. A scoring period is dated from MLB's schedule, not from ESPN's period counter
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-07
 - Spec: [0070-scoring-period-dates](../specs/0070-scoring-period-dates/design.md) · Issue: #70
 
