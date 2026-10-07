@@ -232,11 +232,12 @@ ROSTER = {
     "endpoint": "roster",
     "partitions": {"season": 2026, "league_id": "9", "scoring_period": 1},
 }
-CLOSED = {"latestScoringPeriod": 5, "finalScoringPeriod": 5}
+SETTLED = {"latest_scoring_period": 9, "final_scoring_period": 5}
 
 
 def _needs_roster(zone):
-    return rosters.needs_fetch(zone, season=2026, league_id="9", period=1, status=CLOSED)
+    evidence = rosters.roster_evidence(zone, season=2026, league_id="9")
+    return rosters.needs_fetch(1, evidence=evidence)
 
 
 def test_a_closed_roster_period_with_only_debris_needs_fetching(zone):
@@ -245,14 +246,14 @@ def test_a_closed_roster_period_with_only_debris_needs_fetching(zone):
     (folder / f"fetched_at={STAMP}.tmp-99").mkdir(parents=True)
     (folder / f"fetched_at={STAMP}.json").write_text("{}")
     assert _needs_roster(zone) is True
-    land(zone, **ROSTER)
+    land(zone, source_status=SETTLED, **ROSTER)
     assert _needs_roster(zone) is False
 
 
 def test_needs_fetch_reads_no_payload(zone, monkeypatch):
     """Catches the fetch logic reading every payload to decide what has landed (R2.6)."""
     path = land(zone)
-    land(zone, **ROSTER)
+    land(zone, source_status=SETTLED, **ROSTER)
     real_read_bytes = Path.read_bytes
     real_read_text = Path.read_text
     real_open = Path.open

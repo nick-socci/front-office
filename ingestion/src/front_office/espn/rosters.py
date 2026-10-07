@@ -36,6 +36,7 @@ class RosterBackfillSummary:
     skipped: int = 0
     failed: int = 0
     failed_periods: list[int] = field(default_factory=list)
+    unproven: list[int] = field(default_factory=list)
 
 
 def last_period(status: dict[str, Any]) -> int:
@@ -43,11 +44,6 @@ def last_period(status: dict[str, Any]) -> int:
     latest = int(status.get("latestScoringPeriod", 0))
     final = int(status.get("finalScoringPeriod", latest))
     return min(latest, final)
-
-
-def period_is_over(period: int, status: dict[str, Any]) -> bool:
-    """True when `period` can no longer change."""
-    return period < int(status.get("latestScoringPeriod", 0))
 
 
 def settled_through(
@@ -89,24 +85,37 @@ def is_settled(period: int, evidence: Mapping[int, int]) -> bool:
     return evidence.get(period, 0) > period + RECHECK_PERIODS
 
 
-def needs_fetch(
-    zone: LandingZone,
-    *,
-    season: int,
-    league_id: str,
-    period: int,
-    status: dict[str, Any],
-    refresh: bool = False,
-) -> bool:
-    if refresh:
-        return True
-    if not zone.has_landed(
-        source=SOURCE,
-        endpoint=ENDPOINT,
-        partitions={"season": season, "league_id": league_id, "scoring_period": period},
-    ):
-        return True
-    return not period_is_over(period, status)
+def roster_evidence(zone: LandingZone, *, season: int, league_id: str) -> dict[int, int]:
+    """The evidence of every roster period of one league-season, from sidecars alone.
+
+    No roster payload is read. The one payload read is a settings capture whose stamp a
+    legacy roster capture carries: that is how a legacy capture is judged (ADR 0017).
+    """
+    metas = [
+        capture.meta
+        for capture in zone.committed(source=SOURCE, endpoint=ENDPOINT)
+        if _of_league_season(capture.meta, season, league_id)
+    ]
+    legacy_stamps = {meta["fetched_at"] for meta in metas if "source_status" not in meta}
+    settings_latest_by_run: dict[str, int] = {}
+    if legacy_stamps:
+        for capture in zone.committed(source=SOURCE, endpoint="settings"):
+            stamp = str(capture.meta.get("fetched_at"))
+            if stamp not in legacy_stamps or not _of_league_season(capture.meta, season, league_id):
+                continue
+            payload = capture.payload
+            status = payload.get("status") if isinstance(payload, dict) else None
+            latest = (
+                _integer(status.get("latestScoringPeriod")) if isinstance(status, dict) else None
+            )
+            if latest is not None:
+                settings_latest_by_run[stamp] = latest
+    return settled_through(metas, settings_latest_by_run)
+
+
+def needs_fetch(period: int, *, evidence: Mapping[int, int], refresh: bool = False) -> bool:
+    """True when `refresh` is asked for or no capture has settled `period`."""
+    return refresh or not is_settled(period, evidence)
 
 
 def backfill_rosters(
@@ -121,19 +130,14 @@ def backfill_rosters(
 ) -> RosterBackfillSummary:
     """Land rosters for every scoring period up to the latest that exists."""
     summary = RosterBackfillSummary()
-    for period in range(1, last_period(status) + 1):
-        if not needs_fetch(
-            zone,
-            season=season,
-            league_id=league_id,
-            period=period,
-            status=status,
-            refresh=refresh,
-        ):
+    evidence = roster_evidence(zone, season=season, league_id=league_id)
+    final_period = last_period(status)
+    for period in range(1, final_period + 1):
+        if not needs_fetch(period, evidence=evidence, refresh=refresh):
             summary.skipped += 1
             continue
         try:
-            _fetch_one(
+            recorded = _fetch_one(
                 zone=zone,
                 client=client,
                 season=season,
@@ -151,7 +155,23 @@ def backfill_rosters(
             summary.failed_periods.append(period)
         else:
             summary.fetched += 1
+            latest = recorded["latest_scoring_period"]
+            if latest is not None:
+                evidence[period] = max(latest, evidence.get(period, 0))
+    run_latest = int(status.get("latestScoringPeriod", 0))
+    summary.unproven = [
+        period
+        for period in range(1, final_period + 1)
+        if period < run_latest and not is_closed(period, evidence)
+    ]
     return summary
+
+
+def _of_league_season(meta: Mapping[str, Any], season: int, league_id: str) -> bool:
+    partitions = meta.get("partitions", {})
+    return str(partitions.get("season")) == str(season) and str(partitions.get("league_id")) == str(
+        league_id
+    )
 
 
 def _fetch_one(
@@ -162,11 +182,13 @@ def _fetch_one(
     league_id: str,
     period: int,
     fetched_at: str,
-) -> None:
+) -> dict[str, int | None]:
+    """Land one period's roster; return the status its response recorded."""
     params: list[tuple[str, str | int]] = [("view", view) for view in VIEWS]
     params.append(("scoringPeriodId", period))
     response = client.get(league_url(season, league_id), params=params)
     payload = response.json()
+    source_status = _source_status(payload, period)
     zone.write(
         source=SOURCE,
         endpoint=ENDPOINT,
@@ -178,8 +200,9 @@ def _fetch_one(
             "params": {"view": ",".join(VIEWS), "scoringPeriodId": period},
         },
         fetched_at=fetched_at,
-        source_status=_source_status(payload, period),
+        source_status=source_status,
     )
+    return source_status
 
 
 def _integer(value: Any) -> int | None:
