@@ -109,17 +109,17 @@ period that the opening-day rule does not use.
 - R3.1 THE SYSTEM SHALL fail the build for every scoring period in which the number of
   distinct ESPN games in `stg_espn__player_game_stats` exceeds the number of played MLB
   games on that period's `scoring_date`.
+- R3.2 THE SYSTEM SHALL keep `stg_espn__scoring_periods_start_on_opening_day`, with a
+  header that says what it now catches: an error in the arithmetic of R1.2 and a
+  league-season with no MLB season loaded. It no longer claims two independent sources.
+- R3.3 THE SYSTEM SHALL keep the consecutive-dates, own-final-period and
+  one-period-per-date tests unchanged.
 - R3.4 THE SYSTEM SHALL warn, without failing the build, of every scoring period of a
   league-season with roster entries whose `scoring_date` has a played MLB game and which
   has no ESPN game line: for that period R3.1 checked nothing.
 - R3.5 THE SYSTEM SHALL describe R3.1 as a count comparison, a partial signal. The
   player-level evidence is `rec_espn__player_day_differences`, which is read in the
   real-season verification and not turned into a test here.
-- R3.2 THE SYSTEM SHALL keep `stg_espn__scoring_periods_start_on_opening_day`, with a
-  header that says what it now catches: an error in the arithmetic of R1.2 and a
-  league-season with no MLB season loaded. It no longer claims two independent sources.
-- R3.3 THE SYSTEM SHALL keep the consecutive-dates, own-final-period and
-  one-period-per-date tests unchanged.
 
 ### R4. The audit judges only a counter that can be judged
 
