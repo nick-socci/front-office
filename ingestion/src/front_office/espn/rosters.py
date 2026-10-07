@@ -1,13 +1,27 @@
-"""ESPN rosters, one snapshot per scoring period.
+"""ESPN rosters, one capture per scoring period and run.
 
-A scoring period is one day of fantasy scoring. Its roster is settled once the period
-ends, and ESPN keeps serving historical periods -- verified by spike before this design
-was chosen.
+A scoring period is one day of fantasy scoring. Its roster can change until the period
+closes, so a capture taken while the period was current must not be the one kept.
 
-"Settled" is decided against the league's own status, not against the period number:
-latestScoringPeriod is the period currently in progress, so only periods strictly before
-it are final. Treating `period <= latest` as settled would freeze a day whose lineup can
-still change.
+A period is *closed* when some committed capture of it is evidence that the league had
+moved past it: the response's own `status.latestScoringPeriod`, copied into the capture's
+sidecar as `source_status`, is greater than the period (ADR 0016). The evidence comes
+from the same response as the roster, so no boundary falls between them, and it is
+read from sidecars: no roster payload is opened to decide what to fetch. The status the
+run fetched at the start only decides which periods exist, never which are final.
+
+A capture made before `source_status` existed is judged by the settings capture of the
+same run, which is the rule the audit already applied (ADR 0017). With no such settings,
+or no integer counter in it, it is no evidence.
+
+A closed period is still fetched on every run until the league is `RECHECK_PERIODS`
+past it, and only then *settled* and skipped (ADR 0018): a commissioner can correct a
+recent day after it closes, and refetching costs nothing to interpret. An older edit
+is picked up by `--refresh`. A period the league is past that no capture proves closed
+is reported as unproven, which the command turns into a non-zero exit.
+
+The audit calls `settled_through`, `is_closed` and `is_settled` too, so the fetch
+logic and the audit cannot disagree.
 """
 
 from __future__ import annotations
