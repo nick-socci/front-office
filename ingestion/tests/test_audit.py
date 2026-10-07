@@ -14,7 +14,14 @@ import duckdb
 import pytest
 from typer.testing import CliRunner
 
-from front_office.audit import Severity, check_landing, eastern_date, run_audit
+from front_office.audit import (
+    Severity,
+    _ranges,
+    check_espn,
+    check_landing,
+    eastern_date,
+    run_audit,
+)
 from front_office.cli import app
 from front_office.landing import LandingZone
 from front_office.load import load_landing_zone
@@ -25,7 +32,18 @@ RUN = "20260327T160000Z"  # noon Eastern, 2026-03-27: period 3 is current
 TODAY = dt.date(2026, 5, 1)
 
 
-def land(zone, source, endpoint, partitions, payload, *, fetched_at=RUN, params=None, url=None):
+def land(
+    zone,
+    source,
+    endpoint,
+    partitions,
+    payload,
+    *,
+    fetched_at=RUN,
+    params=None,
+    url=None,
+    source_status=None,
+):
     return zone.write(
         source=source,
         endpoint=endpoint,
@@ -34,6 +52,7 @@ def land(zone, source, endpoint, partitions, payload, *, fetched_at=RUN, params=
         payload=payload,
         request={"url": url or f"https://example.test/{endpoint}", "params": params or {}},
         fetched_at=fetched_at,
+        source_status=source_status,
     )
 
 
@@ -104,7 +123,7 @@ def land_settings(zone, *, latest, final=2, fetched_at=RUN, league=LEAGUE):
     )
 
 
-def land_roster(zone, period, fetched_at=RUN):
+def land_roster(zone, period, fetched_at=RUN, source_status=None):
     land(
         zone,
         "espn",
@@ -113,6 +132,7 @@ def land_roster(zone, period, fetched_at=RUN):
         {"teams": []},
         fetched_at=fetched_at,
         params={"view": "mRoster", "scoringPeriodId": period},
+        source_status=source_status,
     )
 
 
@@ -521,6 +541,90 @@ def test_a_roster_with_no_same_run_settings_is_unproven(zone):
     land_roster(zone, 2, fetched_at="20260401T160000Z")
     drop(zone, "espn/roster/**/scoring_period=2", RUN)
     assert "1 roster(s) with no capture shown final" in details(audit(zone), Severity.WARN)
+
+
+def status_of(latest, final=2):
+    return {"latest_scoring_period": latest, "final_scoring_period": final}
+
+
+def test_a_roster_closed_by_its_own_status_needs_no_settings_from_its_run(zone):
+    """Catches the audit still judging by same-run settings, not the fetch logic's rule (R4.2)."""
+    drop(zone, "espn/roster/**/scoring_period=2", RUN)
+    land_roster(zone, 2, fetched_at="20260401T160000Z", source_status=status_of(3))
+    findings = audit(zone)
+    assert "shown final" not in details(findings, Severity.WARN)
+    assert "2 of 2 rosters captured after their period closed" in details(findings, Severity.INFO)
+
+
+def test_closed_periods_inside_the_recheck_window_are_reported_as_information(zone):
+    """Catches the re-check window invisible in the audit (R6.3)."""
+    findings = audit(zone)
+    assert (
+        "2 closed roster period(s) inside the 7-period re-check window; "
+        "the next run fetches them again; e.g. 1, 2"
+    ) in details(findings, Severity.INFO)
+    assert "re-check window" not in details(findings, Severity.WARN)
+
+
+def test_no_recheck_line_when_every_closed_period_is_settled(zone):
+    """Catches a re-check line emitted for zero periods (R6.3)."""
+    for period in (1, 2):
+        drop(zone, f"espn/roster/**/scoring_period={period}")
+        land_roster(zone, period, source_status=status_of(period + 8))
+    assert "re-check window" not in details(audit(zone), Severity.INFO)
+
+
+def test_a_finished_season_warns_of_a_roster_never_captured_after_the_final_period(zone):
+    """Catches a finished season left without its closing refresh unnoticed (R6.4)."""
+    # Period 1 is closed by a capture that records latest 2, which is not past the final period 2.
+    drop(zone, "espn/roster/**/scoring_period=1")
+    land_roster(zone, 1, fetched_at="20260401T160000Z", source_status=status_of(2))
+    findings = audit(zone)
+    assert (
+        "1 scoring period(s) with no roster captured after the final scoring period: 1; "
+        "run `front-office backfill espn --season 2026 --refresh` to close the season"
+    ) in details(findings, Severity.WARN)
+
+
+def test_the_season_close_warning_names_every_period_including_one_with_no_roster(zone):
+    """Catches periods left out of the closing refresh: sampled away, or missing (R6.4)."""
+    land_settings(zone, latest=9, final=6, fetched_at="20260501T160000Z")
+    for period in (3, 4, 6):
+        land_roster(zone, period, fetched_at="20260405T160000Z", source_status=status_of(6))
+    # 1 and 2 are legacy fixtures judged by settings at latest 2; 5 has no roster at all.
+    assert (
+        "6 scoring period(s) with no roster captured after the final scoring period: 1-6; "
+    ) in details(audit(zone), Severity.WARN)
+
+
+def test_ranges_fold_consecutive_periods_and_list_every_one():
+    """Catches a period dropped from, or sampled out of, a listed range."""
+    assert _ranges([7, 1, 2, 3, 9, 10]) == "1-3, 7, 9-10"
+    assert _ranges([]) == ""
+
+
+def test_a_season_in_progress_has_no_season_close_warning(zone):
+    """Catches the season-close warning firing before the season is over (R6.4)."""
+    land_settings(zone, latest=2, final=5, fetched_at="20260328T160000Z")
+    assert "captured after the final scoring period:" not in details(audit(zone), Severity.WARN)
+
+
+def test_a_2026_shaped_season_has_no_season_close_warning_and_two_periods_to_recheck(tmp_path):
+    """Catches noise on the clean real season: 180 legacy rosters, evidence 186, final 180."""
+    zone = LandingZone(root=tmp_path / "raw")
+    land_settings(zone, latest=186, final=180)
+    land_settings(zone, latest=188, final=180, fetched_at="20260928T160000Z")
+    for period in range(1, 181):
+        land_roster(zone, period)
+    _, captures = check_landing(zone)
+    findings = check_espn(captures, season=SEASON, opening_day=None)
+    warnings = details(findings, Severity.WARN)
+    assert "captured after the final scoring period:" not in warnings
+    assert "shown final" not in warnings
+    info = details(findings, Severity.INFO)
+    assert "180 of 180 rosters captured after their period closed" in info
+    assert "2 closed roster period(s) inside the 7-period re-check window" in info
+    assert "e.g. 179, 180" in info
 
 
 def test_league_snapshots_must_postdate_the_final_period(zone):

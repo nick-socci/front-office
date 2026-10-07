@@ -28,7 +28,9 @@ a single rename. So a capture is on disk complete or not at all, and one that al
 exists is never replaced: a second write to the same place stops the run. One function
 decides what counts as a capture, and the fetch logic, the loader and the audit all ask
 it. Only one command may write at a time, enforced by a lock the operating system
-releases if the process dies.
+releases if the process dies. A roster capture's sidecar also records the league's
+scoring-period status from its own response, which is what shows a period closed
+(ADR 0016).
 
 The intermediate layer now builds platform-facing interfaces, roster days, MLB player
 days (including doubleheader aggregation), and started-player attribution. Marts and

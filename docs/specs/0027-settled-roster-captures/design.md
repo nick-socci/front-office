@@ -143,9 +143,9 @@ to read the matchup schedule, and an edit made the day after a matchup ends is m
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0016](../../adr/0016-a-roster-period-is-settled-by-the-status-in-its-own-response.md) | A roster period is settled by the status recorded from its own response | proposed; option chosen by the owner 2026-10-06 |
-| [0017](../../adr/0017-a-legacy-roster-capture-is-judged-by-its-runs-settings.md) | A roster capture with no recorded status is judged by its run's settings capture | proposed; option chosen by the owner 2026-10-06 |
-| [0018](../../adr/0018-a-closed-roster-period-is-rechecked-for-seven-periods.md) | A closed roster period is fetched again for seven periods | proposed |
+| [0016](../../adr/0016-a-roster-period-is-settled-by-the-status-in-its-own-response.md) | A roster period is settled by the status recorded from its own response | accepted |
+| [0017](../../adr/0017-a-legacy-roster-capture-is-judged-by-its-runs-settings.md) | A roster capture with no recorded status is judged by its run's settings capture | accepted |
+| [0018](../../adr/0018-a-closed-roster-period-is-rechecked-for-seven-periods.md) | A closed roster period is fetched again for seven periods | accepted |
 
 ## Detailed design
 
@@ -349,3 +349,9 @@ All in pytest with a fake transport; no dbt test changes.
 | design-review, second pass | F3 (P2): a test row still described the pre-window sequence | Fixed: the row now fetches through P + 8 and skips from P + 9. |
 
 ## Amendments
+
+- **2026-10-07 — R6.3, when nothing is inside the window.** The requirement says the audit
+  reports how many closed periods are inside the re-check window and was silent on a
+  count of zero. Built: the information line is emitted only when at least one period is
+  inside the window, so a fully settled season adds no line. Within the goals; no
+  decision changes.

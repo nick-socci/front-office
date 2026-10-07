@@ -5,6 +5,7 @@ failure message, because an expired-cookie failure is the one a human has to act
 """
 
 import json
+from pathlib import Path
 
 import httpx
 import pytest
@@ -57,67 +58,57 @@ def test_credentials_are_never_included_in_their_repr(monkeypatch):
     assert "GUID" not in repr(creds)
 
 
-@pytest.mark.parametrize(
-    ("period", "status", "expected"),
-    [
-        (99, MID_SEASON, True),
-        (100, MID_SEASON, False),  # in progress: rosters can still change
-        (101, MID_SEASON, False),
-        (180, SEASON_OVER, True),  # season finished: every period is settled
-        (1, SEASON_OVER, True),
-    ],
-)
-def test_period_is_over(period, status, expected):
-    assert espn_rosters.period_is_over(period, status) is expected
+def evidence_of(zone, *, season=SEASON, league_id=LEAGUE_ID):
+    return espn_rosters.roster_evidence(zone, season=season, league_id=league_id)
 
 
 def test_roster_needs_fetch_when_never_landed(zone):
-    assert (
-        espn_rosters.needs_fetch(
-            zone, season=SEASON, league_id=LEAGUE_ID, period=5, status=MID_SEASON
-        )
-        is True
-    )
-
-
-def test_roster_is_skipped_once_its_period_is_over(zone):
-    land_roster(zone, period=5)
-    assert (
-        espn_rosters.needs_fetch(
-            zone, season=SEASON, league_id=LEAGUE_ID, period=5, status=MID_SEASON
-        )
-        is False
-    )
+    assert espn_rosters.needs_fetch(5, evidence=evidence_of(zone)) is True
 
 
 def test_in_progress_period_is_refetched_even_when_landed(zone):
-    land_roster(zone, period=100)
-    assert (
-        espn_rosters.needs_fetch(
-            zone, season=SEASON, league_id=LEAGUE_ID, period=100, status=MID_SEASON
-        )
-        is True
-    )
+    land_roster(zone, period=100, source_status=status_of(100))
+    assert espn_rosters.needs_fetch(100, evidence=evidence_of(zone)) is True
 
 
 def test_refresh_forces_a_refetch(zone):
-    land_roster(zone, period=5)
-    assert (
-        espn_rosters.needs_fetch(
-            zone, season=SEASON, league_id=LEAGUE_ID, period=5, status=MID_SEASON, refresh=True
-        )
-        is True
-    )
+    land_roster(zone, period=5, source_status=status_of(100))
+    assert espn_rosters.needs_fetch(5, evidence=evidence_of(zone), refresh=True) is True
 
 
-def land_roster(zone, *, period, stamp="20260901T000000Z"):
+def status_of(latest, final=180):
+    return {"latest_scoring_period": latest, "final_scoring_period": final}
+
+
+def land_roster(
+    zone,
+    *,
+    period,
+    stamp="20260901T000000Z",
+    source_status=None,
+    season=SEASON,
+    league_id=LEAGUE_ID,
+):
     return zone.write(
         source="espn",
         endpoint="roster",
-        partitions={"season": SEASON, "league_id": LEAGUE_ID, "scoring_period": period},
+        partitions={"season": season, "league_id": league_id, "scoring_period": period},
         name=f"fetched_at={stamp}",
         payload={"teams": []},
         request={"url": "https://example.test", "params": {"scoringPeriodId": period}},
+        fetched_at=stamp,
+        source_status=source_status,
+    )
+
+
+def land_settings(zone, *, stamp, status, season=SEASON, league_id=LEAGUE_ID):
+    return zone.write(
+        source="espn",
+        endpoint="settings",
+        partitions={"season": season, "league_id": league_id},
+        name=f"fetched_at={stamp}",
+        payload={"status": status},
+        request={"url": "https://example.test", "params": {"view": "mStatus"}},
         fetched_at=stamp,
     )
 
@@ -284,3 +275,393 @@ def test_backfill_espn_exits_non_zero_when_authentication_expires(tmp_path, monk
     assert "Traceback" not in result.output
     assert "cookie-value" not in result.output
     assert requested == ["1", "2"]
+
+
+def _land_one_roster(zone, response_json, *, run_status=None):
+    """Backfill period 1 against a fake roster response; return the landed sidecar."""
+    espn_rosters.backfill_rosters(
+        zone=zone,
+        client=make_client(lambda request: httpx.Response(200, json=response_json)),
+        season=SEASON,
+        league_id=LEAGUE_ID,
+        status=run_status or {"latestScoringPeriod": 1, "finalScoringPeriod": 180},
+        fetched_at="20260101T000000Z",
+    )
+    (capture,) = zone.committed(source="espn", endpoint="roster")
+    return capture.meta
+
+
+def test_roster_sidecar_records_the_status_of_the_response_not_of_the_run(zone):
+    """Catches the status taken from the run's settings instead of the response it landed (R1.1)."""
+    meta = _land_one_roster(
+        zone,
+        {"teams": [], "status": {"latestScoringPeriod": 101, "finalScoringPeriod": 177}},
+        run_status={"latestScoringPeriod": 1, "finalScoringPeriod": 180},
+    )
+    assert meta["source_status"] == {"latest_scoring_period": 101, "final_scoring_period": 177}
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"teams": []},
+        {"teams": [], "status": {"latestScoringPeriod": "101", "finalScoringPeriod": 180}},
+        {"teams": [], "status": {"latestScoringPeriod": True, "finalScoringPeriod": 180}},
+        {"teams": [], "status": [101]},
+    ],
+    ids=["no status", "string counter", "boolean counter", "status not a mapping"],
+)
+def test_a_roster_response_without_a_usable_status_still_lands_and_warns(zone, caplog, response):
+    """Catches a crash losing the capture, or a non-integer counter recorded as a number (R1.2)."""
+    with caplog.at_level("WARNING"):
+        meta = _land_one_roster(zone, response)
+    assert meta["source_status"]["latest_scoring_period"] is None
+    assert any("scoring period 1" in record.getMessage() for record in caplog.records)
+
+
+# -- the evidence: settled_through, is_closed, is_settled ----------------------------------
+
+
+def _meta(period, stamp="20260101T000000Z", **status):
+    """A roster sidecar as a plain dict; pass source_status=... to include that key."""
+    meta = {"partitions": {"season": 2026, "league_id": LEAGUE_ID, "scoring_period": period}}
+    meta["fetched_at"] = stamp
+    meta.update(status)
+    return meta
+
+
+def _own(latest):
+    return {"source_status": {"latest_scoring_period": latest, "final_scoring_period": 180}}
+
+
+@pytest.mark.parametrize(
+    ("latest", "closed"), [(99, False), (100, False), (101, True)], ids=["below", "equal", "above"]
+)
+def test_a_capture_closes_its_period_only_when_its_own_status_is_past_it(latest, closed):
+    """Catches `>=` for `>`: a day still in progress counted as closed (R2.1)."""
+    evidence = espn_rosters.settled_through([_meta(100, **_own(latest))], {})
+    assert espn_rosters.is_closed(100, evidence) is closed
+
+
+def test_evidence_at_period_plus_seven_is_closed_not_settled_and_plus_eight_is_settled():
+    """Catches an off-by-one in the re-check window (R6.1)."""
+    at_seven = espn_rosters.settled_through([_meta(100, **_own(107))], {})
+    at_eight = espn_rosters.settled_through([_meta(100, **_own(108))], {})
+    assert espn_rosters.RECHECK_PERIODS == 7
+    assert espn_rosters.is_closed(100, at_seven)
+    assert not espn_rosters.is_settled(100, at_seven)
+    assert espn_rosters.is_settled(100, at_eight)
+
+
+def test_a_newer_capture_with_a_null_status_does_not_unprove_the_period():
+    """Catches 'newest capture' used instead of 'some capture' as the evidence (R2.1)."""
+    metas = [
+        _meta(100, stamp="20260102T000000Z", **_own(108)),
+        _meta(100, stamp="20260103T000000Z", source_status={"latest_scoring_period": None}),
+    ]
+    evidence = espn_rosters.settled_through(metas, {})
+    assert espn_rosters.is_closed(100, evidence)
+    assert espn_rosters.is_settled(100, evidence)
+
+
+def test_the_highest_evidence_across_captures_and_periods_is_kept_per_period():
+    """Catches evidence mixed up between periods, or the last capture winning over the best."""
+    metas = [_meta(100, **_own(105)), _meta(100, **_own(103)), _meta(101, **_own(102))]
+    assert espn_rosters.settled_through(metas, {}) == {100: 105, 101: 102}
+
+
+@pytest.mark.parametrize(
+    ("settings_latest", "closed"),
+    [(101, True), (100, False), (None, False)],
+    ids=["above", "equal", "no entry"],
+)
+def test_a_legacy_capture_is_judged_by_the_settings_of_its_own_run(settings_latest, closed):
+    """Catches legacy captures all trusted, or all refetched (R3.1, R3.2)."""
+    by_run = {} if settings_latest is None else {"20260101T000000Z": settings_latest}
+    by_run["20260105T000000Z"] = 500  # another run's settings prove nothing here
+    evidence = espn_rosters.settled_through([_meta(100)], by_run)
+    assert espn_rosters.is_closed(100, evidence) is closed
+
+
+def test_a_null_source_status_does_not_fall_back_to_the_settings_rule():
+    """Catches the fallback papering over a bad status (R3.4)."""
+    meta = _meta(100, source_status={"latest_scoring_period": None})
+    evidence = espn_rosters.settled_through([meta], {"20260101T000000Z": 200})
+    assert not espn_rosters.is_closed(100, evidence)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        ["a"],
+        "101",
+        None,
+        {},
+        {"final_scoring_period": 180},
+        {"latest_scoring_period": "101"},
+        {"latest_scoring_period": True},
+        {"latest_scoring_period": 101.5},
+    ],
+    ids=[
+        "list",
+        "string",
+        "none",
+        "empty",
+        "no counter",
+        "string counter",
+        "bool counter",
+        "float",
+    ],
+)
+def test_a_malformed_source_status_is_no_evidence_and_never_an_error(value):
+    """Catches one odd sidecar stopping a backfill or the audit, or a non-integer used (R2.2)."""
+    evidence = espn_rosters.settled_through(
+        [_meta(100, source_status=value)], {"20260101T000000Z": 200}
+    )
+    assert not espn_rosters.is_closed(100, evidence)
+    assert not espn_rosters.is_settled(100, evidence)
+
+
+def test_a_period_with_no_captures_is_neither_closed_nor_settled():
+    """Catches 'never landed' needing a separate branch from 'no evidence'."""
+    assert not espn_rosters.is_closed(7, {})
+    assert not espn_rosters.is_settled(7, {})
+
+
+# -- the fetch path: transitions, outages, recovery ----------------------------------------
+
+
+class Season:
+    """A fake league whose roster responses carry a status the test controls, run by run.
+
+    `latest` is what the roster responses say; `overrides` maps a period to a different
+    counter (a lagging response). `requested` lists every period asked for, in order.
+    """
+
+    def __init__(self, zone, *, final=180):
+        self.zone = zone
+        self.final = final
+        self.requested = []
+        self.overrides = {}
+        self.runs = 0
+
+    def run(self, latest, *, response_latest=None, refresh=False, run_status=None):
+        self.runs += 1
+        said = latest if response_latest is None else response_latest
+        start = len(self.requested)
+
+        def handler(request):
+            period = int(request.url.params["scoringPeriodId"])
+            self.requested.append(period)
+            counter = self.overrides.get(period, said)
+            body = {"teams": [], "status": {"finalScoringPeriod": self.final}}
+            if counter is not None:
+                body["status"]["latestScoringPeriod"] = counter
+            return httpx.Response(200, json=body)
+
+        summary = espn_rosters.backfill_rosters(
+            zone=self.zone,
+            client=make_client(handler),
+            season=SEASON,
+            league_id=LEAGUE_ID,
+            status=run_status or {"latestScoringPeriod": latest, "finalScoringPeriod": self.final},
+            fetched_at=f"20270101T{self.runs:06d}Z",
+            refresh=refresh,
+        )
+        return summary, self.requested[start:]
+
+
+def test_a_period_is_fetched_on_each_run_through_nine_and_skipped_on_the_tenth(zone):
+    """Catches the R1 defect, an off-by-one in the window, or the re-check counted as a failure."""
+    season = Season(zone)
+    fetched_100 = []
+    for latest in range(100, 110):
+        summary, requested = season.run(latest)
+        fetched_100.append(100 in requested)
+        assert summary.unproven == []
+        assert summary.failed == 0
+    assert fetched_100 == [True] * 9 + [False]
+
+
+def test_a_mid_day_capture_is_fetched_although_the_run_status_is_past_it(zone):
+    """Catches the run's status settling a period whose only capture was taken while it was open."""
+    land_roster(zone, period=100, source_status=status_of(100))
+    _, requested = Season(zone).run(105)
+    assert 100 in requested
+
+
+def test_an_outage_refetches_every_period_it_spanned(zone):
+    """Catches a closed period skipped because a mid-day file exists, or a gap left unfetched."""
+    land_roster(zone, period=100, source_status=status_of(100))
+    land_roster(zone, period=101, source_status=status_of(101))
+    land_roster(zone, period=103, source_status=status_of(103))
+    summary, requested = Season(zone).run(105)
+    assert [p for p in requested if p >= 100] == [100, 101, 102, 103, 104, 105]
+    evidence = evidence_of(zone)
+    assert all(espn_rosters.is_closed(p, evidence) for p in range(100, 105))
+    assert not espn_rosters.is_closed(105, evidence)
+    assert summary.unproven == []
+
+
+def test_refresh_fetches_a_settled_period(zone):
+    """Catches --refresh ignored for settled periods (R2.4)."""
+    for period in (1, 2, 3):
+        land_roster(zone, period=period, source_status=status_of(100))
+    season = Season(zone)
+    assert season.run(3)[1] == []
+    assert season.run(3, refresh=True)[1] == [1, 2, 3]
+
+
+def test_a_settled_capture_of_another_league_or_season_settles_nothing_here(zone):
+    """Catches cross-league or cross-season leakage of evidence (R2.7)."""
+    land_roster(zone, period=5, source_status=status_of(100), league_id="99999")
+    land_roster(zone, period=5, source_status=status_of(100), season=2025)
+    assert espn_rosters.needs_fetch(5, evidence=evidence_of(zone)) is True
+    assert evidence_of(zone) == {}
+
+
+def test_a_league_id_stored_as_a_number_still_matches(zone):
+    """Catches partitions compared without normalising their type."""
+    land_roster(zone, period=5, source_status=status_of(100), league_id=int(LEAGUE_ID))
+    assert espn_rosters.needs_fetch(5, evidence=evidence_of(zone)) is False
+
+
+@pytest.mark.parametrize(
+    ("settings_latest", "fetch"),
+    [(108, False), (107, True), (100, True)],
+    ids=["past the window", "inside the window", "at the period"],
+)
+def test_a_legacy_roster_is_judged_by_the_settings_of_its_own_run(zone, settings_latest, fetch):
+    """Catches legacy captures all trusted or all refetched (R3.1)."""
+    land_roster(zone, period=100, stamp="20260926T000000Z")
+    land_settings(
+        zone,
+        stamp="20260926T000000Z",
+        status={"latestScoringPeriod": settings_latest, "finalScoringPeriod": 180},
+    )
+    assert espn_rosters.needs_fetch(100, evidence=evidence_of(zone)) is fetch
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        None,
+        {"finalScoringPeriod": 180},
+        {"latestScoringPeriod": "300"},
+        {"latestScoringPeriod": True},
+    ],
+    ids=["no settings capture", "no counter", "string counter", "boolean counter"],
+)
+def test_a_legacy_roster_without_usable_settings_is_fetched(zone, settings):
+    """Catches finality assumed from absence (R3.2)."""
+    land_roster(zone, period=100, stamp="20260926T000000Z")
+    if settings is not None:
+        land_settings(zone, stamp="20260926T000000Z", status=settings)
+    land_settings(zone, stamp="20260927T000000Z", status={"latestScoringPeriod": 300})
+    assert espn_rosters.needs_fetch(100, evidence=evidence_of(zone)) is True
+
+
+def test_only_a_settings_payload_with_a_legacy_roster_stamp_is_read(zone, monkeypatch):
+    """Catches every settings payload read on each run, or any roster payload read (R3.3)."""
+    legacy = "20260926T000000Z"
+    land_roster(zone, period=100, stamp=legacy)
+    land_roster(zone, period=101, stamp="20260927T000000Z", source_status=status_of(300))
+    wanted = land_settings(zone, stamp=legacy, status={"latestScoringPeriod": 300})
+    land_settings(zone, stamp="20260927T000000Z", status={"latestScoringPeriod": 300})
+    land_settings(zone, stamp=legacy, status={"latestScoringPeriod": 300}, league_id="99999")
+    land_settings(zone, stamp=legacy, status={"latestScoringPeriod": 300}, season=2025)
+    allowed = (wanted / "payload.json").resolve()
+    reads = []
+
+    def guard(real):
+        def wrapped(self, *args, **kwargs):
+            if self.name == "payload.json":
+                if self.resolve() != allowed:
+                    raise AssertionError(f"payload read: {self}")
+                reads.append(self)
+            return real(self, *args, **kwargs)
+
+        return wrapped
+
+    for name in ("read_bytes", "read_text", "open"):
+        monkeypatch.setattr(Path, name, guard(getattr(Path, name)))
+    evidence = evidence_of(zone)
+    assert reads, "the legacy run's settings payload is the one that is read"
+    assert evidence == {100: 300, 101: 300}
+
+
+def test_a_newer_capture_with_a_null_status_leaves_a_settled_period_skipped(zone):
+    """Catches a refresh un-settling a period: 'newest capture' for 'some capture' (R2.1)."""
+    land_roster(zone, period=100, stamp="20270101T000001Z", source_status=status_of(108))
+    land_roster(zone, period=100, stamp="20270101T000002Z", source_status=status_of(None))
+    assert espn_rosters.needs_fetch(100, evidence=evidence_of(zone)) is False
+
+
+def test_a_lagging_status_is_reported_and_the_next_run_clears_it(zone):
+    """Catches a silent permanent refetch, and a period that never recovers (R4.1, R5.2)."""
+    season = Season(zone)
+    season.overrides[100] = 100
+    summary, _ = season.run(101)
+    assert summary.unproven == [100]
+    season.overrides.clear()
+    summary, requested = season.run(101)
+    assert 100 in requested
+    assert summary.unproven == []
+
+
+def test_a_response_without_a_usable_status_is_unproven(zone):
+    """Catches a period left closed-looking after a response that proves nothing."""
+    season = Season(zone)
+    season.overrides[2] = None
+    summary, _ = season.run(4)
+    assert summary.unproven == [2]
+
+
+def test_a_finished_season_with_every_period_settled_fetches_and_reports_nothing(zone):
+    """Catches periods that do not exist (181-187) asked for or reported as unproven (R4.1)."""
+    for period in range(1, 181):
+        land_roster(zone, period=period, source_status=status_of(188))
+    summary, requested = Season(zone).run(188)
+    assert requested == []
+    assert (summary.skipped, summary.unproven) == (180, [])
+
+
+# -- the command ---------------------------------------------------------------------------
+
+
+def _drive_backfill_espn(tmp_path, monkeypatch, *, settings_latest, roster_latest):
+    monkeypatch.setenv("ESPN_S2", "s2-cookie-value")
+    monkeypatch.setenv("SWID", "{swid-cookie-value}")
+    monkeypatch.setenv("LEAGUE_ID", LEAGUE_ID)
+    monkeypatch.setattr(cli, "load_env_file", lambda: None)
+
+    def handler(request):
+        if request.url.params.get("scoringPeriodId") is None:
+            return httpx.Response(
+                200,
+                json={
+                    "status": {"latestScoringPeriod": settings_latest, "finalScoringPeriod": 180},
+                    "topics": [],  # an empty page is a complete activity log
+                },
+            )
+        status = {"latestScoringPeriod": roster_latest, "finalScoringPeriod": 180}
+        return httpx.Response(200, json={"teams": [], "status": status})
+
+    monkeypatch.setattr(cli, "espn_client", lambda _credentials: make_client(handler))
+    return CliRunner().invoke(
+        cli.app, ["backfill", "espn", "--season", str(SEASON), "--raw-root", str(tmp_path)]
+    )
+
+
+def test_backfill_espn_exits_non_zero_and_names_the_unproven_periods(tmp_path, monkeypatch):
+    """Catches a period the league is past that no capture closed passing silently (R4.1)."""
+    result = _drive_backfill_espn(tmp_path, monkeypatch, settings_latest=3, roster_latest=1)
+    assert result.exit_code == 1
+    assert "unproven scoring periods: [1, 2]" in result.output
+
+
+def test_backfill_espn_exits_zero_when_only_closed_periods_are_in_the_window(tmp_path, monkeypatch):
+    """Catches the re-check window treated as a failure (R6.2)."""
+    result = _drive_backfill_espn(tmp_path, monkeypatch, settings_latest=3, roster_latest=3)
+    assert result.exit_code == 0, result.output
+    assert "unproven" not in result.output

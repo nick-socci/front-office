@@ -1,6 +1,6 @@
 # Settled roster captures: a period is final only when a capture proves it — requirements
 
-Issue: #27 · Tier: M · Status: draft
+Issue: #27 · Tier: M · Status: approved 2026-10-07
 
 ## Problem
 

@@ -17,7 +17,7 @@ def zone(tmp_path):
     return LandingZone(root=tmp_path)
 
 
-def write(zone, *, payload=None, stamp=STAMP, partitions=None, endpoint="schedule"):
+def write(zone, *, payload=None, stamp=STAMP, partitions=None, endpoint="schedule", **extra):
     return zone.write(
         source="mlb",
         endpoint=endpoint,
@@ -26,6 +26,7 @@ def write(zone, *, payload=None, stamp=STAMP, partitions=None, endpoint="schedul
         payload={"dates": []} if payload is None else payload,
         request={"url": "https://statsapi.mlb.com/api/v1/schedule", "params": {"season": "2026"}},
         fetched_at=stamp,
+        **extra,
     )
 
 
@@ -270,3 +271,30 @@ def test_a_failed_write_removes_only_the_folders_it_created(zone, monkeypatch):
         write(zone, partitions={"season": 2026})
     monkeypatch.undo()
     assert [p.name for p in (zone.root / "mlb/schedule").iterdir()] == ["season=2025"]
+
+
+def test_a_source_status_is_recorded_as_a_copy_in_the_sidecar(zone):
+    """Catches a source_status dropped, or the caller's own mapping stored by reference (R1.3)."""
+    status = {"latest_scoring_period": 101, "final_scoring_period": 180}
+    path = write(zone, source_status=status)
+    status["latest_scoring_period"] = 999
+    meta = json.loads((path / "meta.json").read_text())
+    assert meta["source_status"] == {"latest_scoring_period": 101, "final_scoring_period": 180}
+
+
+def test_without_a_source_status_the_sidecar_has_exactly_the_old_keys(zone):
+    """Catches a source_status key leaking into sidecars of every other endpoint (R1.3)."""
+    path = write(zone)
+    meta = json.loads((path / "meta.json").read_text())
+    assert "source_status" not in meta
+    assert set(meta) == {
+        "source",
+        "endpoint",
+        "partitions",
+        "url",
+        "params",
+        "request_key",
+        "fetched_at",
+        "payload_bytes",
+        "payload_sha256",
+    }

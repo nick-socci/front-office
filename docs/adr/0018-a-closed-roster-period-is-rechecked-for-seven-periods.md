@@ -1,6 +1,6 @@
 # 0018. A closed roster period is fetched again for seven periods
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-06
 - Spec: [0027-settled-roster-captures](../specs/0027-settled-roster-captures/design.md) · Issue: #27
 

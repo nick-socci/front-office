@@ -226,7 +226,9 @@ def backfill_espn(
         )
         if summary.failed:
             typer.echo(f"failed scoring periods: {summary.failed_periods}", err=True)
-        if summary.failed or transactions_error is not None:
+        if summary.unproven:
+            typer.echo(f"unproven scoring periods: {summary.unproven}", err=True)
+        if summary.failed or summary.unproven or transactions_error is not None:
             raise typer.Exit(code=1)
 
 

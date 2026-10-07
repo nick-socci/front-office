@@ -1,6 +1,6 @@
 # 0016. A roster period is settled by the status recorded from its own response
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-06
 - Spec: [0027-settled-roster-captures](../specs/0027-settled-roster-captures/design.md) · Issue: #27
 

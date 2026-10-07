@@ -184,8 +184,12 @@ class LandingZone:
         payload: PayloadType,
         request: Mapping[str, Any],
         fetched_at: str,
+        source_status: Mapping[str, Any] | None = None,
     ) -> Path:
         """Land a capture as a directory, published by one rename. Returns the directory.
+
+        `source_status`, when given, is copied into the sidecar untouched; the landing zone
+        never looks inside it.
 
         The files are built in a temporary directory beside the final one, so a crash or a
         full disk never leaves anything a reader could mistake for a capture. If the final
@@ -209,6 +213,8 @@ class LandingZone:
             "payload_bytes": len(body),
             "payload_sha256": hashlib.sha256(body).hexdigest(),
         }
+        if source_status is not None:
+            meta["source_status"] = dict(source_status)
 
         # Folders this call will create, outermost first; the root itself is never one.
         made: list[Path] = []
