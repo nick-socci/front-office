@@ -113,8 +113,9 @@ left join opening_days
   captures as the evidence, and that the model is the one staging model that reads
   another source's staging model. In dbt, staging models conventionally read only their
   own source and sources meet in the intermediate layer; this one is the exception
-  because its whole job is the bridge, and moving it is a rename, not a fix (see
-  *Open questions*).
+  because its whole job is the bridge. The owner chose on 2026-10-07 to leave it in
+  staging: if #73 makes ESPN's own schedule the rule, the model reads only ESPN again
+  and the exception ends without a rename.
 
 `stg_espn__league_settings` keeps its SQL. Its YAML gains a description for
 `latest_scoring_period` (R2.1).
@@ -257,8 +258,6 @@ date; the stamp itself stays, since changing it would rename every fixture captu
   MLB's season could never settle its last periods. Not this spec; worth its own issue.
 - **Whether MLB files the Tokyo and Seoul openers as `game_type = 'R'`.** Matters for
   2024 and 2025 only; for #57.
-- **Whether the model belongs in the intermediate layer** now that it reads two sources.
-  The owner's choice; nothing here depends on it.
 - **`firstScoringPeriod`** is 1 in all five captures and the model generates from 1, as
   it does today. Periods are game-wide, so a league that starts at a later period would
   still have the right dates for the periods it has, and rows for periods it does not.
