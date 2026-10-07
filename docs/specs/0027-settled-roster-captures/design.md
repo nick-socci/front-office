@@ -349,3 +349,9 @@ All in pytest with a fake transport; no dbt test changes.
 | design-review, second pass | F3 (P2): a test row still described the pre-window sequence | Fixed: the row now fetches through P + 8 and skips from P + 9. |
 
 ## Amendments
+
+- **2026-10-07 — R6.3, when nothing is inside the window.** The requirement says the audit
+  reports how many closed periods are inside the re-check window and was silent on a
+  count of zero. Built: the information line is emitted only when at least one period is
+  inside the window, so a fully settled season adds no line. Within the goals; no
+  decision changes.
