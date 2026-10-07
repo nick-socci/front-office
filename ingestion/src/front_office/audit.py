@@ -383,7 +383,7 @@ def check_mlb(
     findings += _unplayed_boxscores(captures, boxscores.keys() - played_pks, last_state, subject)
 
     # Settlement is judged by the fetch logic's own functions, over the captures held here.
-    closed, pending, before_start, no_start, unreadable = [], 0, [], [], 0
+    closed, pending, before_start, no_start, unreadable, unstamped = [], 0, [], [], 0, []
     for game in played:
         if game.game_pk not in boxscores:
             continue
@@ -395,7 +395,10 @@ def check_mlb(
             except ValueError:
                 unreadable += 1
         first = mlb_boxscore.first_final(stamps, game.last_start)
-        if game.last_start is None:
+        if not stamps:
+            # Nothing to compare with the start: reported below, with the unreadable stamps.
+            unstamped.append(game.game_pk)
+        elif game.last_start is None:
             no_start.append(game.game_pk)
         elif first is None:
             before_start.append(game.game_pk)
@@ -447,7 +450,13 @@ def check_mlb(
                 "mlb",
                 subject,
                 f"{unreadable} boxscore capture(s) with a fetched_at that is not a UTC stamp; "
-                "not counted as settle evidence",
+                "not counted as settle evidence"
+                + (
+                    f"; {len(unstamped)} game(s) have no other capture, so cannot settle; "
+                    f"{_sample(map(str, unstamped))}"
+                    if unstamped
+                    else ""
+                ),
             )
         )
     opening_day = min((game.official_date for game in played), default=None)
