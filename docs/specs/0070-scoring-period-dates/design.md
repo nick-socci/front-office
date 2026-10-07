@@ -263,7 +263,7 @@ date; the stamp itself stays, since changing it would rename every fixture captu
   (with #66).
 - **The roster re-check needs `latest > period + 7`** (ADR 0018). The counter stopped at
   final + 8 in 2026, just enough. A league whose final period is closer to the end of
-  MLB's season could never settle its last periods. Not this spec; worth its own issue.
+  MLB's season could never settle its last periods. Not this spec: #75.
 - **Whether MLB files the Tokyo and Seoul openers as `game_type = 'R'`.** Matters for
   2024 and 2025 only; for #57.
 - **`firstScoringPeriod`** is 1 in all five captures and the model generates from 1, as

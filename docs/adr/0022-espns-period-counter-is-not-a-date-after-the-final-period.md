@@ -72,4 +72,4 @@ warning on every finished season, which teaches the reader to ignore it.
   then).
 - Follow-ups: the roster re-check rule (ADR 0018) needs `latest > period + 7`. In 2026
   the counter stopped at exactly final + 8. A league whose final period is within 7 days
-  of the end of MLB's season could never settle its last periods. Not in this spec.
+  of the end of MLB's season could never settle its last periods. Not in this spec: #75.
