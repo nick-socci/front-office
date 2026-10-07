@@ -203,15 +203,21 @@ SCHEDULED = boxscore.ScheduledGame(
     official_date=dt.date(2026, 4, 1),
     state="Final",
     detailed_state="Final",
+    last_start=dt.datetime(2026, 4, 1, 18, 0, tzinfo=dt.UTC),
 )
-TODAY = dt.date(2026, 9, 26)
+LATER_STAMP = "20261003T000000Z"  # seven days after STAMP
+
+
+def _needs_boxscore(zone):
+    stamps = boxscore.capture_stamps(zone, season=2026)
+    return boxscore.needs_fetch(SCHEDULED, stamps.get(1, []))
 
 
 def test_a_settled_game_with_only_a_temp_directory_needs_fetching(zone):
     """Catches debris from a killed run counting as landed (R2.2)."""
     folder = zone.root / "mlb/boxscore/season=2026/game_pk=1"
     (folder / f"fetched_at={STAMP}.tmp-99").mkdir(parents=True)
-    assert boxscore.needs_fetch(SCHEDULED, zone, today=TODAY) is True
+    assert _needs_boxscore(zone) is True
 
 
 def test_a_settled_game_with_only_a_loose_old_layout_file_needs_fetching(zone):
@@ -219,12 +225,14 @@ def test_a_settled_game_with_only_a_loose_old_layout_file_needs_fetching(zone):
     folder = zone.root / "mlb/boxscore/season=2026/game_pk=1"
     folder.mkdir(parents=True)
     (folder / f"fetched_at={STAMP}.json").write_text("{}")
-    assert boxscore.needs_fetch(SCHEDULED, zone, today=TODAY) is True
+    assert _needs_boxscore(zone) is True
 
 
 def test_a_settled_game_with_a_committed_capture_does_not_need_fetching(zone):
+    """Catches committed captures not counting: two a week apart settle a game."""
     land(zone)
-    assert boxscore.needs_fetch(SCHEDULED, zone, today=TODAY) is False
+    land(zone, stamp=LATER_STAMP)
+    assert _needs_boxscore(zone) is False
 
 
 ROSTER = {
@@ -253,6 +261,7 @@ def test_a_closed_roster_period_with_only_debris_needs_fetching(zone):
 def test_needs_fetch_reads_no_payload(zone, monkeypatch):
     """Catches the fetch logic reading every payload to decide what has landed (R2.6)."""
     path = land(zone)
+    land(zone, stamp=LATER_STAMP)
     land(zone, source_status=SETTLED, **ROSTER)
     real_read_bytes = Path.read_bytes
     real_read_text = Path.read_text
@@ -269,7 +278,7 @@ def test_needs_fetch_reads_no_payload(zone, monkeypatch):
     monkeypatch.setattr(Path, "read_bytes", guard(real_read_bytes))
     monkeypatch.setattr(Path, "read_text", guard(real_read_text))
     monkeypatch.setattr(Path, "open", guard(real_open))
-    assert boxscore.needs_fetch(SCHEDULED, zone, today=TODAY) is False
+    assert _needs_boxscore(zone) is False
     assert _needs_roster(zone) is False
     assert zone.check(path) is None
 

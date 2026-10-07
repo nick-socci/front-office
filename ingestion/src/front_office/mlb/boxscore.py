@@ -166,26 +166,37 @@ def is_settled(
     return any(stamp >= first + settle_window for stamp in captured)
 
 
+def capture_stamps(zone: LandingZone, *, season: int) -> dict[int, list[dt.datetime]]:
+    """When each game's committed boxscore captures were taken, by game_pk.
+
+    Sidecars only: no payload is read. Only captures under this season's partition count,
+    and `committed` already leaves out debris. A stamp that does not parse is ignored.
+    """
+    stamps: dict[int, list[dt.datetime]] = {}
+    for capture in zone.committed(source=SOURCE, endpoint=ENDPOINT):
+        partitions = capture.meta.get("partitions", {})
+        if str(partitions.get("season")) != str(season):
+            continue
+        try:
+            game_pk = int(partitions["game_pk"])
+            stamp = parse_stamp(str(capture.meta["fetched_at"]))
+        except (KeyError, TypeError, ValueError):
+            logger.warning(
+                "ignoring boxscore capture with an unreadable sidecar: %s", capture.directory
+            )
+            continue
+        stamps.setdefault(game_pk, []).append(stamp)
+    return stamps
+
+
 def needs_fetch(
-    scheduled: ScheduledGame,
-    zone: LandingZone,
-    *,
-    today: dt.date,
-    settle_window: dt.timedelta = SETTLE_WINDOW,
-    refresh: bool = False,
+    scheduled: ScheduledGame, stamps: Iterable[dt.datetime], *, refresh: bool = False
 ) -> bool:
-    """True when this game's boxscore should be fetched (again)."""
-    if refresh:
-        return True
-    if not zone.has_landed(
-        source=SOURCE,
-        endpoint=ENDPOINT,
-        partitions={"season": scheduled.season, "game_pk": scheduled.game_pk},
-    ):
-        return True
-    # Inclusive: a game exactly `settle_window` old is still refetched. One extra
-    # fetch is cheaper than freezing a late stat correction out of the warehouse.
-    return today - scheduled.official_date <= settle_window
+    """True when this game's boxscore should be fetched (again): unless it is settled.
+
+    A game with no captures is simply not settled, so "never landed" needs no branch.
+    """
+    return refresh or not is_settled(stamps, scheduled.last_start)
 
 
 def backfill_boxscores(
@@ -194,18 +205,17 @@ def backfill_boxscores(
     client: HttpClient,
     season: int,
     fetched_at: str,
-    today: dt.date | None = None,
     limit: int | None = None,
     refresh: bool = False,
 ) -> BackfillSummary:
     """Fetch and land boxscores for a season. One game's failure never stops the run;
     rejected credentials and a landing collision do."""
-    today = today or dt.datetime.now(dt.UTC).date()
+    stamps = capture_stamps(zone, season=season)
     summary = BackfillSummary()
     for scheduled in games_from_landed_schedule(zone, season=season):
         if limit is not None and summary.fetched >= limit:
             break
-        if not needs_fetch(scheduled, zone, today=today, refresh=refresh):
+        if not needs_fetch(scheduled, stamps.get(scheduled.game_pk, []), refresh=refresh):
             summary.skipped += 1
             continue
         try:
@@ -219,6 +229,9 @@ def backfill_boxscores(
             summary.failed += 1
             summary.failed_game_pks.append(scheduled.game_pk)
         else:
+            # Within this run each game is visited once, so this changes no decision; it
+            # keeps `stamps` a faithful picture of what is landed.
+            stamps.setdefault(scheduled.game_pk, []).append(parse_stamp(fetched_at))
             summary.fetched += 1
     return summary
 
