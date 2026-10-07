@@ -172,6 +172,14 @@ expected in CI (2 rows, one more warning beside the 5 there today) and for a day
 in season, before a period's roster is captured again after it closes. On the 2026
 season it returns nothing. The unit tests are what CI holds the rule to.
 
+Giving the fixtures game lines would remove the CI warning, and was considered. It is not
+a small change: the roster fixtures are built from real periods 100 and 101 (2026-07-02
+and 2026-07-03) while the MLB fixture games are from 2026-04-29 and 2026-04-30, so lines
+from those rosters would fail this very test on fixture period 2 (13 ESPN games against
+11 MLB games). Making the fixture season one real pair of days is #74; the owner split
+it out on 2026-10-07. The warning has a precedent in `rec_espn__every_side_is_verified`,
+which warns in CI for the same reason.
+
 ### The audit
 
 In `_check_league` (`ingestion/src/front_office/audit.py`), the anchor block becomes:
@@ -267,7 +275,7 @@ date; the stamp itself stays, since changing it would rename every fixture captu
 | Source | Finding | Resolution |
 |---|---|---|
 | design-review | F1 (P1): the audit takes opening day from played games, the model from all scheduled games; a schedule landed before the season would be "no schedule" to the audit | Changed: R4.7, the audit uses the model's rule, with a test |
-| design-review | F2 (P1): the game-line test passes when there are no game lines, so "checked on every build" is not true | Changed: the goal is reworded; R3.4 adds a warning for every period R3.1 could not check. A warning and not a failure because the fixtures have no game lines; listed for the owner |
+| design-review | F2 (P1): the game-line test passes when there are no game lines, so "checked on every build" is not true | Changed: the goal is reworded; R3.4 adds a warning for every period R3.1 could not check. A warning and not a failure because the fixtures have no game lines; the owner chose the warning on 2026-10-07 and split the fixture change into #74 |
 | design-review | F3 (P2): a status with no `finalScoringPeriod` was counted as past the final period | Changed: R4.8, a third group reported as a warning; R2.2 adds `not_null` on `final_scoring_period` |
 | design-review | F4 (P2): a count inequality cannot catch every misalignment | Changed: R3.5 and the design call it a partial signal; the player-level reconciliation (22 rows) is added to the expected values |
 

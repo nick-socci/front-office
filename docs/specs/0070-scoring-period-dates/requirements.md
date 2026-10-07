@@ -55,7 +55,8 @@ that agrees with anything.
 - **No change to how a roster period is settled** (ADRs 0016 to 0018). That rule reads
   the same counter for a different purpose; see *Open questions* in the design.
 - **No historical seasons.** #57 is not built here. The design must not make it harder.
-- **No change to any fixture or seed.** The fixture season keeps its two dates.
+- **No change to any fixture or seed.** The fixture season keeps its two dates. Giving
+  the fixtures ESPN game lines, so that R3.1 compares something in CI, is #74.
 - **No capture is deleted, moved or skipped by the loader.** The two frozen captures are
   loaded like any other.
 - **No change to the Eastern-day boundary** used for transaction dates.
