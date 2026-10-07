@@ -29,11 +29,12 @@ FIXTURE_ROOT = REPO_ROOT / "fixtures/landing"
 # A fixed stamp: fixtures are regenerated on purpose, and a moving fetched_at would
 # churn the committed diff on every run.
 #
-# The value matters for more than tidiness. stg_espn__scoring_periods anchors the
-# period -> date mapping on the settings snapshot's fetched_at (converted to US/Eastern),
-# so this stamp is the Eastern afternoon of the LAST fixture game date. Together with the
-# renumbered scoring periods below, that makes the fixture a coherent two-day season:
-# period 1 = 2026-04-29, period 2 = 2026-04-30, matching the MLB fixture games.
+# The stamp is the Eastern afternoon of the LAST fixture game date. Scoring periods are
+# no longer dated from it: stg_espn__scoring_periods counts from MLB's opening day
+# (ADR 0021), which in the fixture is the first of the two game dates. With the
+# renumbered scoring periods below, that gives a two-day season: period 1 = 2026-04-29,
+# period 2 = 2026-04-30, matching the MLB fixture games. The stamp itself stays, because
+# changing it would rename every fixture capture.
 FIXTURE_FETCHED_AT = "20260430T160000Z"
 
 # Game 823471 was postponed on 2026-04-29 and made up on 2026-04-30. The schedule files
@@ -152,8 +153,8 @@ FIXTURE_LEAGUE_NAME = "Fixture League"
 
 # Two adjacent scoring periods, taken from mid-season (real rosters) but RENUMBERED to
 # 1 and 2 so the fixture season is self-consistent: two scoring periods covering the two
-# MLB fixture dates. Without that, the cross-source "period 1 is opening day" test could
-# not run in CI.
+# MLB fixture dates. The rosters are not from those dates, though: periods 100 and 101
+# are 2026-07-02 and 2026-07-03 (#74).
 FIXTURE_SOURCE_SCORING_PERIODS = (100, 101)
 
 ESPN_SETTINGS_FIELDS = (
