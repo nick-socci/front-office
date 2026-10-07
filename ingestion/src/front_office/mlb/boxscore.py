@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -127,6 +128,42 @@ def _note_start(raw: dict[str, Any], starts: dict[int, dt.datetime], unreadable:
     start = start.astimezone(dt.UTC)
     if pk not in starts or start > starts[pk]:
         starts[pk] = start
+
+
+def parse_stamp(fetched_at: str) -> dt.datetime:
+    """A capture's compact UTC stamp (20260926T162307Z) as an aware instant."""
+    return dt.datetime.strptime(fetched_at, "%Y%m%dT%H%M%SZ").replace(tzinfo=dt.UTC)
+
+
+def first_final(
+    stamps: Iterable[dt.datetime], last_start: dt.datetime | None
+) -> dt.datetime | None:
+    """The earliest capture taken after the game's last scheduled start, or None.
+
+    A boxscore is only fetched for a game the schedule shows as played, so a capture
+    later than the game's last session start is the first one that can have seen it
+    finished. Strictly later: a capture at the start instant has seen nothing.
+    """
+    if last_start is None:
+        return None
+    later = [stamp for stamp in list(stamps) if stamp > last_start]
+    return min(later) if later else None
+
+
+def is_settled(
+    stamps: Iterable[dt.datetime],
+    last_start: dt.datetime | None,
+    settle_window: dt.timedelta = SETTLE_WINDOW,
+) -> bool:
+    """True when some capture is at least `settle_window` later than the first-final one.
+
+    Inclusive: a capture exactly `settle_window` later settles the game.
+    """
+    captured = list(stamps)
+    first = first_final(captured, last_start)
+    if first is None:
+        return False
+    return any(stamp >= first + settle_window for stamp in captured)
 
 
 def needs_fetch(

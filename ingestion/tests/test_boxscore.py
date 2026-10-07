@@ -16,8 +16,11 @@ from front_office.landing import LandingCollision, LandingZone
 from front_office.mlb.boxscore import (
     ScheduledGame,
     backfill_boxscores,
+    first_final,
     games_from_landed_schedule,
+    is_settled,
     needs_fetch,
+    parse_stamp,
 )
 
 TODAY = dt.date(2026, 9, 26)
@@ -383,3 +386,87 @@ def land_boxscore_at(zone, game_pk, stamp):
         request={"url": "https://example.test", "params": {"gamePk": game_pk}},
         fetched_at=stamp,
     )
+
+
+START = utc(2026, 6, 17, 18, 0)
+WEEK = dt.timedelta(days=7)
+
+
+def test_parse_stamp_reads_the_compact_utc_stamp():
+    """Catches a stamp parsed as naive or in local time."""
+    assert parse_stamp("20260926T162307Z") == utc(2026, 9, 26, 16, 23, 7)
+    assert parse_stamp("20260926T162307Z").utcoffset() == dt.timedelta(0)
+
+
+def test_parse_stamp_rejects_a_malformed_stamp():
+    """Catches junk stamps being accepted silently."""
+    with pytest.raises(ValueError):
+        parse_stamp("2026-09-26")
+
+
+def test_no_captures_is_neither_final_nor_settled():
+    """Catches an empty capture list crashing or counting as settled."""
+    assert first_final([], START) is None
+    assert is_settled([], START) is False
+
+
+def test_first_final_is_the_earliest_capture_strictly_after_the_last_start():
+    """Catches the guard using >= (a capture at the start instant has not seen the end)."""
+    stamps = [START - WEEK, START, START + dt.timedelta(hours=5), START + dt.timedelta(hours=2)]
+    assert first_final(stamps, START) == START + dt.timedelta(hours=2)
+
+
+def test_captures_before_the_last_start_are_ignored():
+    """Catches a pre-start capture starting the clock for a resumed game."""
+    stamps = [START - dt.timedelta(days=9), START - dt.timedelta(days=1)]
+    assert first_final(stamps, START) is None
+    assert is_settled(stamps, START) is False
+
+
+def test_without_a_last_start_nothing_is_final_or_settled():
+    """Catches a game with no boundary settling anyway (R1.3)."""
+    stamps = [START, START + WEEK, START + 2 * WEEK]
+    assert first_final(stamps, None) is None
+    assert is_settled(stamps, None) is False
+
+
+def test_one_capture_does_not_settle_a_game():
+    """Catches a single capture counting as its own evidence."""
+    assert is_settled([START + dt.timedelta(hours=1)], START) is False
+
+
+def test_seven_days_less_a_second_does_not_settle():
+    """Catches an off-by-one that settles a game a second early."""
+    first = START + dt.timedelta(hours=1)
+    assert is_settled([first, first + WEEK - dt.timedelta(seconds=1)], START) is False
+
+
+def test_exactly_seven_days_settles():
+    """Catches > in place of >= at the boundary."""
+    first = START + dt.timedelta(hours=1)
+    assert is_settled([first, first + WEEK], START) is True
+
+
+def test_the_window_runs_from_the_first_final_capture_not_a_later_one():
+    """Catches the window measured from the latest capture, which would never settle."""
+    first = START + dt.timedelta(hours=1)
+    stamps = [first, first + dt.timedelta(days=3), first + WEEK + dt.timedelta(days=1)]
+    assert is_settled(stamps, START) is True
+
+
+def test_a_custom_settle_window_is_honoured():
+    """Catches the settle_window argument being ignored."""
+    first = START + dt.timedelta(hours=1)
+    assert is_settled([first, first + dt.timedelta(days=1)], START, dt.timedelta(days=1)) is True
+
+
+def test_the_functions_accept_a_generator_and_read_it_once():
+    """Catches a first pass consuming the stamps so the second pass sees none."""
+    first = START + dt.timedelta(hours=1)
+
+    def stamps():
+        yield first
+        yield first + WEEK
+
+    assert first_final(stamps(), START) == first
+    assert is_settled(stamps(), START) is True
