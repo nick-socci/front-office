@@ -383,13 +383,21 @@ def check_mlb(
     findings += _unplayed_boxscores(captures, boxscores.keys() - played_pks, last_state, subject)
 
     # Settlement is judged by the fetch logic's own functions, over the captures held here.
-    closed, pending, before_start = [], 0, []
+    closed, pending, before_start, no_start, unreadable = [], 0, [], [], 0
     for game in played:
         if game.game_pk not in boxscores:
             continue
-        stamps = [mlb_boxscore.parse_stamp(stamp) for stamp in boxscores[game.game_pk]]
+        # A stamp that does not parse is no evidence, as in the backfill's capture_stamps.
+        stamps = []
+        for stamp in boxscores[game.game_pk]:
+            try:
+                stamps.append(mlb_boxscore.parse_stamp(stamp))
+            except ValueError:
+                unreadable += 1
         first = mlb_boxscore.first_final(stamps, game.last_start)
-        if first is None:
+        if game.last_start is None:
+            no_start.append(game.game_pk)
+        elif first is None:
             before_start.append(game.game_pk)
         elif mlb_boxscore.is_settled(stamps, game.last_start):
             continue
@@ -420,6 +428,26 @@ def check_mlb(
                 subject,
                 f"{len(before_start)} game(s) captured only before their last scheduled start; "
                 f"{_sample(map(str, before_start))}",
+            )
+        )
+    if no_start:
+        findings.append(
+            Finding(
+                Severity.WARN,
+                "mlb",
+                subject,
+                f"{len(no_start)} game(s) with an unreadable gameDate in the schedule, so no "
+                f"last scheduled start: they cannot settle; {_sample(map(str, no_start))}",
+            )
+        )
+    if unreadable:
+        findings.append(
+            Finding(
+                Severity.WARN,
+                "mlb",
+                subject,
+                f"{unreadable} boxscore capture(s) with a fetched_at that is not a UTC stamp; "
+                "not counted as settle evidence",
             )
         )
     opening_day = min((game.official_date for game in played), default=None)

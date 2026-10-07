@@ -337,3 +337,11 @@ All in pytest with a fake transport; no dbt test changes.
   kept, with its purpose unchanged (a capture that survived the kill is counted and not
   quarantined), and now lands two captures a week apart, which is what settles a game
   under R2.1. Within the goals; no decision changes.
+
+- **2026-10-07 — R1.3 and R3.4, what the audit says about a game with no readable start
+  (review round 1).** R3.4 covers games whose captures all predate their last scheduled
+  start; the design counted a game with an unreadable `gameDate` in the same warning,
+  which claims a start that does not exist. Built: such a game gets its own warning,
+  `game(s) with an unreadable gameDate in the schedule … they cannot settle`. A boxscore
+  capture whose `fetched_at` is not a UTC stamp is not counted as evidence and is
+  reported, as the fetch path already ignores it. Within the goals; no decision changes.

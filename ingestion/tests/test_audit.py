@@ -518,21 +518,34 @@ def test_a_game_inside_its_window_is_information_not_a_warning(zone):
     assert "1 game(s) still in settle window" in details(findings, Severity.INFO)
 
 
-@pytest.mark.parametrize(
-    ("game_date", "stamps"),
-    [
-        ("2026-03-25T18:00:00Z", ("20260325T100000Z", "20260325T120000Z")),
-        (None, ("20260326T160000Z", "20260420T160000Z")),
-    ],
-    ids=["before-the-start", "no-readable-start"],
-)
-def test_captures_only_before_the_last_start_warn(zone, game_date, stamps):
-    """Catches a capture from before the game's last start, or with no start, counting."""
-    land_schedule(zone, [schedule_game(1, "2026-03-25", gameDate=game_date)])
-    only_boxscores(zone, *stamps)
+def test_captures_only_before_the_last_start_warn(zone):
+    """Catches a capture from before the game's last start counting as settle evidence."""
+    land_schedule(zone, [schedule_game(1, "2026-03-25", gameDate="2026-03-25T18:00:00Z")])
+    only_boxscores(zone, "20260325T100000Z", "20260325T120000Z")
     warning = details(audit(zone), Severity.WARN)
     assert "1 game(s) captured only before their last scheduled start; e.g. 1" in warning
     assert "settle window closed" not in warning
+    assert "unreadable gameDate" not in warning
+
+
+def test_a_game_with_no_readable_start_is_reported_as_such_and_never_settled(zone):
+    """Catches an unreadable gameDate reported as 'captured before the start', or settling."""
+    land_schedule(zone, [schedule_game(1, "2026-03-25", gameDate=None)])
+    only_boxscores(zone, "20260326T160000Z", "20260420T160000Z")
+    warning = details(audit(zone), Severity.WARN)
+    assert "1 game(s) with an unreadable gameDate in the schedule" in warning
+    assert "they cannot settle; e.g. 1" in warning
+    assert "before their last scheduled start" not in warning
+    assert "settle window closed" not in warning
+
+
+def test_a_capture_whose_stamp_is_not_a_utc_stamp_is_reported_and_not_counted(zone):
+    """Catches one odd fetched_at crashing the audit, or counting as the settling capture."""
+    only_boxscores(zone, "20260326T160000Z", "2026-04-20")
+    findings = audit(zone, as_of=LATER)
+    warning = details(findings, Severity.WARN)
+    assert "1 boxscore capture(s) with a fetched_at that is not a UTC stamp" in warning
+    assert "1 game(s) not captured after their settle window closed" in warning
 
 
 def test_a_resumed_game_is_judged_by_the_guard_not_by_resume_game_date(zone):
