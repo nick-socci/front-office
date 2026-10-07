@@ -462,7 +462,17 @@ def check_mlb(
                 ),
             )
         )
-    opening_day = min((game.official_date for game in played), default=None)
+    # Opening day is the model's rule (stg_espn__scoring_periods): the earliest official date
+    # of any game in the newest schedule, played or not, so it exists before the first pitch.
+    opening_day = min(
+        (
+            dt.date.fromisoformat(entry["officialDate"])
+            for day in schedule.payload().get("dates", [])
+            for entry in day.get("games", [])
+            if isinstance(entry.get("officialDate"), str)
+        ),
+        default=None,
+    )
     return findings, opening_day
 
 
@@ -513,51 +523,81 @@ def _check_league(
     }
     findings = []
 
-    # The scoring-date anchor: each snapshot implies a date for period 1. They must agree
-    # with each other and with MLB opening day, or stg_espn__scoring_periods shifts.
-    implied = {
-        run: eastern_date(run) - dt.timedelta(days=int(status["latestScoringPeriod"]) - 1)
-        for run, status in status_by_run.items()
-        if "latestScoringPeriod" in status
-    }
-    anchors = sorted(set(implied.values()))
-    if len(anchors) > 1:
-        detail = ", ".join(f"{run} -> {date}" for run, date in sorted(implied.items()))
-        findings.append(
-            Finding(
-                Severity.ERROR,
-                "espn",
-                subject,
-                f"settings snapshots imply different dates for period 1: {detail}",
-            )
+    # The scoring-date anchor: an in-progress snapshot implies a date for period 1, which must
+    # be MLB opening day or stg_espn__scoring_periods shifts. Only in-progress snapshots are
+    # compared: ESPN's game-wide counter stops one past the last day with a pro game, so after
+    # the final period it is not a date (ADR 0022).
+    in_progress: dict[str, int] = {}
+    past_final = []
+    unreadable = []
+    for stamp, status in sorted(status_by_run.items()):
+        latest_period, final_period = (
+            status.get("latestScoringPeriod"),
+            status.get("finalScoringPeriod"),
         )
-    elif anchors and opening_day is None:
+        if any(
+            not isinstance(value, int) or isinstance(value, bool)
+            for value in (latest_period, final_period)
+        ):
+            unreadable.append(stamp)
+        elif latest_period <= final_period:
+            in_progress[stamp] = latest_period
+        else:
+            past_final.append(stamp)
+    if unreadable:
         findings.append(
             Finding(
                 Severity.WARN,
                 "espn",
                 subject,
-                f"period 1 = {anchors[0]} per {len(implied)} snapshot(s); no MLB schedule "
-                "to confirm it against",
+                f"{len(unreadable)} settings capture(s) with an unusable latestScoringPeriod or "
+                f"finalScoringPeriod, so not dated; {_sample(unreadable)}",
             )
         )
-    elif anchors and anchors[0] != opening_day:
+    if opening_day is None:
         findings.append(
             Finding(
                 Severity.ERROR,
                 "espn",
                 subject,
-                f"period 1 = {anchors[0]} per settings, but MLB opening day is {opening_day}",
+                "no MLB schedule landed, so scoring periods cannot be dated",
             )
         )
-    elif anchors:
+    else:
+        implied = {
+            stamp: eastern_date(stamp) - dt.timedelta(days=latest_period - 1)
+            for stamp, latest_period in in_progress.items()
+        }
+        off = {stamp: date for stamp, date in implied.items() if date != opening_day}
+        if off:
+            detail = ", ".join(f"{stamp} -> {date}" for stamp, date in sorted(off.items()))
+            findings.append(
+                Finding(
+                    Severity.ERROR,
+                    "espn",
+                    subject,
+                    f"in-progress settings capture(s) imply a period 1 other than opening day "
+                    f"({detail}), but MLB opening day is {opening_day}",
+                )
+            )
+        elif implied:
+            findings.append(
+                Finding(
+                    Severity.INFO,
+                    "espn",
+                    subject,
+                    f"{len(implied)} in-progress settings capture(s) imply period 1 = "
+                    f"{opening_day}, MLB opening day",
+                )
+            )
+    if past_final:
         findings.append(
             Finding(
                 Severity.INFO,
                 "espn",
                 subject,
-                f"period 1 = {anchors[0]}: all {len(implied)} settings snapshot(s) agree, "
-                "and it is MLB opening day",
+                f"{len(past_final)} settings capture(s) taken after the final period; their "
+                "period counter is not compared with a date",
             )
         )
 

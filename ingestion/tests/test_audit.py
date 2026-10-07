@@ -186,7 +186,7 @@ def test_the_clean_world_audits_clean(zone):
     assert problems(findings) == []
     info = details(findings, Severity.INFO)
     assert "all 8 committed capture(s) loaded" in info
-    assert "period 1 = 2026-03-25" in info
+    assert "1 settings capture(s) taken after the final period" in info
     assert "2 of 2 rosters captured after their period closed" in info
 
 
@@ -612,16 +612,126 @@ def test_a_settling_capture_taken_after_today_still_counts(zone, tmp_path):
 # -- espn ------------------------------------------------------------------------------
 
 
-def test_settings_snapshots_that_disagree_on_period_one_are_an_error(zone):
-    """A later snapshot whose latest period stopped advancing shifts the whole calendar."""
-    land_settings(zone, latest=3, fetched_at="20260329T160000Z")
-    assert "imply different dates for period 1" in details(audit(zone), Severity.ERROR)
+def land_status(zone, status, fetched_at):
+    """A settings capture whose status is exactly `status`, however malformed."""
+    land(
+        zone,
+        "espn",
+        "settings",
+        {"season": SEASON, "league_id": LEAGUE},
+        {"status": status},
+        fetched_at=fetched_at,
+        params={"view": "mSettings"},
+    )
+
+
+def test_captures_past_the_final_period_are_counted_and_never_compared_with_a_date(zone):
+    """The 2026 situation: ESPN's counter stops one past the last pro game day, so five
+    captures past the final period imply dates that are not opening day. Catches an
+    audit that compares them (an ERROR) instead of counting them (R4.3)."""
+    drop(zone, "espn/settings/**")
+    stamps = {
+        "20260926T162307Z": 186,
+        "20260926T173627Z": 186,
+        "20260928T225612Z": 188,
+        "20261007T011005Z": 188,
+        "20261007T171657Z": 188,
+    }
+    for stamp, latest in stamps.items():
+        land_settings(zone, latest=latest, final=180, fetched_at=stamp)
+    findings = audit(zone)
+    assert "period 1" not in details(findings, Severity.ERROR)
+    assert "different dates" not in details(findings, Severity.ERROR)
+    assert (
+        "5 settings capture(s) taken after the final period; their period counter is not "
+        "compared with a date"
+    ) in details(findings, Severity.INFO)
+
+
+def test_an_in_progress_capture_off_opening_day_is_an_error_naming_it(zone):
+    """Catches a shifted calendar going unreported: latest 3 on 03-27 implies 03-25, but
+    latest 2 on the same day implies 03-26, not MLB opening day (R4.2)."""
+    drop(zone, "espn/settings/**")
+    land_settings(zone, latest=2, final=180, fetched_at="20260327T170000Z")
+    land_settings(zone, latest=3, final=180, fetched_at=RUN)
+    errors = details(audit(zone), Severity.ERROR)
+    assert "20260327T170000Z -> 2026-03-26" in errors
+    assert "20260327T160000Z" not in errors
+    assert "MLB opening day is 2026-03-25" in errors
+
+
+def test_in_progress_captures_that_all_imply_opening_day_are_information(zone):
+    """Catches a missing all-clear: the count of in-progress captures that agree (R4.5)."""
+    drop(zone, "espn/settings/**")
+    land_settings(zone, latest=3, final=180, fetched_at=RUN)
+    land_settings(zone, latest=4, final=180, fetched_at="20260328T160000Z")
+    findings = audit(zone)
+    assert "period 1" not in details(findings, Severity.ERROR)
+    assert "2 in-progress settings capture(s) imply period 1 = 2026-03-25" in details(
+        findings, Severity.INFO
+    )
 
 
 def test_period_one_must_be_mlb_opening_day(zone):
+    """An in-progress capture disagreeing with a later opening day is an error (R4.2)."""
+    drop(zone, "espn/settings/**")
+    land_settings(zone, latest=3, final=180)
     land_schedule(zone, [schedule_game(1, "2026-03-26")])
     errors = details(audit(zone), Severity.ERROR)
-    assert "period 1 = 2026-03-25 per settings, but MLB opening day is 2026-03-26" in errors
+    assert f"{RUN} -> 2026-03-25" in errors
+    assert "MLB opening day is 2026-03-26" in errors
+
+
+def test_no_schedule_means_scoring_periods_cannot_be_dated(zone):
+    """Catches the old WARN: without a schedule, nothing can be compared (R4.4)."""
+    drop(zone, "mlb/schedule/**")
+    land_settings(zone, latest=3, final=180, fetched_at="20260328T160000Z")
+    findings = audit(zone)
+    assert "no MLB schedule landed, so scoring periods cannot be dated" in details(
+        findings, Severity.ERROR
+    )
+    assert "no MLB schedule to confirm" not in details(findings, Severity.WARN)
+
+
+def test_opening_day_comes_from_a_schedule_with_no_game_played_yet(zone):
+    """Catches opening day taken over played games only: in March 2027 nothing is played
+    yet, but the audit must still date period 1 (R4.7)."""
+    drop(zone, "mlb/boxscore/**")
+    drop(zone, "espn/settings/**")
+    land_schedule(
+        zone,
+        [
+            schedule_game(1, "2026-03-26", detailed="Scheduled"),
+            schedule_game(2, "2026-03-25", detailed="Scheduled"),
+        ],
+    )
+    land_settings(zone, latest=3, final=180)
+    findings = audit(zone)
+    assert "period 1" not in details(findings, Severity.ERROR)
+    assert "cannot be dated" not in details(findings, Severity.ERROR)
+    assert "imply period 1 = 2026-03-25" in details(findings, Severity.INFO)
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        {"finalScoringPeriod": 180},
+        {"latestScoringPeriod": 3},
+        {"latestScoringPeriod": "3", "finalScoringPeriod": 180},
+        {"latestScoringPeriod": 3, "finalScoringPeriod": None},
+    ],
+)
+def test_a_status_without_usable_counters_is_a_warning_and_in_neither_group(zone, status):
+    """Catches a malformed status being counted as in progress or past the final period,
+    or crashing the audit (R4.8)."""
+    land_status(zone, status, "20260326T160000Z")
+    findings = audit(zone)
+    assert "20260326T160000Z" in details(findings, Severity.WARN)
+    assert "unusable" in details(findings, Severity.WARN)
+    info = details(findings, Severity.INFO)
+    assert "1 settings capture(s) taken after the final period" in info, "only the clean world's"
+    assert "in-progress settings capture(s)" not in info
+    assert "20260326T160000Z" not in details(findings, Severity.ERROR)
 
 
 def test_a_scoring_period_without_a_roster_is_an_error(zone):
