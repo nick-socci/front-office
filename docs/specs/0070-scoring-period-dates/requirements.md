@@ -1,6 +1,6 @@
 # Scoring-period dates: a period is dated from MLB's schedule, not from ESPN's period counter — requirements
 
-Issue: #70 · Tier: M · Status: draft
+Issue: #70 · Tier: M · Status: approved 2026-10-07
 
 ## Problem
 

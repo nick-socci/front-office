@@ -462,7 +462,21 @@ def check_mlb(
                 ),
             )
         )
-    opening_day = min((game.official_date for game in played), default=None)
+    # Opening day is the model's rule (stg_espn__scoring_periods over stg_mlb__games): each
+    # game counts once, at the official date of its played or still-scheduled entry when it
+    # has one, so a postponed opener is dated by its makeup. Played or not, so the date
+    # exists before the first pitch.
+    official_dates: dict[int, tuple[bool, dt.date]] = {}
+    for day in schedule.payload().get("dates", []):
+        for entry in day.get("games", []):
+            official_date = entry.get("officialDate")
+            if not isinstance(official_date, str):
+                continue
+            pk = int(entry["gamePk"])
+            not_played = entry.get("status", {}).get("detailedState", "") in mlb_boxscore.NOT_PLAYED
+            if pk not in official_dates or (official_dates[pk][0] and not not_played):
+                official_dates[pk] = (not_played, dt.date.fromisoformat(official_date))
+    opening_day = min((date for _, date in official_dates.values()), default=None)
     return findings, opening_day
 
 
@@ -506,79 +520,140 @@ def _check_league(
     # capture records is what ESPN reported when that run's other captures were taken.
     # Status only moves forward, so it is a conservative bound for anything fetched later
     # in the same run.
+    # A status that is not an object is kept as an empty one: it has no counters, and is
+    # reported with the other unusable ones below.
     status_by_run = {
-        capture.fetched_at: capture.payload().get("status", {})
+        capture.fetched_at: status if isinstance(status, dict) else {}
         for capture in league
         if capture.endpoint == "settings"
+        for status in [capture.payload().get("status")]
     }
     findings = []
 
-    # The scoring-date anchor: each snapshot implies a date for period 1. They must agree
-    # with each other and with MLB opening day, or stg_espn__scoring_periods shifts.
-    implied = {
-        run: eastern_date(run) - dt.timedelta(days=int(status["latestScoringPeriod"]) - 1)
-        for run, status in status_by_run.items()
-        if "latestScoringPeriod" in status
-    }
-    anchors = sorted(set(implied.values()))
-    if len(anchors) > 1:
-        detail = ", ".join(f"{run} -> {date}" for run, date in sorted(implied.items()))
-        findings.append(
-            Finding(
-                Severity.ERROR,
-                "espn",
-                subject,
-                f"settings snapshots imply different dates for period 1: {detail}",
-            )
-        )
-    elif anchors and opening_day is None:
+    def transaction_findings() -> list[Finding]:
+        # Independent of the league status, so it runs whatever the status says.
+        transactions = _newest(league, "espn", "transactions")
+        if transactions is None:
+            return []
+        pages = [
+            capture
+            for capture in league
+            if (capture.source, capture.endpoint) == ("espn", "transactions")
+            and capture.fetched_at == transactions.fetched_at
+        ]
+        return _check_transactions(pages, subject)
+
+    # The scoring-date anchor: an in-progress snapshot implies a date for period 1, which must
+    # be MLB opening day or stg_espn__scoring_periods shifts. Only in-progress snapshots are
+    # compared: ESPN's game-wide counter stops one past the last day with a pro game, so after
+    # the final period it is not a date (ADR 0022).
+    in_progress: dict[str, int] = {}
+    past_final = []
+    unreadable = []
+    for stamp, status in sorted(status_by_run.items()):
+        latest_period = status.get("latestScoringPeriod")
+        final_period = status.get("finalScoringPeriod")
+        if (
+            not isinstance(latest_period, int)
+            or not isinstance(final_period, int)
+            or isinstance(latest_period, bool)
+            or isinstance(final_period, bool)
+        ):
+            unreadable.append(stamp)
+        elif latest_period <= final_period:
+            in_progress[stamp] = latest_period
+        else:
+            past_final.append(stamp)
+    if unreadable:
         findings.append(
             Finding(
                 Severity.WARN,
                 "espn",
                 subject,
-                f"period 1 = {anchors[0]} per {len(implied)} snapshot(s); no MLB schedule "
-                "to confirm it against",
+                f"{len(unreadable)} settings capture(s) with an unusable latestScoringPeriod or "
+                f"finalScoringPeriod, so not dated; {_sample(unreadable)}",
             )
         )
-    elif anchors and anchors[0] != opening_day:
+    if opening_day is None:
         findings.append(
             Finding(
                 Severity.ERROR,
                 "espn",
                 subject,
-                f"period 1 = {anchors[0]} per settings, but MLB opening day is {opening_day}",
+                "no MLB schedule landed, so scoring periods cannot be dated",
             )
         )
-    elif anchors:
+    else:
+        implied = {
+            stamp: eastern_date(stamp) - dt.timedelta(days=latest_period - 1)
+            for stamp, latest_period in in_progress.items()
+        }
+        off = {stamp: date for stamp, date in implied.items() if date != opening_day}
+        if off:
+            detail = ", ".join(f"{stamp} -> {date}" for stamp, date in sorted(off.items()))
+            findings.append(
+                Finding(
+                    Severity.ERROR,
+                    "espn",
+                    subject,
+                    f"in-progress settings capture(s) imply a period 1 other than opening day "
+                    f"({detail}), but MLB opening day is {opening_day}",
+                )
+            )
+        elif implied:
+            findings.append(
+                Finding(
+                    Severity.INFO,
+                    "espn",
+                    subject,
+                    f"{len(implied)} in-progress settings capture(s) imply period 1 = "
+                    f"{opening_day}, MLB opening day",
+                )
+            )
+    if past_final:
         findings.append(
             Finding(
                 Severity.INFO,
                 "espn",
                 subject,
-                f"period 1 = {anchors[0]}: all {len(implied)} settings snapshot(s) agree, "
-                "and it is MLB opening day",
+                f"{len(past_final)} settings capture(s) taken after the final period; their "
+                "period counter is not compared with a date",
             )
         )
 
-    newest_status = status_by_run[max(status_by_run)]
+    newest_run = max(status_by_run)
+    if newest_run in unreadable:
+        # Everything below is judged from the newest status. Without its counters the audit
+        # cannot say which periods exist or whether the season is over, and says so.
+        findings.append(
+            Finding(
+                Severity.ERROR,
+                "espn",
+                subject,
+                f"the newest settings capture ({newest_run}) has no usable period counters; "
+                "roster finality and league snapshots are not checked",
+            )
+        )
+        return findings + transaction_findings()
+    newest_status = status_by_run[newest_run]
     latest = int(newest_status.get("latestScoringPeriod", 0))
     final = int(newest_status.get("finalScoringPeriod", latest))
     first = int(newest_status.get("firstScoringPeriod", 1))
     season_over = latest > final
 
-    def closed_at_run(run: str, period: int) -> bool:
-        status = status_by_run.get(run)
-        return status is not None and int(status.get("latestScoringPeriod", 0)) > period
-
     # The same function the fetch logic uses decides which rosters are closed, so the two
     # cannot disagree (ADR 0016). A settings capture counts only with an integer counter.
-    settings_latest_by_run = {
+    settings_latest_by_run: dict[str, int] = {
         run: status["latestScoringPeriod"]
         for run, status in status_by_run.items()
         if isinstance(status.get("latestScoringPeriod"), int)
         and not isinstance(status.get("latestScoringPeriod"), bool)
     }
+
+    def closed_at_run(run: str, period: int) -> bool:
+        # A run whose settings counter is unusable is not shown to postdate anything.
+        return settings_latest_by_run.get(run, 0) > period
+
     evidence = settled_through(
         [capture.meta for capture in league if capture.endpoint == "roster"],
         settings_latest_by_run,
@@ -679,16 +754,7 @@ def _check_league(
                     )
                 )
 
-    transactions = _newest(league, "espn", "transactions")
-    if transactions is not None:
-        run = [
-            capture
-            for capture in league
-            if (capture.source, capture.endpoint) == ("espn", "transactions")
-            and capture.fetched_at == transactions.fetched_at
-        ]
-        findings += _check_transactions(run, subject)
-    return findings
+    return findings + transaction_findings()
 
 
 def _check_transactions(run: list[Capture], subject: str) -> list[Finding]:

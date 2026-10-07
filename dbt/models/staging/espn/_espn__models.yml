@@ -13,6 +13,14 @@ models:
           - not_null
       - name: team_count
         data_tests: [not_null]
+      - name: latest_scoring_period
+        description: >
+          ESPN's own game-wide period counter at the time of the settings capture. It
+          stops moving after the season ends, so it is not a date and nothing derives a
+          date from it.
+      - name: final_scoring_period
+        description: The league-season's last scoring period; sets how many periods exist.
+        data_tests: [not_null]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -98,7 +106,9 @@ models:
   - name: stg_espn__scoring_periods
     description: >
       One row per (league, season, scoring period), from 1 to that league-season's own
-      final scoring period, mapping it to the calendar date it scored on (US/Eastern boundary). The bridge between ESPN rosters and MLB game logs.
+      final scoring period, mapping it to the calendar date it scored on. The date is counted
+      from MLB's regular-season opening day of the season, not from ESPN's period counter.
+      The bridge between ESPN rosters and MLB game logs.
     columns:
       - name: scoring_period
         data_tests: [not_null]
@@ -340,6 +350,9 @@ unit_tests:
         rows:
           - {league_id: "A", season: 2026, latest_scoring_period: 1, final_scoring_period: 2, fetched_at: "2026-04-01 12:00:00"}
           - {league_id: "B", season: 2026, latest_scoring_period: 1, final_scoring_period: 5, fetched_at: "2026-04-01 12:00:00"}
+      - input: ref('stg_mlb__games')
+        rows:
+          - {season: 2026, game_type: "R", official_date: "2026-04-01"}
     expect:
       rows:
         - {league_id: "A", season: 2026, scoring_period: 1}
@@ -369,20 +382,29 @@ unit_tests:
         - {league_id: "1", season: 2026, final_scoring_period: 180}
         - {league_id: "2", season: 2026, final_scoring_period: 150}
 
-  - name: scoring_period_dates_use_the_eastern_day_boundary
+  - name: scoring_period_dates_do_not_depend_on_the_settings_capture
     description: >
-      A settings snapshot taken at 02:52 UTC belongs to the PREVIOUS Eastern day. If the
-      anchor used the UTC date instead, every period -- and therefore every roster --
-      would shift forward by one day.
+      Catches the bug of #70: dating periods from the settings capture. ESPN's period
+      counter stops after the season, so a capture fetched on 2026-10-07 says the current
+      period is 188 while the league's final period is 3 here; counting back from that
+      moves period 1 off MLB's opening day. Whatever the counter and the fetch time say,
+      period 1 must be the date of the first regular-season game, and later games must not
+      matter.
     model: stg_espn__scoring_periods
     given:
       - input: ref('stg_espn__league_settings')
         rows:
           - league_id: "1"
             season: 2026
-            latest_scoring_period: 180
+            latest_scoring_period: 188
             final_scoring_period: 3
-            fetched_at: "2026-09-21 02:52:12"
+            fetched_at: "2026-10-07 17:16:57"
+      - input: ref('stg_mlb__games')
+        rows:
+          - {season: 2026, game_type: "R", official_date: "2026-03-26"}
+          - {season: 2026, game_type: "R", official_date: "2026-03-25"}
+          - {season: 2026, game_type: "R", official_date: "2026-03-25"}
+          - {season: 2026, game_type: "R", official_date: "2026-04-02"}
     expect:
       rows:
         - scoring_period: 1
@@ -391,6 +413,65 @@ unit_tests:
           scoring_date: "2026-03-26"
         - scoring_period: 3
           scoring_date: "2026-03-27"
+
+  - name: scoring_periods_are_dated_from_their_own_seasons_opening_day
+    description: >
+      Catches one opening day for every season. With 2026 and 2027 both loaded, a global
+      minimum would date the 2027 league from 2026's opening day. Each league-season must
+      be dated from the first regular-season game of its own season.
+    model: stg_espn__scoring_periods
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026, latest_scoring_period: 2, final_scoring_period: 2, fetched_at: "2026-04-01 12:00:00"}
+          - {league_id: "1", season: 2027, latest_scoring_period: 2, final_scoring_period: 2, fetched_at: "2027-04-01 12:00:00"}
+      - input: ref('stg_mlb__games')
+        rows:
+          - {season: 2026, game_type: "R", official_date: "2026-03-25"}
+          - {season: 2027, game_type: "R", official_date: "2027-03-30"}
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, scoring_period: 1, scoring_date: "2026-03-25"}
+        - {league_id: "1", season: 2026, scoring_period: 2, scoring_date: "2026-03-26"}
+        - {league_id: "1", season: 2027, scoring_period: 1, scoring_date: "2027-03-30"}
+        - {league_id: "1", season: 2027, scoring_period: 2, scoring_date: "2027-03-31"}
+
+  - name: scoring_periods_ignore_games_of_other_types
+    description: >
+      Catches spring training or exhibition games moving opening day. A game of another
+      game_type (S) on an earlier date than the first regular-season (R) game must not
+      count; period 1 is the first R game.
+    model: stg_espn__scoring_periods
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026, latest_scoring_period: 1, final_scoring_period: 2, fetched_at: "2026-04-01 12:00:00"}
+      - input: ref('stg_mlb__games')
+        rows:
+          - {season: 2026, game_type: "S", official_date: "2026-02-20"}
+          - {season: 2026, game_type: "R", official_date: "2026-03-25"}
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, scoring_period: 1, scoring_date: "2026-03-25"}
+        - {league_id: "1", season: 2026, scoring_period: 2, scoring_date: "2026-03-26"}
+
+  - name: scoring_periods_keep_their_rows_when_no_mlb_season_is_loaded
+    description: >
+      Catches an inner join silently dropping a league-season whose MLB season is not
+      loaded. The periods must still exist, with a null scoring_date, so the not_null test
+      on scoring_date fails the build instead of downstream models building empty.
+    model: stg_espn__scoring_periods
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2027, latest_scoring_period: 1, final_scoring_period: 2, fetched_at: "2027-04-01 12:00:00"}
+      - input: ref('stg_mlb__games')
+        rows:
+          - {season: 2026, game_type: "R", official_date: "2026-03-25"}
+    expect:
+      rows:
+        - {league_id: "1", season: 2027, scoring_period: 1, scoring_date: null}
+        - {league_id: "1", season: 2027, scoring_period: 2, scoring_date: null}
 
 seeds:
   - name: espn_stat_ids

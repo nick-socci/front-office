@@ -63,8 +63,8 @@ holds the warehouse. The owner chose A now and E as a follow-up (#73).
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0021](../../adr/0021-a-scoring-period-is-dated-from-mlbs-schedule.md) | A scoring period is dated from MLB's schedule, not from ESPN's period counter | proposed |
-| [0022](../../adr/0022-espns-period-counter-is-not-a-date-after-the-final-period.md) | ESPN's period counter is not read as a date after the final period | proposed |
+| [0021](../../adr/0021-a-scoring-period-is-dated-from-mlbs-schedule.md) | A scoring period is dated from MLB's schedule, not from ESPN's period counter | accepted |
+| [0022](../../adr/0022-espns-period-counter-is-not-a-date-after-the-final-period.md) | ESPN's period counter is not read as a date after the final period | accepted |
 
 ## Detailed design
 
@@ -280,3 +280,24 @@ date; the stamp itself stays, since changing it would rename every fixture captu
 | design-review | F4 (P2): a count inequality cannot catch every misalignment | Changed: R3.5 and the design call it a partial signal; the player-level reconciliation (22 rows) is added to the expected values |
 
 ## Amendments
+
+- 2026-10-07, task 1 and task 7: the before picture for the `EXCEPT` comparison is the
+  180 rows saved as a table in `data/pre70_scoring_periods.duckdb`, not the model in
+  `data/warehouse_pre70.duckdb`. The model is a view, and the views in a copied file name
+  the catalog `warehouse`, so they cannot be queried beside the live file. The full copy
+  is still the way back, and its tables are what the marts were compared with.
+- 2026-10-07, R5.4: one more audit test changed its assertion,
+  `test_the_clean_world_audits_clean`. Its settings capture has `latestScoringPeriod` 3
+  and `finalScoringPeriod` 2, so under R4.1 it is past the final period and the audit
+  reports it as such, where it used to report `period 1 = 2026-03-25`. The fixture is
+  unchanged, because the roster-finality tests depend on it; the in-progress finding has
+  its own tests.
+- 2026-10-07, R4.7 (review round 1, F1): the audit counts each game once when it takes
+  opening day, at the official date of its played or still-scheduled entry when it has
+  one, as `stg_mlb__games` does. A postponed opener is then dated by its makeup in both.
+- 2026-10-07, R4.8 (review round 1, F2): when the newest settings capture is the one
+  with unusable counters, the audit reports the R4.8 warning and an error saying roster
+  finality and league snapshots are not checked, and stops for that league. Everything
+  after the date comparison is judged from the newest status, and the spec did not say
+  what to do without it. Falling back to an older capture's status was the alternative;
+  it would have the audit vouch for finality on a status that is not the newest.
