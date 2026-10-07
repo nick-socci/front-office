@@ -330,3 +330,10 @@ All in pytest with a fake transport; no dbt test changes.
 | design-review | F5 (P2): the functions take an iterable but read it twice | Fixed: they read it once into a list; tested with a generator. |
 
 ## Amendments
+
+- **2026-10-07 — R4.1, one more test encoded "one capture settles a game".** R4.1 names
+  six tests to replace. A seventh, `test_a_process_killed_after_the_rename_is_not_fetched_again`
+  in `test_cli_landing.py`, also relied on a single committed capture being enough. It is
+  kept, with its purpose unchanged (a capture that survived the kill is counted and not
+  quarantined), and now lands two captures a week apart, which is what settles a game
+  under R2.1. Within the goals; no decision changes.
