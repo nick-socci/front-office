@@ -554,9 +554,8 @@ def _check_league(
         for period in required
         if is_closed(period, evidence) and not is_settled(period, evidence)
     ]
-    unclosed_season = [
-        period for period in required if period in captured and evidence.get(period, 0) <= final
-    ]
+    # Every required period, a missing roster included: the closing refresh must cover them all.
+    unclosed_season = [period for period in required if evidence.get(period, 0) <= final]
     findings.append(
         Finding(
             Severity.INFO,
@@ -603,9 +602,9 @@ def _check_league(
                 Severity.WARN,
                 "espn",
                 subject,
-                f"{len(unclosed_season)} roster(s) never captured after the final scoring "
-                f"period; run backfill-espn --refresh to close the season; "
-                f"{_sample(map(str, unclosed_season))}",
+                f"{len(unclosed_season)} scoring period(s) with no roster captured after the "
+                f"final scoring period: {_ranges(unclosed_season)}; run `front-office backfill "
+                f"espn --season {season} --refresh` to close the season",
             )
         )
 
@@ -820,6 +819,17 @@ def _newest(
         and all(capture.partition(key) == value for key, value in partitions.items())
     ]
     return max(matching, key=lambda capture: capture.fetched_at, default=None)
+
+
+def _ranges(periods: Iterable[int]) -> str:
+    """Every number, with consecutive runs folded: [1, 2, 3, 7] -> "1-3, 7"."""
+    runs: list[list[int]] = []
+    for period in sorted(periods):
+        if runs and period == runs[-1][1] + 1:
+            runs[-1][1] = period
+        else:
+            runs.append([period, period])
+    return ", ".join(str(lo) if lo == hi else f"{lo}-{hi}" for lo, hi in runs)
 
 
 def _sample(examples: Iterable[str]) -> str:

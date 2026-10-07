@@ -14,7 +14,14 @@ import duckdb
 import pytest
 from typer.testing import CliRunner
 
-from front_office.audit import Severity, check_espn, check_landing, eastern_date, run_audit
+from front_office.audit import (
+    Severity,
+    _ranges,
+    check_espn,
+    check_landing,
+    eastern_date,
+    run_audit,
+)
 from front_office.cli import app
 from front_office.landing import LandingZone
 from front_office.load import load_landing_zone
@@ -574,21 +581,32 @@ def test_a_finished_season_warns_of_a_roster_never_captured_after_the_final_peri
     land_roster(zone, 1, fetched_at="20260401T160000Z", source_status=status_of(2))
     findings = audit(zone)
     assert (
-        "1 roster(s) never captured after the final scoring period; "
-        "run backfill-espn --refresh to close the season; e.g. 1"
+        "1 scoring period(s) with no roster captured after the final scoring period: 1; "
+        "run `front-office backfill espn --season 2026 --refresh` to close the season"
     ) in details(findings, Severity.WARN)
 
 
-def test_a_roster_with_no_capture_is_not_repeated_in_the_season_close_warning(zone):
-    """Catches a missing roster reported twice (R6.4)."""
-    drop(zone, "espn/roster/**/scoring_period=2")
-    assert "never captured after the final" not in details(audit(zone), Severity.WARN)
+def test_the_season_close_warning_names_every_period_including_one_with_no_roster(zone):
+    """Catches periods left out of the closing refresh: sampled away, or missing (R6.4)."""
+    land_settings(zone, latest=9, final=6, fetched_at="20260501T160000Z")
+    for period in (3, 4, 6):
+        land_roster(zone, period, fetched_at="20260405T160000Z", source_status=status_of(6))
+    # 1 and 2 are legacy fixtures judged by settings at latest 2; 5 has no roster at all.
+    assert (
+        "6 scoring period(s) with no roster captured after the final scoring period: 1-6; "
+    ) in details(audit(zone), Severity.WARN)
+
+
+def test_ranges_fold_consecutive_periods_and_list_every_one():
+    """Catches a period dropped from, or sampled out of, a listed range."""
+    assert _ranges([7, 1, 2, 3, 9, 10]) == "1-3, 7, 9-10"
+    assert _ranges([]) == ""
 
 
 def test_a_season_in_progress_has_no_season_close_warning(zone):
     """Catches the season-close warning firing before the season is over (R6.4)."""
     land_settings(zone, latest=2, final=5, fetched_at="20260328T160000Z")
-    assert "never captured after the final" not in details(audit(zone), Severity.WARN)
+    assert "captured after the final scoring period:" not in details(audit(zone), Severity.WARN)
 
 
 def test_a_2026_shaped_season_has_no_season_close_warning_and_two_periods_to_recheck(tmp_path):
@@ -601,7 +619,7 @@ def test_a_2026_shaped_season_has_no_season_close_warning_and_two_periods_to_rec
     _, captures = check_landing(zone)
     findings = check_espn(captures, season=SEASON, opening_day=None)
     warnings = details(findings, Severity.WARN)
-    assert "never captured after the final" not in warnings
+    assert "captured after the final scoring period:" not in warnings
     assert "shown final" not in warnings
     info = details(findings, Severity.INFO)
     assert "180 of 180 rosters captured after their period closed" in info

@@ -53,7 +53,7 @@ them.
      season-close warning;
      the one-off payload cross-check (latest 186 in all 180); `git diff --stat main`
      shows nothing under `dbt/` or `fixtures/`.
-   - No request is made to ESPN. A live `backfill-espn` is the owner's to run; expected
+   - No request is made to ESPN. A live `front-office backfill espn --season 2026` is the owner's to run; expected
      output is `rosters: fetched=2 skipped=178 failed=0`, after which all 180 are settled, and its settings, teams,
      matchups and transactions captures land as on any run.
    - Verify: commands and results posted as a comment on #27.
