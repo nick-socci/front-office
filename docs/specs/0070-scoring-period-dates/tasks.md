@@ -49,7 +49,12 @@ them.
    - Same load: build `stg_espn__scoring_periods+` on the real warehouse and compare the
      model with `warehouse_pre70.duckdb`, `EXCEPT` both ways. Run the shifted queries.
      Count `rec_espn__player_day_differences` (22 before).
-   - Then `uv run front-office load`, a full `dbt build`, and the audit. Compare the
-     model again. List which mart totals moved and by how much, for the owner.
+   - Then `uv run front-office load`, a full `dbt build`, and the audit. (The owner,
+     2026-10-07: the load runs in the build, not after merge.) Compare the model again.
+     List which mart totals moved and by how much, for the owner.
+   - If the build then fails on an unregistered reconciliation difference, from one of
+     the 27 boxscores or the new roster captures, stop and take it to the owner: whether
+     it is registered is not this spec's to decide. `warehouse_pre70.duckdb` is the way
+     back.
    - Verify: every row of the expected values, recorded as a comment on #70. If the 180
      rows differ at either step, stop before the next one.
