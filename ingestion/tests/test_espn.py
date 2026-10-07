@@ -284,3 +284,45 @@ def test_backfill_espn_exits_non_zero_when_authentication_expires(tmp_path, monk
     assert "Traceback" not in result.output
     assert "cookie-value" not in result.output
     assert requested == ["1", "2"]
+
+
+def _land_one_roster(zone, response_json, *, run_status=None):
+    """Backfill period 1 against a fake roster response; return the landed sidecar."""
+    espn_rosters.backfill_rosters(
+        zone=zone,
+        client=make_client(lambda request: httpx.Response(200, json=response_json)),
+        season=SEASON,
+        league_id=LEAGUE_ID,
+        status=run_status or {"latestScoringPeriod": 1, "finalScoringPeriod": 180},
+        fetched_at="20260101T000000Z",
+    )
+    (capture,) = zone.committed(source="espn", endpoint="roster")
+    return capture.meta
+
+
+def test_roster_sidecar_records_the_status_of_the_response_not_of_the_run(zone):
+    """Catches the status taken from the run's settings instead of the response it landed (R1.1)."""
+    meta = _land_one_roster(
+        zone,
+        {"teams": [], "status": {"latestScoringPeriod": 101, "finalScoringPeriod": 177}},
+        run_status={"latestScoringPeriod": 1, "finalScoringPeriod": 180},
+    )
+    assert meta["source_status"] == {"latest_scoring_period": 101, "final_scoring_period": 177}
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"teams": []},
+        {"teams": [], "status": {"latestScoringPeriod": "101", "finalScoringPeriod": 180}},
+        {"teams": [], "status": {"latestScoringPeriod": True, "finalScoringPeriod": 180}},
+        {"teams": [], "status": [101]},
+    ],
+    ids=["no status", "string counter", "boolean counter", "status not a mapping"],
+)
+def test_a_roster_response_without_a_usable_status_still_lands_and_warns(zone, caplog, response):
+    """Catches a crash losing the capture, or a non-integer counter recorded as a number (R1.2)."""
+    with caplog.at_level("WARNING"):
+        meta = _land_one_roster(zone, response)
+    assert meta["source_status"]["latest_scoring_period"] is None
+    assert any("scoring period 1" in record.getMessage() for record in caplog.records)

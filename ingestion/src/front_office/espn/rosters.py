@@ -124,15 +124,43 @@ def _fetch_one(
     params: list[tuple[str, str | int]] = [("view", view) for view in VIEWS]
     params.append(("scoringPeriodId", period))
     response = client.get(league_url(season, league_id), params=params)
+    payload = response.json()
     zone.write(
         source=SOURCE,
         endpoint=ENDPOINT,
         partitions={"season": season, "league_id": league_id, "scoring_period": period},
         name=f"fetched_at={fetched_at}",
-        payload=response.json(),
+        payload=payload,
         request={
             "url": str(response.request.url),
             "params": {"view": ",".join(VIEWS), "scoringPeriodId": period},
         },
         fetched_at=fetched_at,
+        source_status=_source_status(payload, period),
     )
+
+
+def _integer(value: Any) -> int | None:
+    """`value` when it is an integer (a bool is not one here), else None."""
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _source_status(payload: Any, period: int) -> dict[str, int | None]:
+    """The two league counters this roster response carries, for its sidecar.
+
+    A response without a usable latestScoringPeriod still lands: the capture is kept and
+    proves nothing, and the warning says which period.
+    """
+    status = payload.get("status") if isinstance(payload, dict) else None
+    if not isinstance(status, dict):
+        status = {}
+    latest = _integer(status.get("latestScoringPeriod"))
+    if latest is None:
+        logger.warning(
+            "roster response for scoring period %s has no usable status.latestScoringPeriod",
+            period,
+        )
+    return {
+        "latest_scoring_period": latest,
+        "final_scoring_period": _integer(status.get("finalScoringPeriod")),
+    }
