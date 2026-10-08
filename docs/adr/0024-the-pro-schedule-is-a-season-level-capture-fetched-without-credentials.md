@@ -28,7 +28,7 @@ login, and the response has teams and games and no member data.
 
 ## Decision
 
-Proposed: **option 1**. Not yet decided by the owner.
+Chosen: **option 1**, by the owner on 2026-10-07.
 
 The capture is `espn/pro_schedule/season=<year>/fetched_at=<stamp>/`. `backfill espn`
 lands it first, with a client that carries no cookies; `--only pro-schedule` lands it
