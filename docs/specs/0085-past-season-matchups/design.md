@@ -271,3 +271,14 @@ is answered (MLB files them as regular-season games; 2019 opened in Tokyo too); 
 categories changed between 2021 and 2022; and only 2025 and 2026 have a full
 scoring-period to matchup-period mapping, which widens the gap noted on #83 from 2021 to
 six seasons.
+
+### 2026-10-08: review round 1 of PR #87
+
+- requirements.md now says what the amendment above decided for 2020: R5.5, the 2020
+  rabbit hole and the expected values carry it.
+- The owner chose not to add a dbt test for a league-season with no decided matchup. A
+  season that was not played and a capture that parsed to nothing look the same in
+  staging, so a failing test would need a hand-kept list of unplayed seasons, and a
+  warning would never clear for 2020. The count stays a check made when a season is
+  landed. #57's model of margins is to carry the number of matchups measured per
+  league-season, so that an empty season shows where it would do harm; recorded on #57.
