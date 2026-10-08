@@ -78,9 +78,11 @@ passed, and CI's warnings fell from 6 to 3. The expected values below are from i
   only. Today the newest capture is chosen by path among all seasons, so a roster of
   period 36 landed for another season would be picked while the 2026 pro schedule still
   passed R1.2.
-- R1.5 IF league captures of more than one league are landed for season 2026 THEN THE
-  SYSTEM SHALL fail fixture generation, saying how many leagues it found, and SHALL NOT
-  choose between them.
+- R1.5 (The owner, 2026-10-07: stop and report.) IF league captures of more than one
+  league are landed for season 2026 THEN THE SYSTEM SHALL fail fixture generation,
+  saying how many leagues it found, and SHALL NOT choose between them. Which league's
+  rosters are published is a decision, not a sort order, and the script does not read
+  `.env` to make it.
 
 ### R2. Game lines in the roster fixtures
 
