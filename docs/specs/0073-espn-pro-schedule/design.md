@@ -104,7 +104,9 @@ independent check exactly when it is needed.
 ### `stg_espn__pro_games`
 
 Grain: one row per (`season`, `espn_game_id`). Materialized as a table, like the other
-models that parse a large payload.
+models that parse a large payload. The owner confirmed this grain and column set on
+2026-10-07, including the team ids, which nothing here reads: they are what a later
+match to MLB's games would join on, and no such match is planned.
 
 | Column | Type | From | Meaning |
 |---|---|---|---|
