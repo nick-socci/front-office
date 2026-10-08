@@ -51,7 +51,8 @@ passed, and CI's warnings fell from 6 to 3. The expected values below are from i
 ## Rabbit holes
 
 - *Trimming each line's stats to the scored categories* → the whole `stats` map is kept,
-  as `scoreByStat` already is in the matchup fixture: stat ids and numbers.
+  as `scoreByStat` already is in the matchup fixture: stat ids and numbers. (The owner,
+  2026-10-07: general, not tailored to this league's settings.)
 - *More fixture boxscores so the player-day reconciliation is quiet in CI* → out of
   scope; that table has no test in CI and its size there is recorded, not judged.
 - *Making the matchup fixture span the same two days* → a real matchup's totals cover

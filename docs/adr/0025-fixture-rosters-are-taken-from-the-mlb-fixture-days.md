@@ -33,12 +33,17 @@ the MLB games played on those dates.
 
 ## Decision
 
-Proposed: **option 1**. Not yet decided by the owner.
+Proposed: **option 1**. The allowlist was confirmed by the owner on 2026-10-07; the rest
+is not yet decided.
 
 Rosters and the pro schedule are built from one pair of real scoring periods, 36 and 37,
 and generation fails unless those periods fall on the MLB fixture dates. A roster entry
 keeps the player's single-game stat lines of that period, each rebuilt from five fields:
 `scoringPeriodId`, `statSourceId`, `statSplitTypeId`, `externalId`, `stats`.
+
+`stats` is copied whole, every stat id ESPN sends, and not cut down to the categories
+this league scores. The owner's reason: the project is meant to be general, not tailored
+to one league's settings, so a fixture should carry what any league's models could read.
 
 Option 2 loses postponed game 823471 and rewrites every MLB fixture. Option 3 invents
 data. Option 4 leaves three tests guarding nothing between real-season builds.
