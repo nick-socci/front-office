@@ -132,8 +132,9 @@ approved and are not edited.
 - A later change to the allowlist lets a member field through — low — the privacy test
   rebuilds nothing but rejects the patterns, and the new pytest pins the five keys.
 - `rec_espn__player_day_differences` grows from 21 to 308 rows in CI and looks alarming
-  — certain — recorded here and in the expected values; it is the 22 boxscores the
-  fixtures do not have, and no CI test reads it.
+  — certain — accepted by the owner on 2026-10-07 and recorded in the expected values;
+  it is the 22 boxscores the fixtures do not have, and no CI test reads it. That the
+  table compares a player-day with no boxscore at all is #81.
 
 ## Open questions
 

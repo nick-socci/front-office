@@ -58,4 +58,4 @@ data. Option 4 leaves three tests guarding nothing between real-season builds.
   are numbers keyed by ESPN's stat ids and a game id; no member field.
 - Bad / accepted cost: the matchup and transaction fixtures are still from other days.
 - Bad / accepted cost: `rec_espn__player_day_differences` has 308 rows in CI, not 21,
-  because only 2 of the 24 games have a boxscore fixture.
+  because only 2 of the 24 games have a boxscore fixture (#81).
