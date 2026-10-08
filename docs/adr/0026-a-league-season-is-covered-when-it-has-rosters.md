@@ -36,8 +36,9 @@ rule, one because 2021's matchups carry no per-day breakdown.
 
 ## Decision
 
-Proposed: **option 1**. The owner chose the shared path on 2026-10-08; the rule and the
-model are not yet approved.
+Proposed: **option 1**. The owner chose the shared path on 2026-10-08, and on the same
+day agreed the model's grain, its single `has_rosters` column and the rule below. The
+status moves to accepted when the spec is approved.
 
 `int_fantasy__league_seasons` has one row per league-season with settings loaded, and
 `has_rosters`. A model or test that needs rosters applies to league-seasons where it is
