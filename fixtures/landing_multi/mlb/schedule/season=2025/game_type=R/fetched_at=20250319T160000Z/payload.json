@@ -1,0 +1,88 @@
+{
+ "dates": [
+  {
+   "date": "2025-03-18",
+   "games": [
+    {
+     "gamePk": 778563,
+     "gameGuid": "0d975d54-3daf-434e-a94e-fce32190accb",
+     "gameType": "R",
+     "season": "2025",
+     "gameDate": "2025-03-18T10:10:00Z",
+     "officialDate": "2025-03-18",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 112,
+        "name": "Chicago Cubs"
+       },
+       "score": 1,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 119,
+        "name": "Los Angeles Dodgers"
+       },
+       "score": 4,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 2397,
+      "name": "Tokyo Dome"
+     }
+    }
+   ]
+  },
+  {
+   "date": "2025-03-19",
+   "games": [
+    {
+     "gamePk": 778564,
+     "gameGuid": "15b192de-f8f5-49f5-b393-63353162bf12",
+     "gameType": "R",
+     "season": "2025",
+     "gameDate": "2025-03-19T10:10:00Z",
+     "officialDate": "2025-03-19",
+     "gameNumber": 1,
+     "doubleHeader": "N",
+     "dayNight": "night",
+     "status": {
+      "abstractGameState": "Final",
+      "detailedState": "Final"
+     },
+     "teams": {
+      "home": {
+       "team": {
+        "id": 112,
+        "name": "Chicago Cubs"
+       },
+       "score": 3,
+       "isWinner": false
+      },
+      "away": {
+       "team": {
+        "id": 119,
+        "name": "Los Angeles Dodgers"
+       },
+       "score": 6,
+       "isWinner": true
+      }
+     },
+     "venue": {
+      "id": 2397,
+      "name": "Tokyo Dome"
+     }
+    }
+   ]
+  }
+ ]
+}

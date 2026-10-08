@@ -13,7 +13,7 @@ import pytest
 
 from front_office.landing import LandingZone
 from front_office.load import RawKeyCollision, load_landing_zone
-from make_multi_fixtures import RESPELLED_SUFFIX, generate
+from make_multi_fixtures import RESPELLED_SUFFIX, generate, write_capture
 
 REPO = Path(__file__).resolve().parents[2]
 SINGLE = REPO / "fixtures/landing"
@@ -225,3 +225,77 @@ def test_2027_roster_lines_are_period_1_games_of_the_2027_pro_schedule():
     assert lines
     assert {line["scoringPeriodId"] for line in lines} == {1}
     assert {line["externalId"] for line in lines} <= games
+
+
+def decoy_2025(root: Path) -> None:
+    """Add to a copy of the base tree a 2025 season (league 111111) whose captures would
+    each be picked, or relabelled, if the generator did not filter by season: settings and
+    matchups that sort first, and an MLB schedule on 2025 dates that sorts before 2026."""
+    for capture in LandingZone(root).committed(source="espn"):
+        meta = json.loads(json.dumps(capture.meta))
+        if meta["partitions"].get("season") != 2026 or meta["endpoint"] not in (
+            "settings",
+            "matchups",
+            "pro_schedule",
+        ):
+            continue
+        meta["partitions"]["season"] = 2025
+        meta["fetched_at"] = "20250319T160000Z"
+        write_capture(root, meta, json.loads(json.dumps(capture.payload)) | {"decoy": 2025})
+    (schedule,) = LandingZone(root).committed(
+        source="mlb", endpoint="schedule", partitions={"season": 2026, "game_type": "R"}
+    )
+    meta = json.loads(json.dumps(schedule.meta))
+    meta["partitions"]["season"] = 2025
+    meta["fetched_at"] = "20250319T160000Z"
+    day = {"date": "2025-03-18", "games": [{"gamePk": 1, "officialDate": "2025-03-18"}]}
+    write_capture(root, meta, {"dates": [day]})
+
+
+def test_a_past_season_in_the_base_tree_is_copied_and_never_a_source(tmp_path):
+    """Catches the generator reading a 2025 capture as a source (R3.4, design-review F1):
+    with a 2025 season added, the output must be the output without it plus the untouched
+    2025 files, so nothing of 2025 was relabelled as 2026 or 2027 or as league 222222."""
+    without = tmp_path / "without"
+    shutil.copytree(SINGLE, without)
+    for path in without.rglob("season=2025"):
+        shutil.rmtree(path)
+    for path in without.rglob("season=2025"):  # pragma: no cover - nested ones, if any
+        shutil.rmtree(path)
+    with_past = tmp_path / "with_past"
+    shutil.copytree(without, with_past)
+    decoy_2025(with_past)
+
+    out_without, out_with = tmp_path / "out_without", tmp_path / "out_with"
+    generate(without, out_without)
+    generate(with_past, out_with)
+
+    past = {k: v for k, v in tree(out_with).items() if "season=2025" in k}
+    assert past == {k: v for k, v in tree(with_past).items() if "season=2025" in k}
+    assert past
+    rest = {k: v for k, v in tree(out_with).items() if "season=2025" not in k}
+    assert rest == tree(out_without)
+
+
+def test_the_committed_multi_tree_carries_2025_for_the_base_league_only():
+    """Catches the 2025 season missing from the combined tree, present for league 222222, or
+    carrying a roster, team or transaction (R3.4)."""
+    captures = [
+        c
+        for source in ("espn", "mlb")
+        for c in LandingZone(COMMITTED).committed(source=source)
+        if c.meta["partitions"].get("season") == 2025
+    ]
+    assert sorted((c.meta["source"], c.meta["endpoint"]) for c in captures) == [
+        ("espn", "matchups"),
+        ("espn", "pro_schedule"),
+        ("espn", "settings"),
+        ("mlb", "schedule"),
+    ]
+    assert {c.meta["partitions"].get("league_id") for c in captures} <= {"111111", None}
+    for capture in captures:
+        twin = SINGLE / capture.directory.relative_to(COMMITTED)
+        assert (twin / "payload.json").read_bytes() == (
+            capture.directory / "payload.json"
+        ).read_bytes()
+        assert (twin / "meta.json").read_bytes() == (capture.directory / "meta.json").read_bytes()

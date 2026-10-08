@@ -1,0 +1,18 @@
+{
+  "source": "mlb",
+  "endpoint": "schedule",
+  "partitions": {
+    "season": 2025,
+    "game_type": "R"
+  },
+  "url": "https://statsapi.mlb.com/api/v1/schedule",
+  "params": {
+    "sportId": 1,
+    "season": 2025,
+    "gameType": "R",
+    "startDate": "2025-03-18",
+    "endDate": "2025-03-19"
+  },
+  "request_key": "endDate=2025-03-19&gameType=R&season=2025&sportId=1&startDate=2025-03-18",
+  "fetched_at": "20250319T160000Z"
+}

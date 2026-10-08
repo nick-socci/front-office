@@ -45,7 +45,13 @@ MULTI_ROOT = REPO_ROOT / "fixtures/landing_multi"
 # (R4.9), which this script runs in every single build and the combined build runs too.
 EXEMPT_FROM_ROW_COMPARISON = frozenset({"dim_players"})
 
-LEAGUE_SEASONS = [("111111", 2026), ("222222", 2026), ("111111", 2027), ("222222", 2027)]
+LEAGUE_SEASONS = [
+    ("111111", 2026),
+    ("222222", 2026),
+    ("111111", 2027),
+    ("222222", 2027),
+    ("111111", 2025),
+]
 # The same var in every build, or the combined and single warehouses would differ by design.
 DBT_VARS = ["--target", "ci", "--vars", "{anonymize: true}"]
 OWN_TESTS = ["--select", "dim_players", "dim_player_league_seasons"]

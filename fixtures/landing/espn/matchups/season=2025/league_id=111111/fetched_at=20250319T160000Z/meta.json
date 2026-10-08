@@ -1,0 +1,14 @@
+{
+  "source": "espn",
+  "endpoint": "matchups",
+  "partitions": {
+    "season": 2025,
+    "league_id": "111111"
+  },
+  "url": "https://lm-api-reads.fantasy.espn.com/",
+  "params": {
+    "view": "mMatchupScore,mScoreboard"
+  },
+  "request_key": "view=mMatchupScore,mScoreboard",
+  "fetched_at": "20250319T160000Z"
+}
