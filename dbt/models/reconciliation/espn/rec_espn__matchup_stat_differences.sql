@@ -5,6 +5,12 @@
 -- staging, which only this boundary may do. A full outer join, so a side or stat that
 -- exists on one end only is a row with a status, never silently dropped.
 --
+-- Only league-seasons with rosters are compared (ADR 0026). A past season loaded for its
+-- matchup totals alone has ESPN's side and, by design, nothing of ours: every one of its
+-- rows would be 'missing_ours', which is a finding about a season we compute, not a
+-- description of one we do not. ESPN's side is restricted where it is read, so the
+-- formula check and the bye rule below see the same seasons.
+--
 -- status, decided in this order:
 --   bye                    ESPN reports the bye team's stats; a bye has no opponent or
 --                          result, and is out of scope (2 sides in 2026).
@@ -52,16 +58,27 @@ single_component_stats as (
 
 ),
 
+covered as (
+
+    select league_id, season
+    from {{ ref('int_fantasy__league_seasons') }}
+    where platform = 'espn' and has_rosters
+
+),
+
 espn as (
 
     select
-        league_id,
-        season,
-        matchup_id,
-        team_id as fantasy_team_id,
-        stat_id as stat_key,
-        score as espn_value
-    from {{ ref('stg_espn__matchup_category_results') }}
+        results.league_id,
+        results.season,
+        results.matchup_id,
+        results.team_id as fantasy_team_id,
+        results.stat_id as stat_key,
+        results.score as espn_value
+    from {{ ref('stg_espn__matchup_category_results') }} as results
+    inner join covered
+        on covered.league_id = results.league_id
+        and covered.season = results.season
 
 ),
 

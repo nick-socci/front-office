@@ -7,6 +7,9 @@
 -- scored categories disagreeing with ESPN's. Byes need no exclusion: ESPN reports their
 -- stats but no results, so they have no scored categories.
 --
+-- Only league-seasons with rosters are compared (ADR 0026): a season loaded for its
+-- matchup totals alone has ESPN's results and none of ours, by design.
+--
 -- status:
 --   missing_ours scored at ESPN, absent from our marts.
 --   missing_espn in our marts, not scored at ESPN.
@@ -20,11 +23,28 @@
 
 {{ config(materialized='table') }}
 
-with espn as (
+with covered as (
 
-    select league_id, season, matchup_id, team_id as fantasy_team_id, stat_id as category_key, result
-    from {{ ref('stg_espn__matchup_category_results') }}
-    where is_scored_category
+    select league_id, season
+    from {{ ref('int_fantasy__league_seasons') }}
+    where platform = 'espn' and has_rosters
+
+),
+
+espn as (
+
+    select
+        results.league_id,
+        results.season,
+        results.matchup_id,
+        results.team_id as fantasy_team_id,
+        results.stat_id as category_key,
+        results.result
+    from {{ ref('stg_espn__matchup_category_results') }} as results
+    inner join covered
+        on covered.league_id = results.league_id
+        and covered.season = results.season
+    where results.is_scored_category
 
 ),
 
