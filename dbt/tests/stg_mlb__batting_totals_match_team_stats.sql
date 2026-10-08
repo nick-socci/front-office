@@ -24,25 +24,17 @@ with latest_responses as (
 
 claimed as (
 
+    -- One branch per side, so every JSON path is a constant.
+    {% for side in ['home', 'away'] %}
     select
         {{ fo_request_param('request_key', 'gamePk') }} as game_pk,
-        side,
-        try_cast(
-            json_extract_string(payload, '$.teams.' || side || '.teamStats.batting.hits') as bigint
-        ) as team_hits,
-        try_cast(
-            json_extract_string(payload, '$.teams.' || side || '.teamStats.batting.runs') as bigint
-        ) as team_runs,
-        try_cast(
-            json_extract_string(payload, '$.teams.' || side || '.teamStats.batting.atBats') as bigint
-        ) as team_at_bats
-    from (
-        select
-            payload,
-            request_key,
-            unnest(['home', 'away']) as side
-        from latest_responses
-    )
+        '{{ side }}' as side,
+        {{ fo_json_int('payload', '$.teams.' ~ side ~ '.teamStats.batting.hits') }} as team_hits,
+        {{ fo_json_int('payload', '$.teams.' ~ side ~ '.teamStats.batting.runs') }} as team_runs,
+        {{ fo_json_int('payload', '$.teams.' ~ side ~ '.teamStats.batting.atBats') }} as team_at_bats
+    from latest_responses
+    {{ 'union all' if not loop.last }}
+    {% endfor %}
 
 ),
 

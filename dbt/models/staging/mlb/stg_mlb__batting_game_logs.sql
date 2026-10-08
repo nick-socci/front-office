@@ -51,4 +51,4 @@ from players
 -- pinch runner has 0 plate appearances but can still steal a base, so filtering on
 -- plate_appearances would lose real events.
 where {{ fo_json_int('player', '$.stats.batting.gamesPlayed') }} = 1
-{{ fo_latest_by_entity(['game_pk', "player ->> '$.person.id'"]) }}
+{{ fo_latest_by_entity(['game_pk', fo_json_string('player', '$.person.id') | trim]) }}

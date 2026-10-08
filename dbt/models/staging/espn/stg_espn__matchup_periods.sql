@@ -45,30 +45,22 @@ matchups as (
 
 ),
 
-sides as (
-
-    select
-        league_id,
-        season,
-        fetched_at,
-        matchup,
-        unnest(['home', 'away']) as side
-    from matchups
-
-),
-
 period_keys as (
 
+    -- One branch per side, so every JSON path is a constant.
+    {% for side in ['home', 'away'] %}
     select
         league_id,
         season,
         fetched_at,
-        try_cast(json_extract_string(matchup, '$.matchupPeriodId') as bigint) as matchup_period,
+        {{ fo_json_int('matchup', '$.matchupPeriodId') }} as matchup_period,
         unnest(
-            json_keys(matchup, '$.' || side || '.pointsByScoringPeriod')
+            {{ fo_json_keys('matchup', '$.' ~ side ~ '.pointsByScoringPeriod') }}
         ) as scoring_period_key
-    from sides
-    where json_extract(matchup, '$.' || side || '.pointsByScoringPeriod') is not null
+    from matchups
+    where {{ fo_json_exists('matchup', '$.' ~ side ~ '.pointsByScoringPeriod') }}
+    {{ 'union all' if not loop.last }}
+    {% endfor %}
 
 )
 

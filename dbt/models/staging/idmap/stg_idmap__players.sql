@@ -44,4 +44,4 @@ select
 from mapped
 where {{ fo_json_int('row_json', '$.ESPNID') }} is not null
   and {{ fo_json_int('row_json', '$.MLBID') }} is not null
-{{ fo_latest_by_entity(["row_json ->> '$.ESPNID'"]) }}
+{{ fo_latest_by_entity([fo_json_string('row_json', '$.ESPNID') | trim]) }}

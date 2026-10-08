@@ -4,10 +4,10 @@
 -- Two things about this model are deliberate, and both were learned the hard way when
 -- earlier versions exhausted 24 GB of memory:
 --
--- 1. The payload is parsed with an explicit schema (from_json with a structure), not
---    with repeated json_extract calls. ESPN embeds every rostered player's full season
---    stats, so each payload is ~2.3 MB; declaring the few fields we want lets DuckDB
---    discard the rest while parsing.
+-- 1. The payload is parsed with an explicit schema (fo_json_parse, which is DuckDB's
+--    from_json with a structure), not with repeated per-field extraction. ESPN embeds every
+--    rostered player's full season stats, so each payload is ~2.3 MB; declaring the few
+--    fields we want lets DuckDB discard the rest while parsing.
 --
 -- 2. `payload` is projected away in the `header` CTE, BEFORE any unnest. unnest
 --    duplicates every other column in its SELECT once per output row, so extracting
@@ -15,8 +15,9 @@
 --    about 5 GB for one season. Keeping the unnest in a SELECT that no longer mentions
 --    payload is the whole difference between 2.8 seconds and running out of memory.
 --
--- For the BigQuery migration: from_json with a structure string is DuckDB-specific; the
--- equivalent there is JSON_QUERY_ARRAY plus per-field extraction.
+-- For the BigQuery migration: the structure string is DuckDB-specific. It is passed to
+-- fo_json_parse, which is where the DuckDB form (from_json) lives; its BigQuery variant
+-- will be JSON_QUERY_ARRAY plus per-field extraction.
 
 {{ config(materialized='table') }}
 
@@ -52,7 +53,7 @@ header as (
         {{ fo_json_int('payload', '$.seasonId') }} as season,
         {{ fo_request_param('request_key', 'scoringPeriodId') }} as scoring_period,
         fetched_at,
-        from_json(json_extract(payload, '$.teams'), '{{ roster_schema | trim }}') as teams_list
+        {{ fo_json_parse('payload', '$.teams', roster_schema) }} as teams_list
     from latest
 
 ),

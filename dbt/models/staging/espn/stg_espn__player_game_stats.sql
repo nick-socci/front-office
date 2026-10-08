@@ -51,7 +51,7 @@ header as (
         {{ fo_json_int('payload', '$.seasonId') }} as season,
         {{ fo_request_param('request_key', 'scoringPeriodId') }} as scoring_period,
         fetched_at,
-        from_json(json_extract(payload, '$.teams'), '{{ roster_stats_schema | trim }}') as teams_list
+        {{ fo_json_parse('payload', '$.teams', roster_stats_schema) }} as teams_list
     from latest
 
 ),

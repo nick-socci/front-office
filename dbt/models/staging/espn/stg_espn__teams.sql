@@ -26,11 +26,11 @@ select
     {{ fo_json_int('team', '$.id') }} as team_id,
     {{ fo_anonymize(
         fo_json_text('team', '$.name'),
-        "'Team ' || lpad((team ->> '$.id'), 2, '0')"
+        "'Team ' || lpad(" ~ fo_json_string('team', '$.id') | trim ~ ", 2, '0')"
     ) }} as team_name,
     {{ fo_anonymize(
         fo_json_text('team', '$.abbrev'),
-        "'T' || (team ->> '$.id')"
+        "'T' || (" ~ fo_json_string('team', '$.id') | trim ~ ")"
     ) }} as team_abbrev,
     {{ fo_json_int('team', '$.playoffSeed') }} as playoff_seed,
     {{ fo_json_int('team', '$.record.overall.wins') }} as wins,
