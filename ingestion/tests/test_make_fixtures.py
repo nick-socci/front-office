@@ -148,6 +148,234 @@ def test_latest_espn_selects_a_scoring_period_exactly(roots):
         make_fixtures.latest_espn("roster", scoring_period=5)
 
 
+def test_latest_espn_ignores_a_newer_capture_of_another_season(roots):
+    """Catches a roster of the same period landed for another season (a newer capture)
+    being chosen because the newest path among all seasons wins (R1.4)."""
+    raw, _fixtures = roots
+    base = {"league_id": "7", "scoring_period": 36}
+    land(raw, "espn", "roster", {"season": 2026, **base}, "20260101T000000Z", {"s": 2026})
+    land(raw, "espn", "roster", {"season": 2027, **base}, "20270101T000000Z", {"s": 2027})
+    land(raw, "espn", "settings", {"season": 2026, "league_id": "7"}, "20260101T000000Z", {"s": 26})
+    land(raw, "espn", "settings", {"season": 2027, "league_id": "7"}, "20270101T000000Z", {"s": 27})
+    assert make_fixtures.latest_espn("roster", scoring_period=36) == {"s": 2026}
+    assert make_fixtures.latest_espn("roster") == {"s": 2026}
+    assert make_fixtures.latest_espn("settings") == {"s": 26}
+
+
+def test_the_first_transactions_page_is_of_season_2026_only(roots):
+    """Catches a newer transactions run of another season being taken as the fixture's."""
+    raw, _fixtures = roots
+    base = {"league_id": "7", "offset": 0}
+    land(raw, "espn", "transactions", {"season": 2026, **base}, "20260101T000000Z", {"s": 2026})
+    land(raw, "espn", "transactions", {"season": 2027, **base}, "20270101T000000Z", {"s": 2027})
+    assert make_fixtures.newest_transactions_first_page() == {"s": 2026}
+
+
+def test_two_leagues_in_the_season_stop_generation_with_their_count(roots):
+    """Catches a silent choice between leagues (R1.5): the message gives how many were
+    found and never which."""
+    raw, _fixtures = roots
+    for league in ("7", "8"):
+        land(
+            raw,
+            "espn",
+            "settings",
+            {"season": 2026, "league_id": league},
+            "20260101T000000Z",
+            {},
+        )
+    land(raw, "espn", "settings", {"season": 2027, "league_id": "9"}, "20270101T000000Z", {})
+    with pytest.raises(SystemExit) as stop:
+        make_fixtures.check_one_league()
+    message = str(stop.value)
+    assert "2 leagues" in message
+    assert not any(league in message for league in ("7", "8", "9"))
+
+
+def test_one_league_or_none_does_not_stop_generation(roots):
+    """Catches the league check refusing a single league (another season's league does not
+    count) or turning an empty landing zone into a different failure."""
+    raw, _fixtures = roots
+    make_fixtures.check_one_league()
+    land(raw, "espn", "settings", {"season": 2026, "league_id": "7"}, "20260101T000000Z", {})
+    land(raw, "espn", "settings", {"season": 2026, "league_id": "7"}, "20260102T000000Z", {})
+    land(raw, "espn", "settings", {"season": 2027, "league_id": "9"}, "20270101T000000Z", {})
+    make_fixtures.check_one_league()
+
+
+def eastern_ms(stamp: str) -> int:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    local = datetime.fromisoformat(stamp).replace(tzinfo=ZoneInfo("America/New_York"))
+    return int(local.timestamp() * 1000)
+
+
+def land_pro_schedule(raw, games_by_period: dict[str, list[str]]):
+    """Land a made-up 2026 pro schedule: period -> Eastern times of its games."""
+    teams = [
+        {
+            "id": 1,
+            "proGamesByScoringPeriod": {
+                period: [{"id": i, "date": eastern_ms(when)} for i, when in enumerate(times)]
+                for period, times in games_by_period.items()
+            },
+        }
+    ]
+    land(
+        raw,
+        "espn",
+        "pro_schedule",
+        {"season": 2026},
+        "20260501T000000Z",
+        {"settings": {"proTeams": teams}},
+    )
+
+
+DATES = ("2026-04-29", "2026-04-30")
+
+
+def test_source_periods_on_the_fixture_dates_pass(roots):
+    """Catches the date check rejecting a correct pair, including a late-evening game that
+    is the next day in UTC but still the fixture date in Eastern time."""
+    raw, _fixtures = roots
+    land_pro_schedule(
+        raw,
+        {
+            "36": ["2026-04-29T13:10", "2026-04-29T23:40"],
+            "37": ["2026-04-30T19:05"],
+            "38": ["2026-05-01T19:05"],
+        },
+    )
+    make_fixtures.check_source_periods_are_the_fixture_dates((36, 37), DATES)
+
+
+def test_a_source_period_on_another_date_stops_generation(roots):
+    """Catches the constant and the dates drifting apart (R1.2): the message names the
+    period, the date found and the date wanted."""
+    raw, _fixtures = roots
+    land_pro_schedule(raw, {"36": ["2026-04-29T19:05"], "37": ["2026-05-02T19:05"]})
+    with pytest.raises(SystemExit) as stop:
+        make_fixtures.check_source_periods_are_the_fixture_dates((36, 37), DATES)
+    message = str(stop.value)
+    assert "37" in message and "2026-05-02" in message and "2026-04-30" in message
+
+
+def test_a_source_period_on_two_dates_stops_generation(roots):
+    """Catches a period whose games straddle two days passing because one of them matches."""
+    raw, _fixtures = roots
+    land_pro_schedule(
+        raw, {"36": ["2026-04-29T19:05", "2026-04-30T19:05"], "37": ["2026-04-30T19:05"]}
+    )
+    with pytest.raises(SystemExit) as stop:
+        make_fixtures.check_source_periods_are_the_fixture_dates((36, 37), DATES)
+    message = str(stop.value)
+    assert "36" in message and "2026-04-29" in message and "2026-04-30" in message
+
+
+def test_a_source_period_with_no_games_stops_generation(roots):
+    """Catches a period missing from the schedule passing for lack of dates to disagree."""
+    raw, _fixtures = roots
+    land_pro_schedule(raw, {"36": ["2026-04-29T19:05"]})
+    with pytest.raises(SystemExit):
+        make_fixtures.check_source_periods_are_the_fixture_dates((36, 37), DATES)
+
+
+def made_up_entry(lines: list[dict]) -> dict:
+    return {
+        "playerId": 5,
+        "lineupSlotId": 3,
+        "injuryStatus": "ACTIVE",
+        "acquisitionType": "DRAFT",
+        "userProfile": "someone",
+        "playerPoolEntry": {
+            "id": 5,
+            "player": {
+                "fullName": "A Player",
+                "defaultPositionId": 1,
+                "proTeamId": 4,
+                "eligibleSlots": [0, 12],
+                "firstName": "nope",
+                "stats": lines,
+            },
+        },
+    }
+
+
+def real_line(**changes) -> dict:
+    line = {
+        "id": "x",
+        "proTeamId": 4,
+        "seasonId": 2026,
+        "scoringPeriodId": 36,
+        "statSourceId": 0,
+        "statSplitTypeId": 5,
+        "externalId": "823471",
+        "appliedTotal": 1.0,
+        "appliedStats": {"1": 1.0},
+        "stats": {"0": 4.0, "1": 2.0},
+    }
+    return line | changes
+
+
+def test_stat_lines_kept_are_actuals_of_one_game_of_the_source_period(roots):
+    """Catches a projection (source 1), a season or range total (other split types), or
+    another period's line being published (R2.1)."""
+    entry = made_up_entry(
+        [
+            real_line(),
+            real_line(statSourceId=1),
+            real_line(statSplitTypeId=0),
+            real_line(scoringPeriodId=37),
+            real_line(externalId="9", stats={"0": 1.0}),
+        ]
+    )
+    lines = make_fixtures.stat_lines(entry, 36, 1)
+    assert [line["externalId"] for line in lines] == ["823471", "9"]
+
+
+def test_a_kept_line_has_the_five_allowlisted_keys_and_the_fixture_period(roots):
+    """Catches a field outside the allowlist surviving (R2.2) or the period not being
+    renumbered (R1.3); `stats` must be copied whole."""
+    lines = make_fixtures.stat_lines(made_up_entry([real_line()]), 36, 1)
+    assert lines == [
+        {
+            "scoringPeriodId": 1,
+            "statSourceId": 0,
+            "statSplitTypeId": 5,
+            "externalId": "823471",
+            "stats": {"0": 4.0, "1": 2.0},
+        }
+    ]
+    assert tuple(lines[0]) == make_fixtures.ESPN_STAT_LINE_FIELDS
+
+
+def test_the_rebuilt_entry_has_stats_only_when_a_line_was_kept(roots):
+    """Catches an empty `stats` key on an entry with no line (R2.3), and a lost roster
+    field (R2.4): the rest of the entry is what the allowlist gave before."""
+    with_line = make_fixtures.rebuild_roster_entry(made_up_entry([real_line()]), 36, 1)
+    without = make_fixtures.rebuild_roster_entry(
+        made_up_entry([real_line(statSourceId=1), real_line(scoringPeriodId=37)]), 36, 1
+    )
+    bare = made_up_entry([])
+    del bare["playerPoolEntry"]["player"]["stats"]
+    none_at_all = make_fixtures.rebuild_roster_entry(bare, 36, 1)
+    expected = make_fixtures.rebuild(made_up_entry([]), make_fixtures.ESPN_ROSTER_ENTRY_FIELDS)
+    assert "stats" in with_line["playerPoolEntry"]["player"]
+    assert without == expected and none_at_all == expected
+    assert "stats" not in without["playerPoolEntry"]["player"]
+    stripped = json.loads(json.dumps(with_line))
+    del stripped["playerPoolEntry"]["player"]["stats"]
+    assert stripped == expected
+    assert "userProfile" not in with_line and "firstName" not in str(with_line)
+
+
+def test_an_entry_with_no_player_gets_none_invented():
+    """Catches a `playerPoolEntry.player` created only to hold stats."""
+    rebuilt = make_fixtures.rebuild_roster_entry({"playerId": 5}, 36, 1)
+    assert rebuilt == {"playerId": 5}
+
+
 def test_the_first_transactions_page_is_offset_zero_of_the_newest_run(roots):
     """Catches offset=0 being found by a path glob of the old layout, or a later page taken."""
     raw, _fixtures = roots
@@ -246,3 +474,52 @@ def test_committed_pro_schedule_fixture_is_the_allowlist_and_the_fixture_dates()
                 .date()
             )
             assert local.isoformat() == day
+
+
+def committed_rosters_and_games(root: Path, season: int) -> tuple[list, dict[str, set[str]]]:
+    """(capture, period) of every committed roster of the season, and the pro schedule's
+    game ids by period."""
+    zone = LandingZone(root)
+    rosters = [
+        (capture, capture.meta["partitions"]["scoring_period"])
+        for capture in zone.committed(source="espn", endpoint="roster")
+        if capture.meta["partitions"]["season"] == season
+    ]
+    (schedule,) = zone.committed(
+        source="espn", endpoint="pro_schedule", partitions={"season": season}
+    )
+    games: dict[str, set[str]] = {}
+    for team in schedule.payload["settings"]["proTeams"]:
+        for period, listed in team.get("proGamesByScoringPeriod", {}).items():
+            games.setdefault(period, set()).update(str(game["id"]) for game in listed)
+    return rosters, games
+
+
+def test_committed_roster_fixtures_carry_allowlisted_lines_of_scheduled_games():
+    """Catches a projected or season-total line, a field outside the allowlist, a line of
+    another period, a game that is not in the pro schedule fixture for the same period (the
+    rosters and the schedule from different days, R1.1), an empty `stats` key on an entry
+    without lines, and a fixture with no real line to compare in either period."""
+    root = Path(__file__).resolve().parents[2] / "fixtures/landing"
+    rosters, games = committed_rosters_and_games(root, 2026)
+    assert sorted(period for _, period in rosters) == [1, 2]
+    for capture, period in rosters:
+        payload = capture.payload
+        assert payload["scoringPeriodId"] == period
+        non_empty = 0
+        for team in payload["teams"]:
+            for entry in team["roster"]["entries"]:
+                player = entry["playerPoolEntry"]["player"]
+                lines = player.get("stats")
+                if lines is None:
+                    assert "stats" not in player
+                    continue
+                assert lines, "an entry with no line must have no stats key"
+                for line in lines:
+                    assert tuple(line) == make_fixtures.ESPN_STAT_LINE_FIELDS
+                    assert line["statSourceId"] == 0 and line["statSplitTypeId"] == 5
+                    assert line["scoringPeriodId"] == period
+                    assert line["externalId"].isdigit()
+                    assert line["externalId"] in games[str(period)]
+                    non_empty += bool(line["stats"])
+        assert non_empty > 0
