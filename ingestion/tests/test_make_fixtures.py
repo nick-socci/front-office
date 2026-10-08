@@ -192,6 +192,36 @@ def test_two_leagues_in_the_season_stop_generation_with_their_count(roots):
     assert not any(league in message for league in ("7", "8", "9"))
 
 
+@pytest.mark.parametrize(
+    ("endpoint", "extra"),
+    [
+        ("teams", {}),
+        ("matchups", {}),
+        ("transactions", {"offset": 0}),
+        ("roster", {"scoring_period": 36}),
+    ],
+)
+def test_a_second_league_under_any_endpoint_stops_generation(roots, endpoint, extra):
+    """Catches a guard that reads settings only: a second league that has a roster, a
+    transaction page or any other league capture, but no settings capture, would supply
+    fixture data unnoticed (R1.5)."""
+    raw, _fixtures = roots
+    land(raw, "espn", "settings", {"season": 2026, "league_id": "7"}, "20260101T000000Z", {})
+    land(raw, "espn", endpoint, {"season": 2026, "league_id": "8", **extra}, "20260101T000000Z", {})
+    with pytest.raises(SystemExit) as stop:
+        make_fixtures.check_one_league()
+    assert "2 leagues" in str(stop.value)
+
+
+def test_the_pro_schedule_has_no_league_and_is_not_counted_as_one(roots):
+    """Catches the season-level pro schedule, which has no league_id, being counted as a
+    second league and stopping every generation."""
+    raw, _fixtures = roots
+    land(raw, "espn", "settings", {"season": 2026, "league_id": "7"}, "20260101T000000Z", {})
+    land(raw, "espn", "pro_schedule", {"season": 2026}, "20260101T000000Z", {})
+    make_fixtures.check_one_league()
+
+
 def test_one_league_or_none_does_not_stop_generation(roots):
     """Catches the league check refusing a single league (another season's league does not
     count) or turning an empty landing zone into a different failure."""
@@ -516,7 +546,15 @@ def test_committed_roster_fixtures_carry_allowlisted_lines_of_scheduled_games():
                     continue
                 assert lines, "an entry with no line must have no stats key"
                 for line in lines:
-                    assert tuple(line) == make_fixtures.ESPN_STAT_LINE_FIELDS
+                    # Spelled out here, not read from the script: widening the script's
+                    # allowlist must fail this test, not move it.
+                    assert set(line) == {
+                        "scoringPeriodId",
+                        "statSourceId",
+                        "statSplitTypeId",
+                        "externalId",
+                        "stats",
+                    }
                     assert line["statSourceId"] == 0 and line["statSplitTypeId"] == 5
                     assert line["scoringPeriodId"] == period
                     assert line["externalId"].isdigit()

@@ -521,15 +521,19 @@ def check_source_periods_are_the_fixture_dates(
 
 
 def check_one_league() -> None:
-    """Stop when settings of more than one league are landed for the season (R1.5).
+    """Stop when captures of more than one league are landed for the season (R1.5).
 
-    Which league's rosters are published is a decision, so the script does not choose, and
-    it says how many it found, not which.
+    Every ESPN endpoint counts, not settings alone: a second league with a roster or a
+    transaction page and no settings capture would otherwise supply fixture data unnoticed.
+    A capture with no league_id, the season-level pro schedule, is no league. Which league's
+    rosters are published is a decision, so the script does not choose, and it says how many
+    it found, not which.
     """
     leagues = {
-        capture.meta["partitions"].get("league_id")
-        for capture in LandingZone(RAW_ROOT).committed(source="espn", endpoint="settings")
+        str(capture.meta["partitions"]["league_id"])
+        for capture in LandingZone(RAW_ROOT).committed(source="espn")
         if capture.meta.get("partitions", {}).get("season") == FIXTURE_SEASON
+        and capture.meta["partitions"].get("league_id") is not None
     }
     if len(leagues) > 1:
         raise SystemExit(
