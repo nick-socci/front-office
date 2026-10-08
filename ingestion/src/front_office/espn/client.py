@@ -3,6 +3,7 @@
 This is the only module that reads ESPN credentials. They are session cookies for a real
 ESPN account, so they must never reach a landing file, a metadata sidecar, a log line or
 a traceback -- hence the custom repr and the absence of any logging of their values.
+The public client below carries no cookies and reads none.
 """
 
 from __future__ import annotations
@@ -74,3 +75,13 @@ def league_url(season: int, league_id: str) -> str:
 def espn_client(credentials: EspnCredentials) -> HttpClient:
     """An HttpClient carrying the session cookies. 401/403 fails fast, not retried."""
     return HttpClient("espn", cookies=credentials.cookies())
+
+
+def game_url(season: int) -> str:
+    """ESPN's game-level season resource: no league, so no credentials."""
+    return f"{BASE_HOST}/apis/v3/games/{GAME}/seasons/{season}"
+
+
+def espn_public_client() -> HttpClient:
+    """An HttpClient with no cookies, for resources that need no login."""
+    return HttpClient("espn")

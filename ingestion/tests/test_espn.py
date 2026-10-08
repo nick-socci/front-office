@@ -206,6 +206,17 @@ def test_roster_backfill_continues_after_one_period_fails(zone):
     assert summary.failed_periods == [2]
 
 
+def serve_pro_schedule(monkeypatch):
+    """Give `backfill espn` a public client that answers the pro schedule request."""
+    monkeypatch.setattr(
+        cli,
+        "espn_public_client",
+        lambda: make_client(
+            lambda request: httpx.Response(200, json={"settings": {"proTeams": []}})
+        ),
+    )
+
+
 def expires_after_period_one(requested):
     """A handler whose cookies stop working after the first roster request."""
 
@@ -261,6 +272,7 @@ def test_backfill_espn_exits_non_zero_when_authentication_expires(tmp_path, monk
     monkeypatch.setenv("SWID", "{swid-cookie-value}")
     monkeypatch.setenv("LEAGUE_ID", LEAGUE_ID)
     monkeypatch.setattr(cli, "load_env_file", lambda: None)
+    serve_pro_schedule(monkeypatch)
     requested = []
     monkeypatch.setattr(
         cli, "espn_client", lambda _credentials: make_client(expires_after_period_one(requested))
@@ -634,6 +646,7 @@ def _drive_backfill_espn(tmp_path, monkeypatch, *, settings_latest, roster_lates
     monkeypatch.setenv("SWID", "{swid-cookie-value}")
     monkeypatch.setenv("LEAGUE_ID", LEAGUE_ID)
     monkeypatch.setattr(cli, "load_env_file", lambda: None)
+    serve_pro_schedule(monkeypatch)
 
     def handler(request):
         if request.url.params.get("scoringPeriodId") is None:
