@@ -30,10 +30,10 @@ FIXTURE_ROOT = REPO_ROOT / "fixtures/landing"
 # churn the committed diff on every run.
 #
 # The stamp is the Eastern afternoon of the LAST fixture game date. Scoring periods are
-# no longer dated from it: stg_espn__scoring_periods counts from MLB's opening day
-# (ADR 0021), which in the fixture is the first of the two game dates. With the
-# renumbered scoring periods below, that gives a two-day season: period 1 = 2026-04-29,
-# period 2 = 2026-04-30, matching the MLB fixture games. The stamp itself stays, because
+# no longer dated from it: stg_espn__scoring_periods counts from the period-1 date the
+# pro schedule fixture implies (ADR 0023). That fixture is built from the real periods of
+# the two MLB fixture dates, so period 1 = 2026-04-29 and period 2 = 2026-04-30, matching
+# the MLB fixture games. The stamp itself stays, because
 # changing it would rename every fixture capture.
 FIXTURE_FETCHED_AT = "20260430T160000Z"
 
