@@ -132,6 +132,10 @@ The four mart tests and the two others above are what the spikes showed failing.
 build runs the real seasons and CI with the 2025 fixture; a test outside this table that
 fails for an uncovered season is R5.3, not a seventh row added quietly.
 
+The owner agreed this list on 2026-10-08, and that `int_fantasy__category_scales` stays a
+model of our recomputed totals: measuring a scale from the platform's reported totals of
+past seasons is #57's to design, not a change made here.
+
 Staging tests that read a model's own rows (`stg_espn__matchup_periods_are_contiguous`
 and the like) are expected to pass for 2021 because it has no rows there; the build
 confirms it.
