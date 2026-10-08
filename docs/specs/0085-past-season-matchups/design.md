@@ -136,6 +136,11 @@ The owner agreed this list on 2026-10-08, and that `int_fantasy__category_scales
 model of our recomputed totals: measuring a scale from the platform's reported totals of
 past seasons is #57's to design, not a change made here.
 
+The owner accepted on 2026-10-08 that the last two rows narrow a test instead of
+satisfying it, and chose not to add a complete-games rule here: there is no season with
+rosters to reconcile it against. Both gaps come due when a past season gains rosters,
+because it then becomes covered and the tests apply to it again; they are noted on #83.
+
 Staging tests that read a model's own rows (`stg_espn__matchup_periods_are_contiguous`
 and the like) are expected to pass for 2021 because it has no rows there; the build
 confirms it.
