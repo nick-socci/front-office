@@ -72,14 +72,6 @@
   "IDFANGRAPHS": "18684"
  },
  {
-  "PLAYERNAME": "Blaze Alexander",
-  "MLBID": "677942",
-  "ESPNID": "41345",
-  "TEAM": "BAL",
-  "POS": "3B",
-  "IDFANGRAPHS": "23789"
- },
- {
   "PLAYERNAME": "Pete Alonso",
   "MLBID": "624413",
   "ESPNID": "37498",
@@ -110,14 +102,6 @@
   "TEAM": "BOS",
   "POS": "OF",
   "IDFANGRAPHS": "31812"
- },
- {
-  "PLAYERNAME": "Jonathan Aranda",
-  "MLBID": "666018",
-  "ESPNID": "40810",
-  "TEAM": "TB",
-  "POS": "1B",
-  "IDFANGRAPHS": "21837"
  },
  {
   "PLAYERNAME": "Randy Arozarena",
@@ -160,6 +144,14 @@
   "IDFANGRAPHS": "23793"
  },
  {
+  "PLAYERNAME": "Graham Ashcraft",
+  "MLBID": "668933",
+  "ESPNID": "4084179",
+  "TEAM": "CIN",
+  "POS": "P",
+  "IDFANGRAPHS": "27552"
+ },
+ {
   "PLAYERNAME": "Bryan Baker",
   "MLBID": "641329",
   "ESPNID": "40884",
@@ -184,28 +176,12 @@
   "IDFANGRAPHS": "28824"
  },
  {
-  "PLAYERNAME": "Jake Bauers",
-  "MLBID": "641343",
-  "ESPNID": "35013",
-  "TEAM": "MIL",
-  "POS": "1B",
-  "IDFANGRAPHS": "15194"
- },
- {
-  "PLAYERNAME": "Eduard Bazardo",
-  "MLBID": "660825",
-  "ESPNID": "41939",
-  "TEAM": "SEA",
-  "POS": "P",
-  "IDFANGRAPHS": "20997"
- },
- {
-  "PLAYERNAME": "Shane Baz",
-  "MLBID": "669358",
-  "ESPNID": "39639",
+  "PLAYERNAME": "Felix Bautista",
+  "MLBID": "642585",
+  "ESPNID": "4905859",
   "TEAM": "BAL",
   "POS": "P",
-  "IDFANGRAPHS": "22264"
+  "IDFANGRAPHS": "20666"
  },
  {
   "PLAYERNAME": "Travis Bazzana",
@@ -230,6 +206,14 @@
   "TEAM": "NYY",
   "POS": "OF",
   "IDFANGRAPHS": "15998"
+ },
+ {
+  "PLAYERNAME": "Josh Bell",
+  "MLBID": "605137",
+  "ESPNID": "32517",
+  "TEAM": "MIN",
+  "POS": "1B",
+  "IDFANGRAPHS": "13145"
  },
  {
   "PLAYERNAME": "Carson Benge",
@@ -296,12 +280,12 @@
   "IDFANGRAPHS": "22543"
  },
  {
-  "PLAYERNAME": "Ben Brown",
-  "MLBID": "676962",
-  "ESPNID": "41516",
+  "PLAYERNAME": "Alex Bregman",
+  "MLBID": "608324",
+  "ESPNID": "34886",
   "TEAM": "CHC",
-  "POS": "P",
-  "IDFANGRAPHS": "23590"
+  "POS": "3B",
+  "IDFANGRAPHS": "17678"
  },
  {
   "PLAYERNAME": "Hunter Brown",
@@ -326,6 +310,14 @@
   "TEAM": "STL",
   "POS": "1B",
   "IDFANGRAPHS": "27615"
+ },
+ {
+  "PLAYERNAME": "Corbin Burnes",
+  "MLBID": "669203",
+  "ESPNID": "39878",
+  "TEAM": "ARI",
+  "POS": "P",
+  "IDFANGRAPHS": "19361"
  },
  {
   "PLAYERNAME": "Chase Burns",
@@ -358,6 +350,14 @@
   "TEAM": "NYY",
   "POS": "SS",
   "IDFANGRAPHS": "23401"
+ },
+ {
+  "PLAYERNAME": "Edward Cabrera",
+  "MLBID": "665795",
+  "ESPNID": "40944",
+  "TEAM": "CHC",
+  "POS": "P",
+  "IDFANGRAPHS": "21690"
  },
  {
   "PLAYERNAME": "Jac Caglianone",
@@ -408,14 +408,6 @@
   "IDFANGRAPHS": "15689"
  },
  {
-  "PLAYERNAME": "Cade Cavalli",
-  "MLBID": "676917",
-  "ESPNID": "4308037",
-  "TEAM": "WAS",
-  "POS": "P",
-  "IDFANGRAPHS": "27473"
- },
- {
   "PLAYERNAME": "Dylan Cease",
   "MLBID": "656302",
   "ESPNID": "34943",
@@ -438,6 +430,14 @@
   "TEAM": "BOS",
   "POS": "P",
   "IDFANGRAPHS": "10233"
+ },
+ {
+  "PLAYERNAME": "Matt Chapman",
+  "MLBID": "656305",
+  "ESPNID": "33857",
+  "TEAM": "SF",
+  "POS": "3B",
+  "IDFANGRAPHS": "16505"
  },
  {
   "PLAYERNAME": "Jazz Chisholm",
@@ -464,28 +464,12 @@
   "IDFANGRAPHS": "19479"
  },
  {
-  "PLAYERNAME": "Taylor Clarke",
-  "MLBID": "664199",
-  "ESPNID": "35277",
-  "TEAM": "ARI",
-  "POS": "P",
-  "IDFANGRAPHS": "17611"
- },
- {
   "PLAYERNAME": "Ernie Clement",
   "MLBID": "676391",
   "ESPNID": "41287",
   "TEAM": "TOR",
   "POS": "SS",
   "IDFANGRAPHS": "20352"
- },
- {
-  "PLAYERNAME": "Kody Clemens",
-  "MLBID": "665019",
-  "ESPNID": "41311",
-  "TEAM": "MIN",
-  "POS": "2B",
-  "IDFANGRAPHS": "20572"
  },
  {
   "PLAYERNAME": "Gerrit Cole",
@@ -510,6 +494,22 @@
   "TEAM": "MIL",
   "POS": "C",
   "IDFANGRAPHS": "20503"
+ },
+ {
+  "PLAYERNAME": "Carlos Correa",
+  "MLBID": "621043",
+  "ESPNID": "32653",
+  "TEAM": "HOU",
+  "POS": "SS",
+  "IDFANGRAPHS": "14162"
+ },
+ {
+  "PLAYERNAME": "Carlos Cortes",
+  "MLBID": "666126",
+  "ESPNID": "41595",
+  "TEAM": "ATH",
+  "POS": "OF",
+  "IDFANGRAPHS": "21842"
  },
  {
   "PLAYERNAME": "Garrett Crochet",
@@ -568,14 +568,6 @@
   "IDFANGRAPHS": "32127"
  },
  {
-  "PLAYERNAME": "Reid Detmers",
-  "MLBID": "672282",
-  "ESPNID": "4326697",
-  "TEAM": "LAA",
-  "POS": "P",
-  "IDFANGRAPHS": "27468"
- },
- {
   "PLAYERNAME": "Rafael Devers",
   "MLBID": "646240",
   "ESPNID": "33859",
@@ -600,12 +592,20 @@
   "IDFANGRAPHS": "16578"
  },
  {
-  "PLAYERNAME": "Dillon Dingler",
-  "MLBID": "693307",
-  "ESPNID": "4345620",
-  "TEAM": "DET",
+  "PLAYERNAME": "Yainer Diaz",
+  "MLBID": "673237",
+  "ESPNID": "4781491",
+  "TEAM": "HOU",
   "POS": "C",
-  "IDFANGRAPHS": "27464"
+  "IDFANGRAPHS": "23003"
+ },
+ {
+  "PLAYERNAME": "Chase Dollander",
+  "MLBID": "801403",
+  "ESPNID": "4719068",
+  "TEAM": "COL",
+  "POS": "P",
+  "IDFANGRAPHS": "33482"
  },
  {
   "PLAYERNAME": "Seranthony Dominguez",
@@ -624,20 +624,20 @@
   "IDFANGRAPHS": "24679"
  },
  {
+  "PLAYERNAME": "Brenton Doyle",
+  "MLBID": "686668",
+  "ESPNID": "42462",
+  "TEAM": "COL",
+  "POS": "OF",
+  "IDFANGRAPHS": "25479"
+ },
+ {
   "PLAYERNAME": "Mauricio Dubon",
   "MLBID": "643289",
   "ESPNID": "35304",
   "TEAM": "ATL",
   "POS": "SS",
   "IDFANGRAPHS": "16530"
- },
- {
-  "PLAYERNAME": "Ezequiel Duran",
-  "MLBID": "677649",
-  "ESPNID": "42457",
-  "TEAM": "TEX",
-  "POS": "SS",
-  "IDFANGRAPHS": "23733"
  },
  {
   "PLAYERNAME": "Jarren Duran",
@@ -664,14 +664,6 @@
   "IDFANGRAPHS": "33666"
  },
  {
-  "PLAYERNAME": "Tommy Edman",
-  "MLBID": "669242",
-  "ESPNID": "39907",
-  "TEAM": "LAD",
-  "POS": "2B",
-  "IDFANGRAPHS": "19470"
- },
- {
   "PLAYERNAME": "Xavier Edwards",
   "MLBID": "669364",
   "ESPNID": "41326",
@@ -686,14 +678,6 @@
   "TEAM": "ATL",
   "POS": "P",
   "IDFANGRAPHS": "27779"
- },
- {
-  "PLAYERNAME": "Bryce Eldridge",
-  "MLBID": "805811",
-  "ESPNID": "5149064",
-  "TEAM": "SF",
-  "POS": "DH",
-  "IDFANGRAPHS": "33390"
  },
  {
   "PLAYERNAME": "Nathan Eovaldi",
@@ -720,12 +704,28 @@
   "IDFANGRAPHS": "14542"
  },
  {
+  "PLAYERNAME": "Jeremiah Estrada",
+  "MLBID": "669093",
+  "ESPNID": "41014",
+  "TEAM": "SD",
+  "POS": "P",
+  "IDFANGRAPHS": "22210"
+ },
+ {
   "PLAYERNAME": "Peter Fairbanks",
   "MLBID": "664126",
   "ESPNID": "42180",
   "TEAM": "MIA",
   "POS": "P",
   "IDFANGRAPHS": "17998"
+ },
+ {
+  "PLAYERNAME": "Jack Flaherty",
+  "MLBID": "656427",
+  "ESPNID": "33837",
+  "TEAM": "DET",
+  "POS": "P",
+  "IDFANGRAPHS": "17479"
  },
  {
   "PLAYERNAME": "Freddie Freeman",
@@ -760,14 +760,6 @@
   "IDFANGRAPHS": "19291"
  },
  {
-  "PLAYERNAME": "Luis Garcia",
-  "MLBID": "671277",
-  "ESPNID": "40459",
-  "TEAM": "WAS",
-  "POS": "2B",
-  "IDFANGRAPHS": "20391"
- },
- {
   "PLAYERNAME": "Maikel Garcia",
   "MLBID": "672580",
   "ESPNID": "4905884",
@@ -798,14 +790,6 @@
   "TEAM": "TOR",
   "POS": "2B",
   "IDFANGRAPHS": "19950"
- },
- {
-  "PLAYERNAME": "J.T. Ginn",
-  "MLBID": "669372",
-  "ESPNID": "4414002",
-  "TEAM": "ATH",
-  "POS": "P",
-  "IDFANGRAPHS": "27889"
  },
  {
   "PLAYERNAME": "Tyler Glasnow",
@@ -960,28 +944,12 @@
   "IDFANGRAPHS": "26289"
  },
  {
-  "PLAYERNAME": "Logan Henderson",
-  "MLBID": "701656",
-  "ESPNID": "4917878",
-  "TEAM": "MIL",
-  "POS": "P",
-  "IDFANGRAPHS": "31475"
- },
- {
   "PLAYERNAME": "Teoscar Hernandez",
   "MLBID": "606192",
   "ESPNID": "33377",
   "TEAM": "LAD",
   "POS": "OF",
   "IDFANGRAPHS": "13066"
- },
- {
-  "PLAYERNAME": "Ivan Herrera",
-  "MLBID": "671056",
-  "ESPNID": "41889",
-  "TEAM": "STL",
-  "POS": "DH",
-  "IDFANGRAPHS": "20599"
  },
  {
   "PLAYERNAME": "Liam Hicks",
@@ -1016,6 +984,14 @@
   "IDFANGRAPHS": "31781"
  },
  {
+  "PLAYERNAME": "Clay Holmes",
+  "MLBID": "605280",
+  "ESPNID": "32827",
+  "TEAM": "NYM",
+  "POS": "P",
+  "IDFANGRAPHS": "13649"
+ },
+ {
   "PLAYERNAME": "Grant Holmes",
   "MLBID": "656550",
   "ESPNID": "33840",
@@ -1032,14 +1008,6 @@
   "IDFANGRAPHS": "17130"
  },
  {
-  "PLAYERNAME": "Tatsuya Imai",
-  "MLBID": "837227",
-  "ESPNID": "5330833",
-  "TEAM": "HOU",
-  "POS": "P",
-  "IDFANGRAPHS": "37124"
- },
- {
   "PLAYERNAME": "Shota Imanaga",
   "MLBID": "684007",
   "ESPNID": "5134630",
@@ -1048,20 +1016,20 @@
   "IDFANGRAPHS": "33829"
  },
  {
+  "PLAYERNAME": "Jeremiah Jackson",
+  "MLBID": "669236",
+  "ESPNID": "41264",
+  "TEAM": "BAL",
+  "POS": "OF",
+  "IDFANGRAPHS": "22239"
+ },
+ {
   "PLAYERNAME": "Kenley Jansen",
   "MLBID": "445276",
   "ESPNID": "29630",
   "TEAM": "DET",
   "POS": "P",
   "IDFANGRAPHS": "3096"
- },
- {
-  "PLAYERNAME": "Griffin Jax",
-  "MLBID": "643377",
-  "ESPNID": "42604",
-  "TEAM": "TB",
-  "POS": "P",
-  "IDFANGRAPHS": "20253"
  },
  {
   "PLAYERNAME": "Carter Jensen",
@@ -1088,28 +1056,20 @@
   "IDFANGRAPHS": "15640"
  },
  {
-  "PLAYERNAME": "Gage Jump",
-  "MLBID": "695611",
-  "ESPNID": "5023852",
-  "TEAM": "ATH",
-  "POS": "P",
-  "IDFANGRAPHS": "35418"
- },
- {
-  "PLAYERNAME": "Josh Jung",
-  "MLBID": "673962",
-  "ESPNID": "42437",
-  "TEAM": "TEX",
-  "POS": "3B",
-  "IDFANGRAPHS": "26299"
- },
- {
   "PLAYERNAME": "Jakob Junis",
   "MLBID": "596001",
   "ESPNID": "36056",
   "TEAM": "TEX",
   "POS": "P",
   "IDFANGRAPHS": "13619"
+ },
+ {
+  "PLAYERNAME": "Luke Keaschall",
+  "MLBID": "807712",
+  "ESPNID": "4977664",
+  "TEAM": "MIN",
+  "POS": "2B",
+  "IDFANGRAPHS": "33321"
  },
  {
   "PLAYERNAME": "Brad Keller",
@@ -1126,14 +1086,6 @@
   "TEAM": "PIT",
   "POS": "P",
   "IDFANGRAPHS": "17594"
- },
- {
-  "PLAYERNAME": "Kevin Kelly",
-  "MLBID": "687330",
-  "ESPNID": "5001153",
-  "TEAM": "TB",
-  "POS": "P",
-  "IDFANGRAPHS": "25679"
  },
  {
   "PLAYERNAME": "Merrill Kelly",
@@ -1184,6 +1136,22 @@
   "IDFANGRAPHS": "22581"
  },
  {
+  "PLAYERNAME": "Dean Kremer",
+  "MLBID": "665152",
+  "ESPNID": "38295",
+  "TEAM": "BAL",
+  "POS": "P",
+  "IDFANGRAPHS": "19350"
+ },
+ {
+  "PLAYERNAME": "Joel Kuhnel",
+  "MLBID": "669270",
+  "ESPNID": "40855",
+  "TEAM": "ATH",
+  "POS": "P",
+  "IDFANGRAPHS": "19995"
+ },
+ {
   "PLAYERNAME": "Nick Kurtz",
   "MLBID": "701762",
   "ESPNID": "4966637",
@@ -1198,14 +1166,6 @@
   "TEAM": "CLE",
   "POS": "OF",
   "IDFANGRAPHS": "24610"
- },
- {
-  "PLAYERNAME": "Peter Lambert",
-  "MLBID": "663567",
-  "ESPNID": "39898",
-  "TEAM": "HOU",
-  "POS": "P",
-  "IDFANGRAPHS": "17969"
  },
  {
   "PLAYERNAME": "Shea Langeliers",
@@ -1224,20 +1184,12 @@
   "IDFANGRAPHS": "33333"
  },
  {
-  "PLAYERNAME": "Jacob Latz",
-  "MLBID": "656641",
-  "ESPNID": "3210625",
-  "TEAM": "TEX",
-  "POS": "P",
-  "IDFANGRAPHS": "21306"
- },
- {
-  "PLAYERNAME": "Dylan Lee",
-  "MLBID": "669276",
-  "ESPNID": "41455",
-  "TEAM": "ATL",
-  "POS": "P",
-  "IDFANGRAPHS": "19996"
+  "PLAYERNAME": "Ramon Laureano",
+  "MLBID": "657656",
+  "ESPNID": "35142",
+  "TEAM": "SD",
+  "POS": "OF",
+  "IDFANGRAPHS": "17128"
  },
  {
   "PLAYERNAME": "Jung Hoo Lee",
@@ -1320,12 +1272,12 @@
   "IDFANGRAPHS": "11493"
  },
  {
-  "PLAYERNAME": "Brandon Marsh",
-  "MLBID": "669016",
-  "ESPNID": "40803",
-  "TEAM": "PHI",
+  "PLAYERNAME": "Jakob Marsee",
+  "MLBID": "805300",
+  "ESPNID": "4866735",
+  "TEAM": "MIA",
   "POS": "OF",
-  "IDFANGRAPHS": "20202"
+  "IDFANGRAPHS": "31370"
  },
  {
   "PLAYERNAME": "Ketel Marte",
@@ -1344,28 +1296,12 @@
   "IDFANGRAPHS": "21448"
  },
  {
-  "PLAYERNAME": "Nick Martinez",
-  "MLBID": "607259",
-  "ESPNID": "33372",
+  "PLAYERNAME": "Steven Matz",
+  "MLBID": "571927",
+  "ESPNID": "33106",
   "TEAM": "TB",
   "POS": "P",
-  "IDFANGRAPHS": "12730"
- },
- {
-  "PLAYERNAME": "Dustin May",
-  "MLBID": "669160",
-  "ESPNID": "40937",
-  "TEAM": "STL",
-  "POS": "P",
-  "IDFANGRAPHS": "19716"
- },
- {
-  "PLAYERNAME": "Jake McCarthy",
-  "MLBID": "664983",
-  "ESPNID": "41197",
-  "TEAM": "COL",
-  "POS": "OF",
-  "IDFANGRAPHS": "21622"
+  "IDFANGRAPHS": "13361"
  },
  {
   "PLAYERNAME": "Shane McClanahan",
@@ -1384,6 +1320,22 @@
   "IDFANGRAPHS": "33572"
  },
  {
+  "PLAYERNAME": "Michael McGreevy",
+  "MLBID": "700241",
+  "ESPNID": "4424141",
+  "TEAM": "STL",
+  "POS": "P",
+  "IDFANGRAPHS": "29869"
+ },
+ {
+  "PLAYERNAME": "Matt McLain",
+  "MLBID": "680574",
+  "ESPNID": "4422899",
+  "TEAM": "CIN",
+  "POS": "2B",
+  "IDFANGRAPHS": "29695"
+ },
+ {
   "PLAYERNAME": "Nolan McLean",
   "MLBID": "690997",
   "ESPNID": "4433874",
@@ -1398,14 +1350,6 @@
   "TEAM": "MIL",
   "POS": "P",
   "IDFANGRAPHS": "17722"
- },
- {
-  "PLAYERNAME": "Troy Melton",
-  "MLBID": "675512",
-  "ESPNID": "5294127",
-  "TEAM": "DET",
-  "POS": "P",
-  "IDFANGRAPHS": "31807"
  },
  {
   "PLAYERNAME": "Jackson Merrill",
@@ -1472,36 +1416,12 @@
   "IDFANGRAPHS": "19956"
  },
  {
-  "PLAYERNAME": "Braden Montgomery",
-  "MLBID": "695731",
-  "ESPNID": "4950345",
-  "TEAM": "CHW",
-  "POS": "OF",
-  "IDFANGRAPHS": "35423"
- },
- {
   "PLAYERNAME": "Colson Montgomery",
   "MLBID": "695657",
   "ESPNID": "4872685",
   "TEAM": "CHW",
   "POS": "SS",
   "IDFANGRAPHS": "29712"
- },
- {
-  "PLAYERNAME": "Adrian Morejon",
-  "MLBID": "670970",
-  "ESPNID": "40917",
-  "TEAM": "SD",
-  "POS": "P",
-  "IDFANGRAPHS": "20039"
- },
- {
-  "PLAYERNAME": "Gabriel Moreno",
-  "MLBID": "672515",
-  "ESPNID": "42464",
-  "TEAM": "ARI",
-  "POS": "C",
-  "IDFANGRAPHS": "22664"
  },
  {
   "PLAYERNAME": "Max Muncy",
@@ -1560,6 +1480,14 @@
   "IDFANGRAPHS": "31347"
  },
  {
+  "PLAYERNAME": "Brandon Nimmo",
+  "MLBID": "607043",
+  "ESPNID": "32159",
+  "TEAM": "TEX",
+  "POS": "OF",
+  "IDFANGRAPHS": "12927"
+ },
+ {
   "PLAYERNAME": "Aaron Nola",
   "MLBID": "605400",
   "ESPNID": "33709",
@@ -1568,12 +1496,12 @@
   "IDFANGRAPHS": "16149"
  },
  {
-  "PLAYERNAME": "Nasim Nunez",
-  "MLBID": "683083",
-  "ESPNID": "4728688",
-  "TEAM": "WAS",
-  "POS": "SS",
-  "IDFANGRAPHS": "25979"
+  "PLAYERNAME": "Bailey Ober",
+  "MLBID": "641927",
+  "ESPNID": "3107919",
+  "TEAM": "MIN",
+  "POS": "P",
+  "IDFANGRAPHS": "21224"
  },
  {
   "PLAYERNAME": "Riley O'Brien",
@@ -1640,20 +1568,20 @@
   "IDFANGRAPHS": "24816"
  },
  {
+  "PLAYERNAME": "Andrew Painter",
+  "MLBID": "691725",
+  "ESPNID": "4872683",
+  "TEAM": "PHI",
+  "POS": "P",
+  "IDFANGRAPHS": "30091"
+ },
+ {
   "PLAYERNAME": "Daniel Palencia",
   "MLBID": "694037",
   "ESPNID": "4875225",
   "TEAM": "CHC",
   "POS": "P",
   "IDFANGRAPHS": "27914"
- },
- {
-  "PLAYERNAME": "Andre Pallante",
-  "MLBID": "669467",
-  "ESPNID": "4109034",
-  "TEAM": "STL",
-  "POS": "P",
-  "IDFANGRAPHS": "26108"
  },
  {
   "PLAYERNAME": "Vinnie Pasquantino",
@@ -1670,6 +1598,14 @@
   "TEAM": "HOU",
   "POS": "SS",
   "IDFANGRAPHS": "21636"
+ },
+ {
+  "PLAYERNAME": "Ryan Pepiot",
+  "MLBID": "686752",
+  "ESPNID": "4208281",
+  "TEAM": "TB",
+  "POS": "P",
+  "IDFANGRAPHS": "26221"
  },
  {
   "PLAYERNAME": "Freddy Peralta",
@@ -1696,14 +1632,6 @@
   "IDFANGRAPHS": "27768"
  },
  {
-  "PLAYERNAME": "Martin Perez",
-  "MLBID": "527048",
-  "ESPNID": "31098",
-  "TEAM": "ATL",
-  "POS": "P",
-  "IDFANGRAPHS": "6902"
- },
- {
   "PLAYERNAME": "Salvador Perez",
   "MLBID": "521692",
   "ESPNID": "31127",
@@ -1720,6 +1648,14 @@
   "IDFANGRAPHS": "15454"
  },
  {
+  "PLAYERNAME": "Connor Prielipp",
+  "MLBID": "687570",
+  "ESPNID": "4620001",
+  "TEAM": "MIN",
+  "POS": "P",
+  "IDFANGRAPHS": "31857"
+ },
+ {
   "PLAYERNAME": "Ceddanne Rafaela",
   "MLBID": "678882",
   "ESPNID": "4987382",
@@ -1728,12 +1664,28 @@
   "IDFANGRAPHS": "24262"
  },
  {
+  "PLAYERNAME": "Cole Ragans",
+  "MLBID": "666142",
+  "ESPNID": "41054",
+  "TEAM": "KC",
+  "POS": "P",
+  "IDFANGRAPHS": "21846"
+ },
+ {
   "PLAYERNAME": "Cal Raleigh",
   "MLBID": "663728",
   "ESPNID": "41292",
   "TEAM": "SEA",
   "POS": "C",
   "IDFANGRAPHS": "21534"
+ },
+ {
+  "PLAYERNAME": "Agustin Ramirez",
+  "MLBID": "682663",
+  "ESPNID": "5132014",
+  "TEAM": "MIA",
+  "POS": "C",
+  "IDFANGRAPHS": "26546"
  },
  {
   "PLAYERNAME": "Jose Ramirez",
@@ -1800,12 +1752,12 @@
   "IDFANGRAPHS": "16137"
  },
  {
-  "PLAYERNAME": "Eduardo Rodriguez",
-  "MLBID": "593958",
-  "ESPNID": "32675",
-  "TEAM": "ARI",
+  "PLAYERNAME": "Elmer Rodriguez",
+  "MLBID": "695684",
+  "ESPNID": "5194637",
+  "TEAM": "NYY",
   "POS": "P",
-  "IDFANGRAPHS": "13164"
+  "IDFANGRAPHS": "31811"
  },
  {
   "PLAYERNAME": "Julio Rodriguez",
@@ -1822,14 +1774,6 @@
   "TEAM": "BAL",
   "POS": "P",
   "IDFANGRAPHS": "22286"
- },
- {
-  "PLAYERNAME": "Tyler Rogers",
-  "MLBID": "643511",
-  "ESPNID": "34026",
-  "TEAM": "TOR",
-  "POS": "P",
-  "IDFANGRAPHS": "15541"
  },
  {
   "PLAYERNAME": "JoJo Romero",
@@ -1854,14 +1798,6 @@
   "TEAM": "SF",
   "POS": "P",
   "IDFANGRAPHS": "30076"
- },
- {
-  "PLAYERNAME": "Dalton Rushing",
-  "MLBID": "687221",
-  "ESPNID": "4619839",
-  "TEAM": "LAD",
-  "POS": "C",
-  "IDFANGRAPHS": "31382"
  },
  {
   "PLAYERNAME": "Adley Rutschman",
@@ -1904,6 +1840,22 @@
   "IDFANGRAPHS": "20778"
  },
  {
+  "PLAYERNAME": "Dennis Santana",
+  "MLBID": "642701",
+  "ESPNID": "39801",
+  "TEAM": "PIT",
+  "POS": "P",
+  "IDFANGRAPHS": "17878"
+ },
+ {
+  "PLAYERNAME": "Tony Santillan",
+  "MLBID": "663574",
+  "ESPNID": "40950",
+  "TEAM": "CIN",
+  "POS": "P",
+  "IDFANGRAPHS": "19926"
+ },
+ {
   "PLAYERNAME": "Roki Sasaki",
   "MLBID": "808963",
   "ESPNID": "5134638",
@@ -1920,12 +1872,12 @@
   "IDFANGRAPHS": "32095"
  },
  {
-  "PLAYERNAME": "Casey Schmitt",
-  "MLBID": "669477",
-  "ESPNID": "4301949",
-  "TEAM": "SF",
-  "POS": "2B",
-  "IDFANGRAPHS": "27577"
+  "PLAYERNAME": "Noah Schultz",
+  "MLBID": "702273",
+  "ESPNID": "5080754",
+  "TEAM": "CHW",
+  "POS": "P",
+  "IDFANGRAPHS": "32056"
  },
  {
   "PLAYERNAME": "Kyle Schwarber",
@@ -1942,14 +1894,6 @@
   "TEAM": "ATL",
   "POS": "P",
   "IDFANGRAPHS": "31846"
- },
- {
-  "PLAYERNAME": "Christian Scott",
-  "MLBID": "681035",
-  "ESPNID": "4414215",
-  "TEAM": "NYM",
-  "POS": "P",
-  "IDFANGRAPHS": "30107"
  },
  {
   "PLAYERNAME": "Tanner Scott",
@@ -1976,6 +1920,14 @@
   "IDFANGRAPHS": "12533"
  },
  {
+  "PLAYERNAME": "Kodai Senga",
+  "MLBID": "673540",
+  "ESPNID": "4142421",
+  "TEAM": "NYM",
+  "POS": "P",
+  "IDFANGRAPHS": "31838"
+ },
+ {
   "PLAYERNAME": "Luis Severino",
   "MLBID": "622663",
   "ESPNID": "33263",
@@ -1990,14 +1942,6 @@
   "TEAM": "ARI",
   "POS": "P",
   "IDFANGRAPHS": "13892"
- },
- {
-  "PLAYERNAME": "Ian Seymour",
-  "MLBID": "693855",
-  "ESPNID": "4669425",
-  "TEAM": "TB",
-  "POS": "P",
-  "IDFANGRAPHS": "27932"
  },
  {
   "PLAYERNAME": "Emmet Sheehan",
@@ -2064,6 +2008,14 @@
   "IDFANGRAPHS": "27467"
  },
  {
+  "PLAYERNAME": "Jorge Soler",
+  "MLBID": "624585",
+  "ESPNID": "32558",
+  "TEAM": "LAA",
+  "POS": "OF",
+  "IDFANGRAPHS": "14221"
+ },
+ {
   "PLAYERNAME": "Jose Soriano",
   "MLBID": "667755",
   "ESPNID": "40973",
@@ -2104,12 +2056,28 @@
   "IDFANGRAPHS": "12856"
  },
  {
-  "PLAYERNAME": "Spencer Steer",
-  "MLBID": "668715",
-  "ESPNID": "4722857",
-  "TEAM": "CIN",
-  "POS": "1B",
-  "IDFANGRAPHS": "26323"
+  "PLAYERNAME": "Jeffrey Springs",
+  "MLBID": "605488",
+  "ESPNID": "35397",
+  "TEAM": "ATH",
+  "POS": "P",
+  "IDFANGRAPHS": "17677"
+ },
+ {
+  "PLAYERNAME": "Giancarlo Stanton",
+  "MLBID": "519317",
+  "ESPNID": "30583",
+  "TEAM": "NYY",
+  "POS": "OF",
+  "IDFANGRAPHS": "4949"
+ },
+ {
+  "PLAYERNAME": "Justin Steele",
+  "MLBID": "657006",
+  "ESPNID": "41022",
+  "TEAM": "CHC",
+  "POS": "P",
+  "IDFANGRAPHS": "17312"
  },
  {
   "PLAYERNAME": "Sal Stewart",
@@ -2120,12 +2088,20 @@
   "IDFANGRAPHS": "31505"
  },
  {
-  "PLAYERNAME": "Kyle Stowers",
-  "MLBID": "669065",
-  "ESPNID": "42796",
-  "TEAM": "MIA",
-  "POS": "OF",
-  "IDFANGRAPHS": "26151"
+  "PLAYERNAME": "Trevor Story",
+  "MLBID": "596115",
+  "ESPNID": "32150",
+  "TEAM": "BOS",
+  "POS": "SS",
+  "IDFANGRAPHS": "12564"
+ },
+ {
+  "PLAYERNAME": "Matt Strahm",
+  "MLBID": "621381",
+  "ESPNID": "34862",
+  "TEAM": "KC",
+  "POS": "P",
+  "IDFANGRAPHS": "13799"
  },
  {
   "PLAYERNAME": "Spencer Strider",
@@ -2192,20 +2168,20 @@
   "IDFANGRAPHS": "33927"
  },
  {
-  "PLAYERNAME": "Kyle Teel",
-  "MLBID": "691019",
-  "ESPNID": "4743772",
-  "TEAM": "CHW",
-  "POS": "C",
-  "IDFANGRAPHS": "33549"
- },
- {
   "PLAYERNAME": "Payton Tolle",
   "MLBID": "801139",
   "ESPNID": "4966140",
   "TEAM": "BOS",
   "POS": "P",
   "IDFANGRAPHS": "35466"
+ },
+ {
+  "PLAYERNAME": "Gleyber Torres",
+  "MLBID": "650402",
+  "ESPNID": "33804",
+  "TEAM": "DET",
+  "POS": "2B",
+  "IDFANGRAPHS": "16997"
  },
  {
   "PLAYERNAME": "Mike Trout",
@@ -2248,14 +2224,6 @@
   "IDFANGRAPHS": "25327"
  },
  {
-  "PLAYERNAME": "Esmerlyn Valdez",
-  "MLBID": "699013",
-  "ESPNID": "5137200",
-  "TEAM": "PIT",
-  "POS": "OF",
-  "IDFANGRAPHS": "29005"
- },
- {
   "PLAYERNAME": "Framber Valdez",
   "MLBID": "664285",
   "ESPNID": "36581",
@@ -2264,12 +2232,12 @@
   "IDFANGRAPHS": "17295"
  },
  {
-  "PLAYERNAME": "Miguel Vargas",
-  "MLBID": "678246",
-  "ESPNID": "42453",
-  "TEAM": "CHW",
-  "POS": "1B",
-  "IDFANGRAPHS": "20178"
+  "PLAYERNAME": "Ildemaro Vargas",
+  "MLBID": "545121",
+  "ESPNID": "32985",
+  "TEAM": "ARI",
+  "POS": "2B",
+  "IDFANGRAPHS": "13324"
  },
  {
   "PLAYERNAME": "Louis Varland",
@@ -2278,6 +2246,14 @@
   "TEAM": "TOR",
   "POS": "P",
   "IDFANGRAPHS": "27691"
+ },
+ {
+  "PLAYERNAME": "Randy Vasquez",
+  "MLBID": "681190",
+  "ESPNID": "4722847",
+  "TEAM": "SD",
+  "POS": "P",
+  "IDFANGRAPHS": "24719"
  },
  {
   "PLAYERNAME": "Alex Vesia",
@@ -2310,6 +2286,14 @@
   "TEAM": "STL",
   "POS": "OF",
   "IDFANGRAPHS": "27475"
+ },
+ {
+  "PLAYERNAME": "Ryan Walker",
+  "MLBID": "676254",
+  "ESPNID": "5000950",
+  "TEAM": "SF",
+  "POS": "P",
+  "IDFANGRAPHS": "20423"
  },
  {
   "PLAYERNAME": "Taylor Ward",
@@ -2472,20 +2456,12 @@
   "IDFANGRAPHS": "35456"
  },
  {
-  "PLAYERNAME": "T.J. Rumfield",
-  "MLBID": "681198",
-  "ESPNID": "5014349",
-  "TEAM": "COL",
-  "POS": "1B",
-  "IDFANGRAPHS": "29805"
- },
- {
-  "PLAYERNAME": "Sam Antonacci",
-  "MLBID": "803011",
-  "ESPNID": "5207167",
-  "TEAM": "CHW",
-  "POS": "OF",
-  "IDFANGRAPHS": "35101"
+  "PLAYERNAME": "Juan Morillo",
+  "MLBID": "666661",
+  "ESPNID": "4722925",
+  "TEAM": "ARI",
+  "POS": "P",
+  "IDFANGRAPHS": "21924"
  },
  {
   "PLAYERNAME": "Rico Garcia",
