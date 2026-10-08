@@ -45,7 +45,7 @@ header as (
     select
         season,
         fetched_at,
-        from_json(json_extract(payload, '$.settings.proTeams'), '{{ pro_teams_schema | trim }}') as teams_list
+        {{ fo_json_parse('payload', '$.settings.proTeams', pro_teams_schema) }} as teams_list
     from latest
 
 ),
