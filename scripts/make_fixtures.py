@@ -17,8 +17,10 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from front_office.landing import LandingZone
 
@@ -31,10 +33,10 @@ FIXTURE_ROOT = REPO_ROOT / "fixtures/landing"
 #
 # The stamp is the Eastern afternoon of the LAST fixture game date. Scoring periods are
 # no longer dated from it: stg_espn__scoring_periods counts from the period-1 date the
-# pro schedule fixture implies (ADR 0023). That fixture is built from the real periods of
-# the two MLB fixture dates, so period 1 = 2026-04-29 and period 2 = 2026-04-30, matching
-# the MLB fixture games. The stamp itself stays, because
-# changing it would rename every fixture capture.
+# pro schedule fixture implies (ADR 0023). The pro schedule and the rosters are both built
+# from the real periods of the two MLB fixture dates, so period 1 = 2026-04-29 and
+# period 2 = 2026-04-30, matching the MLB fixture games (#74, ADR 0025). The stamp itself
+# stays, because changing it would rename every fixture capture.
 FIXTURE_FETCHED_AT = "20260430T160000Z"
 
 # Game 823471 was postponed on 2026-04-29 and made up on 2026-04-30. The schedule files
@@ -151,17 +153,15 @@ FIXTURE_BOXSCORE_GAMES = 2
 FIXTURE_LEAGUE_ID = "111111"
 FIXTURE_LEAGUE_NAME = "Fixture League"
 
-# Two adjacent scoring periods, taken from mid-season (real rosters) but RENUMBERED to
-# 1 and 2 so the fixture season is self-consistent: two scoring periods covering the two
-# MLB fixture dates. The rosters are not from those dates, though: periods 100 and 101
-# are 2026-07-02 and 2026-07-03 (#74).
-FIXTURE_SOURCE_SCORING_PERIODS = (100, 101)
+# The real scoring periods of DEFAULT_DATES (2026-04-29 and 2026-04-30), used for the
+# rosters AND the pro schedule, RENUMBERED 1 and 2 so the fixture season is
+# self-consistent. Generation checks that they fall on the MLB fixture dates (ADR 0025).
+FIXTURE_SOURCE_SCORING_PERIODS = (36, 37)
 
-# The real scoring periods of ESPN's pro schedule that the fixture keeps, renumbered 1 and 2.
-# They are 2026-04-29 and 2026-04-30, the MLB fixture dates (DEFAULT_DATES), which is what
-# puts the fixture's period 1 on 2026-04-29. They are deliberately NOT
-# FIXTURE_SOURCE_SCORING_PERIODS (100, 101), the rosters' source, which are other days (#74).
-FIXTURE_PRO_SCHEDULE_SOURCE_PERIODS = (36, 37)
+# The only season the fixtures are built from: a capture of another season is never chosen.
+FIXTURE_SEASON = 2026
+EASTERN = ZoneInfo("America/New_York")
+
 ESPN_PRO_GAME_FIELDS = ("id", "date", "scoringPeriodId", "homeProTeamId", "awayProTeamId")
 
 ESPN_SETTINGS_FIELDS = (
@@ -239,6 +239,20 @@ ESPN_ROSTER_ENTRY_FIELDS = (
     "playerPoolEntry.player.eligibleSlots",
 )
 
+# A player's single-game line in a roster entry. Rebuilt from this list, never scrubbed: the
+# real line also has id, proTeamId, seasonId, appliedTotal and appliedStats. `stats` is ESPN's
+# map from stat id to number, copied whole, as scoreByStat is in the matchup fixture.
+ESPN_STAT_LINE_FIELDS = (
+    "scoringPeriodId",
+    "statSourceId",
+    "statSplitTypeId",
+    "externalId",
+    "stats",
+)
+# What stg_espn__player_game_stats keeps: actuals (source 0) of a single game (split type 5).
+ESPN_STAT_LINE_SOURCE = 0
+ESPN_STAT_LINE_SPLIT = 5
+
 
 def pick(source: dict[str, Any], dotted: str) -> tuple[list[str], Any] | None:
     """Return (path, value) for a dotted path, or None when absent."""
@@ -277,6 +291,19 @@ def landed(source: str, endpoint: str, **partitions: Any) -> list[Path]:
         for capture in zone.committed(
             source=source, endpoint=endpoint, partitions=partitions or None
         )
+    ]
+
+
+def landed_in(source: str, endpoint: str, **partitions: Any) -> list[Path]:
+    """payload.json of every committed capture whose sidecar partitions include these.
+
+    `committed(partitions=...)` reads one exact folder, so a partial match (a season, say,
+    across every league and period) is the sidecar's own partitions, over `committed`.
+    """
+    return [
+        capture.payload_path
+        for capture in LandingZone(RAW_ROOT).committed(source=source, endpoint=endpoint)
+        if all(capture.meta.get("partitions", {}).get(k) == v for k, v in partitions.items())
     ]
 
 
@@ -450,19 +477,70 @@ def espn_team_alias(team_id: int) -> dict[str, str]:
 def latest_espn(endpoint: str, scoring_period: int | None = None) -> dict[str, Any]:
     # committed() leaves out anything that is not a complete capture, such as the spike
     # backups, which have no sidecar and a different layout.
-    candidates = [
-        path
-        for path in landed("espn", endpoint)
-        if scoring_period is None or f"scoring_period={scoring_period}/" in str(path)
-    ]
+    partitions: dict[str, Any] = {"season": FIXTURE_SEASON}
+    if scoring_period is not None:
+        partitions["scoring_period"] = scoring_period
+    candidates = landed_in("espn", endpoint, **partitions)
     if not candidates:
         raise SystemExit(f"no landed espn/{endpoint} response (period={scoring_period})")
     return json.loads(sorted(candidates)[-1].read_text())
 
 
+def check_source_periods_are_the_fixture_dates(
+    source_periods: tuple[int, ...], dates: tuple[str, ...]
+) -> None:
+    """Stop unless each source period's games are all on its fixture date (Eastern), in order.
+
+    Reads the landed 2026 pro schedule. This is what keeps FIXTURE_SOURCE_SCORING_PERIODS and
+    the MLB fixture dates from drifting apart (ADR 0025).
+    """
+    candidates = landed("espn", "pro_schedule", season=FIXTURE_SEASON)
+    if not candidates:
+        raise SystemExit(
+            "no landed espn/pro_schedule response for 2026: run `front-office backfill`"
+        )
+    payload = json.loads(sorted(candidates)[-1].read_text())
+    found: dict[str, set[str]] = {str(period): set() for period in source_periods}
+    for team in payload["settings"]["proTeams"]:
+        for period, games in (team.get("proGamesByScoringPeriod") or {}).items():
+            if period in found:
+                for game in games:
+                    local = datetime.fromtimestamp(game["date"] / 1000, UTC).astimezone(EASTERN)
+                    found[period].add(local.date().isoformat())
+    if len(source_periods) != len(dates):
+        raise SystemExit(
+            f"{len(source_periods)} source scoring periods but {len(dates)} dates: {dates}"
+        )
+    for period, wanted in zip(source_periods, dates, strict=True):
+        got = sorted(found[str(period)])
+        if got != [wanted]:
+            raise SystemExit(
+                f"scoring period {period}: its games in the landed pro schedule are on "
+                f"{', '.join(got) or 'no date'}, but the fixture date wanted is {wanted}"
+            )
+
+
+def check_one_league() -> None:
+    """Stop when settings of more than one league are landed for the season (R1.5).
+
+    Which league's rosters are published is a decision, so the script does not choose, and
+    it says how many it found, not which.
+    """
+    leagues = {
+        capture.meta["partitions"].get("league_id")
+        for capture in LandingZone(RAW_ROOT).committed(source="espn", endpoint="settings")
+        if capture.meta.get("partitions", {}).get("season") == FIXTURE_SEASON
+    }
+    if len(leagues) > 1:
+        raise SystemExit(
+            f"{len(leagues)} leagues are landed for season {FIXTURE_SEASON}: fixtures are "
+            "built from one league, and which one is a decision for the person"
+        )
+
+
 def build_espn_pro_schedule() -> Path:
     """ESPN's pro schedule: teams and games only, two real periods renumbered 1 and 2."""
-    candidates = landed("espn", "pro_schedule", season=2026)
+    candidates = landed("espn", "pro_schedule", season=FIXTURE_SEASON)
     if not candidates:
         raise SystemExit(
             "no landed espn/pro_schedule response for 2026: run `front-office backfill`"
@@ -470,7 +548,7 @@ def build_espn_pro_schedule() -> Path:
     payload = json.loads(sorted(candidates)[-1].read_text())
     renumber = {
         str(source): str(fixture)
-        for fixture, source in enumerate(FIXTURE_PRO_SCHEDULE_SOURCE_PERIODS, start=1)
+        for fixture, source in enumerate(FIXTURE_SOURCE_SCORING_PERIODS, start=1)
     }
     teams: list[dict[str, Any]] = []
     for team in payload["settings"]["proTeams"]:
@@ -558,6 +636,35 @@ def build_espn_teams() -> Path:
     return path
 
 
+def stat_lines(
+    entry: dict[str, Any], source_period: int, fixture_period: int
+) -> list[dict[str, Any]]:
+    """The player's actual single-game lines for the source period, rebuilt from the allowlist.
+
+    These are the conditions stg_espn__player_game_stats applies, so the fixture keeps what
+    the model would keep and nothing else. scoringPeriodId is renumbered to the fixture period.
+    """
+    lines = entry.get("playerPoolEntry", {}).get("player", {}).get("stats") or []
+    return [
+        rebuild(line, ESPN_STAT_LINE_FIELDS) | {"scoringPeriodId": fixture_period}
+        for line in lines
+        if line.get("statSourceId") == ESPN_STAT_LINE_SOURCE
+        and line.get("statSplitTypeId") == ESPN_STAT_LINE_SPLIT
+        and line.get("scoringPeriodId") == source_period
+    ]
+
+
+def rebuild_roster_entry(
+    entry: dict[str, Any], source_period: int, fixture_period: int
+) -> dict[str, Any]:
+    """A roster entry from the allowlist, plus its game lines when it has any (none: no key)."""
+    rebuilt = rebuild(entry, ESPN_ROSTER_ENTRY_FIELDS)
+    lines = stat_lines(entry, source_period, fixture_period)
+    if lines:
+        rebuilt.setdefault("playerPoolEntry", {}).setdefault("player", {})["stats"] = lines
+    return rebuilt
+
+
 def build_espn_rosters() -> list[Path]:
     written: list[Path] = []
     for fixture_period, source_period in enumerate(FIXTURE_SOURCE_SCORING_PERIODS, start=1):
@@ -571,7 +678,7 @@ def build_espn_rosters() -> list[Path]:
                     "id": team["id"],
                     "roster": {
                         "entries": [
-                            rebuild(entry, ESPN_ROSTER_ENTRY_FIELDS)
+                            rebuild_roster_entry(entry, source_period, fixture_period)
                             for entry in team["roster"]["entries"]
                         ]
                     },
@@ -593,10 +700,14 @@ def build_espn_rosters() -> list[Path]:
                 "params": {"view": "mRoster", "scoringPeriodId": fixture_period},
             },
         )
-        entries = sum(len(t["roster"]["entries"]) for t in fixture["teams"])
+        entries = [e for t in fixture["teams"] for e in t["roster"]["entries"]]
+        with_lines = [
+            e for e in entries if "stats" in e.get("playerPoolEntry", {}).get("player", {})
+        ]
         print(
             f"espn/roster period {fixture_period} (from {source_period}): "
-            f"{entries} entries -> {path.relative_to(REPO_ROOT)}"
+            f"{len(entries)} entries, {len(with_lines)} with game lines "
+            f"-> {path.relative_to(REPO_ROOT)}"
         )
         written.append(path)
     return written
@@ -647,7 +758,9 @@ def build_espn_matchups() -> Path:
 def newest_transactions_first_page() -> dict[str, Any]:
     """Page 0 (offset=0) of the newest paged transaction run."""
     pages = [
-        path for path in landed("espn", "transactions") if path.parent.parent.name == "offset=0"
+        path
+        for path in landed_in("espn", "transactions", season=FIXTURE_SEASON)
+        if path.parent.parent.name == "offset=0"
     ]
     if not pages:
         raise SystemExit("no paged espn/transactions capture: run `front-office backfill espn`")
@@ -739,6 +852,9 @@ def main() -> None:
         help="Schedule dates to capture (calendar dates, not officialDate).",
     )
     args = parser.parse_args()
+    dates = tuple(args.dates)
+    check_source_periods_are_the_fixture_dates(FIXTURE_SOURCE_SCORING_PERIODS, dates)
+    check_one_league()
     build_mlb_schedule(tuple(args.dates))
     build_mlb_boxscores(tuple(args.dates))
     build_espn_pro_schedule()
