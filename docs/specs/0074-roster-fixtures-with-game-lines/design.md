@@ -140,8 +140,9 @@ approved and are not edited.
   the season's first two, with `pointsByScoringPeriod` cut to real periods 1 and 2
   (2026-03-25 and 2026-03-26); the transactions are the first topics of the newest
   page. #74's title says "one real pair of days"; this spec makes that true of rosters,
-  lines, the pro schedule and MLB, not of those two. The owner decides whether that is
-  enough to close #74 or whether the rest becomes its own issue.
+  lines, the pro schedule and MLB, not of those two. The owner decided on 2026-10-07
+  that this closes #74: a matchup's totals cover its whole span and cannot honestly be
+  cut to two days, and no test waits on the transactions. Nothing is filed for the rest.
 - **Why period 36's roster has a line for all 307 entries and period 37's for 178 of
   306.** Not looked into. The model keeps only lines with stats, and the tests pass on
   both.
@@ -152,7 +153,7 @@ approved and are not edited.
 
 | Source | Finding | Resolution |
 |---|---|---|
-| design-review | F1 (P1): matchup and transaction fixtures stay on other days, and whether that satisfies #74 is unresolved | Not changed: it is the owner's decision and is the first item under *Decisions for you* in the PR. The spec's title and goals claim only what it does |
+| design-review | F1 (P1): matchup and transaction fixtures stay on other days, and whether that satisfies #74 is unresolved | Not changed in scope. The owner decided on 2026-10-07 that rosters, lines, the pro schedule and MLB on the same days closes #74. The spec's title and goals claim only what it does |
 | design-review | F2 (P2): the date check validates the 2026 pro schedule but not the season or league of the roster captures `latest_espn` picks | Changed: R1.4 and R1.5. Sources are selected by the `season` partition, and a second league in the season stops generation |
 
 ## Amendments
