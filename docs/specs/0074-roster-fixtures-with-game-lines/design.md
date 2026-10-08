@@ -126,8 +126,9 @@ approved and are not edited.
 
 - The landing zone gains captures between the spike and the build and another fixture
   changes — low; nothing is being fetched — R3.3 stops the build.
-- Fixtures grow by about 1.5 MB in the repo — certain — accepted; the two trees stay
-  under 3.2 MB together.
+- Fixtures grow by about 1.5 MB in the repo — certain — accepted by the owner on
+  2026-10-07; the two trees stay under 3.2 MB together. Compact JSON would halve it and
+  was not chosen: a fixture change has to be reviewable line by line.
 - A later change to the allowlist lets a member field through — low — the privacy test
   rebuilds nothing but rejects the patterns, and the new pytest pins the five keys.
 - `rec_espn__player_day_differences` grows from 21 to 308 rows in CI and looks alarming
