@@ -38,7 +38,7 @@ its season.
 
 ## Decision
 
-Proposed: **option 1**. Not yet decided by the owner.
+Chosen: **option 1**, by the owner on 2026-10-07.
 
 Period 1 of a season is the earliest date its scheduled games imply, and a test fails
 the build unless every game implies that same date. Period *p* is *p* − 1 days later.
