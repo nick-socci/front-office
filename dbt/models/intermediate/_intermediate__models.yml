@@ -48,6 +48,35 @@ models:
           arguments:
             combination_of_columns: [platform, league_id, season, fantasy_team_id]
 
+  - name: int_fantasy__league_seasons
+    description: >
+      One row per league-season with settings loaded, and whether its rosters are loaded
+      (ADR 0026). A model or test that needs rosters applies where has_rosters is true;
+      one that describes what the platform reported applies to every league-season.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: league_id
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: season
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: has_rosters
+        description: >
+          True when at least one roster entry is loaded for the league-season. Read from
+          the data, never declared.
+        data_type: boolean
+        constraints: [{type: not_null}]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season]
+
   - name: int_fantasy__categories
     description: >
       One row per scored category. is_lower_better renames ESPN's is_reverse, because
@@ -632,6 +661,52 @@ models:
 # -----------------------------------------------------------------------------
 
 unit_tests:
+  - name: league_seasons_are_covered_only_where_rosters_are_loaded
+    description: >
+      Season 2026 has settings and roster entries; season 2025 has settings only, as a
+      past season landed for its matchup totals does. Catches: a season with no rosters
+      called covered, and a season dropped because it has none.
+    model: int_fantasy__league_seasons
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026}
+          - {league_id: "1", season: 2025}
+      - input: ref('stg_espn__roster_entries')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 1}
+          - {league_id: "1", season: 2026, scoring_period: 2}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+        - {platform: espn, league_id: "1", season: 2025, has_rosters: false}
+
+  - name: league_season_coverage_does_not_leak_between_leagues_or_seasons
+    description: >
+      Two leagues and two seasons; rosters are loaded for league 1 in 2026 and league 2
+      in 2025 only. Each of the four league-seasons is one row, covered by its own
+      rosters and no other's. Catches: a join on the league alone or the season alone,
+      which would cover all four, and rows multiplied by the number of roster entries.
+    model: int_fantasy__league_seasons
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026}
+          - {league_id: "1", season: 2025}
+          - {league_id: "2", season: 2026}
+          - {league_id: "2", season: 2025}
+      - input: ref('stg_espn__roster_entries')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 1}
+          - {league_id: "1", season: 2026, scoring_period: 2}
+          - {league_id: "2", season: 2025, scoring_period: 1}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+        - {platform: espn, league_id: "1", season: 2025, has_rosters: false}
+        - {platform: espn, league_id: "2", season: 2026, has_rosters: false}
+        - {platform: espn, league_id: "2", season: 2025, has_rosters: true}
+
   - name: crosswalk_one_row_per_id_named_by_the_latest_snapshot
     description: >
       One ESPN id spelled two ways in a league-season is one row, named as on the latest
