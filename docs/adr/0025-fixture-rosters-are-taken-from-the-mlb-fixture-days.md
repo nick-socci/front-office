@@ -33,8 +33,7 @@ the MLB games played on those dates.
 
 ## Decision
 
-Proposed: **option 1**. The allowlist was confirmed by the owner on 2026-10-07; the rest
-is not yet decided.
+Chosen: **option 1**, by the owner on 2026-10-07, with the allowlist below.
 
 Rosters and the pro schedule are built from one pair of real scoring periods, 36 and 37,
 and generation fails unless those periods fall on the MLB fixture dates. A roster entry
