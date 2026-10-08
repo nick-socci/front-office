@@ -45,8 +45,12 @@ before 2026. Measured on 2026-10-08:
 ## Decision
 
 Proposed: **option 2**. The owner chose it over options 1 and 3 on 2026-10-08; the
-threshold, the seasons pooled, the source of the totals and the rule for a rate's
-denominator are proposed here.
+seasons pooled, the source of the totals and the rule for a rate's denominator are
+proposed here.
+
+Agreed by the owner on 2026-10-08, going through the spec's decisions:
+
+- the threshold of 100 earlier matchups, counted per category.
 
 For a category of a league-season, if the earlier seasons of the same platform and
 league hold at least 100 decided matchups with a reported margin in that category, the
