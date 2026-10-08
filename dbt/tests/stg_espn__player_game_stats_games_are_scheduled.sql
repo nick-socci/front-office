@@ -6,8 +6,8 @@
 -- the dates built from the schedule would be wrong for those lines.
 --
 -- On the 2026 season all 2,339 distinct (league, season, period, game) pairs pass. In CI it
--- has nothing to compare: the fixture rosters carry no game lines (#74). dbt cannot
--- unit-test a singular test, so its two branches (a wrong period, a missing game) are
+-- compares the two periods of real ESPN lines in the fixture rosters, which are from the
+-- MLB fixture days (ADR 0025). dbt cannot unit-test a singular test, so its two branches (a wrong period, a missing game) are
 -- exercised by one-off queries on the real season (spec 0073).
 
 with played as (

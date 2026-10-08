@@ -201,3 +201,27 @@ def test_pro_schedule_is_season_level_and_2027_is_one_period_on_the_2027_day():
                 )
                 assert local.isoformat() == day
     assert periods == {"1"} and games > 0
+
+
+def test_2027_roster_lines_are_period_1_games_of_the_2027_pro_schedule():
+    """Catches the 2027 roster keeping lines of the 2026 fixture days (period 2, or games
+    that are not in the 2027 pro schedule's period 1) after the cut to one period."""
+    (roster,) = (
+        c
+        for c in LandingZone(COMMITTED).committed(source="espn", endpoint="roster")
+        if c.meta["partitions"]["season"] == 2027 and c.meta["partitions"]["league_id"] == "111111"
+    )
+    games = {
+        str(game["id"])
+        for team in pro_schedule(2027)[1]["settings"]["proTeams"]
+        for game in team.get("proGamesByScoringPeriod", {}).get("1", [])
+    }
+    lines = [
+        line
+        for team in roster.payload["teams"]
+        for entry in team["roster"]["entries"]
+        for line in entry["playerPoolEntry"]["player"].get("stats", [])
+    ]
+    assert lines
+    assert {line["scoringPeriodId"] for line in lines} == {1}
+    assert {line["externalId"] for line in lines} <= games

@@ -44,7 +44,7 @@ builds, which is what CI is for.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0025](../../adr/0025-fixture-rosters-are-taken-from-the-mlb-fixture-days.md) | Fixture rosters are taken from the MLB fixture days, with ESPN's game lines | proposed |
+| [0025](../../adr/0025-fixture-rosters-are-taken-from-the-mlb-fixture-days.md) | Fixture rosters are taken from the MLB fixture days, with ESPN's game lines | accepted |
 
 ## Detailed design
 
@@ -162,3 +162,11 @@ approved and are not edited.
 | design-review | F2 (P2): the date check validates the 2026 pro schedule but not the season or league of the roster captures `latest_espn` picks | Changed: R1.4 and R1.5. Sources are selected by the `season` partition, and a second league in the season stops generation |
 
 ## Amendments
+
+- 2026-10-07, R1.4: the design said `latest_espn` would pass `season=2026` to
+  `landed(...)`. `LandingZone.committed(partitions=...)` reads one exact folder and does
+  not match a partial set of partitions, so a new helper, `landed_in`, takes every
+  committed capture of the endpoint through `LandingZone.committed` and keeps those whose
+  sidecar partitions equal the ones asked for. Still no path is searched or globbed.
+- 2026-10-07, R1.2: a different number of source periods and dates also stops
+  generation, before the dates are compared.
