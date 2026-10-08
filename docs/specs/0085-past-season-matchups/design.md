@@ -113,12 +113,20 @@ that describes what the platform reported applies to all.**
 |---|---|
 | `int_fantasy__matchup_side_totals` | inner join to covered league-seasons. Everything computed from it follows: `int_fantasy__matchup_stat_values`, `fct_matchup_category_scores`, `fct_matchup_results` |
 | `int_fantasy__category_scales` | its spine of categories is restricted to covered league-seasons, so an uncovered one has no scale row instead of a row with no matchups measured |
+| `int_fantasy__category_scales_cover_the_scored_categories` (test) | its category side is restricted to covered league-seasons, to match; for a covered one it still requires exactly the scored categories |
 | `fct_player_category_value`, `fct_player_season_value`, `fct_transaction_impact` | no change expected: they start from roster days, which only covered seasons have. The test of R4.3 holds them to it |
 | `rec_espn__matchup_stat_differences`, `rec_espn__category_result_differences` | ESPN's side of the comparison is restricted to covered league-seasons, so a season we do not compute is not reported as missing on our side |
 | `fct_matchup_results_match_espn` (test) | the same restriction on ESPN's side |
 | `fct_player_category_value_has_every_scored_category` (test) | categories of covered league-seasons |
 | `stg_espn__every_scoring_period_has_one_matchup` (test) | covered league-seasons: the mapping exists to assign roster days to matchups |
 | the `relationships` test from `int_fantasy__categories.category_key` to `int_fantasy__stat_components` | replaced by a singular test making the same check for covered league-seasons: complete games is scored in 2018 to 2021 and has no rule, and needs none where no value is computed |
+
+A new singular test, `stg_espn__decided_matchups_have_category_totals` (R5.4), applies to
+every league-season: a decided matchup with a side missing a score for a scored category
+is returned. It is what makes "the season's totals are landed" a checked statement; with
+R5.5's count it also catches a response that parses to nothing. A matchup still
+`UNDECIDED` is left out, so the test does not fail during a season, and that includes
+byes, which ESPN also reports as `UNDECIDED`.
 
 The four mart tests and the two others above are what the spikes showed failing. The
 build runs the real seasons and CI with the 2025 fixture; a test outside this table that
@@ -143,9 +151,13 @@ confirms it.
   the question, taken to the owner.
 - No 2025 boxscore, roster, team, transaction or id-map row is added.
 - `scripts/make_multi_fixtures.py` copies the base tree, so the 2025 season of league
-  111111 arrives with it; the relabelling for the second league and for 2027 is limited
-  to the 2026 captures it is written for. `scripts/check_tenant_isolation.py` adds
-  ("111111", 2025) to its league-seasons.
+  111111 arrives with it. Today the generator then reads every ESPN and MLB capture of
+  the base tree as its source for the second league and for 2027, with no season
+  filter: with 2025 in the tree it would relabel 2025's settings and matchups as 2026
+  and 2027 captures and could take 2025's MLB schedule as the 2027 source. So its source
+  captures are filtered to `BASE_SEASON` before anything is selected or relabelled, and
+  the 2025 captures are copied and otherwise left alone. `scripts/check_tenant_isolation.py`
+  adds ("111111", 2025) to its league-seasons.
 
 ### Landing the real seasons
 
@@ -167,6 +179,7 @@ ones. Then `front-office load` and a full build.
 | R2.7 | every model compared for season 2026, real build | any side effect on the one covered season |
 | R3.1–R3.5 | pytest of the committed 2025 fixtures; privacy test; isolation over 5 league-seasons | a field outside the allowlists; a past season depending on another's rows |
 | R5.1–R5.3 | the real build with nine seasons | a season that behaves unlike the three probed |
+| R5.4, R5.5 | `stg_espn__decided_matchups_have_category_totals`; the per-season count in the run evidence | a season "landed" whose response holds no matchups or no totals |
 
 ## Risks
 
@@ -196,5 +209,8 @@ ones. Then `front-office load` and a full build.
 
 | Source | Finding | Resolution |
 |---|---|---|
+| design-review | F1 (P1): the multi-fixture generator reads every season of the base tree, so a 2025 season would be relabelled as 2026 and 2027 | Changed: the design filters its sources to `BASE_SEASON`; task 6 covers it with a test |
+| design-review | F2 (P1): restricting category scales to covered seasons breaks `int_fantasy__category_scales_cover_the_scored_categories` for uncovered ones | Changed: the test is in the table, restricted on its category side |
+| design-review | F3 (P1): nothing requires a landed season to hold any matchup totals | Changed: R5.4, a test for every league-season, and R5.5, a per-season count that stops the build |
 
 ## Amendments
