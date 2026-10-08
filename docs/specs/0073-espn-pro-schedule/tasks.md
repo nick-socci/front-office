@@ -14,7 +14,7 @@ The first commit of the build accepts ADRs 0023 and 0024 and sets ADR 0021 to
      rows of `stg_espn__scoring_periods` as a table in a gitignored `.duckdb` file (the
      model is a view; see the amendment of spec 0070).
    - Verify: 180 rows, 2026-03-25 to 2026-09-20, posted on #73.
-2. Fetch the pro schedule — `impl` — R1.1–R1.6, R7.1
+2. Fetch the pro schedule — `impl` — R1.1–R1.7, R7.1
    - pytest first, with a fake transport, seen to fail. Then `game_url` and
      `espn_public_client` in `espn/client.py`, `espn/pro_schedule.py`, and `--only
      pro-schedule` and the first step of the run in `cli.py`.

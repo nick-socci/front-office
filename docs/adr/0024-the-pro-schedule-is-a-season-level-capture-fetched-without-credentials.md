@@ -49,4 +49,6 @@ the fixtures for one endpoint of the same API.
 - Bad / accepted cost: about 850 KB on every `backfill espn`, 150 MB over a season of
   daily runs.
 - Bad / accepted cost: the ESPN run now makes one request outside the authenticated
-  client, so a failure there stops the run before the league data is fetched.
+  client. If it fails, the run reports it, still fetches the league data, and exits
+  non-zero at the end (the owner, 2026-10-07), so a withdrawn view cannot stop the
+  league's captures.

@@ -76,7 +76,11 @@ in the schedule, each with the same period.
 - R1.5 THE SYSTEM SHALL treat the pro schedule as a snapshot: every run lands a new
   capture, and none is skipped because an earlier one exists.
 - R1.6 IF the response is not a JSON object with a `settings.proTeams` list THEN THE
-  SYSTEM SHALL fail the run without landing a capture.
+  SYSTEM SHALL land no capture and treat the pro schedule as failed.
+- R1.7 (The owner, 2026-10-07.) IF the pro schedule fails in a full `backfill espn` run,
+  by R1.6 or because the request kept failing, THEN THE SYSTEM SHALL report it, go on to
+  fetch the league's captures, and exit non-zero at the end, as it does for an
+  incomplete transaction log. With `--only pro-schedule` the failure ends the run.
 
 ### R2. Scheduled games are staged
 
@@ -162,7 +166,9 @@ in the schedule, each with the same period.
 
 - R7.1 THE SYSTEM SHALL test the fetch with a fake transport: the URL and view; that no
   cookie is sent; the capture's source, endpoint and partition; that a malformed
-  response lands nothing; and that `--only pro-schedule` works with no credentials set.
+  response lands nothing; that `--only pro-schedule` works with no credentials set; and
+  that a full run whose pro schedule fails still lands the league's captures and exits
+  non-zero.
 - R7.2 THE SYSTEM SHALL have dbt unit tests for `stg_espn__pro_games`: a game listed
   under both teams is one row; a start at 02:05 UTC belongs to the previous Eastern
   date; only the newest capture of a season is read; two seasons stay apart.

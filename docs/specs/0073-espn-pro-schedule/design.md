@@ -92,6 +92,12 @@ independent check exactly when it is needed.
   returns, without calling `load_env_file` or `EspnCredentials.from_env`. Without it,
   the pro schedule is landed first, with the public client, and the league run follows
   with the authenticated one as today. Both use the run's one `fetched_at`.
+- If the pro schedule fails in a full run (a refused response, or retries exhausted),
+  the error is printed, the league run goes on, and the command exits 1 at the end
+  (R1.7). This is the pattern the transaction log already follows. The owner chose it on
+  2026-10-07: the failure worth guarding against is ESPN withdrawing the view, which
+  would otherwise stop every ESPN run, and the model reads the newest schedule already
+  landed. An expired login still ends the run where it happens, as today.
 - The loader needs no change: it stores `partitions` as JSON and identifies a response
   by request path and parameters (ADR 0011).
 
@@ -227,7 +233,7 @@ for period 1, which is what MLB's opening day gave. Everything downstream joins 
 |---|---|---|
 | R1.1, R1.5, R7.1 | pytest, fake transport: URL, view, sidecar, partitions; two runs land two captures | a wrong resource or view; a capture filed under a league |
 | R1.2, R1.4, R7.1 | pytest: the client used has no cookies; `--only pro-schedule` with the three variables unset | credentials sent to, or required for, a public request |
-| R1.3 | pytest on the CLI with fakes: order of landed captures | the league run starting without the schedule |
+| R1.3, R1.7 | pytest on the CLI with fakes: order of landed captures; a failing pro schedule followed by a complete league run and exit code 1 | the schedule landed under another stamp; one public request stopping the league's data; a failure that exits 0 |
 | R1.6, R7.1 | pytest: an error object, a list, `proTeams` missing | an error page landed as a schedule |
 | R2.1, R2.3, R7.2 | unit tests on `stg_espn__pro_games` | double rows per game; an older capture read |
 | R2.2, R7.2 | unit test: start at 02:05 UTC | the UTC date used for the fantasy day |
