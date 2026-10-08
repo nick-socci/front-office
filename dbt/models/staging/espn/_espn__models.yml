@@ -294,6 +294,42 @@ models:
       - name: fetched_at
         data_type: timestamp
 
+  - name: stg_espn__pro_games
+    description: >
+      One row per (season, ESPN game): ESPN's own schedule of MLB games, from the newest
+      pro_schedule capture of each season. It states which scoring period each game
+      belongs to, which is how ESPN dates its scoring periods. Team ids are ESPN's, not
+      MLB's.
+    columns:
+      - name: season
+        description: The season the capture was filed under.
+        data_tests: [not_null]
+      - name: espn_game_id
+        description: ESPN's game id as text; the externalId of the roster stat lines.
+        data_tests: [not_null]
+      - name: scoring_period
+        description: The scoring period ESPN assigns the game to.
+        data_tests: [not_null]
+      - name: game_start_at_utc
+        description: The scheduled start, in UTC.
+        data_tests: [not_null]
+      - name: game_date
+        description: The US/Eastern calendar date of the start.
+        data_tests: [not_null]
+      - name: home_pro_team_id
+        description: ESPN's id of the home team.
+        data_tests: [not_null]
+      - name: away_pro_team_id
+        description: ESPN's id of the away team.
+        data_tests: [not_null]
+      - name: fetched_at
+        data_type: timestamp
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [season, espn_game_id]
+
 unit_tests:
   - name: transactions_keep_each_league_seasons_newest_run
     description: >
@@ -472,6 +508,72 @@ unit_tests:
       rows:
         - {league_id: "1", season: 2027, scoring_period: 1, scoring_date: null}
         - {league_id: "1", season: 2027, scoring_period: 2, scoring_date: null}
+
+  - name: pro_games_a_game_listed_under_both_teams_is_one_row
+    description: >
+      Catches counting a game once per listing. ESPN lists every game under its home team
+      and again, identically, under its away team, so unnesting without collapsing gives
+      two rows per game and breaks the (season, game) uniqueness. Game 100 is listed
+      under teams 12 and 5 and must be one row; game 101 is listed once each way and
+      stays a row of its own.
+    model: stg_espn__pro_games
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: pro_schedule, request_path: /p, request_key: view=proTeamSchedules_wl, fetched_at: "20260930T000000Z", file_path: p1, partitions: '{"season": 2026}', payload: '{"settings": {"proTeams": [{"id": 0, "abbrev": "FA"}, {"id": 12, "proGamesByScoringPeriod": {"2": [{"id": 100, "date": 1775063100000, "scoringPeriodId": 2, "homeProTeamId": 12, "awayProTeamId": 5}], "3": [{"id": 101, "date": 1775171100000, "scoringPeriodId": 3, "homeProTeamId": 5, "awayProTeamId": 12}]}}, {"id": 5, "proGamesByScoringPeriod": {"2": [{"id": 100, "date": 1775063100000, "scoringPeriodId": 2, "homeProTeamId": 12, "awayProTeamId": 5}], "3": [{"id": 101, "date": 1775171100000, "scoringPeriodId": 3, "homeProTeamId": 5, "awayProTeamId": 12}]}}]}}'}
+    expect:
+      rows:
+        - {season: 2026, espn_game_id: "100", scoring_period: 2, game_start_at_utc: "2026-04-01 17:05:00", game_date: "2026-04-01", home_pro_team_id: 12, away_pro_team_id: 5, fetched_at: "2026-09-30 00:00:00"}
+        - {season: 2026, espn_game_id: "101", scoring_period: 3, game_start_at_utc: "2026-04-02 23:05:00", game_date: "2026-04-02", home_pro_team_id: 5, away_pro_team_id: 12, fetched_at: "2026-09-30 00:00:00"}
+
+  - name: pro_games_late_utc_starts_belong_to_the_previous_eastern_date
+    description: >
+      Catches dating a game by its UTC date, or by a conversion that depends on the
+      session time zone. A start at 02:05 UTC on 2026-04-01 is 22:05 on 2026-03-31
+      Eastern, and ESPN scores it on the 31st; the UTC date would put it a period late.
+    model: stg_espn__pro_games
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: pro_schedule, request_path: /p, request_key: view=proTeamSchedules_wl, fetched_at: "20260930T000000Z", file_path: p1, partitions: '{"season": 2026}', payload: '{"settings": {"proTeams": [{"id": 12, "proGamesByScoringPeriod": {"1": [{"id": 100, "date": 1775009100000, "scoringPeriodId": 1, "homeProTeamId": 12, "awayProTeamId": 5}]}}]}}'}
+    expect:
+      rows:
+        - {season: 2026, espn_game_id: "100", scoring_period: 1, game_start_at_utc: "2026-04-01 02:05:00", game_date: "2026-03-31", home_pro_team_id: 12, away_pro_team_id: 5, fetched_at: "2026-09-30 00:00:00"}
+
+  - name: pro_games_read_only_the_newest_capture_of_a_season
+    description: >
+      Catches merging captures of one season. A schedule is a statement about the season
+      at one moment, so a game the newer capture no longer lists (101) must drop out, not
+      linger from the older one. Only game 100, in the newer capture, may appear.
+    model: stg_espn__pro_games
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: pro_schedule, request_path: /p, request_key: view=proTeamSchedules_wl, fetched_at: "20260901T000000Z", file_path: p1, partitions: '{"season": 2026}', payload: '{"settings": {"proTeams": [{"id": 12, "proGamesByScoringPeriod": {"2": [{"id": 100, "date": 1775063100000, "scoringPeriodId": 2, "homeProTeamId": 12, "awayProTeamId": 5}, {"id": 101, "date": 1775063100000, "scoringPeriodId": 2, "homeProTeamId": 12, "awayProTeamId": 5}]}}]}}'}
+          - {source: espn, endpoint: pro_schedule, request_path: /p, request_key: view=proTeamSchedules_wl, fetched_at: "20260930T000000Z", file_path: p2, partitions: '{"season": 2026}', payload: '{"settings": {"proTeams": [{"id": 12, "proGamesByScoringPeriod": {"2": [{"id": 100, "date": 1775063100000, "scoringPeriodId": 2, "homeProTeamId": 12, "awayProTeamId": 5}]}}]}}'}
+    expect:
+      rows:
+        - {season: 2026, espn_game_id: "100", scoring_period: 2, game_start_at_utc: "2026-04-01 17:05:00", game_date: "2026-04-01", home_pro_team_id: 12, away_pro_team_id: 5, fetched_at: "2026-09-30 00:00:00"}
+
+  - name: pro_games_keep_seasons_apart
+    description: >
+      Catches a global "latest" or a season taken from the wrong place. A 2026 capture
+      and a 2027 capture each keep their own games, filed under their own season, even
+      though the 2026 one was fetched later in the same run.
+    model: stg_espn__pro_games
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: pro_schedule, request_path: /p, request_key: view=proTeamSchedules_wl, fetched_at: "20260930T000000Z", file_path: p1, partitions: '{"season": 2026}', payload: '{"settings": {"proTeams": [{"id": 12, "proGamesByScoringPeriod": {"2": [{"id": 100, "date": 1775063100000, "scoringPeriodId": 2, "homeProTeamId": 12, "awayProTeamId": 5}]}}]}}'}
+          - {source: espn, endpoint: pro_schedule, request_path: /p, request_key: view=proTeamSchedules_wl, fetched_at: "20260929T000000Z", file_path: p2, partitions: '{"season": 2027}', payload: '{"settings": {"proTeams": [{"id": 12, "proGamesByScoringPeriod": {"1": [{"id": 200, "date": 1806620700000, "scoringPeriodId": 1, "homeProTeamId": 12, "awayProTeamId": 5}]}}]}}'}
+    expect:
+      rows:
+        - {season: 2026, espn_game_id: "100", scoring_period: 2, game_start_at_utc: "2026-04-01 17:05:00", game_date: "2026-04-01", home_pro_team_id: 12, away_pro_team_id: 5, fetched_at: "2026-09-30 00:00:00"}
+        - {season: 2027, espn_game_id: "200", scoring_period: 1, game_start_at_utc: "2027-04-01 23:05:00", game_date: "2027-04-01", home_pro_team_id: 12, away_pro_team_id: 5, fetched_at: "2026-09-29 00:00:00"}
 
 seeds:
   - name: espn_stat_ids
