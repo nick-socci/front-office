@@ -12,8 +12,9 @@ The first commit of the build accepts ADR 0026.
    - Copy `data/warehouse.duckdb`; dump the views' rows from it (spec 0070's amendment);
      record CI's counts and warnings.
    - Verify: posted on #85.
-2. `--only matchups` — `impl` — R1.1–R1.4, R4.1
-   - pytest with a fake transport first, seen to fail; then `cli.py`.
+2. `--only matchups` — `impl` — R1.1–R1.5, R4.1
+   - pytest with a fake transport first, seen to fail; then `cli.py`, with the line in
+     the audit's help (R1.5).
    - Verify: `uv run pytest`, ruff, mypy. No request to ESPN.
 3. The coverage model — `impl` — R2.1, R2.6, R4.2
    - Unit tests and the R2.6 test first; then `int_fantasy__league_seasons` with its
@@ -25,9 +26,10 @@ The first commit of the build accepts ADR 0026.
    - Verify: CI build unchanged in counts and warnings apart from the tests added; every
      CI relation identical to the starting point.
 5. Land 2025 — `judgment` — R3.1, R5.1
-   - `uv run front-office backfill espn --season 2025 --only matchups` and `uv run
-     front-office backfill mlb --season 2025 --only schedule`. Two authenticated requests
-     and two public ones.
+   - `uv run front-office backfill mlb --season 2025 --only schedule` first, then `uv
+     run front-office backfill espn --season 2025 --only matchups`. Two public requests
+     and two authenticated ones. MLB's schedule goes first because it answers the Tokyo
+     question before anything is sent with the login.
    - Verify: four captures; whether MLB's schedule has regular-season games on
      2025-03-18 and 2025-03-19. If it has none, stop: the fixture of task 6 cannot be
      built as designed, and the owner decides.

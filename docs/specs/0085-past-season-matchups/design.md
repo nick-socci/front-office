@@ -217,7 +217,9 @@ the final count.
 - **Whether the audit should understand a season with no rosters.** Today `front-office
   audit --season 2021` would report every scoring period as missing a roster and every
   game as missing a boxscore. Out of scope; if past seasons are to be audited, the audit
-  needs the same notion of coverage, from the landing zone and not from dbt.
+  needs the same notion of coverage, from the landing zone and not from dbt. The owner
+  chose on 2026-10-08 to leave the audit as it is; its help text says what it does with
+  such a season (R1.5).
 - **Whether MLB files the Seoul (2024) and Tokyo (2025) openers as regular season.** Not
   checked before approval, by the owner's choice on 2026-10-08: the build lands MLB's
   schedules first and finds out. If they are not regular-season games there, the

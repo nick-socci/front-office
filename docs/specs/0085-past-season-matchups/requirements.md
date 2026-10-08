@@ -46,7 +46,8 @@ season. Measuring the margins is #57 itself, specced afterwards against what is 
 - **No season before 2018.** They are believed to sit behind another endpoint.
 - **No component rule for complete games**, and no new MLB stat staged for it.
 - **No clean audit for a season with no rosters.** `front-office audit --season <past>`
-  is not changed to understand one; see *Open questions*.
+  is not changed to understand one; see *Open questions*. Only its help text changes
+  (R1.5).
 - **No change to the grain, name or columns of any existing model.**
 - **No invented fixture data.** The past season in the fixtures is real data cut down.
 
@@ -76,6 +77,9 @@ season. Measuring the margins is #57 itself, specced afterwards against what is 
   land settings and matchups, and exit non-zero (spec 0073, R1.7).
 - R1.4 THE SYSTEM SHALL leave a full `backfill espn` run, and `--only pro-schedule`, as
   they are.
+- R1.5 THE SYSTEM SHALL say in the help of `front-office audit` that it judges a season
+  landed whole, and reports a season landed with `--only matchups` as missing its
+  rosters and boxscores. No finding of the audit changes.
 
 ### R2. Season coverage
 
