@@ -630,10 +630,9 @@ models:
             expression: >-
               verified_player_days + missing_boxscore_player_days + unresolved_player_days
               = started_player_days
-      # Every side of every matchup, no more and no fewer.
-      - dbt_utils.equal_rowcount:
-          arguments:
-            compare_model: ref('int_fantasy__matchup_sides')
+      # That it holds every side, no more and no fewer, is the singular test
+      # int_fantasy__matchup_side_totals_hold_every_side: it compares with the sides of
+      # league-seasons with rosters, which a row count against all sides cannot (ADR 0026).
 
   - name: int_fantasy__matchup_stat_values
     description: >

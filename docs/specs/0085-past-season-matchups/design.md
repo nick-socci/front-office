@@ -238,3 +238,36 @@ the final count.
 | design-review | F3 (P1): nothing requires a landed season to hold any matchup totals | Changed: R5.4, a test for every league-season, and R5.5, a per-season count that stops the build |
 
 ## Amendments
+
+### 2026-10-08: three findings of the real build, settled by the owner
+
+The build landed and built all eight past seasons before stopping (R5.6) and took three
+findings to the owner, who chose as follows on 2026-10-08.
+
+1. **A seventh test is narrowed to covered league-seasons.** The `dbt_utils.equal_rowcount`
+   test of `int_fantasy__matchup_side_totals` against `int_fantasy__matchup_sides` was not
+   in the table of *Where coverage is applied*, and cannot hold once the first is built
+   for covered league-seasons and the second for all (286 rows against 2,324). The spikes
+   did not show it because they ran before the restriction existed. It is replaced by the
+   singular test `int_fantasy__matchup_side_totals_hold_every_side`, which makes the check
+   side by side, in both directions, for league-seasons with rosters. R2.5's list grows
+   by this one test.
+2. **The opening-day test asserts the first period with a game, not period 1.** In 2020
+   ESPN kept the numbering of the season as first scheduled: period 1 is 2020-03-26 and
+   the first game is period 120, on 2020-07-23, MLB's first regular-season game.
+   `stg_espn__scoring_periods_start_on_opening_day` now requires that a league-season's
+   first scoring period with a game in ESPN's pro schedule falls on MLB's earliest game
+   date of the season. That holds for all nine seasons, is the same statement as before
+   for the eight where the first game is period 1, and still compares two sources. No
+   season is exempted. The model is unchanged.
+3. **2020 is loaded with settings and no matchups, and R5.5 does not apply to it.** ESPN's
+   response for 2020 holds one schedule entry with no sides and no winner: the league did
+   not play. It stays a league-season of `int_fantasy__league_seasons` with `has_rosters`
+   false and contributes no matchup to #57, which has seven past seasons to measure. R5.5
+   holds for the other seven.
+
+Also found, and changing nothing here: the open question on the Seoul and Tokyo openers
+is answered (MLB files them as regular-season games; 2019 opened in Tokyo too); the
+categories changed between 2021 and 2022; and only 2025 and 2026 have a full
+scoring-period to matchup-period mapping, which widens the gap noted on #83 from 2021 to
+six seasons.
