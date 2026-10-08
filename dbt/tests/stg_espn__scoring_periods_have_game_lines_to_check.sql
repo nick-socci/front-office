@@ -6,9 +6,10 @@
 -- passing because it had nothing to compare (for instance if ESPN changed the shape of
 -- its stat lines).
 --
--- A warning, not an error: it is expected in CI, where fixture rosters carry no game
--- lines and it returns 2 rows; and for a day or two in season, before a period's roster
--- is captured again after it closes. On the real 2026 season it returns nothing.
+-- A warning, not an error: it is expected for a day or two in season, before a period's
+-- roster is captured again after it closes (a roster is captured before its games are
+-- played). It returns nothing in CI, whose fixture rosters carry two periods of real
+-- game lines (ADR 0025), and on the real 2026 season.
 
 with rostered_league_seasons as (
     select distinct league_id, season
