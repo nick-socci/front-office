@@ -71,6 +71,8 @@ which is when a valuation is most used.
   switches method. The two methods agree too closely (rank correlation 0.999) to pay for
   a second grain.
 - **No change to the grain of any model, or to the columns of either value fact.**
+- **No new fixture data.** The isolation check exercises the pooled scale by lowering
+  the threshold for its own builds, on the fixtures that exist.
 - **No new ingestion and no request to ESPN or MLB.**
 - **No change to value over replacement, replacement levels or the component rules.**
 - **No rosters, complete-games rule or matchup-period mapping for past seasons** (#83).
@@ -113,6 +115,10 @@ which is when a valuation is most used.
 - R1.5 IF a rate's denominator is not reported for either side of a matchup THEN THE
   SYSTEM SHALL keep the row with null denominators, so that the category's scale and its
   denominator can be measured from the same matchups (R2.3).
+- R1.7 THE SYSTEM SHALL carry `is_measured` on every row: true for a count; for a rate,
+  true only when both sides' denominators are reported and greater than zero. A rate on
+  a zero denominator is undefined, as it is in `int_fantasy__matchup_stat_values`, even
+  where the platform reports it as zero.
 - R1.6 THE SYSTEM SHALL NOT include a matchup the platform has not decided, or a bye.
 
 ### R2. Reported scales per league-season
@@ -122,11 +128,15 @@ which is when a valuation is most used.
   league-season loaded, including a league-season with no decided matchup.
 - R2.2 THE SYSTEM SHALL carry `matchups_measured` on every row, zero where there are
   none, with a null scale.
-- R2.3 THE SYSTEM SHALL measure a rate's scale and its `side_denominator` from the same
-  matchups: those where both sides' denominators are reported. A rate whose denominator
-  no matchup reports has `matchups_measured` zero.
-- R2.4 THE SYSTEM SHALL compute the scale as the root mean square of the margins, summed
-  in a fixed order (spec 0028, R4.13).
+- R2.3 THE SYSTEM SHALL measure a scale, and a rate's `side_denominator`, from the rows
+  with `is_measured` and no others, so that a rate's scale and denominator come from the
+  same matchups. A rate whose denominator no matchup reports has `matchups_measured`
+  zero.
+- R2.4 THE SYSTEM SHALL compute every scale as the root mean square of the margins,
+  summed in the order (`season`, `matchup_id`), which is unique within a league: ESPN
+  reuses matchup ids across seasons (158 distinct ids over 1,162 matchups), and the last
+  digit of a floating-point sum depends on the order of its terms (spec 0028, R4.13).
+  This holds for the pooled scale of R3.1 as well.
 
 ### R3. Which scale a league-season's values divide by
 
@@ -156,7 +166,8 @@ which is when a valuation is most used.
 - R4.1 THE SYSTEM SHALL have dbt unit tests for the margins model: a decided matchup
   gives one row per scored category; an undecided matchup and a bye give none; a
   non-scored stat gives none; a rate carries both denominators, and nulls where one is
-  unreported; a category with no component rule is a count.
+  unreported; a decided matchup with a side on a zero denominator is a row that is not
+  measured; a category with no component rule is a count.
 - R4.2 THE SYSTEM SHALL have dbt unit tests for the reported scales: a league-season with
   no decided matchup keeps its categories with zero measured; a rate is measured only
   from matchups with both denominators; the scale is unchanged when home and away are
@@ -168,20 +179,40 @@ which is when a valuation is most used.
   with no earlier season given.
 - R4.4 THE SYSTEM SHALL have singular tests that: every scored category of every
   league-season has a row in the reported scales; a scale with `scale_source`
-  `prior_seasons` rests on at least the threshold; a rate's scale and denominator are
-  both null or both present.
+  `prior_seasons` rests on at least the threshold and has a scale, and for a rate a
+  denominator. A `current_season` row is not held to that: today's method can give a
+  rate a denominator and no scale (one side defined, the other on a zero denominator),
+  and R3.2 keeps it as it is.
 - R4.5 THE SYSTEM SHALL keep every existing test of the scales and the value facts, with
   its expectation unchanged where the method in use for its inputs is unchanged.
 
-### R5. The real seasons
+### R5. Isolation between leagues
 
-- R5.1 THE SYSTEM SHALL build and test clean on the real warehouse, with the warnings it
+A league-season's scales now read the same league's earlier seasons by design, which the
+isolation check of ADR 0013 forbids as written: it builds each league-season alone.
+
+- R5.1 THE SYSTEM SHALL have `scripts/check_tenant_isolation.py` build, for each
+  league-season, that league's captures of that season and of every earlier season, with
+  the MLB data of those seasons, and compare the rows of that league-season with the
+  combined build's, relation by relation, as it does today.
+- R5.2 THE SYSTEM SHALL run every build of that check, combined and single, with
+  `fantasy_scale_min_prior_matchups` set to 2, so that the pooled scale is in use for
+  the fixture league-seasons that have an earlier season, and a league-season with none
+  falls back in the same run.
+- R5.3 THE SYSTEM SHALL fail the check if another league's captures, or a later
+  season's, change a league-season's rows.
+- R5.4 THE SYSTEM SHALL leave the main CI build at the default threshold, so that its
+  value facts do not move (R6.3).
+
+### R6. The real seasons
+
+- R6.1 THE SYSTEM SHALL build and test clean on the real warehouse, with the warnings it
   has today and no new one.
-- R5.2 THE SYSTEM SHALL leave every existing model's rows unchanged except:
+- R6.2 THE SYSTEM SHALL leave every existing model's rows unchanged except:
   `margin_scale`, `side_denominator`, `matchups_measured` and the two new columns of
   `int_fantasy__category_scales`; and `scaled_value`, `total_value` and the columns
   derived from them in the three value facts.
-- R5.3 THE SYSTEM SHALL leave CI's value facts unchanged: no fixture league-season has
+- R6.3 THE SYSTEM SHALL leave CI's value facts unchanged: no fixture league-season has
   100 earlier matchups.
 
 ## Expected values
@@ -246,4 +277,4 @@ shown to say the two sources agree (largest difference: ERA, 1.1%).
 | Rows of each value fact | unchanged: 9,860 · 580 · 737 | counts |
 | Real build | passes, 1 warning as today | `dbt build` |
 | CI | passes; warnings unchanged at 3; value facts identical to before | `.agentic/gates` |
-| Tenant isolation | 0 differing pairs over 5 league-seasons | `.agentic/gates` |
+| Tenant isolation, each league-season built with its league's earlier seasons, threshold 2 | 0 differing pairs over 5 league-seasons; `scale_source` is `prior_seasons` for (111111, 2026), (111111, 2027) and (222222, 2027), and `current_season` for (222222, 2026) | `.agentic/gates`, and a query on the kept combined warehouse |

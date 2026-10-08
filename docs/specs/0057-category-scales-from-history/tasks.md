@@ -6,7 +6,8 @@ Ordered. Tests before the code they test. This is the plan, not the tracker: pro
 run evidence are recorded on #57 during the build, and this file is not edited to show
 them.
 
-The first commit of the build accepts ADR 0027 and notes on ADR 0010 that 0027 amends it.
+The first commit of the build accepts ADRs 0027 and 0028 and notes on ADRs 0010 and 0013
+that they are amended.
 
 1. Record the starting point — `judgment` — expected values
    - Copy `data/warehouse.duckdb` under its own file name; copy the CI warehouse after a
@@ -32,12 +33,18 @@ The first commit of the build accepts ADR 0027 and notes on ADR 0010 that 0027 a
      its two new columns in the contract, and the variable in `dbt_project.yml`.
    - Verify: CI build passes; in CI every scale is `current_season` and the value facts
      are identical to the starting point.
-6. Headers and the isolation check's docstring — `impl` — R3.8
+6. Headers — `impl` — R3.8
    - Rewrite the header of `int_fantasy__category_scales` and the scale paragraphs of
-     the three value facts' headers; say in `scripts/check_tenant_isolation.py` what the
-     check establishes now that a league-season reads its league's earlier seasons.
+     the three value facts' headers.
    - Verify: `git diff` of the three facts is comments only.
-7. (last) Verify against the real seasons — `judgment` — R5.1–R5.3, expected values
+7. The isolation check — `impl` — R5.1–R5.4
+   - pytest first for the seasons a single build copies (the season and every earlier
+     one of the same league, none later, no other league). Then `copy_single`, the
+     threshold in the check's dbt variables, and its docstring.
+   - Verify: `.agentic/gates`; 0 differing pairs; the `scale_source` of each fixture
+     league-season as in the expected values. A dbt test failing in the check's builds
+     because of a two-matchup scale: stop and take it to the owner.
+8. (last) Verify against the real seasons — `judgment` — R6.1–R6.3, expected values
    - A full real build and `.agentic/gates`. Compare every relation with the starting
      point; compute every row of the expected values.
    - Verify: posted on #57. A scale, a count or a ranking number that differs from

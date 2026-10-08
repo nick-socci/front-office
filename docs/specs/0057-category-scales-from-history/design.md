@@ -70,6 +70,7 @@ Within B, three narrower choices:
 | ADR | Decision | Status |
 |---|---|---|
 | [0027](../../adr/0027-a-category-scale-is-pooled-from-the-leagues-earlier-seasons.md) | A category's scale, and a rate's denominator with it, is pooled from the league's earlier seasons where they hold enough matchups; amends ADR 0010 | proposed |
+| [0028](../../adr/0028-a-league-season-may-read-its-leagues-earlier-seasons.md) | A league-season may read its own league's earlier seasons; isolation is checked by building it with them; amends ADR 0013 | proposed |
 
 ## Detailed design
 
@@ -85,6 +86,7 @@ league-season loaded.
 | `margin` | home's reported total minus away's |
 | `is_rate` | the category has a denominator rule in `int_fantasy__stat_components` |
 | `home_denominator`, `away_denominator` | for a rate, each side's reported denominator; null for a count, and for a rate whose denominator is not reported |
+| `is_measured` | whether the row counts toward a scale: always for a count; for a rate, only when both denominators are reported and above zero |
 
 Built from `stg_espn__matchup_category_results` (one row per side and stat, with
 `is_scored_category`) joined home to away, for matchups whose `winner` in
@@ -99,6 +101,12 @@ league that is at-bats (ESPN stat 0) for AVG and outs (34) for WHIP, ERA and K/9
 reports stats beyond the scored ones from 2019 on; in 2018 it reports only the scored
 ones, so 2018 has outs and no at-bats.
 
+A rate on a zero denominator is undefined. ESPN reports it as zero all the same (it does
+for the zero-out sides of byes), and a reported 0.00 ERA would otherwise enter a scale
+as the best ERA possible. `is_measured` applies the rule
+`int_fantasy__matchup_stat_values` already applies to our own totals. No decided matchup
+of 2018 to 2026 has such a side; the rule is there for the league that does.
+
 The bridge is moved into a macro so that the two models share one definition.
 
 ### `int_fantasy__reported_category_scales`
@@ -109,7 +117,7 @@ a season with nothing to measure is a row and not an absence.
 
 | Column | Meaning |
 |---|---|
-| `matchups_measured` | margins behind the scale; for a rate, only matchups with both denominators |
+| `matchups_measured` | rows with `is_measured` behind the scale |
 | `margin_scale` | root mean square of those margins; null when none |
 | `side_denominator` | for a rate, mean reported denominator over the sides of those matchups; null for a count or when none |
 
@@ -122,10 +130,10 @@ downstream of it computes a value.
 Same grain, same seasons (those with rosters, ADR 0026), same three numeric columns the
 facts read. Per category of a league-season:
 
-1. `prior`: over `int_fantasy__reported_matchup_margins` rows of the same platform and
-   league with `season` less than this one, restricted for a rate to rows with both
-   denominators: the count, the root mean square, the mean denominator over sides, and
-   the number of distinct seasons.
+1. `prior`: over the `is_measured` rows of `int_fantasy__reported_matchup_margins` of
+   the same platform and league with `season` less than this one: the count, the root
+   mean square (summed in `season`, `matchup_id` order), the mean denominator over
+   sides, and the number of distinct seasons.
 2. `own`: today's computation from `int_fantasy__matchup_stat_values`, unchanged.
 3. If `prior`'s count is at least `var('fantasy_scale_min_prior_matchups', 100)`, the row
    takes `prior`'s scale, denominator, count and seasons, with `scale_source`
@@ -157,15 +165,29 @@ No SQL change. Their headers, and the model header of `int_fantasy__category_sca
 (which records ADR 0010's three accepted costs and its one-season sample), are rewritten
 to say what holds now. ADR 0010's unit and formula stand.
 
-### What a league-season now depends on
+### What a league-season now depends on, and the isolation check
 
 Until now every model's rows for a league-season depended only on that league-season's
 captures, and `scripts/check_tenant_isolation.py` checks exactly that, by building each
-alone and comparing. With this change a league-season's scales, and so its value facts,
-depend on the same league's earlier seasons. Another league's captures still never
-affect them. The check keeps passing in CI because no fixture league-season has 100
-earlier matchups; its docstring is changed to say what it does and does not establish.
-Making it build a league with its history is not needed while that is true.
+alone and comparing (ADR 0013). With this change a league-season's scales, and so its
+value facts, depend on the same league's earlier seasons. Another league's captures, and
+a later season's, must still never affect them.
+
+Left alone, the check would keep passing only because no fixture league-season has 100
+earlier matchups: it would say nothing about the new dependency, and would fail on
+correct results the day a fixture qualified. So the check changes
+([ADR 0028](../../adr/0028-a-league-season-may-read-its-leagues-earlier-seasons.md)):
+
+- A single build holds the league's captures for the season under test **and every
+  earlier season**, with those seasons' MLB data. `copy_single` takes the seasons up to
+  the one under test; the comparison is still of that league-season's rows only.
+- Every build of the check, combined and single, passes
+  `fantasy_scale_min_prior_matchups: 2`. The fixture seasons have two decided matchups
+  each, so (111111, 2026) pools 2025, (111111, 2027) pools 2025 and 2026, (222222, 2027)
+  pools 2026, and (222222, 2026), which has no earlier season, falls back. Both paths
+  run, and league 222222's history differs from 111111's, so a scale pooled across
+  leagues or from a later season shows as a difference.
+- The main CI build keeps the default of 100 and so keeps today's values.
 
 ## Test strategy
 
@@ -177,7 +199,8 @@ Making it build a league with its history is not needed while that is true.
 | R3.6, R4.4 | singular tests on `scale_source` against `matchups_measured`, and on rate rows | a scale labelled pooled that rests on too little |
 | R3.7, R4.5 | the existing coverage and scale tests | a category dropped or added |
 | R3.8 | `git diff` of the three facts shows comments only; `value_facts_share_the_category_scales` | a fact computing its own scale |
-| R5.1–R5.3 | real build; every relation compared with a copy kept before; the expected values | any movement this document does not state |
+| R5.1–R5.4 | the isolation check, each league-season built with its league's earlier seasons, threshold 2; pytest of `copy_single`'s season selection | another league's or a later season's matchups in a pooled scale; a check that passes only because nothing pools |
+| R6.1–R6.3 | real build; every relation compared with a copy kept before; the expected values | any movement this document does not state |
 
 A dbt unit test can set a variable for one test with `overrides: vars:`, which is how the
 threshold is exercised at 2 matchups without changing it for the build.
@@ -193,6 +216,10 @@ threshold is exercised at 2 matchups without changing it for the build.
   are not the same game. For this league the size was 12 throughout and the 16 common
   categories kept their direction. Nothing detects a change of size; see *Open
   questions*.
+- **A scale pooled from two fixture matchups may be zero or tiny** in the isolation
+  check's builds (two tied margins). The facts already handle a zero scale; if a test
+  of the combined build objects, that is found in task 7 and taken to the owner, not
+  worked around by changing the threshold.
 - **AVG has one season fewer** (876 matchups, six seasons) because 2018 reports no
   at-bats.
 
@@ -208,5 +235,12 @@ threshold is exercised at 2 matchups without changing it for the build.
   categories. Out of scope by the owner's narrowing of 2026-10-08.
 
 ## Review log
+
+| Source | Finding | Resolution |
+|---|---|---|
+| design-review | F1 (P1): a reported denominator of zero would be measured, against the existing rule that a rate on a zero denominator is undefined | Changed: R1.7 and `is_measured`; R2.3 measures only those rows; a unit test of a decided matchup with a zero-denominator side |
+| design-review | F2 (P1): "a rate's scale and denominator are both null or both present" contradicts today's fallback, which can give a denominator and no scale | Changed: R4.4 holds only `prior_seasons` rows to it |
+| design-review | F3 (P1): the isolation gate passes only because no fixture qualifies, and cannot validate the new dependency | Changed: R5, ADR 0028 (proposed, the owner's decision): single builds include the league's earlier seasons, and the check runs at a threshold of 2 so the pooled path is exercised |
+| design-review | F4 (P2): the pooled sum's order is not unique, matchup ids repeat across seasons | Changed: R2.4 orders by (`season`, `matchup_id`) |
 
 ## Amendments
