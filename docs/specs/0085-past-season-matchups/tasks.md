@@ -31,8 +31,9 @@ The first commit of the build accepts ADR 0026.
      and two authenticated ones. MLB's schedule goes first because it answers the Tokyo
      question before anything is sent with the login.
    - Verify: four captures; whether MLB's schedule has regular-season games on
-     2025-03-18 and 2025-03-19. If it has none, stop: the fixture of task 6 cannot be
-     built as designed, and the owner decides.
+     2025-03-18 and 2025-03-19. If it has none, the fixture of task 6 cannot be built as
+     designed: skip tasks 6 and 7, do tasks 8 and 9 so that every season's problems are
+     known (R5.6), then stop and take them to the owner together.
 6. The 2025 fixture season — `impl` — R3.1–R3.5, R4.4
    - pytest first, including that the multi-fixture generator takes its sources from
      `BASE_SEASON` only when another season is in the base tree; then the season
@@ -50,11 +51,11 @@ The first commit of the build accepts ADR 0026.
    - The two commands of task 5 for each season: fourteen authenticated requests and
      fourteen public ones.
    - Verify: per season, three ESPN captures and one MLB schedule; posted on #85.
-9. (last) Verify against the real seasons — `judgment` — R2.7, R5.2–R5.5, expected values
+9. (last) Verify against the real seasons — `judgment` — R2.7, R5.2–R5.6, expected values
    - `uv run front-office load`, a full `dbt build`. Compare every model's 2026 rows
      with the starting point. Record, per season, the rows of the every-season models,
      the scored categories, the final period, period 1, MLB's opening day and the number
      of decided two-sided matchups (R5.5).
    - Verify: every expected value, as a comment on #85. Anything that fails outside the
-     design's table: stop and take it to the owner with the season, the test and the
-     rows.
+     design's table: finish the run for every season, then stop and take all of it to
+     the owner in one report, with the season, the test and the rows (R5.6).

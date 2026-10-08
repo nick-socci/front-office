@@ -147,6 +147,9 @@ season. Measuring the margins is #57 itself, specced afterwards against what is 
 - R5.5 WHEN the past seasons are landed THE SYSTEM SHALL have, for each of 2018 to 2025,
   at least one decided two-sided matchup; IF a season has none THEN the build SHALL stop
   and take it to the owner. A capture that parses to no matchups is not a landed season.
+- R5.6 WHEN the build stops under R5.3 or R5.5 THE SYSTEM SHALL first have landed and
+  built every season it can, so that every season with a problem is reported to the
+  owner together. It SHALL NOT exclude a season, or narrow a test, to get past one.
 
 ## Expected values
 
