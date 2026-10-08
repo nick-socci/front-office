@@ -218,6 +218,11 @@ the final count.
   audit --season 2021` would report every scoring period as missing a roster and every
   game as missing a boxscore. Out of scope; if past seasons are to be audited, the audit
   needs the same notion of coverage, from the landing zone and not from dbt.
+- **Whether MLB files the Seoul (2024) and Tokyo (2025) openers as regular season.** Not
+  checked before approval, by the owner's choice on 2026-10-08: the build lands MLB's
+  schedules first and finds out. If they are not regular-season games there, the
+  opening-day test fails for those seasons and the build stops for the owner (R5.3);
+  what the test should then mean is not decided here.
 - **When the categories changed** between 2021 and 2025. The landed settings will say.
 - **Whether 2020 is usable.** For #57.
 - **Whether the two long matchup periods and the playoffs should count.** For #57.
