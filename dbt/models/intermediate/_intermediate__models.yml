@@ -48,6 +48,35 @@ models:
           arguments:
             combination_of_columns: [platform, league_id, season, fantasy_team_id]
 
+  - name: int_fantasy__league_seasons
+    description: >
+      One row per league-season with settings loaded, and whether its rosters are loaded
+      (ADR 0026). A model or test that needs rosters applies where has_rosters is true;
+      one that describes what the platform reported applies to every league-season.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: league_id
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: season
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: has_rosters
+        description: >
+          True when at least one roster entry is loaded for the league-season. Read from
+          the data, never declared.
+        data_type: boolean
+        constraints: [{type: not_null}]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season]
+
   - name: int_fantasy__categories
     description: >
       One row per scored category. is_lower_better renames ESPN's is_reverse, because
@@ -68,12 +97,9 @@ models:
       - name: category_key
         data_type: bigint
         constraints: [{type: not_null}]
-        data_tests:
-          # A scored category with no formula would never appear in the marts.
-          - relationships:
-              arguments:
-                to: ref('int_fantasy__stat_components')
-                field: stat_key
+        # That a scored category has a rule in int_fantasy__stat_components is the singular
+        # test int_fantasy__scored_categories_have_a_component_rule: it holds for
+        # league-seasons with rosters, which a relationships test cannot say (ADR 0026).
       - name: category_label
         data_type: varchar
         constraints: [{type: not_null}]
@@ -604,10 +630,9 @@ models:
             expression: >-
               verified_player_days + missing_boxscore_player_days + unresolved_player_days
               = started_player_days
-      # Every side of every matchup, no more and no fewer.
-      - dbt_utils.equal_rowcount:
-          arguments:
-            compare_model: ref('int_fantasy__matchup_sides')
+      # That it holds every side, no more and no fewer, is the singular test
+      # int_fantasy__matchup_side_totals_hold_every_side: it compares with the sides of
+      # league-seasons with rosters, which a row count against all sides cannot (ADR 0026).
 
   - name: int_fantasy__matchup_stat_values
     description: >
@@ -632,6 +657,52 @@ models:
 # -----------------------------------------------------------------------------
 
 unit_tests:
+  - name: league_seasons_are_covered_only_where_rosters_are_loaded
+    description: >
+      Season 2026 has settings and roster entries; season 2025 has settings only, as a
+      past season landed for its matchup totals does. Catches: a season with no rosters
+      called covered, and a season dropped because it has none.
+    model: int_fantasy__league_seasons
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026}
+          - {league_id: "1", season: 2025}
+      - input: ref('stg_espn__roster_entries')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 1}
+          - {league_id: "1", season: 2026, scoring_period: 2}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+        - {platform: espn, league_id: "1", season: 2025, has_rosters: false}
+
+  - name: league_season_coverage_does_not_leak_between_leagues_or_seasons
+    description: >
+      Two leagues and two seasons; rosters are loaded for league 1 in 2026 and league 2
+      in 2025 only. Each of the four league-seasons is one row, covered by its own
+      rosters and no other's. Catches: a join on the league alone or the season alone,
+      which would cover all four, and rows multiplied by the number of roster entries.
+    model: int_fantasy__league_seasons
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026}
+          - {league_id: "1", season: 2025}
+          - {league_id: "2", season: 2026}
+          - {league_id: "2", season: 2025}
+      - input: ref('stg_espn__roster_entries')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 1}
+          - {league_id: "1", season: 2026, scoring_period: 2}
+          - {league_id: "2", season: 2025, scoring_period: 1}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+        - {platform: espn, league_id: "1", season: 2025, has_rosters: false}
+        - {platform: espn, league_id: "2", season: 2026, has_rosters: false}
+        - {platform: espn, league_id: "2", season: 2025, has_rosters: true}
+
   - name: crosswalk_one_row_per_id_named_by_the_latest_snapshot
     description: >
       One ESPN id spelled two ways in a league-season is one row, named as on the latest
@@ -1020,6 +1091,36 @@ unit_tests:
 # Unit tests: matchup aggregation (#10).
 # -----------------------------------------------------------------------------
 
+  - name: matchup_side_totals_leave_out_a_league_season_with_no_rosters
+    description: >
+      Season 2025 has a matchup and no rosters, as a past season loaded for its matchup
+      totals has; season 2026 has both. Only 2026's sides get a row, team 2's of zeroes
+      because it started nobody. Catches: a row of zeroes for a side of a season whose
+      rosters were never loaded, which reads as a team that produced nothing (ADR 0026).
+    model: int_fantasy__matchup_side_totals
+    given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+          - {platform: espn, league_id: "1", season: 2025, has_rosters: false}
+      - input: ref('int_fantasy__matchup_sides')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 1, fantasy_team_id: 1, opponent_team_id: 2, is_home: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 1, fantasy_team_id: 2, opponent_team_id: 1, is_home: false}
+          - {platform: espn, league_id: "1", season: 2025, matchup_id: 7, matchup_period: 1, fantasy_team_id: 1, opponent_team_id: 2, is_home: true}
+          - {platform: espn, league_id: "1", season: 2025, matchup_id: 7, matchup_period: 1, fantasy_team_id: 2, opponent_team_id: 1, is_home: false}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "1", season: 2025, matchup_period: 1, scoring_date: "2025-06-01"}
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, input_status: played, at_bats: 4, hits: 2, outs_recorded: 0}
+    expect:
+      rows:
+        - {season: 2026, fantasy_team_id: 1, started_player_days: 1, at_bats: 4, hits: 2}
+        - {season: 2026, fantasy_team_id: 2, started_player_days: 0, at_bats: 0, hits: 0}
+
   - name: matchup_side_totals_sum_only_the_matchup_days_for_the_team
     description: >
       Matchup period 1 covers two dates. Team 1's two started days in it are summed; its
@@ -1028,6 +1129,9 @@ unit_tests:
       verified.
     model: int_fantasy__matchup_side_totals
     given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
       - input: ref('int_fantasy__matchup_sides')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 1, fantasy_team_id: 1, opponent_team_id: 2, is_home: true}
@@ -1467,6 +1571,9 @@ unit_tests:
       Two matchups with home-minus-away margins +1 and -7. The scale is sqrt(25) = 5. A standard deviation about the mean (-3) would give 4, so this catches a deviation about the mean.
     model: int_fantasy__category_scales
     given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 0}
@@ -1480,11 +1587,38 @@ unit_tests:
       rows:
         - {category_key: 0, matchups_measured: 2, margin_scale: 5, side_denominator: null}
 
+  - name: category_scales_leave_out_a_league_season_with_no_rosters
+    description: >
+      Season 2025 scores a category and has no rosters, so no values of ours; season 2026
+      has both. 2026 keeps its row and 2025 has none. Catches: a row with
+      matchups_measured 0 and a null scale for a season that was never measured, which
+      says its matchups were looked at and found unmeasurable (ADR 0026).
+    model: int_fantasy__category_scales
+    given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+          - {platform: espn, league_id: "1", season: 2025, has_rosters: false}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 0}
+          - {platform: espn, league_id: "1", season: 2025, category_key: 0}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: true, stat_key: 0, denominator: null, stat_value: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: false, stat_key: 0, denominator: null, stat_value: 6}
+    expect:
+      rows:
+        - {season: 2026, category_key: 0, matchups_measured: 1, margin_scale: 4, side_denominator: null}
+
   - name: category_scales_do_not_change_when_home_and_away_are_swapped
     description: >
       The same two matchups as the previous test with the home and away sides swapped (margins -1 and +7). The scale is still 5. Catches a result that depends on which side is home.
     model: int_fantasy__category_scales
     given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 0}
@@ -1503,6 +1637,9 @@ unit_tests:
       Matchup 2 has a null value on one side, so it contributes no margin and matchups_measured is 1; the scale is the one margin, 4. Catches a null read as zero, which would count two matchups and give sqrt((16 + 25) / 2).
     model: int_fantasy__category_scales
     given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 0}
@@ -1521,6 +1658,9 @@ unit_tests:
       A rate (stat 47, with denominators 150 and 210 on its two sides) has the mean, 180; a count (stat 0, null denominators) has a null side_denominator. Catches a count given a denominator.
     model: int_fantasy__category_scales
     given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 0}
@@ -1541,6 +1681,9 @@ unit_tests:
       A rate with sides of 180 and 0 outs; the zero-out side has a null value. The mean denominator is 180, not 90, and the matchup contributes no margin. Catches an undefined rate halving the divisor and inflating every player's rate value.
     model: int_fantasy__category_scales
     given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 47}
@@ -1557,6 +1700,9 @@ unit_tests:
       A scored category (stat 5) with no matchup rows still has a row: matchups_measured 0 and a null scale. Catches a category vanishing from the facts through an inner join.
     model: int_fantasy__category_scales
     given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 0}

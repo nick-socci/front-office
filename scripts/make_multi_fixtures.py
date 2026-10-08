@@ -9,6 +9,9 @@ copies: they prove isolation (spec 0028, R5), not baseball.
     111111, 2027   the same, a ONE-scoring-period season on a calendar shifted 364 days
     222222, 2027   the 2027 one, league id changed
 
+The base tree also holds a past season (2025: settings, matchups and the two calendars).
+It is copied and is never a source: the others are derived from BASE_SEASON alone.
+
 ESPN's pro schedule belongs to a season, not a league: the 2026 capture is copied once, and
 one 2027 capture is derived (period 1 only, game dates shifted with the rest of 2027).
 
@@ -56,6 +59,11 @@ def read_captures(root: Path, source: str) -> list[Capture]:
         (json.loads(json.dumps(capture.meta)), capture.payload)
         for capture in LandingZone(root).committed(source=source)
     ]
+
+
+def base_season_only(captures: list[Capture]) -> list[Capture]:
+    """The captures of BASE_SEASON: the only ones the other tenants are derived from."""
+    return [c for c in captures if c[0]["partitions"].get("season") == BASE_SEASON]
 
 
 def write_capture(root: Path, meta: dict[str, Any], payload: Any) -> None:
@@ -250,10 +258,12 @@ def generate(input_root: Path, output_root: Path) -> dict[str, Any]:
 
     copy_tree(input_root, output_root)  # 111111/2026, MLB 2026 and the id map, untouched
 
-    espn = read_captures(input_root, "espn")
+    # Only the base season is a source: any other season of the base tree (a past one, with
+    # settings and matchups only) is copied above and otherwise left alone.
+    espn = base_season_only(read_captures(input_root, "espn"))
     # Season-level captures have no league to relabel; they are handled on their own.
     base = [c for c in espn if c[0]["endpoint"] != "pro_schedule"]
-    mlb = read_captures(input_root, "mlb")
+    mlb = base_season_only(read_captures(input_root, "mlb"))
     schedule = next(p for m, p in mlb if m["endpoint"] == "schedule")
     first_day = date.fromisoformat(schedule["dates"][0]["date"])
     target_day = first_day + SHIFT

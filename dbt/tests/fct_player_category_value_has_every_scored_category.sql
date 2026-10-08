@@ -5,6 +5,10 @@
 -- Catches a category list hardcoded or dropped somewhere in the build (R4.2): a stat whose
 -- components are missing from int_fantasy__stat_components would simply vanish from the
 -- fact through an inner join, and a count of rows alone would not say which.
+--
+-- The categories are those of league-seasons with rosters (ADR 0026): the fact starts from
+-- started days, so a season loaded for its matchup totals alone has categories and no row
+-- in the fact. For a league-season with rosters the check is what it was.
 
 with in_fact as (
 
@@ -15,8 +19,13 @@ with in_fact as (
 
 in_categories as (
 
-    select platform, league_id, season, category_key
-    from {{ ref('int_fantasy__categories') }}
+    select categories.platform, categories.league_id, categories.season, categories.category_key
+    from {{ ref('int_fantasy__categories') }} as categories
+    inner join {{ ref('int_fantasy__league_seasons') }} as league_seasons
+        on league_seasons.platform = categories.platform
+        and league_seasons.league_id = categories.league_id
+        and league_seasons.season = categories.season
+        and league_seasons.has_rosters
 
 )
 

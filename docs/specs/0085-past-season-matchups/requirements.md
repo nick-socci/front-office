@@ -61,7 +61,8 @@ season. Measuring the margins is #57 itself, specced afterwards against what is 
 - *Why 2021 has no per-day breakdown* → not chased. Nothing needs it for a season with no
   rosters.
 - *The shortened 2020 season* → landed like the others; whether its matchups are usable
-  is #57's question.
+  is #57's question. *Amended 2026-10-08:* it has none. The league did not play in 2020
+  (R5.5).
 - *Teams for past seasons, to name the sides* → not landed. A side is a team id.
 
 ## Requirements
@@ -144,9 +145,16 @@ season. Measuring the margins is #57 itself, specced afterwards against what is 
 - R5.4 THE SYSTEM SHALL fail the build for every decided matchup (a winner other than
   `UNDECIDED`) that lacks a reported score, on either side, for a category its
   league-season scores. A matchup not yet decided, and a bye, are not held to it.
-- R5.5 WHEN the past seasons are landed THE SYSTEM SHALL have, for each of 2018 to 2025,
-  at least one decided two-sided matchup; IF a season has none THEN the build SHALL stop
-  and take it to the owner. A capture that parses to no matchups is not a landed season.
+- R5.5 WHEN the past seasons are landed THE SYSTEM SHALL have, for each of 2018 to 2025
+  that the league played, at least one decided two-sided matchup; IF a season has none
+  THEN the build SHALL stop and take it to the owner: a season with no matchup is not
+  taken as landed until the owner has said why it has none. The count is made per season when the seasons are
+  landed and recorded in the run evidence; it is not a dbt test, because a season that
+  was not played and a capture that parsed to nothing look the same in staging.
+  *Amended 2026-10-08:* the build stopped here for 2020. ESPN's response holds no
+  matchup because the league did not play; the owner chose to keep 2020 loaded with
+  settings and no matchups. The requirement holds for the other seven seasons (design.md,
+  *Amendments*).
 - R5.6 WHEN the build stops under R5.3 or R5.5 THE SYSTEM SHALL first have landed and
   built every season it can, so that every season with a problem is reported to the
   owner together. It SHALL NOT exclude a season, or narrow a test, to get past one.
@@ -163,7 +171,7 @@ expected value: the build records what it finds.
 | League-seasons in `stg_espn__league_settings` | 9: 2018 to 2026 | query |
 | `int_fantasy__league_seasons` | 9 rows; `has_rosters` true for 2026 only | query |
 | Rows in the value marts for 2018 to 2025 | 0 | R4.3's test |
-| Decided two-sided matchups, each with a score for every scored category on both sides | 2025: 149 · 2021: 143 · 2018: 143 · 2026: 143 · the other five seasons: at least one, the number recorded | R5.4's test; R5.5's count per season |
+| Decided two-sided matchups, each with a score for every scored category on both sides | 2025: 149 · 2021: 143 · 2018: 143 · 2026: 143 · 2019, 2022, 2023 and 2024: at least one, the number recorded (as landed: 143 · 143 · 143 · 155) · 2020: none, because the league did not play (amended 2026-10-08; before the landing this row expected at least one) | R5.4's test; R5.5's count per season |
 | Schedule entries / two-sided matchups | 2025: 151 / 149 · 2021: 145 / 143 · 2018: 145 / 143 · 2026: 145 / 143 | `stg_espn__matchups` |
 | Scored categories | 2025: 17, the 2026 list · 2021 and 2018: 18, with SV and CG and without SVHD | `int_fantasy__categories` |
 | Final scoring period | 2025: 188 · 2021: 179 · 2018: 179 | `stg_espn__league_settings`; `stg_espn__scoring_periods` row counts |

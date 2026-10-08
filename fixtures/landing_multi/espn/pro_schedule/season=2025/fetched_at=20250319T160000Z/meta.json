@@ -1,0 +1,13 @@
+{
+  "source": "espn",
+  "endpoint": "pro_schedule",
+  "partitions": {
+    "season": 2025
+  },
+  "url": "https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb/seasons/2025",
+  "params": {
+    "view": "proTeamSchedules_wl"
+  },
+  "request_key": "view=proTeamSchedules_wl",
+  "fetched_at": "20250319T160000Z"
+}

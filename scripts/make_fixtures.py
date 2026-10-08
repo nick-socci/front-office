@@ -19,7 +19,7 @@ import argparse
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
 from front_office.landing import LandingZone
@@ -161,6 +161,23 @@ FIXTURE_SOURCE_SCORING_PERIODS = (36, 37)
 # The only season the fixtures are built from: a capture of another season is never chosen.
 FIXTURE_SEASON = 2026
 EASTERN = ZoneInfo("America/New_York")
+
+
+class PastSeason(NamedTuple):
+    """A past season of the fixtures: settings, matchups and the two calendars, no rosters.
+
+    The periods are real and keep their numbers (2025's first two are the Tokyo games), so
+    nothing is renumbered. The stamp is the Eastern afternoon of the last date, as
+    FIXTURE_FETCHED_AT is for 2026 (spec 0085, R3).
+    """
+
+    season: int
+    source_periods: tuple[int, ...]
+    dates: tuple[str, ...]
+    fetched_at: str
+
+
+PAST_SEASONS = (PastSeason(2025, (1, 2), ("2025-03-18", "2025-03-19"), "20250319T160000Z"),)
 
 ESPN_PRO_GAME_FIELDS = ("id", "date", "scoringPeriodId", "homeProTeamId", "awayProTeamId")
 
@@ -314,6 +331,14 @@ def latest_landed(source: str, endpoint: str) -> Path:
     return candidates[-1]
 
 
+def latest_schedule(season: int) -> Path:
+    """payload.json of the newest committed regular-season MLB schedule of one season."""
+    candidates = landed_in("mlb", "schedule", season=season, game_type="R")
+    if not candidates:
+        raise SystemExit(f"no landed mlb/schedule response for {season} under {RAW_ROOT}")
+    return sorted(candidates)[-1]
+
+
 def write_fixture(
     *,
     source: str,
@@ -343,8 +368,12 @@ def write_fixture(
     return payload_path
 
 
-def build_mlb_schedule(dates: tuple[str, ...]) -> Path:
-    payload = json.loads(latest_landed("mlb", "schedule").read_text())
+def build_mlb_schedule(
+    dates: tuple[str, ...],
+    season: int = FIXTURE_SEASON,
+    fetched_at: str = FIXTURE_FETCHED_AT,
+) -> Path:
+    payload = json.loads(latest_schedule(season).read_text())
     days = [day for day in payload["dates"] if day["date"] in dates]
     if not days:
         raise SystemExit(f"no games found on {', '.join(dates)} in the landed schedule")
@@ -362,13 +391,14 @@ def build_mlb_schedule(dates: tuple[str, ...]) -> Path:
     path = write_fixture(
         source="mlb",
         endpoint="schedule",
-        partitions={"season": 2026, "game_type": "R"},
+        partitions={"season": season, "game_type": "R"},
         payload=fixture,
+        fetched_at=fetched_at,
         request={
             "url": "https://statsapi.mlb.com/api/v1/schedule",
             "params": {
                 "sportId": 1,
-                "season": 2026,
+                "season": season,
                 "gameType": "R",
                 "startDate": min(dates),
                 "endDate": max(dates),
@@ -384,7 +414,7 @@ def build_mlb_schedule(dates: tuple[str, ...]) -> Path:
 
 def build_mlb_boxscores(dates: tuple[str, ...]) -> list[Path]:
     """Boxscores for the first few played games on the fixture dates."""
-    schedule = json.loads(latest_landed("mlb", "schedule").read_text())
+    schedule = json.loads(latest_schedule(FIXTURE_SEASON).read_text())
     game_pks = [
         game["gamePk"]
         for day in schedule["dates"]
@@ -474,30 +504,35 @@ def espn_team_alias(team_id: int) -> dict[str, str]:
     return {"name": f"Team {team_id:02d}", "abbrev": f"T{team_id}"}
 
 
-def latest_espn(endpoint: str, scoring_period: int | None = None) -> dict[str, Any]:
+def latest_espn(
+    endpoint: str, scoring_period: int | None = None, season: int = FIXTURE_SEASON
+) -> dict[str, Any]:
     # committed() leaves out anything that is not a complete capture, such as the spike
     # backups, which have no sidecar and a different layout.
-    partitions: dict[str, Any] = {"season": FIXTURE_SEASON}
+    partitions: dict[str, Any] = {"season": season}
     if scoring_period is not None:
         partitions["scoring_period"] = scoring_period
     candidates = landed_in("espn", endpoint, **partitions)
     if not candidates:
-        raise SystemExit(f"no landed espn/{endpoint} response (period={scoring_period})")
+        raise SystemExit(
+            f"no landed espn/{endpoint} response for {season} (period={scoring_period})"
+        )
     return json.loads(sorted(candidates)[-1].read_text())
 
 
 def check_source_periods_are_the_fixture_dates(
-    source_periods: tuple[int, ...], dates: tuple[str, ...]
+    source_periods: tuple[int, ...], dates: tuple[str, ...], season: int = FIXTURE_SEASON
 ) -> None:
     """Stop unless each source period's games are all on its fixture date (Eastern), in order.
 
-    Reads the landed 2026 pro schedule. This is what keeps FIXTURE_SOURCE_SCORING_PERIODS and
-    the MLB fixture dates from drifting apart (ADR 0025).
+    Reads the season's landed pro schedule. This is what keeps FIXTURE_SOURCE_SCORING_PERIODS
+    and the MLB fixture dates from drifting apart (ADR 0025), and what makes 2025's periods 1
+    and 2 the Tokyo dates or no fixture at all (spec 0085, R3.2).
     """
-    candidates = landed("espn", "pro_schedule", season=FIXTURE_SEASON)
+    candidates = landed("espn", "pro_schedule", season=season)
     if not candidates:
         raise SystemExit(
-            "no landed espn/pro_schedule response for 2026: run `front-office backfill`"
+            f"no landed espn/pro_schedule response for {season}: run `front-office backfill`"
         )
     payload = json.loads(sorted(candidates)[-1].read_text())
     found: dict[str, set[str]] = {str(period): set() for period in source_periods}
@@ -515,12 +550,34 @@ def check_source_periods_are_the_fixture_dates(
         got = sorted(found[str(period)])
         if got != [wanted]:
             raise SystemExit(
-                f"scoring period {period}: its games in the landed pro schedule are on "
+                f"{season} scoring period {period}: its games in the landed pro schedule are on "
                 f"{', '.join(got) or 'no date'}, but the fixture date wanted is {wanted}"
             )
 
 
-def check_one_league() -> None:
+def check_mlb_has_games_on_the_fixture_dates(
+    dates: tuple[str, ...], season: int = FIXTURE_SEASON
+) -> None:
+    """Stop unless MLB's landed schedule has a regular-season game on every fixture date.
+
+    The ESPN periods are checked against the dates; this checks the dates against MLB, so the
+    two calendars of a fixture season agree (spec 0085, R3.2). A date with no regular-season
+    game would otherwise give a season whose ESPN periods have nothing to join to.
+    """
+    payload = json.loads(latest_schedule(season).read_text())
+    with_games = {
+        day["date"]
+        for day in payload["dates"]
+        if any(game.get("gameType") == "R" for game in day["games"])
+    }
+    missing = [date for date in dates if date not in with_games]
+    if missing:
+        raise SystemExit(
+            f"{season}: the landed MLB schedule has no regular-season game on {', '.join(missing)}"
+        )
+
+
+def check_one_league(season: int = FIXTURE_SEASON) -> None:
     """Stop when captures of more than one league are landed for the season (R1.5).
 
     Every ESPN endpoint counts, not settings alone: a second league with a roster or a
@@ -532,28 +589,29 @@ def check_one_league() -> None:
     leagues = {
         str(capture.meta["partitions"]["league_id"])
         for capture in LandingZone(RAW_ROOT).committed(source="espn")
-        if capture.meta.get("partitions", {}).get("season") == FIXTURE_SEASON
+        if capture.meta.get("partitions", {}).get("season") == season
         and capture.meta["partitions"].get("league_id") is not None
     }
     if len(leagues) > 1:
         raise SystemExit(
-            f"{len(leagues)} leagues are landed for season {FIXTURE_SEASON}: fixtures are "
+            f"{len(leagues)} leagues are landed for season {season}: fixtures are "
             "built from one league, and which one is a decision for the person"
         )
 
 
-def build_espn_pro_schedule() -> Path:
+def build_espn_pro_schedule(
+    season: int = FIXTURE_SEASON,
+    source_periods: tuple[int, ...] = FIXTURE_SOURCE_SCORING_PERIODS,
+    fetched_at: str = FIXTURE_FETCHED_AT,
+) -> Path:
     """ESPN's pro schedule: teams and games only, two real periods renumbered 1 and 2."""
-    candidates = landed("espn", "pro_schedule", season=FIXTURE_SEASON)
+    candidates = landed("espn", "pro_schedule", season=season)
     if not candidates:
         raise SystemExit(
-            "no landed espn/pro_schedule response for 2026: run `front-office backfill`"
+            f"no landed espn/pro_schedule response for {season}: run `front-office backfill`"
         )
     payload = json.loads(sorted(candidates)[-1].read_text())
-    renumber = {
-        str(source): str(fixture)
-        for fixture, source in enumerate(FIXTURE_SOURCE_SCORING_PERIODS, start=1)
-    }
+    renumber = {str(source): str(fixture) for fixture, source in enumerate(source_periods, start=1)}
     teams: list[dict[str, Any]] = []
     for team in payload["settings"]["proTeams"]:
         rebuilt: dict[str, Any] = {"id": team["id"]}
@@ -574,10 +632,11 @@ def build_espn_pro_schedule() -> Path:
     path = write_fixture(
         source="espn",
         endpoint="pro_schedule",
-        partitions={"season": 2026},
+        partitions={"season": season},
         payload=fixture,
+        fetched_at=fetched_at,
         request={
-            "url": "https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb/seasons/2026",
+            "url": f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb/seasons/{season}",
             "params": {"view": "proTeamSchedules_wl"},
         },
     )
@@ -594,15 +653,19 @@ def build_espn_pro_schedule() -> Path:
     return path
 
 
-def build_espn_settings() -> Path:
-    payload = latest_espn("settings")
+def build_espn_settings(
+    season: int = FIXTURE_SEASON,
+    source_periods: tuple[int, ...] = FIXTURE_SOURCE_SCORING_PERIODS,
+    fetched_at: str = FIXTURE_FETCHED_AT,
+) -> Path:
+    payload = latest_espn("settings", season=season)
     fixture = rebuild(payload, ESPN_SETTINGS_FIELDS)
     fixture["id"] = FIXTURE_LEAGUE_ID
     fixture["settings"]["name"] = FIXTURE_LEAGUE_NAME
     # The fixture season is two days long; see FIXTURE_FETCHED_AT.
-    fixture["scoringPeriodId"] = len(FIXTURE_SOURCE_SCORING_PERIODS)
-    fixture["status"]["latestScoringPeriod"] = len(FIXTURE_SOURCE_SCORING_PERIODS)
-    fixture["status"]["finalScoringPeriod"] = len(FIXTURE_SOURCE_SCORING_PERIODS)
+    fixture["scoringPeriodId"] = len(source_periods)
+    fixture["status"]["latestScoringPeriod"] = len(source_periods)
+    fixture["status"]["finalScoringPeriod"] = len(source_periods)
     fixture["settings"]["scoringSettings"]["scoringItems"] = [
         rebuild(item, ESPN_SCORING_ITEM_FIELDS)
         for item in payload["settings"]["scoringSettings"]["scoringItems"]
@@ -610,8 +673,9 @@ def build_espn_settings() -> Path:
     path = write_fixture(
         source="espn",
         endpoint="settings",
-        partitions={"season": 2026, "league_id": FIXTURE_LEAGUE_ID},
+        partitions={"season": season, "league_id": FIXTURE_LEAGUE_ID},
         payload=fixture,
+        fetched_at=fetched_at,
         request={
             "url": "https://lm-api-reads.fantasy.espn.com/",
             "params": {"view": "mSettings,mStatus"},
@@ -717,7 +781,9 @@ def build_espn_rosters() -> list[Path]:
     return written
 
 
-def trim_scoring_periods(matchup: dict[str, Any]) -> dict[str, Any]:
+def trim_scoring_periods(
+    matchup: dict[str, Any], periods: int = len(FIXTURE_SOURCE_SCORING_PERIODS)
+) -> dict[str, Any]:
     """Cut each side's pointsByScoringPeriod down to the fixture's own scoring periods.
 
     The real matchup this is copied from spans twelve days; the fixture season is two.
@@ -728,7 +794,7 @@ def trim_scoring_periods(matchup: dict[str, Any]) -> dict[str, Any]:
     so this is the same fiction applied consistently: one coherent slice, not a real
     matchup with a real matchup's span.
     """
-    keep = {str(period) for period in range(1, len(FIXTURE_SOURCE_SCORING_PERIODS) + 1)}
+    keep = {str(period) for period in range(1, periods + 1)}
     for side in ("home", "away"):
         points = matchup.get(side, {}).get("pointsByScoringPeriod")
         if points:
@@ -738,18 +804,23 @@ def trim_scoring_periods(matchup: dict[str, Any]) -> dict[str, Any]:
     return matchup
 
 
-def build_espn_matchups() -> Path:
-    payload = latest_espn("matchups")
+def build_espn_matchups(
+    season: int = FIXTURE_SEASON,
+    source_periods: tuple[int, ...] = FIXTURE_SOURCE_SCORING_PERIODS,
+    fetched_at: str = FIXTURE_FETCHED_AT,
+) -> Path:
+    payload = latest_espn("matchups", season=season)
     schedule = [
-        trim_scoring_periods(rebuild(matchup, ESPN_MATCHUP_FIELDS))
+        trim_scoring_periods(rebuild(matchup, ESPN_MATCHUP_FIELDS), len(source_periods))
         for matchup in payload["schedule"][:FIXTURE_MATCHUPS]
     ]
     fixture = {"id": FIXTURE_LEAGUE_ID, "seasonId": payload.get("seasonId"), "schedule": schedule}
     path = write_fixture(
         source="espn",
         endpoint="matchups",
-        partitions={"season": 2026, "league_id": FIXTURE_LEAGUE_ID},
+        partitions={"season": season, "league_id": FIXTURE_LEAGUE_ID},
         payload=fixture,
+        fetched_at=fetched_at,
         request={
             "url": "https://lm-api-reads.fantasy.espn.com/",
             "params": {"view": "mMatchupScore,mScoreboard"},
@@ -859,6 +930,11 @@ def main() -> None:
     dates = tuple(args.dates)
     check_source_periods_are_the_fixture_dates(FIXTURE_SOURCE_SCORING_PERIODS, dates)
     check_one_league()
+    # Every check of every season first, so a failing past season leaves no half-written run.
+    for past in PAST_SEASONS:
+        check_source_periods_are_the_fixture_dates(past.source_periods, past.dates, past.season)
+        check_mlb_has_games_on_the_fixture_dates(past.dates, past.season)
+        check_one_league(past.season)
     build_mlb_schedule(tuple(args.dates))
     build_mlb_boxscores(tuple(args.dates))
     build_espn_pro_schedule()
@@ -868,6 +944,11 @@ def main() -> None:
     build_espn_matchups()
     build_espn_transactions()
     build_idmap(roster_paths)
+    for past in PAST_SEASONS:
+        build_mlb_schedule(past.dates, past.season, past.fetched_at)
+        build_espn_pro_schedule(past.season, past.source_periods, past.fetched_at)
+        build_espn_settings(past.season, past.source_periods, past.fetched_at)
+        build_espn_matchups(past.season, past.source_periods, past.fetched_at)
 
 
 if __name__ == "__main__":

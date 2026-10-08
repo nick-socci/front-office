@@ -12,6 +12,13 @@
 -- way down, so a side is never silently dropped. Its components are then zero, and
 -- started_player_days = 0 says why.
 --
+-- Only for league-seasons with rosters (ADR 0026). A past season loaded for its matchup
+-- totals alone has sides and no started days, and the left joins below would give each
+-- of its sides a row of zeroes: a total that reads as "this team produced nothing" when
+-- nothing was ever loaded to add up. The inner join to the covered league-seasons is the
+-- one place that is decided; the stat values, category scores and results computed from
+-- this model follow it. "Every side gets a row" holds within a covered league-season.
+--
 -- The input counts carry #25's status up a level. A side's totals are only as good as
 -- its least certain day, so marts report unverified_player_days next to the scores
 -- rather than scoring a missing boxscore as zero.
@@ -44,6 +51,11 @@ select
     coalesce(sum(days.{{ column }}), 0) as {{ column }}{{ ',' if not loop.last }}
     {%- endfor %}
 from {{ ref('int_fantasy__matchup_sides') }} as sides
+inner join {{ ref('int_fantasy__league_seasons') }} as league_seasons
+    on league_seasons.platform = sides.platform
+    and league_seasons.league_id = sides.league_id
+    and league_seasons.season = sides.season
+    and league_seasons.has_rosters
 left join {{ ref('int_fantasy__matchup_periods') }} as periods
     on periods.platform = sides.platform
     and periods.league_id = sides.league_id

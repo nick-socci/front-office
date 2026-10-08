@@ -241,8 +241,8 @@ def eastern_ms(stamp: str) -> int:
     return int(local.timestamp() * 1000)
 
 
-def land_pro_schedule(raw, games_by_period: dict[str, list[str]]):
-    """Land a made-up 2026 pro schedule: period -> Eastern times of its games."""
+def land_pro_schedule(raw, games_by_period: dict[str, list[str]], season: int = 2026):
+    """Land a made-up pro schedule (2026 unless told): period -> Eastern times of its games."""
     teams = [
         {
             "id": 1,
@@ -256,7 +256,7 @@ def land_pro_schedule(raw, games_by_period: dict[str, list[str]]):
         raw,
         "espn",
         "pro_schedule",
-        {"season": 2026},
+        {"season": season},
         "20260501T000000Z",
         {"settings": {"proTeams": teams}},
     )
@@ -561,3 +561,277 @@ def test_committed_roster_fixtures_carry_allowlisted_lines_of_scheduled_games():
                     assert line["externalId"] in games[str(period)]
                     non_empty += bool(line["stats"])
         assert non_empty > 0
+
+
+# -- the 2025 past season (spec 0085, R3) ------------------------------------------------------
+
+FIXTURES = Path(__file__).resolve().parents[2] / "fixtures/landing"
+PAST_DATES = ("2025-03-18", "2025-03-19")
+
+
+def eastern_day(epoch_ms: int) -> str:
+    from datetime import UTC, datetime
+    from zoneinfo import ZoneInfo
+
+    local = datetime.fromtimestamp(epoch_ms / 1000, UTC).astimezone(ZoneInfo("America/New_York"))
+    return local.date().isoformat()
+
+
+def committed_of_season(season: int) -> list:
+    zone = LandingZone(FIXTURES)
+    return [
+        capture
+        for source in ("espn", "mlb", "idmap")
+        for capture in zone.committed(source=source)
+        if capture.meta["partitions"].get("season") == season
+    ]
+
+
+def leaf_paths(node, prefix=""):
+    """Dotted paths down to the first non-dict value (lists and scalars are leaves)."""
+    if not isinstance(node, dict):
+        yield prefix
+        return
+    for key, value in node.items():
+        yield from leaf_paths(value, f"{prefix}.{key}" if prefix else key)
+
+
+def only_allowed(payload, allowed: set[str]) -> None:
+    for path in leaf_paths(payload):
+        assert path in allowed or any(path.startswith(a + ".") for a in allowed), path
+
+
+def test_the_2025_fixture_season_holds_four_captures_and_nothing_else():
+    """Catches a 2025 roster, team, transaction, boxscore or id-map capture in the fixtures
+    (R3.1), or one of the four wanted captures missing."""
+    captures = committed_of_season(2025)
+    kinds = sorted((c.meta["source"], c.meta["endpoint"]) for c in captures)
+    assert kinds == [
+        ("espn", "matchups"),
+        ("espn", "pro_schedule"),
+        ("espn", "settings"),
+        ("mlb", "schedule"),
+    ]
+
+
+def test_the_2025_settings_fixture_is_the_allowlist_of_the_fixture_league():
+    """Catches a field outside the settings allowlist, the real league id or name, or a
+    season not cut to the two fixture periods (R3.1, R3.2)."""
+    (capture,) = (c for c in committed_of_season(2025) if c.meta["endpoint"] == "settings")
+    assert capture.meta["partitions"] == {"season": 2025, "league_id": "111111"}
+    payload = capture.payload
+    allowed = {
+        "id",
+        "seasonId",
+        "scoringPeriodId",
+        "settings.name",
+        "settings.size",
+        "settings.scoringSettings.scoringType",
+        "settings.scoringSettings.scoringItems",
+        "settings.scheduleSettings.playoffTeamCount",
+        "status.currentMatchupPeriod",
+        "status.latestScoringPeriod",
+        "status.finalScoringPeriod",
+        "status.isActive",
+        "settings.rosterSettings.lineupSlotCounts",
+    }
+    only_allowed(payload, allowed)
+    assert payload["id"] == "111111" and payload["seasonId"] == 2025
+    assert payload["settings"]["name"] == "Fixture League"
+    assert payload["status"]["latestScoringPeriod"] == 2
+    assert payload["status"]["finalScoringPeriod"] == 2
+    for item in payload["settings"]["scoringSettings"]["scoringItems"]:
+        assert set(item) <= {"statId", "isReverseItem", "points"}
+
+
+def test_the_2025_matchups_fixture_is_two_allowlisted_matchups_of_two_periods():
+    """Catches a field outside the matchup allowlist, more or fewer than two matchups, or a
+    pointsByScoringPeriod left at its real span instead of periods 1 and 2 (R3.1)."""
+    (capture,) = (c for c in committed_of_season(2025) if c.meta["endpoint"] == "matchups")
+    assert capture.meta["partitions"] == {"season": 2025, "league_id": "111111"}
+    payload = capture.payload
+    assert set(payload) == {"id", "seasonId", "schedule"}
+    assert payload["id"] == "111111" and payload["seasonId"] == 2025
+    assert len(payload["schedule"]) == 2
+    allowed = {"id", "matchupPeriodId", "winner", "playoffTierType"}
+    for side in ("home", "away"):
+        allowed |= {
+            f"{side}.teamId",
+            f"{side}.cumulativeScore.wins",
+            f"{side}.cumulativeScore.losses",
+            f"{side}.cumulativeScore.ties",
+            f"{side}.cumulativeScore.scoreByStat",
+            f"{side}.pointsByScoringPeriod",
+        }
+    kept = set()
+    for matchup in payload["schedule"]:
+        only_allowed(matchup, allowed)
+        for side in ("home", "away"):
+            kept |= set(matchup[side]["pointsByScoringPeriod"])
+    assert kept == {"1", "2"}
+
+
+def test_the_2025_pro_schedule_is_periods_one_and_two_on_the_tokyo_dates():
+    """Catches a wrong period slice, a field outside the allowlist, or periods that are not
+    on 2025-03-18 and 2025-03-19, which would put the fixture's opening day wrong (R3.2)."""
+    (capture,) = (c for c in committed_of_season(2025) if c.meta["endpoint"] == "pro_schedule")
+    assert capture.meta["partitions"] == {"season": 2025}
+    assert capture.meta["request_key"] == "view=proTeamSchedules_wl"
+    payload = capture.payload
+    assert set(payload) == {"settings"} and set(payload["settings"]) == {"proTeams"}
+    days: dict[str, set[str]] = {}
+    for team in payload["settings"]["proTeams"]:
+        assert set(team) <= {"id", "proGamesByScoringPeriod"}
+        for period, games in team.get("proGamesByScoringPeriod", {}).items():
+            for game in games:
+                assert set(game) == {
+                    "id",
+                    "date",
+                    "scoringPeriodId",
+                    "homeProTeamId",
+                    "awayProTeamId",
+                }
+                assert str(game["scoringPeriodId"]) == period
+                days.setdefault(period, set()).add(eastern_day(game["date"]))
+    assert days == {"1": {"2025-03-18"}, "2": {"2025-03-19"}}
+
+
+def test_the_2025_mlb_schedule_has_regular_season_games_on_exactly_the_two_dates():
+    """Catches an MLB schedule on other dates than ESPN's periods 1 and 2, or one with a
+    non-regular-season game or no game on a date (R3.2)."""
+    (capture,) = (c for c in committed_of_season(2025) if c.meta["source"] == "mlb")
+    assert capture.meta["partitions"] == {"season": 2025, "game_type": "R"}
+    days = capture.payload["dates"]
+    assert tuple(day["date"] for day in days) == PAST_DATES
+    for day in days:
+        assert day["games"]
+        assert {game["gameType"] for game in day["games"]} == {"R"}
+
+
+def test_the_2026_fixture_season_is_untouched_by_the_past_season():
+    """Catches the 2026 captures changing in number: the past season is added beside them
+    (R3.3). Their bytes are held by git; this holds the set."""
+    kinds = {(c.meta["source"], c.meta["endpoint"]) for c in committed_of_season(2026)}
+    assert kinds == {
+        ("espn", "matchups"),
+        ("espn", "pro_schedule"),
+        ("espn", "roster"),
+        ("espn", "settings"),
+        ("espn", "teams"),
+        ("espn", "transactions"),
+        ("mlb", "boxscore"),
+        ("mlb", "schedule"),
+    }
+
+
+def test_the_date_check_runs_on_the_season_it_is_given(roots):
+    """Catches a date check reading the 2026 pro schedule for a past season: 2026 is wrong
+    for periods 1 and 2 here and 2025 is right, so only a per-season read passes."""
+    raw, _fixtures = roots
+    land_pro_schedule(raw, {"1": ["2026-09-01T19:05"], "2": ["2026-09-02T19:05"]}, season=2026)
+    land_pro_schedule(
+        raw,
+        {"1": ["2025-03-18T06:10"], "2": ["2025-03-19T06:10"], "3": ["2025-03-27T19:05"]},
+        season=2025,
+    )
+    make_fixtures.check_source_periods_are_the_fixture_dates((1, 2), PAST_DATES, season=2025)
+
+
+def test_a_past_period_off_its_expected_date_stops_generation(roots):
+    """Catches generation going on when ESPN's period 2 of 2025 is not 2025-03-19 (R3.2):
+    the message names the period, the date found and the date wanted."""
+    raw, _fixtures = roots
+    land_pro_schedule(raw, {"1": ["2025-03-18T06:10"], "2": ["2025-03-20T19:05"]}, season=2025)
+    with pytest.raises(SystemExit) as stop:
+        make_fixtures.check_source_periods_are_the_fixture_dates((1, 2), PAST_DATES, season=2025)
+    message = str(stop.value)
+    assert "period 2" in message and "2025-03-20" in message and "2025-03-19" in message
+
+
+def land_schedule(raw, days: dict[str, list[str]], season: int = 2025):
+    """Land a made-up MLB schedule: date -> gameType of each game that day."""
+    land(
+        raw,
+        "mlb",
+        "schedule",
+        {"season": season, "game_type": "R"},
+        "20260501T000000Z",
+        {
+            "dates": [
+                {"date": day, "games": [{"gamePk": i, "gameType": t} for i, t in enumerate(types)]}
+                for day, types in days.items()
+            ]
+        },
+    )
+
+
+def test_mlb_games_on_both_past_dates_pass(roots):
+    """Catches the MLB check rejecting a correct schedule, or reading another season's."""
+    raw, _fixtures = roots
+    land_schedule(raw, {"2025-03-18": ["R"], "2025-03-19": ["R", "R"], "2025-03-27": ["R"]})
+    land_schedule(raw, {"2026-04-29": ["R"]}, season=2026)
+    make_fixtures.check_mlb_has_games_on_the_fixture_dates(PAST_DATES, season=2025)
+
+
+@pytest.mark.parametrize(
+    "days",
+    [
+        {"2025-03-18": ["R"]},
+        {"2025-03-18": ["R"], "2025-03-19": []},
+        {"2025-03-18": ["R"], "2025-03-19": ["S"]},
+    ],
+    ids=["date absent", "date with no game", "date with spring training only"],
+)
+def test_mlb_without_regular_season_games_on_a_date_stops_generation(roots, days):
+    """Catches generation going on with no regular-season MLB game on one of the dates
+    (R3.2), including a date that holds only another game type."""
+    raw, _fixtures = roots
+    land_schedule(raw, days)
+    with pytest.raises(SystemExit) as stop:
+        make_fixtures.check_mlb_has_games_on_the_fixture_dates(PAST_DATES, season=2025)
+    assert "2025-03-19" in str(stop.value)
+
+
+def test_the_season_builders_take_their_captures_from_the_season_they_are_given(roots):
+    """Catches settings, matchups or the MLB schedule chosen from the newest path of any
+    season, and a past season written under 2026 (R3.1)."""
+    raw, fixtures = roots
+    for season, stamp in ((2025, "20250101T000000Z"), (2026, "20260101T000000Z")):
+        partitions = {"season": season, "league_id": "7"}
+        status = {"latestScoringPeriod": 196, "finalScoringPeriod": 188}
+        scoring = {"scoringType": "H2H_CATEGORY", "scoringItems": []}
+        settings = {"id": 7, "seasonId": season, "status": status}
+        settings["settings"] = {"name": "Real Name", "scoringSettings": scoring}
+        land(raw, "espn", "settings", partitions, stamp, settings)
+        schedule = [{"id": n, "matchupPeriodId": 1} for n in range(5)]
+        land(raw, "espn", "matchups", partitions, stamp, {"seasonId": season, "schedule": schedule})
+    land_schedule(raw, {"2025-03-18": ["R"], "2025-03-19": ["R"]})
+    land_schedule(raw, {"2026-04-29": ["R"]}, season=2026)
+
+    settings_path = make_fixtures.build_espn_settings(2025, (1, 2), "20250319T160000Z")
+    matchups_path = make_fixtures.build_espn_matchups(2025, (1, 2), "20250319T160000Z")
+    schedule_path = make_fixtures.build_mlb_schedule(PAST_DATES, 2025, "20250319T160000Z")
+
+    assert settings_path.is_relative_to(fixtures / "espn/settings/season=2025")
+    assert matchups_path.is_relative_to(fixtures / "espn/matchups/season=2025")
+    assert schedule_path.is_relative_to(fixtures / "mlb/schedule/season=2025")
+    settings = json.loads(settings_path.read_text())
+    assert settings["seasonId"] == 2025 and settings["id"] == "111111"
+    assert settings["settings"]["name"] == "Fixture League"
+    assert settings["status"] == {"latestScoringPeriod": 2, "finalScoringPeriod": 2}
+    assert len(json.loads(matchups_path.read_text())["schedule"]) == 2
+    days = json.loads(schedule_path.read_text())["dates"]
+    assert [d["date"] for d in days] == list(PAST_DATES)
+
+
+def test_the_league_check_runs_per_season(roots):
+    """Catches the one-league guard looking at 2026 only: two leagues landed for 2025 stop
+    generation, and 2026's single league does not hide them."""
+    raw, _fixtures = roots
+    land(raw, "espn", "settings", {"season": 2026, "league_id": "7"}, "20260101T000000Z", {})
+    for league in ("7", "8"):
+        land(raw, "espn", "matchups", {"season": 2025, "league_id": league}, "20250101T000000Z", {})
+    make_fixtures.check_one_league(2026)
+    with pytest.raises(SystemExit) as stop:
+        make_fixtures.check_one_league(2025)
+    assert "2 leagues" in str(stop.value)

@@ -190,17 +190,22 @@ def backfill_espn(
     ] = False,
     only: Annotated[
         str | None,
-        typer.Option("--only", help="Limit to one endpoint: pro-schedule (needs no login)."),
+        typer.Option(
+            "--only",
+            help="Limit the run: pro-schedule (needs no login), or matchups "
+            "(pro schedule, settings and matchups only).",
+        ),
     ] = None,
 ) -> None:
     """Back-fill ESPN data: the pro schedule, then league settings, teams and rosters.
 
     The pro schedule is public and fetched without credentials; a failure there is
     reported and the league run goes on, then the command exits 1. `--only pro-schedule`
-    fetches just that, and needs no .env.
+    fetches just that, and needs no .env. `--only matchups` fetches the pro schedule,
+    settings and matchups, and no teams, transactions or rosters; it needs the .env.
     """
-    if only is not None and only != "pro-schedule":
-        raise typer.BadParameter(f"unknown endpoint: {only} (expected pro-schedule)")
+    if only is not None and only not in ("pro-schedule", "matchups"):
+        raise typer.BadParameter(f"unknown endpoint: {only} (expected pro-schedule or matchups)")
 
     zone = LandingZone(root=raw_root)
     fetched_at = utc_stamp()
@@ -214,6 +219,40 @@ def backfill_espn(
 
     load_env_file()
     credentials = EspnCredentials.from_env()
+
+    if only == "matchups":
+        # A past season's league data without its rosters: the same calls as the full run
+        # below, minus teams, transactions and rosters.
+        with (
+            writing_session(zone, fetched_at),
+            exit_on_expired_auth(),
+            espn_client(credentials) as client,
+        ):
+            pro_schedule_error = land_pro_schedule(zone, season, fetched_at)
+            settings_path, settings_payload = espn_settings.backfill_settings(
+                zone=zone,
+                client=client,
+                season=season,
+                league_id=credentials.league_id,
+                fetched_at=fetched_at,
+            )
+            typer.echo(f"landed settings -> {settings_path}")
+            matchups_path = espn_matchups.backfill_matchups(
+                zone=zone,
+                client=client,
+                season=season,
+                league_id=credentials.league_id,
+                fetched_at=fetched_at,
+            )
+            typer.echo(f"landed matchups -> {matchups_path}")
+            status = settings_payload.get("status", {})
+            typer.echo(
+                f"scoring periods: latest={status.get('latestScoringPeriod')} "
+                f"final={status.get('finalScoringPeriod')}"
+            )
+        if pro_schedule_error is not None:
+            raise typer.Exit(code=1)
+        return
 
     with (
         writing_session(zone, fetched_at),
@@ -374,7 +413,11 @@ def audit(
         ),
     ] = None,
 ) -> None:
-    """Check that landed data is complete, loaded and final. Exits 1 on any ERROR."""
+    """Check that landed data is complete, loaded and final. Exits 1 on any ERROR.
+
+    The audit judges a season landed whole: a season landed with `backfill espn --only
+    matchups` is reported as missing its rosters and boxscores.
+    """
     zone = LandingZone(root=raw_root)
     warn_if_writing(zone)
     as_of = (

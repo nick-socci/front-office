@@ -54,6 +54,11 @@ unit_tests:
       unexplained even though a component is registered.
     model: rec_espn__matchup_stat_differences
     given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+          # A past season loaded for its matchup totals alone: ESPN's rows for it are not compared.
+          - {platform: espn, league_id: "1", season: 2025, has_rosters: false}
       - input: ref('int_fantasy__stat_components')
         rows:
           - {platform: espn, stat_key: 0, part: numerator, component: at_bats, weight: 1}
@@ -92,6 +97,8 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 11, fantasy_team_id: 6, stat_key: 2, stat_value: 0.9}
       - input: ref('stg_espn__matchup_category_results')
         rows:
+          # Season 2025 has no rosters: ESPN's total is there and is no missing_ours row (ADR 0026).
+          - {league_id: "1", season: 2025, matchup_id: 7, team_id: 1, stat_id: 0, score: 40}
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 0, score: 40}
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 1, score: 10}
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 2, score: 0.25}
@@ -140,6 +147,11 @@ unit_tests:
       scored at ESPN (PR #46 review). Both fail rather than vanish.
     model: rec_espn__category_result_differences
     given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+          # A past season loaded for its matchup totals alone: ESPN's rows for it are not compared.
+          - {platform: espn, league_id: "1", season: 2025, has_rosters: false}
       - input: ref('fct_matchup_category_scores')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, category_key: 5, result: WIN, has_unverified_inputs: false}
@@ -158,6 +170,8 @@ unit_tests:
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 20, result: LOSS, is_scored_category: true}
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 2, stat_id: 20, result: WIN, is_scored_category: true}
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 47, result: WIN, is_scored_category: true}
+          # Season 2025 has no rosters: scored at ESPN, and no missing_ours row (ADR 0026).
+          - {league_id: "1", season: 2025, matchup_id: 7, team_id: 1, stat_id: 5, result: WIN, is_scored_category: true}
           # Component-only stat: never a category, at either end.
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 0, result: null, is_scored_category: false}
       - input: ref('rec_espn__matchup_stat_differences')

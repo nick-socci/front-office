@@ -23,6 +23,12 @@
 -- matchup keeps a row (matchups_measured 0, margin_scale null) rather than vanishing from
 -- the facts through an inner join.
 --
+-- The spine is the categories of league-seasons with rosters only (ADR 0026). The scale is
+-- measured from our recomputed totals, which a season loaded for its matchup totals alone
+-- does not have: left on the spine, each of its categories would be a row with
+-- matchups_measured 0, as if its matchups had been looked at and found unmeasurable. A
+-- scale measured from the platform's reported totals of such seasons is #57's to design.
+--
 -- RATE CONVERSION. A rate's value over replacement arrives in numerator units over the
 -- player's own denominator (earned runs x 27 saved over his outs). Dividing by
 -- side_denominator turns it into the change it makes to a typical side's rate, which is
@@ -129,6 +135,11 @@ select
     margin_scales.margin_scale,
     side_denominators.side_denominator
 from {{ ref('int_fantasy__categories') }} as categories
+inner join {{ ref('int_fantasy__league_seasons') }} as league_seasons
+    on league_seasons.platform = categories.platform
+    and league_seasons.league_id = categories.league_id
+    and league_seasons.season = categories.season
+    and league_seasons.has_rosters
 left join margin_scales
     on margin_scales.platform = categories.platform
     and margin_scales.league_id = categories.league_id
