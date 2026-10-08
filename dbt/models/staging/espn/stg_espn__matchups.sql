@@ -50,4 +50,4 @@ from matchups
 -- "who played whom", and a bye has no opponent and no category results. The team's
 -- advancement is still visible in the bracket via playoff_tier on its next matchup.
 where {{ fo_json_int('matchup', '$.away.teamId') }} is not null
-{{ fo_latest_by_entity(['league_id', 'season', "matchup ->> '$.id'"]) }}
+{{ fo_latest_by_entity(['league_id', 'season', fo_json_string('matchup', '$.id') | trim]) }}

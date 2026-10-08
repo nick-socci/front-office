@@ -34,10 +34,13 @@ slot_keys as (
         league_id,
         season,
         fetched_at,
-        settings_payload,
+        -- keys and values unnested together stay paired, so no path is built from a key
         unnest(
-            json_keys(settings_payload, '$.settings.rosterSettings.lineupSlotCounts')
-        ) as slot_key
+            {{ fo_json_keys('settings_payload', '$.settings.rosterSettings.lineupSlotCounts') }}
+        ) as slot_key,
+        unnest(
+            {{ fo_json_values('settings_payload', '$.settings.rosterSettings.lineupSlotCounts') }}
+        ) as slot_value
     from header
 
 )
@@ -48,12 +51,7 @@ select
     try_cast(slot_keys.slot_key as bigint) as lineup_slot_id,
     slots.slot_abbrev as lineup_slot,
     slots.is_starting_slot,
-    try_cast(
-        json_extract_string(
-            slot_keys.settings_payload,
-            '$.settings.rosterSettings.lineupSlotCounts.' || slot_keys.slot_key
-        ) as bigint
-    ) as slot_count,
+    {{ fo_json_int('slot_keys.slot_value', '$') }} as slot_count,
     {{ fo_parse_fetched_at('slot_keys.fetched_at') }} as fetched_at
 from slot_keys
 left join {{ ref('espn_lineup_slots') }} as slots

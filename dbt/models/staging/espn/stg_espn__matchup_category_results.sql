@@ -40,29 +40,30 @@ matchups as (
 
 ),
 
-sides as (
-
-    select
-        league_id,
-        season,
-        fetched_at,
-        matchup,
-        unnest(['home', 'away']) as side
-    from matchups
-
-),
-
 stat_keys as (
 
+    -- One branch per side, so every JSON path is a constant. A bye has an empty `away`
+    -- object, whose teamId filter drops it, as before. Keys and values are unnested
+    -- together, so each stat_key stays paired with its own stat_value and no path is
+    -- built from a key.
+    {% for side in ['home', 'away'] %}
     select
         league_id,
         season,
         fetched_at,
         matchup,
-        side,
-        unnest(json_keys(matchup, '$.' || side || '.cumulativeScore.scoreByStat')) as stat_key
-    from sides
-    where json_extract_string(matchup, '$.' || side || '.teamId') is not null
+        '{{ side }}' as side,
+        {{ fo_json_int('matchup', '$.' ~ side ~ '.teamId') }} as team_id,
+        unnest(
+            {{ fo_json_keys('matchup', '$.' ~ side ~ '.cumulativeScore.scoreByStat') }}
+        ) as stat_key,
+        unnest(
+            {{ fo_json_values('matchup', '$.' ~ side ~ '.cumulativeScore.scoreByStat') }}
+        ) as stat_value
+    from matchups
+    where {{ fo_json_string('matchup', '$.' ~ side ~ '.teamId') }} is not null
+    {{ 'union all' if not loop.last }}
+    {% endfor %}
 
 ),
 
@@ -74,22 +75,11 @@ results as (
         fetched_at,
         side,
         stat_key,
-        try_cast(json_extract_string(matchup, '$.id') as bigint) as matchup_id,
-        try_cast(json_extract_string(matchup, '$.matchupPeriodId') as bigint) as matchup_period,
-        try_cast(json_extract_string(matchup, '$.' || side || '.teamId') as bigint) as team_id,
-        try_cast(
-            json_extract_string(
-                matchup,
-                '$.' || side || '.cumulativeScore.scoreByStat.' || stat_key || '.score'
-            ) as double
-        ) as score,
-        nullif(
-            json_extract_string(
-                matchup,
-                '$.' || side || '.cumulativeScore.scoreByStat.' || stat_key || '.result'
-            ),
-            ''
-        ) as result
+        team_id,
+        {{ fo_json_int('matchup', '$.id') }} as matchup_id,
+        {{ fo_json_int('matchup', '$.matchupPeriodId') }} as matchup_period,
+        try_cast({{ fo_json_string('stat_value', '$.score') }} as double) as score,
+        {{ fo_json_text('stat_value', '$.result') }} as result
     from stat_keys
 
 )

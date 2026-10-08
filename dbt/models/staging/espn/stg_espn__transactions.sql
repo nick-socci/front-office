@@ -108,7 +108,7 @@ select
     topic_id,
     {{ fo_json_text('message', '$.id') }} as transaction_id,
     to_timestamp({{ fo_json_int('message', '$.date') }} / 1000) as transacted_at,
-    {{ fo_eastern_date("to_timestamp(try_cast(message ->> '$.date' as bigint) / 1000)::timestamp") }}
+    {{ fo_eastern_date('to_timestamp(' ~ fo_json_int('message', '$.date') | trim ~ ' / 1000)::timestamp') }}
         as transaction_date,
     {{ fo_json_int('message', '$.messageTypeId') }} as message_type_id,
     activities.activity,
@@ -125,6 +125,6 @@ where activities.is_transaction is distinct from false
 -- Every page of a run shares one fetched_at, so recency cannot choose between two copies
 -- of a message that straddles a page boundary: the page (request_key) and topic do.
 {{ fo_latest_by_entity(
-    ['league_id', 'season', "message ->> '$.id'"],
+    ['league_id', 'season', fo_json_string('message', '$.id') | trim],
     order_by='fetched_at desc, request_key, topic_id'
 ) }}

@@ -48,4 +48,4 @@ select
     {{ fo_parse_fetched_at() }} as fetched_at
 from players
 where {{ fo_json_int('player', '$.stats.pitching.gamesPitched') }} = 1
-{{ fo_latest_by_entity(['game_pk', "player ->> '$.person.id'"]) }}
+{{ fo_latest_by_entity(['game_pk', fo_json_string('player', '$.person.id') | trim]) }}
