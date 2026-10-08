@@ -1,6 +1,6 @@
 # Roster fixtures on the fixture days, with ESPN's game lines — requirements
 
-Issue: #74 · Tier: M · Status: draft
+Issue: #74 · Tier: M · Status: approved 2026-10-07
 
 ## Problem
 

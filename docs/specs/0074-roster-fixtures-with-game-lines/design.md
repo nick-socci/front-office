@@ -44,7 +44,7 @@ builds, which is what CI is for.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0025](../../adr/0025-fixture-rosters-are-taken-from-the-mlb-fixture-days.md) | Fixture rosters are taken from the MLB fixture days, with ESPN's game lines | proposed |
+| [0025](../../adr/0025-fixture-rosters-are-taken-from-the-mlb-fixture-days.md) | Fixture rosters are taken from the MLB fixture days, with ESPN's game lines | accepted |
 
 ## Detailed design
 
