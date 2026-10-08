@@ -21,7 +21,8 @@ The first commit of the build accepts ADRs 0023 and 0024 and sets ADR 0021 to
    - Verify: `uv run pytest`, ruff, mypy. No request to ESPN.
 3. Land the 2026 schedule — `judgment` — expected values
    - One unauthenticated request: `uv run front-office backfill espn --season 2026 --only
-     pro-schedule`. Nothing else is fetched.
+     pro-schedule`. Nothing else is fetched. (The owner, 2026-10-07: the build runs it.
+     2026 only; no other season, and no run that reads the league credentials.)
    - Verify: one committed capture under `data/raw/espn/pro_schedule/season=2026/`; the
      first six expected values, read from its payload, posted on #73.
 4. Fixtures and isolation — `impl` — R6.1–R6.4
