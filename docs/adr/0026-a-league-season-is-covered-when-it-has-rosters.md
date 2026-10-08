@@ -1,6 +1,6 @@
 # 0026. A league-season is covered when it has rosters, and value models build only for covered ones
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-08
 - Spec: [0085-past-season-matchups](../specs/0085-past-season-matchups/design.md) · Issue: #85
 
@@ -36,9 +36,8 @@ rule, one because 2021's matchups carry no per-day breakdown.
 
 ## Decision
 
-Proposed: **option 1**. The owner chose the shared path on 2026-10-08, and on the same
-day agreed the model's grain, its single `has_rosters` column and the rule below. The
-status moves to accepted when the spec is approved.
+Chosen: **option 1**, by the owner on 2026-10-08, with the model's grain, its single
+`has_rosters` column and the rule below.
 
 `int_fantasy__league_seasons` has one row per league-season with settings loaded, and
 `has_rosters`. A model or test that needs rosters applies to league-seasons where it is
