@@ -3,6 +3,8 @@
 No test here touches the network or reads a real .env: every client has a fake transport.
 """
 
+import re
+
 import httpx
 import pytest
 from typer.testing import CliRunner
@@ -180,10 +182,11 @@ def test_an_unknown_only_value_is_refused_naming_both_accepted_values(tmp_path, 
 
 def test_audit_help_says_it_judges_a_season_landed_whole():
     """Catches the audit help omitting the --only matchups caveat (R1.5)."""
-    # The docstring is what Typer renders as the help body. The rendered output is not
-    # asserted on: where colour is forced, as in CI, an option name inside it is styled
-    # and the words are no longer adjacent.
-    assert CliRunner().invoke(cli.app, ["audit", "--help"]).exit_code == 0
-    text = " ".join((cli.audit.__doc__ or "").split())
+    # A wide terminal so the sentence is not wrapped, and the styling stripped: where
+    # colour is forced, as in CI, an option name in the help is wrapped in escape codes
+    # and its words are no longer adjacent.
+    result = CliRunner().invoke(cli.app, ["audit", "--help"], env={"COLUMNS": "200"})
+    assert result.exit_code == 0
+    text = " ".join(re.sub(r"\x1b\[[0-9;]*m", "", result.output).split())
     assert "--only matchups" in text
     assert "rosters" in text and "boxscores" in text
