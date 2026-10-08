@@ -13,10 +13,11 @@ The first commit of the build accepts ADR 0025.
      fixtures' entry counts and sizes, `rec_espn__player_day_differences` in CI.
    - Verify: the "now" column of the expected values, posted on #74; the second
      period's entry count filled in.
-2. The script — `impl` — R1.1–R1.3, R2.1–R2.4, R5.2
-   - pytest first, seen to fail: the date check on a made-up landing zone; the line
-     filter and allowlist on a made-up roster entry. Then the constant, the check,
-     `ESPN_STAT_LINE_FIELDS` and `build_espn_rosters`.
+2. The script — `impl` — R1.1–R1.5, R2.1–R2.4, R5.2
+   - pytest first, seen to fail: the date check, the season selection and the two-league
+     stop on a made-up landing zone; the line filter and allowlist on a made-up roster
+     entry. Then the constant, the checks, `latest_espn`, `ESPN_STAT_LINE_FIELDS` and
+     `build_espn_rosters`.
    - Verify: `uv run pytest ingestion/tests/test_make_fixtures.py`; ruff and mypy clean.
      No fixture regenerated yet.
 3. Regenerate — `impl` — R3.1–R3.4

@@ -59,6 +59,12 @@ builds, which is what CI is for.
   corresponding entry of the dates the script was given. Otherwise `SystemExit` naming
   the period, the dates found and the date wanted. This is what stops the constant and
   the dates drifting apart again, including when the script is run with other `--dates`.
+- `latest_espn` passes `season=2026` to `landed(...)`, with the scoring period as a
+  partition too where it has one, so the landing zone's own partition match selects the
+  captures and no path is searched for a substring (R1.4). Before any ESPN fixture is
+  built, the `league_id` partitions of the season's settings captures are collected
+  through `LandingZone.committed`; more than one stops generation with the count (R1.5).
+  The message gives the count, not the ids.
 - `ESPN_STAT_LINE_FIELDS = ("scoringPeriodId", "statSourceId", "statSplitTypeId",
   "externalId", "stats")`.
 - `build_espn_rosters`: after `rebuild(entry, ESPN_ROSTER_ENTRY_FIELDS)`, the entry's
@@ -108,6 +114,7 @@ approved and are not edited.
 |---|---|---|
 | R1.1, R1.3 | pytest: the committed roster and pro schedule fixtures hold periods 1 and 2, and every roster line's game is in the pro schedule fixture on the same period | rosters and schedule built from different days again |
 | R1.2, R5.2 | pytest on a made-up landing zone: a period whose games are on another date, or on two dates, stops generation | the constant and the dates drifting apart |
+| R1.4, R1.5, R5.2 | pytest on a made-up landing zone: a newer period-36 roster of another season is not chosen; two leagues in 2026 stop generation | a fixture built from another season or league once one is landed (#57) |
 | R2.1–R2.3, R5.1 | pytest of the committed rosters: five keys per line, source 0, split 5, the roster's own period; an entry with no line has no `stats` key | a projected or season-total line, or a field outside the allowlist, reaching a public file |
 | R2.4, R3.4 | the existing fixture tests and the privacy test, unchanged | a lost roster field; member data |
 | R3.1–R3.3 | `git status fixtures` after regeneration, in the build | an unrelated fixture changing with the landing zone |
@@ -145,5 +152,7 @@ approved and are not edited.
 
 | Source | Finding | Resolution |
 |---|---|---|
+| design-review | F1 (P1): matchup and transaction fixtures stay on other days, and whether that satisfies #74 is unresolved | Not changed: it is the owner's decision and is the first item under *Decisions for you* in the PR. The spec's title and goals claim only what it does |
+| design-review | F2 (P2): the date check validates the 2026 pro schedule but not the season or league of the roster captures `latest_espn` picks | Changed: R1.4 and R1.5. Sources are selected by the `season` partition, and a second league in the season stops generation |
 
 ## Amendments

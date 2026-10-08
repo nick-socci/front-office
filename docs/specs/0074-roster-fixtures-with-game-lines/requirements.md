@@ -72,6 +72,13 @@ passed, and CI's warnings fell from 6 to 3. The expected values below are from i
 - R1.2 THE SYSTEM SHALL fail fixture generation if the Eastern dates of those periods in
   the landed pro schedule are not exactly the MLB fixture dates, in order.
 - R1.3 THE SYSTEM SHALL keep renumbering them 1 and 2 everywhere they appear.
+- R1.4 THE SYSTEM SHALL take every ESPN fixture source from captures of season 2026
+  only. Today the newest capture is chosen by path among all seasons, so a roster of
+  period 36 landed for another season would be picked while the 2026 pro schedule still
+  passed R1.2.
+- R1.5 IF league captures of more than one league are landed for season 2026 THEN THE
+  SYSTEM SHALL fail fixture generation, saying how many leagues it found, and SHALL NOT
+  choose between them.
 
 ### R2. Game lines in the roster fixtures
 
@@ -108,7 +115,9 @@ passed, and CI's warnings fell from 6 to 3. The expected values below are from i
   has exactly the five allowlisted keys, source 0 and split type 5, and its roster's own
   fixture period; every line's `externalId` is a game of that period in the committed
   pro schedule fixture; both periods have at least one line with stats.
-- R5.2 THE SYSTEM SHALL have a pytest of R1.2 on a small made-up landing zone.
+- R5.2 THE SYSTEM SHALL have pytest of R1.2, R1.4 and R1.5 on a small made-up landing
+  zone: a period on the wrong date; a newer capture of the same period for another
+  season, which must not be chosen; two leagues in the season.
 - R5.3 THE SYSTEM SHALL correct the header comments of the three game-line tests, and
   the comments in `scripts/make_fixtures.py`, that say the fixture rosters carry no game
   lines or are from other days.
