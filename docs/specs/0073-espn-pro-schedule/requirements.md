@@ -26,7 +26,8 @@ in the schedule, each with the same period.
   only ESPN data again.
 - MLB's opening day goes back to being evidence from an independent source.
 - Every ESPN per-game stat line can be tied to a scheduled game and its date.
-- A league-season can be dated with nothing landed but ESPN data.
+- The model can date a league-season from ESPN data alone. (Whether a build with no MLB
+  season loaded should pass is not decided here: see R4.1.)
 - The 180 scoring dates of 2026 do not move.
 
 ## No-gos
@@ -113,6 +114,10 @@ in the schedule, each with the same period.
 
 - R4.1 THE SYSTEM SHALL keep `stg_espn__scoring_periods_start_on_opening_day`, SQL
   unchanged, with a header saying it is again a comparison of two independent sources.
+  It still fails for a league-season with no MLB season loaded, so a build of such a
+  season does not pass although its periods are dated. Whether that case becomes a
+  warning is left to #57, the first work that would load one; a test is not relaxed
+  here for a case that does not exist yet.
 - R4.2 THE SYSTEM SHALL keep the two game-line tests of #70 unchanged.
 - R4.3 THE SYSTEM SHALL fail the build for every ESPN per-game stat line whose game is
   not in `stg_espn__pro_games` for its season, or is there with another scoring period.
@@ -127,11 +132,16 @@ in the schedule, each with the same period.
   capture by the model's rule (R2.5), and compare in-progress settings captures (ADR
   0022) with that date, where it compares them with MLB opening day today.
 - R5.3 WHEN period 1's date differs from MLB opening day THE SYSTEM SHALL report an
-  error naming both; IF no MLB schedule is landed THEN THE SYSTEM SHALL report a warning
-  that there is nothing to confirm the date against.
+  error naming both; IF no MLB schedule is landed THEN THE SYSTEM SHALL report, in the
+  `espn` section, a warning that there is nothing to confirm the date against, where it
+  reports an error that periods cannot be dated today.
 - R5.4 IF games of the newest pro schedule imply more than one date for period 1 THEN
-  THE SYSTEM SHALL report an error with the dates and a count of games for each.
-- R5.5 THE SYSTEM SHALL leave the audit's other findings as they are.
+  THE SYSTEM SHALL report an error with the dates and a count of games for each; IF it
+  holds no game with a usable `date` and `scoringPeriodId` THEN THE SYSTEM SHALL report
+  an error that the capture dates nothing.
+- R5.5 THE SYSTEM SHALL leave the audit's other findings as they are. That includes the
+  `mlb` section's own error for a season with no committed MLB schedule: a season audited
+  with ESPN data alone still ends with that error, as R4.1's test still fails for it.
 
 ### R6. Fixtures and isolation
 
@@ -161,7 +171,8 @@ in the schedule, each with the same period.
   on the settings capture; a period with no game (a gap) is still dated; each season
   from its own schedule; no schedule gives null dates; each league to its own final
   period.
-- R7.4 THE SYSTEM SHALL have audit tests for R5.1 to R5.4.
+- R7.4 THE SYSTEM SHALL have audit tests for R5.1 to R5.4, including a capture with an
+  empty `proTeams` list.
 
 ## Expected values
 
@@ -181,6 +192,8 @@ not adjusted.
 | MLB opening day | 2026-03-25, equal to period 1 | `stg_espn__scoring_periods_start_on_opening_day` passes |
 | ESPN stat lines: distinct (period, game) | 2,339, all in the schedule with the same period | R4.3's test returns 0 rows |
 | Scheduled games in periods 1 to 180 | 2,366, of which 2,339 appear in stat lines | query |
+| R4.3's query with every scheduled period moved by one | 2,339 rows: every line is on another period | one-off query; shows the period comparison bites |
+| R4.3's query with one game removed from the schedule | as many rows as that game has (league, period) pairs in the lines, at least 1 | one-off query; shows the missing-game branch bites |
 | The two game-line tests of #70 | 0 rows each on the real season | `dbt build` |
 | Built tables other than the new one | all 36 identical apart from `fetched_at` | multiset comparison with a copy taken before |
 | Audit | 0 errors, 0 warnings; one pro schedule capture reported | `uv run front-office audit --season 2026` |

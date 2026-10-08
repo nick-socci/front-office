@@ -162,7 +162,10 @@ the same `left join` (R3.4). The header is rewritten: ESPN's schedule is the rul
   distinct (`league_id`, `season`, `scoring_period`, `espn_game_id`) of
   `stg_espn__player_game_stats` with no row in `stg_espn__pro_games` for that season and
   game, or with a different `scoring_period` there. 0 of 2,339 on 2026. Like the other
-  game-line tests it has nothing to compare in CI until #74.
+  game-line tests it has nothing to compare in CI until #74, and dbt has no unit tests
+  for a singular test. Its two branches are therefore shown to bite on the real season,
+  in the last task: with every scheduled period moved by one it must return all 2,339,
+  and with one game removed, that game's lines.
 - `stg_espn__scoring_periods_start_on_opening_day`: SQL unchanged. Its header says it is
   again two sources agreeing: period 1 from ESPN's schedule, opening day from MLB's.
 - The two game-line tests of #70 and the structural tests: unchanged.
@@ -176,13 +179,18 @@ the same `left join` (R3.4). The header is rewritten: ESPN's schedule is the rul
   periods cannot be dated` (R5.1), and the date comparisons below are skipped.
 - A helper mirrors the model: for each distinct game, the Eastern date of `date` minus
   (`scoringPeriodId` − 1) days. One distinct value → period 1's date. More than one →
-  ERROR listing each date with its number of games (R5.4), and no date is used.
+  ERROR listing each date with its number of games (R5.4), and no date is used. None,
+  because the capture has no game with a usable `date` and `scoringPeriodId` → ERROR
+  that the capture dates nothing. (The fetch refuses a response without a `proTeams`
+  list but does not count games: deciding what a usable game is belongs to the reader.)
 - `_check_league` receives period 1's date in place of `opening_day` for the in-progress
   comparison (R5.2). The wording changes from "MLB opening day" to "period 1 per ESPN's
   schedule".
 - Once per season: period 1's date ≠ MLB opening day → ERROR naming both; no MLB
   schedule → WARN, nothing to confirm against (R5.3). This restores the warning that #70
-  turned into an error, because MLB is the witness again and not the rule.
+  turned into an error, because MLB is the witness again and not the rule. The `mlb`
+  section still reports its own error for a season with no MLB schedule, unchanged
+  (R5.5): an audit of ESPN data alone does not come out clean, and is not meant to yet.
 - An INFO line reports the capture used and its number of games.
 
 ### Fixtures and isolation
@@ -229,7 +237,7 @@ for period 1, which is what MLB's opening day gave. Everything downstream joins 
 | R3.1–R3.5, R7.3 | unit tests on `stg_espn__scoring_periods` | dates from the settings capture; a gap undated; one season's date used for another; a silent drop |
 | R4.1 | the opening-day test on the real season and in CI | ESPN's period 1 not being MLB's first game |
 | R4.2, R4.4 | unchanged tests | a shift, gaps, repeats |
-| R4.3 | `stg_espn__player_game_stats_games_are_scheduled` | a stat line scored on a period its game is not scheduled on |
+| R4.3 | `stg_espn__player_game_stats_games_are_scheduled`; its two branches exercised by one-off queries on the real season | a stat line scored on a period its game is not scheduled on; a line whose game is not scheduled |
 | R5.1–R5.4, R7.4 | pytest in `test_audit.py` | an undatable league-season audited clean; a split schedule; a disagreement with MLB unreported |
 | R6.1, R6.4 | fixture privacy test; fixture content check in pytest | a field outside the allowlist; the wrong two periods |
 | R6.2, R6.3 | `test_make_multi_fixtures.py`; the isolation gate | a 2027 season dated from 2026; a single build with no schedule |
@@ -260,6 +268,10 @@ for period 1, which is what MLB's opening day gave. Everything downstream joins 
   played, so postponed games appear to stay on their original day. Not verified game by
   game; nothing here depends on it.
 - **Whether a postponed game's makeup gets a new ESPN id.** Not checked.
+- **Whether a season with no MLB data should build and audit clean.** The model dates
+  it; the opening-day test and the audit's `mlb` section still fail for it (R4.1, R5.5).
+  #57 decides, when such a season is first loaded: land MLB's schedule for it, or turn
+  the missing witness into a warning.
 - **Whether MLB files the Tokyo and Seoul openers as regular season.** With ESPN as the
   rule it no longer affects dates, only whether the opening-day test passes for 2024 and
   2025. For #57.
@@ -270,5 +282,9 @@ for period 1, which is what MLB's opening day gave. Everything downstream joins 
 
 | Source | Finding | Resolution |
 |---|---|---|
+| design-review | F1 (P1): the opening-day test fails with no MLB season loaded, which contradicts "dated from ESPN data alone" | Changed the goal, not the test: the model dates such a season, the build does not pass, and R4.1 says so. Relaxing the test is left to #57; listed for the owner |
+| design-review | F2 (P1): R5.3's warning cannot make an ESPN-only audit clean, because the `mlb` section errors on a missing schedule | Changed: R5.3 is scoped to the `espn` section and R5.5 says the `mlb` error stays. Same question as F1, same owner |
+| design-review | F3 (P2): a capture with no games passes the fetch check and has no audit error | Changed: R5.4 and the audit design add an error for a capture that dates nothing, with a test (R7.4). The build already fails on null dates |
+| design-review | F4 (P2): the scheduled-games test has no input in CI and no negative case | Not changed in CI: dbt cannot unit-test a singular test and the fixtures have no game lines until #74. Changed: two negative cases are run on the real season and are expected values |
 
 ## Amendments
