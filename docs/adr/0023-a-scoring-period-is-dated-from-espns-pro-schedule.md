@@ -1,6 +1,6 @@
 # 0023. A scoring period is dated from ESPN's pro schedule
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-07
 - Spec: [0073-espn-pro-schedule](../specs/0073-espn-pro-schedule/design.md) · Issue: #73
 - Supersedes: [0021](0021-a-scoring-period-is-dated-from-mlbs-schedule.md)

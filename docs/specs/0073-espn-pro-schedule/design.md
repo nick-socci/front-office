@@ -68,8 +68,8 @@ independent check exactly when it is needed.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0023](../../adr/0023-a-scoring-period-is-dated-from-espns-pro-schedule.md) | A scoring period is dated from ESPN's pro schedule; supersedes 0021 | proposed |
-| [0024](../../adr/0024-the-pro-schedule-is-a-season-level-capture-fetched-without-credentials.md) | The pro schedule is a season-level ESPN capture, fetched without credentials | proposed |
+| [0023](../../adr/0023-a-scoring-period-is-dated-from-espns-pro-schedule.md) | A scoring period is dated from ESPN's pro schedule; supersedes 0021 | accepted |
+| [0024](../../adr/0024-the-pro-schedule-is-a-season-level-capture-fetched-without-credentials.md) | The pro schedule is a season-level ESPN capture, fetched without credentials | accepted |
 
 ## Detailed design
 
