@@ -293,6 +293,6 @@ for period 1, which is what MLB's opening day gave. Everything downstream joins 
 | design-review | F1 (P1): the opening-day test fails with no MLB season loaded, which contradicts "dated from ESPN data alone" | Changed the goal, not the test: the model dates such a season, the build does not pass, and R4.1 says so. Relaxing the test is left to #57; listed for the owner |
 | design-review | F2 (P1): R5.3's warning cannot make an ESPN-only audit clean, because the `mlb` section errors on a missing schedule | Changed: R5.3 is scoped to the `espn` section and R5.5 says the `mlb` error stays. Same question as F1, same owner |
 | design-review | F3 (P2): a capture with no games passes the fetch check and has no audit error | Changed: R5.4 and the audit design add an error for a capture that dates nothing, with a test (R7.4). The build already fails on null dates |
-| design-review | F4 (P2): the scheduled-games test has no input in CI and no negative case | Not changed in CI: dbt cannot unit-test a singular test and the fixtures have no game lines until #74. Changed: two negative cases are run on the real season and are expected values |
+| design-review | F4 (P2): the scheduled-games test has no input in CI and no negative case | Not changed in CI: dbt cannot unit-test a singular test and the fixtures have no game lines until #74. Changed: two negative cases are run on the real season and are expected values. The owner accepted the gap until #74 on 2026-10-07 |
 
 ## Amendments
