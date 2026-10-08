@@ -1,10 +1,11 @@
 -- Independent check of the scoring-period dates against ESPN's own game lines: on each
 -- scoring period, ESPN never scores more games than MLB played on the mapped date.
 --
--- The model dates periods from MLB's opening day (ADR 0021), so MLB's schedule cannot
--- check its own date. ESPN's player_game_stats rows, keyed by scoring period, are the
--- other source. This catches a whole-season shift of the mapping: shifted by a day or
--- more, many periods are held against a day with fewer games.
+-- The model dates periods from ESPN's pro schedule (ADR 0023); this test remains the
+-- cross-source count check against MLB's games. ESPN's player_game_stats rows, keyed by
+-- scoring period, are compared with MLB's schedule. This catches a whole-season shift of
+-- the mapping: shifted by a day or more, many periods are held against a day with fewer
+-- games.
 --
 -- It compares counts, not games (ESPN's game ids are not MLB's), so it is a partial
 -- signal: it shows there were enough games that day, not that they were the same games.

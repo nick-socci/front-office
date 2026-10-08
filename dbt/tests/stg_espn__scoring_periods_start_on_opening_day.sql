@@ -1,9 +1,9 @@
 -- Each league-season's fantasy scoring period 1 is MLB's opening day of that same season.
 --
--- The model is built from opening day, so this is no longer two independent sources
--- agreeing; the independent check is stg_espn__scoring_periods_agree_with_espn_game_lines.
--- This test catches an error in the period arithmetic (an off-by-one in period 1) and a
--- league-season with no MLB season loaded.
+-- Two independent sources agreeing again: period 1 comes from ESPN's own pro schedule
+-- (ADR 0023), opening day from MLB's games. That they land on the same date is real
+-- evidence the mapping is right. The test also fails for a league-season with no MLB season
+-- loaded (whether that becomes a warning is left to #57) and for one with no period 1.
 --
 -- Compared per season: with two seasons loaded, holding a 2027 league to 2026's opening
 -- day (the earliest MLB date of everything loaded) would fail for the wrong reason, or
