@@ -159,6 +159,9 @@ confirms it.
   regular-season game on those dates, generation stops (R3.2) and that is the answer to
   the question, taken to the owner.
 - No 2025 boxscore, roster, team, transaction or id-map row is added.
+- The owner agreed on 2026-10-08 that the fixture is the real 2025 season, trimmed, not
+  a made-up one: two real matchups' category totals, with no member data, as the 2026
+  fixtures already hold.
 - `scripts/make_multi_fixtures.py` copies the base tree, so the 2025 season of league
   111111 arrives with it. Today the generator then reads every ESPN and MLB capture of
   the base tree as its source for the second league and for 2027, with no season
