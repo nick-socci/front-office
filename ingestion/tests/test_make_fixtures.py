@@ -198,3 +198,51 @@ def test_boxscore_fixtures_and_the_correction_are_read_and_written_as_directorie
     corrected = json.loads(written[1].read_text())
     assert corrected["teams"]["home"]["teamStats"]["batting"]["hits"] == 4
     assert Path(written[1].parent / "meta.json").exists()
+
+
+def test_committed_pro_schedule_fixture_is_the_allowlist_and_the_fixture_dates():
+    """Catches a field outside the allowlist reaching the committed pro schedule (a team
+    name, a flag), a wrong period slice, and games off the MLB fixture dates, which would
+    put the fixture's period 1 on the wrong day."""
+    from datetime import UTC, datetime
+    from zoneinfo import ZoneInfo
+
+    root = Path(__file__).resolve().parents[2] / "fixtures/landing"
+    captures = list(
+        LandingZone(root).committed(
+            source="espn", endpoint="pro_schedule", partitions={"season": 2026}
+        )
+    )
+    assert len(captures) == 1
+    assert captures[0].meta["partitions"] == {"season": 2026}
+    assert captures[0].meta["request_key"] == "view=proTeamSchedules_wl"
+    payload = captures[0].payload
+    assert set(payload) == {"settings"} and set(payload["settings"]) == {"proTeams"}
+    teams = payload["settings"]["proTeams"]
+    assert len(teams) == 31
+    games_by_period: dict[str, list[dict]] = {}
+    for team in teams:
+        assert set(team) <= {"id", "proGamesByScoringPeriod"}
+        for period, games in team.get("proGamesByScoringPeriod", {}).items():
+            for game in games:
+                assert set(game) == {
+                    "id",
+                    "date",
+                    "scoringPeriodId",
+                    "homeProTeamId",
+                    "awayProTeamId",
+                }
+                assert str(game["scoringPeriodId"]) == period
+                games_by_period.setdefault(period, []).append(game)
+    assert set(games_by_period) == {"1", "2"}
+    expected = {"1": (15, "2026-04-29"), "2": (11, "2026-04-30")}
+    for period, (count, day) in expected.items():
+        assert len({g["id"] for g in games_by_period[period]}) == count
+        assert len(games_by_period[period]) == 2 * count  # listed under both teams
+        for game in games_by_period[period]:
+            local = (
+                datetime.fromtimestamp(game["date"] / 1000, UTC)
+                .astimezone(ZoneInfo("America/New_York"))
+                .date()
+            )
+            assert local.isoformat() == day

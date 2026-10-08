@@ -61,7 +61,7 @@ def espn_meta(root: Path, league: str, season: int) -> list[dict]:
     return [
         json.loads(p.read_text())
         for p in sidecars(root / "espn")
-        if json.loads(p.read_text())["partitions"]["league_id"] == league
+        if json.loads(p.read_text())["partitions"].get("league_id") == league
         and json.loads(p.read_text())["partitions"]["season"] == season
     ]
 
@@ -159,3 +159,45 @@ def test_generator_ignores_a_stray_directory_that_is_not_a_capture(tmp_path):
     for name in ("meta.json", "payload.json"):
         expected[str((stray / name).relative_to(copy))] = (stray / name).read_bytes()
     assert tree(out) == expected
+
+
+def pro_schedule(season: int) -> tuple[dict, dict]:
+    (capture,) = LandingZone(COMMITTED).committed(
+        source="espn", endpoint="pro_schedule", partitions={"season": season}
+    )
+    return capture.meta, capture.payload
+
+
+def test_pro_schedule_is_season_level_and_2027_is_one_period_on_the_2027_day():
+    """Catches a pro schedule relabelled per league (it has no league), a 2027 schedule
+    that still has period 2 or unshifted dates, and one whose period 1 is not the day the
+    rest of 2027 calls period 1."""
+    from datetime import UTC, datetime
+    from zoneinfo import ZoneInfo
+
+    assert not list(COMMITTED.glob("espn/pro_schedule/**/league_id=*"))
+    meta_2026, payload_2026 = pro_schedule(2026)
+    assert payload_2026 == json.loads(
+        (next((SINGLE / "espn/pro_schedule/season=2026").glob("*/payload.json"))).read_text()
+    )
+    meta, payload = pro_schedule(2027)
+    assert meta["partitions"] == {"season": 2027}
+    assert meta["url"].endswith("/seasons/2027")
+    schedule = json.loads(
+        next((COMMITTED / "mlb/schedule/season=2027").rglob("payload.json")).read_text()
+    )
+    day = schedule["dates"][0]["date"]
+    periods = set()
+    games = 0
+    for team in payload["settings"]["proTeams"]:
+        for period, listed in team.get("proGamesByScoringPeriod", {}).items():
+            periods.add(period)
+            for game in listed:
+                games += 1
+                local = (
+                    datetime.fromtimestamp(game["date"] / 1000, UTC)
+                    .astimezone(ZoneInfo("America/New_York"))
+                    .date()
+                )
+                assert local.isoformat() == day
+    assert periods == {"1"} and games > 0

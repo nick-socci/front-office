@@ -2,7 +2,8 @@
 
 Spec 0028 R5.3, ADR 0013. Loads fixtures/landing_multi/ into one warehouse and builds it;
 then, for each of the four league-seasons, builds that league-season ALONE (its ESPN
-folders, its season's MLB folders, the id map) into a warehouse of its own; then compares
+folders, plus the season-level ESPN captures such as the pro schedule, its season's MLB
+folders, the id map) into a warehouse of its own; then compares
 every model. Any model whose rows for a league-season differ between the combined build and
 the single build is named. Exit 1 if any differ or any dbt step failed.
 
@@ -90,7 +91,11 @@ def load(root: Path, db: Path) -> int:
 
 
 def copy_single(league: str, season: int, target: Path) -> None:
-    """One league-season's ESPN folders, its season's MLB folders, and the id map."""
+    """One league-season's ESPN folders, its season's MLB folders, and the id map.
+
+    An ESPN endpoint whose season partition has no `league_id=` level (the pro schedule
+    belongs to a season, not a league) is copied whole for that season.
+    """
     for source in sorted(MULTI_ROOT.iterdir()):
         for endpoint in sorted(source.iterdir()):
             if source.name == "idmap":
@@ -99,7 +104,10 @@ def copy_single(league: str, season: int, target: Path) -> None:
             for partition in sorted(endpoint.iterdir()):
                 if partition.name != f"season={season}":
                     continue
-                if source.name == "espn":
+                season_level = source.name == "espn" and not any(
+                    child.name.startswith("league_id=") for child in partition.iterdir()
+                )
+                if source.name == "espn" and not season_level:
                     shutil.copytree(
                         partition / f"league_id={league}",
                         target / "espn" / endpoint.name / partition.name / f"league_id={league}",
