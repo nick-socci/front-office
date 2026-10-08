@@ -1,12 +1,13 @@
 """AGENTS.md: all JSON access goes through ``fo_json_*``; models never write DuckDB JSON syntax.
 
 The BigQuery migration only works if the DuckDB spelling lives in ``dbt/macros/json.sql``
-alone, so this scans every model and singular test for it (spec 79, AC1 and AC7). Macros are
-the one place allowed to spell it, so ``dbt/macros/`` is not scanned.
+alone, so this scans every model, singular test and macro for it (spec 79, AC1 and AC7).
+``json.sql`` is the one file allowed to spell it: a macro that builds on JSON, such as
+``fo_boxscore_players``, calls the ``fo_json_*`` accessors like a model does.
 
 ``->`` is flagged wherever it appears, not only as ``->>``: no model uses a lambda
 (``x -> ...``), and a JSON arrow and a lambda arrow cannot be told apart without a parser.
-If a lambda is ever needed, wrap it in a macro.
+If a lambda is ever needed, this check has to learn to tell them apart first.
 """
 
 import re
@@ -15,7 +16,9 @@ from pathlib import Path
 import pytest
 
 DBT_ROOT = Path(__file__).resolve().parents[2] / "dbt"
-SCANNED_DIRS = ("models", "tests")
+SCANNED_DIRS = ("models", "tests", "macros")
+# The one file that may spell DuckDB's JSON syntax.
+JSON_MACROS = DBT_ROOT / "macros" / "json.sql"
 
 # SQL line comments and Jinja comments (which may span lines): leftmost match wins, so a
 # "--" inside a {# #} block, or a {# inside a "--" line, is handled by whichever comes first.
@@ -48,12 +51,17 @@ def json_syntax_violations(sql: str) -> list[tuple[int, str]]:
 
 
 def _sql_files() -> list[Path]:
-    return sorted(p for d in SCANNED_DIRS for p in (DBT_ROOT / d).rglob("*.sql"))
+    return sorted(
+        p for d in SCANNED_DIRS for p in (DBT_ROOT / d).rglob("*.sql") if p != JSON_MACROS
+    )
 
 
-def test_no_dbt_model_or_test_writes_duckdb_json_syntax() -> None:
-    """Catches DuckDB JSON syntax creeping back into a model or singular test."""
+def test_no_dbt_model_test_or_macro_writes_duckdb_json_syntax() -> None:
+    """Catches DuckDB JSON syntax creeping back into a model, a singular test or a macro
+    other than json.sql."""
     assert _sql_files(), "found no .sql files: DBT_ROOT is wrong"
+    assert JSON_MACROS.exists() and JSON_MACROS not in _sql_files()
+    assert any(p.parent.name == "macros" for p in _sql_files()), "macros are not scanned"
     problems = [
         f"{path.relative_to(DBT_ROOT.parent)}:{number}: {what}"
         for path in _sql_files()
