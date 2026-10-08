@@ -120,8 +120,8 @@ in the schedule, each with the same period.
   unchanged, with a header saying it is again a comparison of two independent sources.
   It still fails for a league-season with no MLB season loaded, so a build of such a
   season does not pass although its periods are dated. Whether that case becomes a
-  warning is left to #57, the first work that would load one; a test is not relaxed
-  here for a case that does not exist yet.
+  warning is left to #57, the first work that would load one (the owner, 2026-10-07); a
+  test is not relaxed here for a case that does not exist yet.
 - R4.2 THE SYSTEM SHALL keep the two game-line tests of #70 unchanged.
 - R4.3 THE SYSTEM SHALL fail the build for every ESPN per-game stat line whose game is
   not in `stg_espn__pro_games` for its season, or is there with another scoring period.
