@@ -11,8 +11,9 @@ checks the files themselves:
   mlb      every played game in the newest schedule has a boxscore, and one was captured
            a settle window (7 days) after its first capture that postdates the game's last
            scheduled start, by the same functions the backfill uses (specs/0030)
-  espn     every scoring period has a roster captured after the period closed; the
-           scoring-date anchor is stable across snapshots and lands on MLB opening day;
+  espn     every scoring period has a roster captured after the period closed; period 1's
+           date comes from ESPN's pro schedule (ADR 0023), is confirmed against MLB
+           opening day, and is the date every in-progress snapshot implies;
            league snapshots postdate the season; the transaction log is not truncated
 
 ERROR means the data cannot be relied on as it stands. WARN means the evidence that it
@@ -90,6 +91,12 @@ class Capture:
 def eastern_date(fetched_at: str) -> dt.date:
     """The Eastern calendar date of a compact UTC stamp like 20260926T162307Z."""
     instant = dt.datetime.strptime(fetched_at, "%Y%m%dT%H%M%SZ").replace(tzinfo=dt.UTC)
+    return instant.astimezone(EASTERN).date()
+
+
+def eastern_date_of_epoch_ms(epoch_ms: int) -> dt.date:
+    """The Eastern calendar date of an epoch-millisecond instant, as ESPN stamps a game."""
+    instant = dt.datetime.fromtimestamp(epoch_ms // 1000, tz=dt.UTC)
     return instant.astimezone(EASTERN).date()
 
 
@@ -483,10 +490,64 @@ def check_mlb(
 # -- espn ------------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class ProSchedule:
+    """What the newest pro schedule capture says about period 1, read once per season.
+
+    `capture` is None when none is landed. `dates` maps each implied period-1 date to its
+    number of distinct games; `period_one` is set only when there is exactly one."""
+
+    capture: Capture | None
+    dates: Mapping[dt.date, int]
+
+    @property
+    def games(self) -> int:
+        return sum(self.dates.values())
+
+    @property
+    def period_one(self) -> dt.date | None:
+        return next(iter(self.dates)) if len(self.dates) == 1 else None
+
+
+def pro_schedule_dates(payload: Any) -> dict[dt.date, int]:
+    """Period 1's date implied by each distinct game, with the number of games implying it.
+
+    Mirrors stg_espn__pro_games and stg_espn__scoring_periods: the Eastern date of the
+    game's `date` minus (`scoringPeriodId` - 1) days. A game is listed under both its teams,
+    so games are distinct by (id, date, period). A shape the model could not read is
+    skipped, not an error: a schedule left with no game then dates nothing.
+    """
+    settings = payload.get("settings") if isinstance(payload, dict) else None
+    teams = settings.get("proTeams") if isinstance(settings, dict) else None
+    games: set[tuple[str, int, int]] = set()
+    for team in teams if isinstance(teams, list) else []:
+        by_period = team.get("proGamesByScoringPeriod") if isinstance(team, dict) else None
+        for listed in by_period.values() if isinstance(by_period, dict) else []:
+            for game in listed if isinstance(listed, list) else []:
+                if not isinstance(game, dict):
+                    continue
+                date, period = game.get("date"), game.get("scoringPeriodId")
+                if (
+                    isinstance(date, int)
+                    and isinstance(period, int)
+                    and not isinstance(date, bool)
+                    and not isinstance(period, bool)
+                ):
+                    games.add((str(game.get("id")), date, period))
+    counts: Counter[dt.date] = Counter(
+        eastern_date_of_epoch_ms(date) - dt.timedelta(days=period - 1) for _, date, period in games
+    )
+    return dict(sorted(counts.items()))
+
+
 def check_espn(
     captures: list[Capture], *, season: int, opening_day: dt.date | None
 ) -> list[Finding]:
-    """Roster finality, calendar anchor and league-snapshot completeness, per league."""
+    """Roster finality, calendar anchor and league-snapshot completeness, per league.
+
+    The pro schedule is a fact about the season, so it is read once; its findings are
+    reported once per league, under that league's subject, like the other ESPN findings.
+    """
     leagues = sorted(
         {
             capture.partition("league_id") or ""
@@ -497,16 +558,87 @@ def check_espn(
     )
     if not leagues:
         return [Finding(Severity.ERROR, "espn", f"espn {season}", "no committed settings capture")]
+    newest = _newest(captures, "espn", "pro_schedule", season=str(season))
+    schedule = ProSchedule(newest, {} if newest is None else pro_schedule_dates(newest.payload()))
     findings = []
     for league_id in leagues:
         findings += _check_league(
-            captures, season=season, league_id=league_id, opening_day=opening_day
+            captures,
+            season=season,
+            league_id=league_id,
+            schedule=schedule,
+            opening_day=opening_day,
         )
     return findings
 
 
+def _schedule_findings(
+    subject: str, schedule: ProSchedule, opening_day: dt.date | None
+) -> list[Finding]:
+    """The pro schedule's own findings (R5.1, R5.3, R5.4); a date is used only if clean."""
+    capture = schedule.capture
+    if capture is None:
+        return [
+            Finding(
+                Severity.ERROR,
+                "espn",
+                subject,
+                "no committed pro schedule capture, so scoring periods cannot be dated",
+            )
+        ]
+    stamp = capture.fetched_at
+    if not schedule.dates:
+        return [
+            Finding(
+                Severity.ERROR,
+                "espn",
+                subject,
+                f"pro schedule {stamp} dates nothing: it holds no game with a usable date "
+                "and scoringPeriodId",
+            )
+        ]
+    if schedule.period_one is None:
+        listed = ", ".join(f"{date} ({n} game(s))" for date, n in schedule.dates.items())
+        return [
+            Finding(
+                Severity.ERROR,
+                "espn",
+                subject,
+                f"pro schedule {stamp}: games imply different dates for period 1: {listed}",
+            )
+        ]
+    period_one = schedule.period_one
+    named = f"period 1 = {period_one} per ESPN's schedule ({stamp}, {schedule.games} games)"
+    if opening_day is None:
+        return [
+            Finding(Severity.INFO, "espn", subject, named),
+            Finding(
+                Severity.WARN,
+                "espn",
+                subject,
+                "no MLB schedule to confirm period 1 against; its date rests on ESPN's schedule",
+            ),
+        ]
+    if opening_day != period_one:
+        return [
+            Finding(
+                Severity.ERROR,
+                "espn",
+                subject,
+                f"period 1 = {period_one} per ESPN's schedule, but MLB opening day is "
+                f"{opening_day}",
+            )
+        ]
+    return [Finding(Severity.INFO, "espn", subject, f"{named}, and it is MLB opening day")]
+
+
 def _check_league(
-    captures: list[Capture], *, season: int, league_id: str, opening_day: dt.date | None
+    captures: list[Capture],
+    *,
+    season: int,
+    league_id: str,
+    schedule: ProSchedule,
+    opening_day: dt.date | None,
 ) -> list[Finding]:
     subject = f"espn {season} league {league_id}"
     league = [
@@ -544,9 +676,9 @@ def _check_league(
         return _check_transactions(pages, subject)
 
     # The scoring-date anchor: an in-progress snapshot implies a date for period 1, which must
-    # be MLB opening day or stg_espn__scoring_periods shifts. Only in-progress snapshots are
-    # compared: ESPN's game-wide counter stops one past the last day with a pro game, so after
-    # the final period it is not a date (ADR 0022).
+    # be the one ESPN's pro schedule gives or the model's dates shift. Only in-progress
+    # snapshots are compared: ESPN's game-wide counter stops one past the last day with a pro
+    # game, so after the final period it is not a date (ADR 0022).
     in_progress: dict[str, int] = {}
     past_final = []
     unreadable = []
@@ -574,21 +706,14 @@ def _check_league(
                 f"finalScoringPeriod, so not dated; {_sample(unreadable)}",
             )
         )
-    if opening_day is None:
-        findings.append(
-            Finding(
-                Severity.ERROR,
-                "espn",
-                subject,
-                "no MLB schedule landed, so scoring periods cannot be dated",
-            )
-        )
-    else:
+    findings += _schedule_findings(subject, schedule, opening_day)
+    period_one = schedule.period_one
+    if period_one is not None:
         implied = {
             stamp: eastern_date(stamp) - dt.timedelta(days=latest_period - 1)
             for stamp, latest_period in in_progress.items()
         }
-        off = {stamp: date for stamp, date in implied.items() if date != opening_day}
+        off = {stamp: date for stamp, date in implied.items() if date != period_one}
         if off:
             detail = ", ".join(f"{stamp} -> {date}" for stamp, date in sorted(off.items()))
             findings.append(
@@ -596,8 +721,8 @@ def _check_league(
                     Severity.ERROR,
                     "espn",
                     subject,
-                    f"in-progress settings capture(s) imply a period 1 other than opening day "
-                    f"({detail}), but MLB opening day is {opening_day}",
+                    f"in-progress settings capture(s) imply a period 1 other than ESPN's "
+                    f"schedule gives ({detail}); the schedule gives {period_one}",
                 )
             )
         elif implied:
@@ -607,7 +732,7 @@ def _check_league(
                     "espn",
                     subject,
                     f"{len(implied)} in-progress settings capture(s) imply period 1 = "
-                    f"{opening_day}, MLB opening day",
+                    f"{period_one}, as ESPN's schedule gives",
                 )
             )
     if past_final:

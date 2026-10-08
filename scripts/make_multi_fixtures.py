@@ -9,6 +9,9 @@ copies: they prove isolation (spec 0028, R5), not baseball.
     111111, 2027   the same, a ONE-scoring-period season on a calendar shifted 364 days
     222222, 2027   the 2027 one, league id changed
 
+ESPN's pro schedule belongs to a season, not a league: the 2026 capture is copied once, and
+one 2027 capture is derived (period 1 only, game dates shifted with the rest of 2027).
+
 Usage:  uv run python scripts/make_multi_fixtures.py
 """
 
@@ -173,6 +176,29 @@ def build_2027_espn(base: list[Capture], target_day: date, stamp_shift: timedelt
     return out
 
 
+def build_2027_pro_schedule(
+    base: list[Capture], target_day: date, stamp_shift: timedelta
+) -> Capture:
+    """The one pro schedule of 2027: period 1 of the 2026 one, on the shifted calendar."""
+    meta, payload = next((m, p) for m, p in base if m["endpoint"] == "pro_schedule")
+    meta = json.loads(json.dumps(meta))
+    payload = json.loads(json.dumps(payload))
+    meta["partitions"]["season"] = NEW_SEASON
+    meta["url"] = f"{ESPN_HOST}/apis/v3/games/flb/seasons/{NEW_SEASON}"
+    stamp = datetime.strptime(meta["fetched_at"], STAMP_FORMAT) + stamp_shift
+    meta["fetched_at"] = stamp.strftime(STAMP_FORMAT)
+    for team in payload["settings"]["proTeams"]:
+        by_period = team.get("proGamesByScoringPeriod")
+        if by_period is None:
+            continue
+        team["proGamesByScoringPeriod"] = {k: v for k, v in by_period.items() if k == "1"}
+        for game in team["proGamesByScoringPeriod"].get("1", []):
+            game["date"] = shift_epoch_ms(game["date"])
+            if eastern_date(game["date"]) != target_day:
+                raise SystemExit(f"pro game {game['id']} is not on the 2027 period-1 day")
+    return meta, payload
+
+
 def shift_day(text: str, fmt: str) -> str:
     return (datetime.strptime(text, fmt) + SHIFT).strftime(fmt)
 
@@ -224,7 +250,9 @@ def generate(input_root: Path, output_root: Path) -> dict[str, Any]:
 
     copy_tree(input_root, output_root)  # 111111/2026, MLB 2026 and the id map, untouched
 
-    base = read_captures(input_root, "espn")
+    espn = read_captures(input_root, "espn")
+    # Season-level captures have no league to relabel; they are handled on their own.
+    base = [c for c in espn if c[0]["endpoint"] != "pro_schedule"]
     mlb = read_captures(input_root, "mlb")
     schedule = next(p for m, p in mlb if m["endpoint"] == "schedule")
     first_day = date.fromisoformat(schedule["dates"][0]["date"])
@@ -254,6 +282,10 @@ def generate(input_root: Path, output_root: Path) -> dict[str, Any]:
             meta, payload, league=OTHER_LEAGUE, season=NEW_SEASON, stamp_shift=timedelta(0)
         )
         write_capture(output_root, new_meta, new_payload)
+
+    # The 2026 pro schedule was copied with the base tree; 2027 gets its own, once.
+    pro_meta, pro_payload = build_2027_pro_schedule(espn, target_day, espn_2027_shift)
+    write_capture(output_root, pro_meta, pro_payload)
 
     for meta, payload in build_2027_mlb(mlb):
         write_capture(output_root, meta, payload)

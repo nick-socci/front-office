@@ -101,6 +101,49 @@ def land_schedule(zone, games):
     )
 
 
+def epoch_ms(stamp):
+    """Epoch milliseconds, as ESPN writes a game's `date`, of an ISO UTC instant."""
+    instant = dt.datetime.fromisoformat(stamp).replace(tzinfo=dt.UTC)
+    return int(instant.timestamp() * 1000)
+
+
+def pro_game(game_id, when, period):
+    return {
+        "id": game_id,
+        "date": epoch_ms(when),
+        "scoringPeriodId": period,
+        "homeProTeamId": 1,
+        "awayProTeamId": 2,
+    }
+
+
+def land_pro_schedule(zone, games, *, fetched_at="20260320T120000Z", payload=None):
+    """A season-level pro schedule capture (no league_id), each game under both its teams,
+    as ESPN lists it. `payload` replaces the whole thing, for malformed shapes."""
+    if payload is None:
+        by_team = {team: {str(game["scoringPeriodId"]): [] for game in games} for team in (1, 2)}
+        for game in games:
+            for team in (1, 2):
+                by_team[team][str(game["scoringPeriodId"])].append(game)
+        payload = {
+            "settings": {
+                "proTeams": [
+                    {"id": team, "proGamesByScoringPeriod": periods}
+                    for team, periods in by_team.items()
+                ]
+            }
+        }
+    land(
+        zone,
+        "espn",
+        "pro_schedule",
+        {"season": SEASON},
+        payload,
+        fetched_at=fetched_at,
+        params={"view": "proTeamSchedules_wl"},
+    )
+
+
 def land_boxscore(zone, pk, fetched_at, payload=None):
     land(
         zone,
@@ -157,6 +200,7 @@ def zone(tmp_path):
     zone = LandingZone(root=tmp_path / "raw")
     land_schedule(zone, [schedule_game(1, "2026-03-25")])
     land_boxscore(zone, 1, "20260410T160000Z")
+    land_pro_schedule(zone, [pro_game(401, "2026-03-25T20:00:00", 1)])
     land_settings(zone, latest=3)
     for period in (1, 2):
         land_roster(zone, period)
@@ -185,8 +229,9 @@ def test_the_clean_world_audits_clean(zone):
     findings = audit(zone)
     assert problems(findings) == []
     info = details(findings, Severity.INFO)
-    assert "all 8 committed capture(s) loaded" in info
+    assert "all 9 committed capture(s) loaded" in info
     assert "1 settings capture(s) taken after the final period" in info
+    assert "period 1 = 2026-03-25 per ESPN's schedule (20260320T120000Z, 1 games)" in info
     assert "2 of 2 rosters captured after their period closed" in info
 
 
@@ -311,7 +356,7 @@ def test_a_clean_tree_has_no_layout_line_and_counts_checksums(zone):
     findings, _ = check_landing(zone)
     assert not [f for f in findings if f.subject == "layout"]
     info = details(findings, Severity.INFO)
-    assert "8 capture(s) checksum-verified, 0 with no recorded checksum" in info
+    assert "9 capture(s) checksum-verified, 0 with no recorded checksum" in info
 
 
 def test_a_capture_with_no_recorded_checksum_is_counted_not_failed(zone):
@@ -323,7 +368,7 @@ def test_a_capture_with_no_recorded_checksum_is_counted_not_failed(zone):
     meta_path.write_text(json.dumps(meta))
     findings, _ = check_landing(zone)
     assert problems(findings) == []
-    assert "7 capture(s) checksum-verified, 1 with no recorded checksum" in details(
+    assert "8 capture(s) checksum-verified, 1 with no recorded checksum" in details(
         findings, Severity.INFO
     )
 
@@ -657,7 +702,7 @@ def test_an_in_progress_capture_off_opening_day_is_an_error_naming_it(zone):
     errors = details(audit(zone), Severity.ERROR)
     assert "20260327T170000Z -> 2026-03-26" in errors
     assert "20260327T160000Z" not in errors
-    assert "MLB opening day is 2026-03-25" in errors
+    assert "the schedule gives 2026-03-25" in errors
 
 
 def test_in_progress_captures_that_all_imply_opening_day_are_information(zone):
@@ -667,30 +712,200 @@ def test_in_progress_captures_that_all_imply_opening_day_are_information(zone):
     land_settings(zone, latest=4, final=180, fetched_at="20260328T160000Z")
     findings = audit(zone)
     assert "period 1" not in details(findings, Severity.ERROR)
-    assert "2 in-progress settings capture(s) imply period 1 = 2026-03-25" in details(
-        findings, Severity.INFO
-    )
+    assert (
+        "2 in-progress settings capture(s) imply period 1 = 2026-03-25, as ESPN's schedule gives"
+    ) in details(findings, Severity.INFO)
 
 
-def test_period_one_must_be_mlb_opening_day(zone):
-    """An in-progress capture disagreeing with a later opening day is an error (R4.2)."""
+def test_period_one_per_the_schedule_must_be_mlb_opening_day(zone):
+    """Catches the two sources disagreeing unreported (R5.3). Settings agree with ESPN's
+    schedule here, so the only error is the schedule against MLB."""
     drop(zone, "espn/settings/**")
     land_settings(zone, latest=3, final=180)
     land_schedule(zone, [schedule_game(1, "2026-03-26")])
     errors = details(audit(zone), Severity.ERROR)
-    assert f"{RUN} -> 2026-03-25" in errors
-    assert "MLB opening day is 2026-03-26" in errors
+    assert "period 1 = 2026-03-25 per ESPN's schedule, but MLB opening day is 2026-03-26" in errors
+    assert "imply a period 1 other than" not in errors
 
 
-def test_no_schedule_means_scoring_periods_cannot_be_dated(zone):
-    """Catches the old WARN: without a schedule, nothing can be compared (R4.4)."""
+def test_in_progress_captures_are_compared_with_the_schedule_not_with_mlb(zone):
+    """Catches the comparison still using MLB opening day (R5.2): the capture implies
+    03-25, MLB says 03-26, ESPN's schedule says 03-25, so no capture is named."""
+    drop(zone, "espn/settings/**")
+    land_settings(zone, latest=3, final=180)
+    land_schedule(zone, [schedule_game(1, "2026-03-26")])
+    assert "imply a period 1 other than" not in details(audit(zone), Severity.ERROR)
+
+
+def test_no_mlb_schedule_is_a_warning_in_the_espn_section_and_the_mlb_error_stays(zone):
+    """Catches the old ESPN error (ADR 0023: MLB is a witness, not the rule), a lost
+    warning that nothing confirms period 1, and an MLB error that went missing (R5.3, R5.5)."""
     drop(zone, "mlb/schedule/**")
     land_settings(zone, latest=3, final=180, fetched_at="20260328T160000Z")
     findings = audit(zone)
-    assert "no MLB schedule landed, so scoring periods cannot be dated" in details(
-        findings, Severity.ERROR
+    assert "cannot be dated" not in details(findings, Severity.ERROR)
+    espn_warnings = [f.detail for f in findings if f.check == "espn" and f.severity == "WARN"]
+    assert any("no MLB schedule to confirm period 1" in w for w in espn_warnings)
+    assert any(
+        f.check == "mlb" and f.detail == "no committed schedule capture" and f.severity == "ERROR"
+        for f in findings
     )
-    assert "no MLB schedule to confirm" not in details(findings, Severity.WARN)
+    # The capture is still named, with its games.
+    assert "(20260320T120000Z, 1 games)" in details(findings, Severity.INFO)
+
+
+def test_no_pro_schedule_capture_means_periods_cannot_be_dated(zone):
+    """Catches an undated season passing (R5.1), and any date comparison made without a
+    date: an in-progress capture that would be off must not be named, and everything else
+    in the league check still runs."""
+    drop(zone, "espn/pro_schedule/**")
+    land_settings(zone, latest=2, final=180, fetched_at="20260327T170000Z")
+    findings = audit(zone)
+    errors = details(findings, Severity.ERROR)
+    assert "no committed pro schedule capture, so scoring periods cannot be dated" in errors
+    assert "imply a period 1" not in errors
+    assert "per ESPN's schedule" not in details(findings, Severity.INFO)
+    assert "rosters captured after their period closed" in details(findings, Severity.INFO)
+
+
+def test_a_pro_schedule_capture_is_not_a_league(zone):
+    """Catches a season-level capture (no league_id) being taken for a league with an
+    empty id: the error is reported once per real league only."""
+    drop(zone, "espn/pro_schedule/**")
+    findings = audit(zone)
+    subjects = {f.subject for f in findings if "cannot be dated" in f.detail}
+    assert subjects == {f"espn {SEASON} league {LEAGUE}"}
+
+
+def test_the_landing_section_counts_the_pro_schedule(zone):
+    """Catches the landing section special-casing endpoints (R5.5)."""
+    landing = [f.detail for f in audit(zone) if f.subject == "espn/pro_schedule"]
+    assert landing == ["1 committed capture(s)"]
+
+
+def test_games_implying_two_dates_for_period_one_are_an_error_and_no_date_is_used(zone):
+    """Catches a schedule that disagrees with itself being resolved silently (R5.4): the
+    error lists each date with its games, and no comparison is made with either."""
+    land_pro_schedule(
+        zone,
+        [
+            pro_game(401, "2026-03-25T20:00:00", 1),
+            pro_game(402, "2026-03-25T23:00:00", 1),
+            pro_game(403, "2026-03-27T20:00:00", 1),
+        ],
+        fetched_at="20260321T120000Z",
+    )
+    drop(zone, "espn/settings/**")
+    land_settings(zone, latest=2, final=180, fetched_at="20260327T170000Z")
+    findings = audit(zone)
+    errors = details(findings, Severity.ERROR)
+    assert (
+        "pro schedule 20260321T120000Z: games imply different dates for period 1: "
+        "2026-03-25 (2 game(s)), 2026-03-27 (1 game(s))"
+    ) in errors
+    assert "imply a period 1 other than" not in errors
+    assert "per ESPN's schedule, but MLB" not in errors
+    assert "per ESPN's schedule" not in details(findings, Severity.INFO)
+
+
+def test_a_game_listed_under_both_teams_counts_once(zone):
+    """Catches games counted per team: the count in the all-clear is distinct games."""
+    land_pro_schedule(
+        zone,
+        [pro_game(401, "2026-03-25T20:00:00", 1), pro_game(402, "2026-03-26T20:00:00", 2)],
+        fetched_at="20260321T120000Z",
+    )
+    assert "(20260321T120000Z, 2 games)" in details(audit(zone), Severity.INFO)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"settings": {"proTeams": []}},
+        {"settings": {"proTeams": [{"id": 1}]}},
+        {"settings": {"proTeams": [{"id": 1, "proGamesByScoringPeriod": {"1": []}}]}},
+    ],
+)
+def test_a_pro_schedule_with_no_games_dates_nothing(zone, payload):
+    """Catches an empty schedule (empty proTeams, a team with no games) being taken for a
+    date or silently ignored (R5.4, R7.4)."""
+    land_pro_schedule(zone, [], fetched_at="20260321T120000Z", payload=payload)
+    findings = audit(zone)
+    assert "pro schedule 20260321T120000Z dates nothing" in details(findings, Severity.ERROR)
+    assert "per ESPN's schedule" not in details(findings, Severity.INFO)
+
+
+def test_games_without_a_usable_date_or_period_date_nothing(zone):
+    """Catches games with a missing, boolean or text date or period being used (R5.4)."""
+    games = [
+        {"id": 1, "scoringPeriodId": 1},
+        {"id": 2, "date": epoch_ms("2026-03-25T20:00:00")},
+        {"id": 3, "date": True, "scoringPeriodId": 1},
+        {"id": 4, "date": epoch_ms("2026-03-25T20:00:00"), "scoringPeriodId": True},
+        {"id": 5, "date": "2026-03-25", "scoringPeriodId": 1},
+        {"id": 6, "date": epoch_ms("2026-03-25T20:00:00"), "scoringPeriodId": "1"},
+    ]
+    payload = {"settings": {"proTeams": [{"id": 1, "proGamesByScoringPeriod": {"1": games}}]}}
+    land_pro_schedule(zone, [], fetched_at="20260321T120000Z", payload=payload)
+    assert "pro schedule 20260321T120000Z dates nothing" in details(audit(zone), Severity.ERROR)
+
+
+def test_a_game_after_midnight_utc_counts_on_the_previous_eastern_date(zone):
+    """Catches a UTC date used for the fantasy day: 02:05 UTC on the 26th is the 25th in
+    New York, so period 1 is the 25th, not the 26th."""
+    land_pro_schedule(
+        zone, [pro_game(401, "2026-03-26T02:05:00", 1)], fetched_at="20260321T120000Z"
+    )
+    findings = audit(zone)
+    assert problems(findings) == []
+    assert "period 1 = 2026-03-25 per ESPN's schedule" in details(findings, Severity.INFO)
+
+
+def test_a_later_period_dates_period_one_by_subtracting_the_days(zone):
+    """Catches the period number being ignored: period 3 on 03-27 is period 1 on 03-25."""
+    land_pro_schedule(
+        zone, [pro_game(401, "2026-03-27T20:00:00", 3)], fetched_at="20260321T120000Z"
+    )
+    assert problems(audit(zone)) == []
+
+
+def test_the_newest_pro_schedule_capture_is_the_one_used(zone):
+    """Catches the first or an arbitrary capture being read: the older one is wrong, the
+    newer right, and the audit is clean; with the stamps swapped it is not."""
+    land_pro_schedule(
+        zone, [pro_game(401, "2026-03-30T20:00:00", 1)], fetched_at="20260310T120000Z"
+    )
+    findings = audit(zone)
+    assert problems(findings) == []
+    assert "(20260320T120000Z, 1 games)" in details(findings, Severity.INFO)
+    land_pro_schedule(
+        zone, [pro_game(401, "2026-03-30T20:00:00", 1)], fetched_at="20260322T120000Z"
+    )
+    assert "period 1 = 2026-03-30 per ESPN's schedule, but MLB opening day is 2026-03-25" in (
+        details(audit(zone), Severity.ERROR)
+    )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [],
+        "text",
+        {},
+        {"settings": []},
+        {"settings": {"proTeams": {}}},
+        {"settings": {"proTeams": ["x", None, 3]}},
+        {"settings": {"proTeams": [{"id": 1, "proGamesByScoringPeriod": []}]}},
+        {"settings": {"proTeams": [{"id": 1, "proGamesByScoringPeriod": {"1": "x"}}]}},
+        {"settings": {"proTeams": [{"id": 1, "proGamesByScoringPeriod": {"1": [1, None, "x"]}}]}},
+    ],
+)
+def test_malformed_pro_schedule_shapes_do_not_crash_the_audit(zone, payload):
+    """Catches an unguarded access in the schedule reader: each shape is skipped, and the
+    capture then dates nothing."""
+    land_pro_schedule(zone, [], fetched_at="20260321T120000Z", payload=payload)
+    findings = audit(zone)
+    assert "pro schedule 20260321T120000Z dates nothing" in details(findings, Severity.ERROR)
 
 
 def test_opening_day_comes_from_a_schedule_with_no_game_played_yet(zone):

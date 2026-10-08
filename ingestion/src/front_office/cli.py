@@ -13,16 +13,23 @@ from pathlib import Path
 from typing import Annotated
 
 import duckdb
+import httpx
 import typer
 
 from front_office import audit as landing_audit
 from front_office.espn import matchups as espn_matchups
+from front_office.espn import pro_schedule as espn_pro_schedule
 from front_office.espn import rosters as espn_rosters
 from front_office.espn import settings as espn_settings
 from front_office.espn import teams as espn_teams
 from front_office.espn import transactions as espn_transactions
-from front_office.espn.client import EspnCredentials, espn_client, load_env_file
-from front_office.http_client import AuthExpired, HttpClient
+from front_office.espn.client import (
+    EspnCredentials,
+    espn_client,
+    espn_public_client,
+    load_env_file,
+)
+from front_office.http_client import AuthExpired, HttpClient, RequestFailed
 from front_office.idmap import sfbb
 from front_office.landing import (
     LandingCollision,
@@ -144,6 +151,36 @@ def backfill_mlb(
                 raise typer.Exit(code=1)
 
 
+def land_pro_schedule(zone: LandingZone, season: int, fetched_at: str) -> Exception | None:
+    """Land the pro schedule with the public client; return the error if it failed.
+
+    A malformed response, a refused one, or retries running out are returned (and printed)
+    rather than raised, so the caller decides whether the run goes on. A 401 or 403 is one
+    of them: no cookies are sent, so it is not an expired login but ESPN asking for one,
+    and it must not end the league run as an expired login does (spec 0073, R1.7).
+    """
+    try:
+        with espn_public_client() as public:
+            path = espn_pro_schedule.backfill_pro_schedule(
+                zone=zone, client=public, season=season, fetched_at=fetched_at
+            )
+    except AuthExpired:
+        error: Exception = RuntimeError(
+            "ESPN refused the request, which carries no login; the view may now need one"
+        )
+        typer.echo(f"pro schedule: {error}", err=True)
+        return error
+    except (
+        espn_pro_schedule.ProScheduleMalformed,
+        RequestFailed,
+        httpx.HTTPStatusError,
+    ) as failure:
+        typer.echo(f"pro schedule: {failure}", err=True)
+        return failure
+    typer.echo(f"landed pro schedule -> {path}")
+    return None
+
+
 @backfill_app.command("espn")
 def backfill_espn(
     season: Annotated[int, typer.Option("--season", help="Season year, e.g. 2026.")],
@@ -151,18 +188,42 @@ def backfill_espn(
     refresh: Annotated[
         bool, typer.Option("--refresh", help="Re-fetch even settled scoring periods.")
     ] = False,
+    only: Annotated[
+        str | None,
+        typer.Option("--only", help="Limit to one endpoint: pro-schedule (needs no login)."),
+    ] = None,
 ) -> None:
-    """Back-fill ESPN league data: settings, teams, then one roster per scoring period."""
-    load_env_file()
-    credentials = EspnCredentials.from_env()
+    """Back-fill ESPN data: the pro schedule, then league settings, teams and rosters.
+
+    The pro schedule is public and fetched without credentials; a failure there is
+    reported and the league run goes on, then the command exits 1. `--only pro-schedule`
+    fetches just that, and needs no .env.
+    """
+    if only is not None and only != "pro-schedule":
+        raise typer.BadParameter(f"unknown endpoint: {only} (expected pro-schedule)")
+
     zone = LandingZone(root=raw_root)
     fetched_at = utc_stamp()
+
+    if only == "pro-schedule":
+        with writing_session(zone, fetched_at), exit_on_expired_auth():
+            pro_schedule_error = land_pro_schedule(zone, season, fetched_at)
+        if pro_schedule_error is not None:
+            raise typer.Exit(code=1)
+        return
+
+    load_env_file()
+    credentials = EspnCredentials.from_env()
 
     with (
         writing_session(zone, fetched_at),
         exit_on_expired_auth(),
         espn_client(credentials) as client,
     ):
+        # First, so the schedule is landed even if the league run later stops. It uses its
+        # own cookie-less client, never `client`.
+        pro_schedule_error = land_pro_schedule(zone, season, fetched_at)
+
         settings_path, settings_payload = espn_settings.backfill_settings(
             zone=zone,
             client=client,
@@ -228,7 +289,12 @@ def backfill_espn(
             typer.echo(f"failed scoring periods: {summary.failed_periods}", err=True)
         if summary.unproven:
             typer.echo(f"unproven scoring periods: {summary.unproven}", err=True)
-        if summary.failed or summary.unproven or transactions_error is not None:
+        if (
+            summary.failed
+            or summary.unproven
+            or transactions_error is not None
+            or pro_schedule_error is not None
+        ):
             raise typer.Exit(code=1)
 
 

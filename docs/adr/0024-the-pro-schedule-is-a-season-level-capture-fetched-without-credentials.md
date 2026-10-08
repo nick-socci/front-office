@@ -1,6 +1,6 @@
 # 0024. The pro schedule is a season-level ESPN capture, fetched without credentials
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-07
 - Spec: [0073-espn-pro-schedule](../specs/0073-espn-pro-schedule/design.md) · Issue: #73
 

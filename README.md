@@ -32,6 +32,10 @@ releases if the process dies. A roster capture's sidecar also records the league
 scoring-period status from its own response, which is what shows a period closed
 (ADR 0016).
 
+ESPN's pro schedule is landed as a season-level capture: it has no league and needs no
+credentials (ADR 0024). It is what dates scoring periods (ADR 0023): every scheduled game
+implies a date for period 1, and the build fails unless they all agree.
+
 The intermediate layer now builds platform-facing interfaces, roster days, MLB player
 days (including doubleheader aggregation), and started-player attribution. Marts and
 full-season matchup reconciliation are still pending.
@@ -42,7 +46,7 @@ flattening JSON, deduplicating at the entity grain, and converting to honest uni
 | Layer | Models |
 |---|---|
 | MLB | `stg_mlb__games`, `stg_mlb__batting_game_logs`, `stg_mlb__pitching_game_logs` |
-| ESPN | `stg_espn__league_settings`, `stg_espn__scoring_categories`, `stg_espn__scoring_periods`, `stg_espn__teams`, `stg_espn__roster_entries`, `stg_espn__matchups`, `stg_espn__matchup_category_results`, `stg_espn__transactions` |
+| ESPN | `stg_espn__league_settings`, `stg_espn__scoring_categories`, `stg_espn__scoring_periods`, `stg_espn__pro_games`, `stg_espn__teams`, `stg_espn__roster_entries`, `stg_espn__matchups`, `stg_espn__matchup_category_results`, `stg_espn__transactions` |
 | Crosswalk | `stg_idmap__players` (ESPN ↔ MLBAM player ids) |
 
 The recorded 2026 snapshot (2026-09-26): 2,430 scheduled games, 51,129 batting lines,

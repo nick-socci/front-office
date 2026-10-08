@@ -68,8 +68,8 @@ independent check exactly when it is needed.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0023](../../adr/0023-a-scoring-period-is-dated-from-espns-pro-schedule.md) | A scoring period is dated from ESPN's pro schedule; supersedes 0021 | proposed |
-| [0024](../../adr/0024-the-pro-schedule-is-a-season-level-capture-fetched-without-credentials.md) | The pro schedule is a season-level ESPN capture, fetched without credentials | proposed |
+| [0023](../../adr/0023-a-scoring-period-is-dated-from-espns-pro-schedule.md) | A scoring period is dated from ESPN's pro schedule; supersedes 0021 | accepted |
+| [0024](../../adr/0024-the-pro-schedule-is-a-season-level-capture-fetched-without-credentials.md) | The pro schedule is a season-level ESPN capture, fetched without credentials | accepted |
 
 ## Detailed design
 
@@ -296,3 +296,22 @@ for period 1, which is what MLB's opening day gave. Everything downstream joins 
 | design-review | F4 (P2): the scheduled-games test has no input in CI and no negative case | Not changed in CI: dbt cannot unit-test a singular test and the fixtures have no game lines until #74. Changed: two negative cases are run on the real season and are expected values. The owner accepted the gap until #74 on 2026-10-07 |
 
 ## Amendments
+
+- 2026-10-07, R1.7: a 401 or 403 on the pro schedule request is a pro schedule failure
+  like the others: reported, the league run goes on, exit 1 at the end. The request
+  carries no login, so it is not an expired one; it is the "ESPN starts asking for a
+  login" case the owner chose R1.7 for. The sentence above about an expired login ending
+  the run applies to the league's own requests, as before. A non-retryable status (a 404
+  for a withdrawn view) and a body that is not JSON are failures in the same way.
+- 2026-10-07, task order: task 5 (`stg_espn__pro_games`) was built before task 4. Its unit
+  tests need no fixture; its table was empty in CI until the fixture existed.
+- 2026-10-07, `stg_espn__pro_games`: the start is converted with `epoch_ms`, which gives a
+  UTC timestamp whatever the session time zone is, and not with the cast
+  `stg_espn__transactions` uses.
+- 2026-10-07, R5.4: the audit counts a game once per distinct (id, date, period), as the
+  model's `select distinct` does, so two listings of a game that disagree show up as
+  conflicting dates in both.
+- 2026-10-07, R7.3: against the model as it was, the replaced unit tests failed to
+  compile (they no longer supply `stg_mlb__games`, which that model read) and so were not
+  seen to return wrong rows. `scoring_periods_ignore_games_of_other_types` is removed:
+  the model no longer reads MLB's game types.

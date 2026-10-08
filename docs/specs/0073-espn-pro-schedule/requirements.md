@@ -1,6 +1,6 @@
 # ESPN's pro schedule: every scoring period is dated by ESPN's own games — requirements
 
-Issue: #73 · Tier: M · Status: draft
+Issue: #73 · Tier: M · Status: approved 2026-10-07
 
 ## Problem
 

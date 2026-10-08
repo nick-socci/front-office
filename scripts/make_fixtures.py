@@ -30,10 +30,10 @@ FIXTURE_ROOT = REPO_ROOT / "fixtures/landing"
 # churn the committed diff on every run.
 #
 # The stamp is the Eastern afternoon of the LAST fixture game date. Scoring periods are
-# no longer dated from it: stg_espn__scoring_periods counts from MLB's opening day
-# (ADR 0021), which in the fixture is the first of the two game dates. With the
-# renumbered scoring periods below, that gives a two-day season: period 1 = 2026-04-29,
-# period 2 = 2026-04-30, matching the MLB fixture games. The stamp itself stays, because
+# no longer dated from it: stg_espn__scoring_periods counts from the period-1 date the
+# pro schedule fixture implies (ADR 0023). That fixture is built from the real periods of
+# the two MLB fixture dates, so period 1 = 2026-04-29 and period 2 = 2026-04-30, matching
+# the MLB fixture games. The stamp itself stays, because
 # changing it would rename every fixture capture.
 FIXTURE_FETCHED_AT = "20260430T160000Z"
 
@@ -156,6 +156,13 @@ FIXTURE_LEAGUE_NAME = "Fixture League"
 # MLB fixture dates. The rosters are not from those dates, though: periods 100 and 101
 # are 2026-07-02 and 2026-07-03 (#74).
 FIXTURE_SOURCE_SCORING_PERIODS = (100, 101)
+
+# The real scoring periods of ESPN's pro schedule that the fixture keeps, renumbered 1 and 2.
+# They are 2026-04-29 and 2026-04-30, the MLB fixture dates (DEFAULT_DATES), which is what
+# puts the fixture's period 1 on 2026-04-29. They are deliberately NOT
+# FIXTURE_SOURCE_SCORING_PERIODS (100, 101), the rosters' source, which are other days (#74).
+FIXTURE_PRO_SCHEDULE_SOURCE_PERIODS = (36, 37)
+ESPN_PRO_GAME_FIELDS = ("id", "date", "scoringPeriodId", "homeProTeamId", "awayProTeamId")
 
 ESPN_SETTINGS_FIELDS = (
     "id",
@@ -453,6 +460,58 @@ def latest_espn(endpoint: str, scoring_period: int | None = None) -> dict[str, A
     return json.loads(sorted(candidates)[-1].read_text())
 
 
+def build_espn_pro_schedule() -> Path:
+    """ESPN's pro schedule: teams and games only, two real periods renumbered 1 and 2."""
+    candidates = landed("espn", "pro_schedule", season=2026)
+    if not candidates:
+        raise SystemExit(
+            "no landed espn/pro_schedule response for 2026: run `front-office backfill`"
+        )
+    payload = json.loads(sorted(candidates)[-1].read_text())
+    renumber = {
+        str(source): str(fixture)
+        for fixture, source in enumerate(FIXTURE_PRO_SCHEDULE_SOURCE_PERIODS, start=1)
+    }
+    teams: list[dict[str, Any]] = []
+    for team in payload["settings"]["proTeams"]:
+        rebuilt: dict[str, Any] = {"id": team["id"]}
+        by_period = team.get("proGamesByScoringPeriod")
+        if by_period is not None:
+            kept = {
+                renumber[period]: [
+                    rebuild(game, ESPN_PRO_GAME_FIELDS) | {"scoringPeriodId": int(renumber[period])}
+                    for game in games
+                ]
+                for period, games in by_period.items()
+                if period in renumber
+            }
+            if kept:
+                rebuilt["proGamesByScoringPeriod"] = dict(sorted(kept.items()))
+        teams.append(rebuilt)
+    fixture = {"settings": {"proTeams": teams}}
+    path = write_fixture(
+        source="espn",
+        endpoint="pro_schedule",
+        partitions={"season": 2026},
+        payload=fixture,
+        request={
+            "url": "https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb/seasons/2026",
+            "params": {"view": "proTeamSchedules_wl"},
+        },
+    )
+    game_ids = {
+        game["id"]
+        for team in teams
+        for games in team.get("proGamesByScoringPeriod", {}).values()
+        for game in games
+    }
+    print(
+        f"espn/pro_schedule: {len(teams)} teams, {len(game_ids)} distinct games "
+        f"-> {path.relative_to(REPO_ROOT)}"
+    )
+    return path
+
+
 def build_espn_settings() -> Path:
     payload = latest_espn("settings")
     fixture = rebuild(payload, ESPN_SETTINGS_FIELDS)
@@ -682,6 +741,7 @@ def main() -> None:
     args = parser.parse_args()
     build_mlb_schedule(tuple(args.dates))
     build_mlb_boxscores(tuple(args.dates))
+    build_espn_pro_schedule()
     build_espn_settings()
     build_espn_teams()
     roster_paths = build_espn_rosters()
