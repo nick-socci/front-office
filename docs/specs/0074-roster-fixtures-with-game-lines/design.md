@@ -149,7 +149,10 @@ approved and are not edited.
   306.** Not looked into. The model keeps only lines with stats, and the tests pass on
   both.
 - **Whether `…have_game_lines_to_check` should fail in CI and warn elsewhere.** dbt can
-  set severity by target. Not proposed: one test behaving two ways is its own decision.
+  set severity by target. The owner decided on 2026-10-07 that it stays a warning
+  everywhere: one test behaving two ways is harder to read than the risk is worth. Lines
+  disappearing from the fixtures is caught by the pytest of R5.1, which requires at
+  least one line with stats in each period.
 
 ## Review log
 
