@@ -180,8 +180,10 @@ def test_an_unknown_only_value_is_refused_naming_both_accepted_values(tmp_path, 
 
 def test_audit_help_says_it_judges_a_season_landed_whole():
     """Catches the audit help omitting the --only matchups caveat (R1.5)."""
-    result = CliRunner().invoke(cli.app, ["audit", "--help"])
-    assert result.exit_code == 0
-    text = " ".join(result.output.split())
+    # The docstring is what Typer renders as the help body. The rendered output is not
+    # asserted on: where colour is forced, as in CI, an option name inside it is styled
+    # and the words are no longer adjacent.
+    assert CliRunner().invoke(cli.app, ["audit", "--help"]).exit_code == 0
+    text = " ".join((cli.audit.__doc__ or "").split())
     assert "--only matchups" in text
     assert "rosters" in text and "boxscores" in text
