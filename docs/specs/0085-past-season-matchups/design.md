@@ -174,6 +174,11 @@ For each of 2018 to 2025: `backfill espn --season <year> --only matchups`, then 
 mlb --season <year> --only schedule`. Sixteen authenticated requests and sixteen public
 ones. Then `front-office load` and a full build.
 
+The owner approved these requests on 2026-10-08: for each season 2018 to 2025, settings
+and matchups with the login (16) and ESPN's pro schedule and MLB's schedule without it
+(16). A season is requested again only if its own request failed, and the build reports
+the final count.
+
 ## Test strategy
 
 | Requirement | Test | Catches |
