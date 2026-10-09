@@ -1420,13 +1420,14 @@ unit_tests:
 
   - name: replacement_levels_an_empty_pool_still_has_rows_with_a_null_level
     description: >
-      Free-agent days for a hitter and for a pitcher making his first start of the season,
-      and no reliever. The relief pool still gets a row per pitching component, with
-      pool_players 0, pool_played_days 0 and a null level: an inner join would drop the
-      kind, and a coalesce to 0 would say replacement relievers produce nothing. So does
-      the start pool: a first start is by nobody who was a starter yet (ADR 0029), so the
-      pool is empty whenever no start has an earlier turn behind it, as in a season's first
-      days (and as it was on the CI fixtures before #93).
+      Free-agent days for a hitter and for a pitcher starting after one relief outing, and
+      no free-agent reliever (the outing is on 05-31, before any scoring date, so it is
+      history and not a free-agent day). The relief pool still gets a row per pitching
+      component, with pool_players 0, pool_played_days 0 and a null level: an inner join
+      would drop the kind, and a coalesce to 0 would say replacement relievers produce
+      nothing. So does the start pool: a start by a pitcher who had relieved is not a
+      starter's yet (ADR 0029, 0031), so the pool is empty. It is a relief outing and not a
+      debut that makes it empty: since #92 a first start of the season is in the pool.
     model: int_fantasy__replacement_levels
     overrides:
       macros:
@@ -1442,6 +1443,7 @@ unit_tests:
       - input: ref('int_mlb__player_game_days')
         rows:
           - {season: 2026, mlbam_player_id: 900001, game_date: "2026-06-01", games_batted: 1, plate_appearances: 4, hits: 2}
+          - {season: 2026, mlbam_player_id: 900002, game_date: "2026-05-31", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
           - {season: 2026, mlbam_player_id: 900002, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
     expect:
       rows:
@@ -1627,10 +1629,12 @@ unit_tests:
   - name: replacement_levels_a_relief_pool_members_start_is_not_in_the_relief_level
     description: >
       900001 has three relief days (3 outs each) and then one start (27 outs); 900002 has two
-      starts. 900001 had been a reliever up to his start, so it is in no pool; 900002's
-      first start is in none either, and his second is the start pool. The relief level is
-      9 outs over 3 days: the start is in neither pool_total nor pool_played_days of
-      relief. Catches a swingman's starts leaking into the relief level.
+      starts. 900001 had been a reliever up to his start, so it is in no pool; both of
+      900002's starts are in the start pool, the first as a debut (#92) and the second as
+      a start by a pitcher who had started. The start level is 36 outs over 2 days. The
+      relief level is 9 outs over 3 days: 900001's start is in neither pool_total nor
+      pool_played_days of relief. Catches a swingman's starts leaking into the relief
+      level.
     model: int_fantasy__replacement_levels
     overrides:
       macros:
@@ -1659,10 +1663,10 @@ unit_tests:
         - {day_kind: batting, component: games_batted, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
         - {day_kind: batting, component: plate_appearances, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
         - {day_kind: batting, component: hits, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
-        - {day_kind: start, component: games_pitched, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
-        - {day_kind: start, component: games_started, pool_players: 1, pool_played_days: 1, pool_total: 1, level_per_played_day: 1}
-        - {day_kind: start, component: outs_recorded, pool_players: 1, pool_played_days: 1, pool_total: 18, level_per_played_day: 18}
-        - {day_kind: start, component: batters_faced, pool_players: 1, pool_played_days: 1, pool_total: 24, level_per_played_day: 24}
+        - {day_kind: start, component: games_pitched, pool_players: 1, pool_played_days: 2, pool_total: 2, level_per_played_day: 1}
+        - {day_kind: start, component: games_started, pool_players: 1, pool_played_days: 2, pool_total: 2, level_per_played_day: 1}
+        - {day_kind: start, component: outs_recorded, pool_players: 1, pool_played_days: 2, pool_total: 36, level_per_played_day: 18}
+        - {day_kind: start, component: batters_faced, pool_players: 1, pool_played_days: 2, pool_total: 48, level_per_played_day: 24}
         - {day_kind: relief, component: games_pitched, pool_players: 1, pool_played_days: 3, pool_total: 3, level_per_played_day: 1}
         - {day_kind: relief, component: games_started, pool_players: 1, pool_played_days: 3, pool_total: 0, level_per_played_day: 0}
         - {day_kind: relief, component: outs_recorded, pool_players: 1, pool_played_days: 3, pool_total: 9, level_per_played_day: 3}
@@ -1671,17 +1675,19 @@ unit_tests:
   - name: replacement_levels_the_start_pool_is_every_free_agent_start_by_a_starter_at_the_time
     description: >
       One fantasy team (N = 1) and ten scoring dates. 900001 and 900002 each start twice:
-      their first starts are in no pool (nobody is a starter on his first day) and their
-      second ones are both in, two pitchers where a cut at N would keep one. Left out, each
-      marked by 100 batters faced: 900003, an opener, starts after three relief days;
-      900004's second start comes on a day league 1 rosters him; 900005 relieves twice and
-      then starts twice, so over the season half his games are starts, and on neither day
-      had half been; 900006 started in 2025 and makes his first 2026 appearance. League 2
-      rosters 900002 on his second start, and he is still a free agent in league 1. The
-      start level is 27 outs and 36 batters over 2 days. The relief pool, still ranked and
-      cut at N, is 900003's three days. Catches: a cap on the start pool; a first start,
-      an opener or a rostered start in it; a role decided with the whole season, or from
-      another season; another league's roster removing a free agent (ADR 0029).
+      the first starts are in as debuts (#92) and the second ones as starts by a pitcher
+      who had started, two pitchers where a cut at N would keep one. 900004 makes a debut
+      start, which is in, and a second start on a day league 1 rosters him, which is not.
+      900006 started in 2025 and makes his first 2026 appearance, a debut: the 2025 start
+      is not an earlier pitching day. Left out, each marked by 100 batters faced: 900003,
+      an opener, starts after three relief days; 900005 relieves twice and then starts
+      twice, so over the season half his games are starts, and on neither day had half
+      been, nor had his last two appearances been starts. League 2 rosters 900002 on his
+      second start, and he is still a free agent in league 1. The start level is 99 outs
+      and 132 batters over 6 days by 4 pitchers. The relief pool, still ranked and cut at
+      N, is 900003's three days. Catches: a cap on the start pool; a debut left out; an
+      opener or a rostered start in it; a role decided with the whole season, or from
+      another season; another league's roster removing a free agent (ADR 0029, 0031).
     model: int_fantasy__replacement_levels
     overrides:
       macros:
@@ -1722,7 +1728,133 @@ unit_tests:
           - {season: 2026, mlbam_player_id: 900005, game_date: "2026-06-04", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 100}
           - {season: 2026, mlbam_player_id: 900005, game_date: "2026-06-08", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 100}
           - {season: 2025, mlbam_player_id: 900006, game_date: "2025-09-01", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
-          - {season: 2026, mlbam_player_id: 900006, game_date: "2026-06-03", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 100}
+          - {season: 2026, mlbam_player_id: 900006, game_date: "2026-06-03", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
+    expect:
+      rows:
+        - {day_kind: batting, component: games_batted, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: plate_appearances, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: hits, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: games_pitched, pool_players: 4, pool_played_days: 6, pool_total: 6, level_per_played_day: 1}
+        - {day_kind: start, component: games_started, pool_players: 4, pool_played_days: 6, pool_total: 6, level_per_played_day: 1}
+        - {day_kind: start, component: outs_recorded, pool_players: 4, pool_played_days: 6, pool_total: 99, level_per_played_day: 16.5}
+        - {day_kind: start, component: batters_faced, pool_players: 4, pool_played_days: 6, pool_total: 132, level_per_played_day: 22}
+        - {day_kind: relief, component: games_pitched, pool_players: 1, pool_played_days: 3, pool_total: 3, level_per_played_day: 1}
+        - {day_kind: relief, component: games_started, pool_players: 1, pool_played_days: 3, pool_total: 0, level_per_played_day: 0}
+        - {day_kind: relief, component: outs_recorded, pool_players: 1, pool_played_days: 3, pool_total: 9, level_per_played_day: 3}
+        - {day_kind: relief, component: batters_faced, pool_players: 1, pool_played_days: 3, pool_total: 12, level_per_played_day: 4}
+
+  - name: replacement_levels_a_starter_at_the_time_is_judged_by_his_last_two_pitching_days
+    description: >
+      One fantasy team (N = 1). Every relief or batting day is on a date that is no
+      scoring date, so it is history and never a free-agent day: only starts are in play,
+      and the relief pool stays empty. 910001 relieves three times and then starts three
+      times: his first two starts are out and his third is in, though over the whole season
+      half his games are starts, so a role decided with later days would take all three.
+      910002 goes relief, start, relief, start, relief, start: all out, though his third
+      start has two starts before it, which are not his last two. 910003, an opener, has
+      relief days only before his start: out. 910004 makes a debut start, which is in, and
+      relieves three times afterwards; a later day does not take his debut out, and his
+      next start is out. 910005 relieves three times, then starts, bats, starts, bats and
+      starts: his third start is in, because a day on which he only batted is not an
+      appearance and does not break his last two. Each start left out is marked by 100
+      batters faced; the start level is 57 outs and 72 batters over 3 days by 3
+      pitchers. Catches: the whole-season count deciding alone; any two earlier starts in
+      place of the last two; one start being enough; the opening of the pool to every
+      start; hindsight; the lags running over days he did not pitch (R1, ADR 0031).
+    model: int_fantasy__replacement_levels
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, plate_appearances, hits]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, batters_faced]
+    given:
+      - input: ref('int_fantasy__teams')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-05", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-07", mlbam_player_id: 900009}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {season: 2026, mlbam_player_id: 910001, game_date: "2026-05-01", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910001, game_date: "2026-05-02", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910001, game_date: "2026-05-03", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910001, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 3, batters_faced: 100}
+          - {season: 2026, mlbam_player_id: 910001, game_date: "2026-06-03", games_pitched: 1, games_started: 1, outs_recorded: 3, batters_faced: 100}
+          - {season: 2026, mlbam_player_id: 910001, game_date: "2026-06-05", games_pitched: 1, games_started: 1, outs_recorded: 21, batters_faced: 27}
+          - {season: 2026, mlbam_player_id: 910002, game_date: "2026-05-01", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910002, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 3, batters_faced: 100}
+          - {season: 2026, mlbam_player_id: 910002, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910002, game_date: "2026-06-03", games_pitched: 1, games_started: 1, outs_recorded: 3, batters_faced: 100}
+          - {season: 2026, mlbam_player_id: 910002, game_date: "2026-06-04", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910002, game_date: "2026-06-05", games_pitched: 1, games_started: 1, outs_recorded: 3, batters_faced: 100}
+          - {season: 2026, mlbam_player_id: 910003, game_date: "2026-05-01", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910003, game_date: "2026-05-02", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910003, game_date: "2026-05-03", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910003, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 3, batters_faced: 100}
+          - {season: 2026, mlbam_player_id: 910004, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 12, batters_faced: 15}
+          - {season: 2026, mlbam_player_id: 910004, game_date: "2026-06-02", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910004, game_date: "2026-06-04", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910004, game_date: "2026-06-06", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910004, game_date: "2026-06-07", games_pitched: 1, games_started: 1, outs_recorded: 3, batters_faced: 100}
+          - {season: 2026, mlbam_player_id: 910005, game_date: "2026-05-01", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910005, game_date: "2026-05-02", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910005, game_date: "2026-05-03", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910005, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 3, batters_faced: 100}
+          - {season: 2026, mlbam_player_id: 910005, game_date: "2026-06-02", games_batted: 1, plate_appearances: 4, hits: 1}
+          - {season: 2026, mlbam_player_id: 910005, game_date: "2026-06-03", games_pitched: 1, games_started: 1, outs_recorded: 3, batters_faced: 100}
+          - {season: 2026, mlbam_player_id: 910005, game_date: "2026-06-04", games_batted: 1, plate_appearances: 4, hits: 1}
+          - {season: 2026, mlbam_player_id: 910005, game_date: "2026-06-05", games_pitched: 1, games_started: 1, outs_recorded: 24, batters_faced: 30}
+    expect:
+      rows:
+        - {day_kind: batting, component: games_batted, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: plate_appearances, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: batting, component: hits, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: start, component: games_pitched, pool_players: 3, pool_played_days: 3, pool_total: 3, level_per_played_day: 1}
+        - {day_kind: start, component: games_started, pool_players: 3, pool_played_days: 3, pool_total: 3, level_per_played_day: 1}
+        - {day_kind: start, component: outs_recorded, pool_players: 3, pool_played_days: 3, pool_total: 57, level_per_played_day: 19}
+        - {day_kind: start, component: batters_faced, pool_players: 3, pool_played_days: 3, pool_total: 72, level_per_played_day: 24}
+        - {day_kind: relief, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+
+  - name: replacement_levels_a_pitchers_first_start_of_the_season_is_in_the_pool_if_he_is_a_free_agent
+    description: >
+      One fantasy team (N = 1) and two scoring dates; the batting day is on a date that
+      is no scoring date. 910006 started once in 2025 and makes his first 2026 start: a
+      start in another season is not an earlier pitching day, so it is a debut and in.
+      910007 has batted this season and never pitched: R1.1 counts pitching days and not
+      MLB days, so his first start is in. 910008 makes a debut start on a day league 1
+      rosters him, which is out: being a starter does not make a rostered pitcher a free
+      agent. The out start is marked by 100 batters faced; the start level is 15 outs and
+      18 batters over 2 days by 2 pitchers. Catches: another season's start counted as
+      an earlier pitching day; earlier batting days counted as appearances, which would
+      make a player who bats a hitter and keep his first start out; a rostered start in
+      the pool (R1.1, R1.5, ADR 0031).
+    model: int_fantasy__replacement_levels
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, plate_appearances, hits]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, batters_faced]
+    given:
+      - input: ref('int_fantasy__teams')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", mlbam_player_id: 900009}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", mlbam_player_id: 910008}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {season: 2025, mlbam_player_id: 910006, game_date: "2025-09-01", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
+          - {season: 2026, mlbam_player_id: 910006, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 9, batters_faced: 11}
+          - {season: 2026, mlbam_player_id: 910007, game_date: "2026-05-30", games_batted: 1, plate_appearances: 4, hits: 1}
+          - {season: 2026, mlbam_player_id: 910007, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 6, batters_faced: 7}
+          - {season: 2026, mlbam_player_id: 910008, game_date: "2026-06-03", games_pitched: 1, games_started: 1, outs_recorded: 3, batters_faced: 100}
     expect:
       rows:
         - {day_kind: batting, component: games_batted, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
@@ -1730,12 +1862,12 @@ unit_tests:
         - {day_kind: batting, component: hits, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
         - {day_kind: start, component: games_pitched, pool_players: 2, pool_played_days: 2, pool_total: 2, level_per_played_day: 1}
         - {day_kind: start, component: games_started, pool_players: 2, pool_played_days: 2, pool_total: 2, level_per_played_day: 1}
-        - {day_kind: start, component: outs_recorded, pool_players: 2, pool_played_days: 2, pool_total: 27, level_per_played_day: 13.5}
-        - {day_kind: start, component: batters_faced, pool_players: 2, pool_played_days: 2, pool_total: 36, level_per_played_day: 18}
-        - {day_kind: relief, component: games_pitched, pool_players: 1, pool_played_days: 3, pool_total: 3, level_per_played_day: 1}
-        - {day_kind: relief, component: games_started, pool_players: 1, pool_played_days: 3, pool_total: 0, level_per_played_day: 0}
-        - {day_kind: relief, component: outs_recorded, pool_players: 1, pool_played_days: 3, pool_total: 9, level_per_played_day: 3}
-        - {day_kind: relief, component: batters_faced, pool_players: 1, pool_played_days: 3, pool_total: 12, level_per_played_day: 4}
+        - {day_kind: start, component: outs_recorded, pool_players: 2, pool_played_days: 2, pool_total: 15, level_per_played_day: 7.5}
+        - {day_kind: start, component: batters_faced, pool_players: 2, pool_played_days: 2, pool_total: 18, level_per_played_day: 9}
+        - {day_kind: relief, component: games_pitched, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: games_started, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: outs_recorded, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
+        - {day_kind: relief, component: batters_faced, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
 
   - name: replacement_levels_leagues_of_different_sizes_get_pools_of_their_own_size
     description: >
