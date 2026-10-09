@@ -658,6 +658,11 @@ def check_a_free_agent_starts_on_the_earlier_day_and_again_later(
     game's period. A pitcher with no id-map row is unrostered, as he is in the model. Without
     such a pitcher the fixture regenerates cleanly and the pool is empty again. Reads only
     what the builders read, before anything is written.
+
+    This check holds the HISTORY path of the rule, a pitcher admitted by his earlier
+    appearances (fo_is_starter_at_the_time, ADR 0031). Since #92 a first start of the season
+    is in the pool without any history, so an empty pool would no longer reveal the loss of
+    that pitcher: the pytest of the committed fixtures is what would.
     """
     period_of_date = dict(zip(dates, source_periods, strict=True))
     earlier: set[str] = set()

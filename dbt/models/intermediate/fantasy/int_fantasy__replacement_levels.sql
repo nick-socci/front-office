@@ -24,12 +24,19 @@
 --      relief day is a candidate, ranked by how many he had, then by outs recorded over
 --      them, then by mlbam_player_id; the top N are in. No replacement group is consulted,
 --      so a hitter who pitched a mop-up inning may be in the relief pool.
---   3b. Start pool (ADR 0029): every free-agent day that is a start, by a pitcher who was
---      a starter at the time: fo_replacement_group over his MLB days of the season
---      strictly before that day says SP (at least half his games pitched were starts).
---      Not ranked, and not cut to N. A pitcher's first appearance of a season has no
---      history and is not in; nor is an opener who had been relieving. Call-ups and
---      pitchers who change role are served badly by this, and #92 is to do better.
+--   3b. Start pool (ADR 0029, ADR 0031): every free-agent day that is a start, by a pitcher
+--      who was a starter at the time, as fo_is_starter_at_the_time says, over his MLB days
+--      of the season strictly before that day. He is one if any of these holds:
+--        - he had not pitched yet (a debut, or the first turn of a rotation);
+--        - fo_replacement_group says SP (at least half his games pitched were starts);
+--        - his two most recent pitching days were both starts (a pitcher who changed role).
+--      Not ranked, and not cut to N. An opener who had been relieving is not in, nor is a
+--      reliever's first or only start after relief: nothing known before the game tells
+--      it from an opener's, and the outing itself is never judged. Two starts running is
+--      a rotation turn taken twice. In 2026 this takes 1,518 starts by 182 pitchers: 120
+--      admitted by a first appearance and 108 by two starts running, on top of the 1,290
+--      the count alone takes; 357 stay out. #92 was the issue, ADR 0031 the decision; a
+--      role carried from a previous season waits for more than one MLB season (#83).
 --   4. Level: pitching components are summed over the pool's free-agent days of that kind
 --      only (the relief pool members' relief days; the start pool's days), and divided by
 --      the count of those days (pool_played_days). For the start kind pool_players is the
@@ -46,14 +53,14 @@
 --
 -- WHY THE START POOL IS DIFFERENT. Ranked like the others, by appearances while unrostered,
 -- it was the twelve pitchers who started all year and whom nobody wanted: 306 starts at a
--- 5.41 ERA, when free-agent starts by starters ran at 4.90 (1,290 of them by 153 pitchers
--- in 2026, at the same 14.9 outs). No ranking does better: by usage at the time the
+-- 5.41 ERA, when free-agent starts by starters ran at 4.89 (1,518 of them by 182 pitchers
+-- in 2026, at 14.78 outs). No ranking does better: by usage at the time the
 -- most-used free-agent starters are the worst (ERA 5.88 for the top 6 a week), and by
 -- performance to date there are too few free-agent starters a day (about 11) to choose
 -- among. And none is needed: a free-agent starter's quality does not depend on how much
--- he has pitched (ERA 4.87 to 4.93 whether 3, 5 or 10 earlier starts are asked for; 4.91
--- and 4.90 in the two halves of the season), only the length of his outing does, which
--- the role filter takes care of. For relievers and hitters the unranked pool is not the
+-- he has pitched (ERA 4.87 to 4.93 whether 3, 5 or 10 earlier starts are asked for, under
+-- the rule of ADR 0029; 4.89 and 4.89 in the two halves of the season), only the length
+-- of his outing does, which the role filter takes care of. For relievers and hitters the unranked pool is not the
 -- players doing the job (long men and call-ups at 3.58 outs; bench players with one
 -- at-bat), so their pools stay ranked.
 --
@@ -73,7 +80,7 @@
 -- SENSITIVITY. Measured on the 2026 season (12 teams) at N/2, N and 2N -- pool sizes of
 -- 6, 12 and 24:
 --   batting  AVG   .2410 / .2416 / .2420
--- The start pool has no N: 14.92 outs, ERA 4.90, WHIP 1.40.
+-- The start pool has no N: 14.78 outs, ERA 4.89, WHIP 1.404.
 --   relief   outs   2.68 /  2.80 /  2.83   ERA 3.18 / 3.49 / 3.58   WHIP 1.31 / 1.26 / 1.28
 -- Started players, for scale: .254; 16.39 outs and ERA 3.89 in a start; 3.01 outs and ERA
 -- 3.37 in relief. The size of a relief outing, which decides innings and strikeouts,
@@ -285,8 +292,35 @@ roles_to_date as (
 
 ),
 
+-- What each pitcher had done on his pitching days before each of his days, this season:
+-- how many there were, and whether the latest two were starts (null when there is no such
+-- day). Over pitching days only, so a day he only batted is not an appearance and does not
+-- break "his last two". A doubleheader day with a start and a relief outing is one
+-- pitching day, a start, as fo_pitching_day_kind says everywhere else.
+pitching_days_to_date as (
+
+    select
+        mlbam_player_id,
+        season,
+        game_date,
+        row_number() over pitching_order - 1 as earlier_pitching_days,
+        lag({{ fo_pitching_day_kind('games_pitched', 'games_started') }} = 'start', 1)
+            over pitching_order as last_was_start,
+        lag({{ fo_pitching_day_kind('games_pitched', 'games_started') }} = 'start', 2)
+            over pitching_order as one_before_was_start
+    from {{ ref('int_mlb__player_game_days') }}
+    where games_pitched > 0
+    window pitching_order as (
+        partition by mlbam_player_id, season
+        order by game_date
+    )
+
+),
+
 -- The start pool is days, not players (ADR 0029): every free-agent start by a pitcher who
--- was a starter up to then. Not ranked and not cut to N.
+-- was a starter up to then, as fo_is_starter_at_the_time says (ADR 0031). Not ranked and
+-- not cut to N. A day he did not pitch has no row in pitching_days_to_date, but a start
+-- is a pitching day, so the join finds one for every start.
 start_pool_days as (
 
     select
@@ -297,8 +331,17 @@ start_pool_days as (
         on roles_to_date.mlbam_player_id = free_agent_days.mlbam_player_id
         and roles_to_date.season = free_agent_days.season
         and roles_to_date.game_date = free_agent_days.game_date
+    inner join pitching_days_to_date
+        on pitching_days_to_date.mlbam_player_id = free_agent_days.mlbam_player_id
+        and pitching_days_to_date.season = free_agent_days.season
+        and pitching_days_to_date.game_date = free_agent_days.game_date
     where {{ fo_pitching_day_kind('free_agent_days.games_pitched', 'free_agent_days.games_started') }} = 'start'
-        and roles_to_date.role_to_date = 'SP'
+        and {{ fo_is_starter_at_the_time(
+            'pitching_days_to_date.earlier_pitching_days',
+            'roles_to_date.role_to_date',
+            'pitching_days_to_date.last_was_start',
+            'pitching_days_to_date.one_before_was_start'
+        ) }}
 
 ),
 
