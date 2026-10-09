@@ -45,6 +45,12 @@ starters as for hitters, so the level, not the arithmetic, is what tilts.
 Chosen by the owner on 2026-10-09: **option 2, for the start kind only.** The detail is
 proposed here.
 
+Agreed by the owner on 2026-10-09, going through the spec's decisions:
+
+- "a starter at the time" is `fo_replacement_group` on the pitcher's earlier appearances
+  of the season, **for now**. The owner wants a better answer for call-ups and for
+  pitchers who change role; that is #92.
+
 The start pool of a league-season is every start, on one of its scoring dates, by a
 player on none of its rosters that date whose `fo_replacement_group` over his MLB days
 of the season before that date is `SP`. It is not ranked and has no size. The relief
@@ -72,4 +78,5 @@ hitters the unranked pool is not the players doing the job.
 - Bad / accepted cost: a pitcher's first appearance of a season is never in the pool,
   and early in a season the pool is thin.
 - Bad / accepted cost: on a two-day fixture the pool is empty.
-- Follow-ups: whether the relief and batting pools should be decided at the time.
+- Follow-ups: who is a starter for call-ups and role changes (#92); whether the relief
+  and batting pools should be decided at the time.

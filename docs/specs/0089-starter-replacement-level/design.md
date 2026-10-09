@@ -169,6 +169,9 @@ so a slope is never computed from part of a group.
 
 ## Open questions
 
+- **Who is a starter for a call-up, and for a pitcher who changes role.** The rule is
+  accepted for now; #92.
+
 - **Whether the relief and batting pools should also be decided at the time.** No gap
   was measured; both still use whole-season hindsight.
 - **Why relievers' values convert to real wins less steadily** (slope 0.33, correlation
