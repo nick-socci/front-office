@@ -38,8 +38,81 @@ models:
       Started player-days where our credited number for a stat differs from ESPN's own
       per-game lines summed for the day. The evidence behind each registered
       official_scoring_change residual.
+    columns:
+      - name: input_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [played, verified_off, missing_boxscore, unresolved_player]
+      - name: status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [difference, unverified]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, scoring_period, fantasy_team_id, platform_player_id, stat_id]
 
 unit_tests:
+  - name: player_day_differences_label_their_inputs
+    description: >
+      Eight started player-days of team 1, one case each, on one date in matchup 7. H is
+      hits (stat 1) and ER is earned_runs (stat 45); a hitter slot credits hits and a
+      pitcher slot earned runs. Player 101 is played and equal to ESPN: no row. 102 is
+      played and differs (3 against 2): a difference. 103 is played with no ESPN line,
+      compared against zero: a difference. 104 is verified_off and ESPN has a hit for
+      him: a difference of minus one, because we say he did not play and every game is
+      loaded. 105 is verified_off and ESPN has no line: no row. 106 is missing_boxscore
+      and 107 unresolved_player, each with an ESPN line: rows kept, both numbers, but
+      unverified. 108 is a pitcher slot with 5 hits that are not his to score and earned
+      runs equal to ESPN's: no row. Catches a status decided from the wrong column; a
+      verified_off line dropped; an unverified row labelled a difference; a table that
+      keeps rows where the numbers agree; a batting line compared for a pitcher slot.
+    model: rec_espn__player_day_differences
+    overrides:
+      macros:
+        fo_batting_columns: [hits]
+        fo_pitching_columns: [earned_runs]
+    given:
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 1, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 45, part: numerator, component: earned_runs, weight: 1}
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 101, slot_role: hitter, input_status: played, hits: 2}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 102, slot_role: hitter, input_status: played, hits: 3}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 103, slot_role: hitter, input_status: played, hits: 1}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 104, slot_role: hitter, input_status: verified_off, hits: 0}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 105, slot_role: hitter, input_status: verified_off, hits: 0}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 106, slot_role: hitter, input_status: missing_boxscore, hits: 0}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 107, slot_role: hitter, input_status: unresolved_player, hits: 0}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 108, slot_role: pitcher, input_status: played, hits: 5, earned_runs: 2}
+      - input: ref('stg_espn__player_game_stats')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 1, espn_player_id: 101, espn_game_id: 9001, stat_id: 1, stat_value: 2}
+          - {league_id: "1", season: 2026, scoring_period: 1, espn_player_id: 102, espn_game_id: 9001, stat_id: 1, stat_value: 2}
+          - {league_id: "1", season: 2026, scoring_period: 1, espn_player_id: 104, espn_game_id: 9001, stat_id: 1, stat_value: 1}
+          - {league_id: "1", season: 2026, scoring_period: 1, espn_player_id: 106, espn_game_id: 9001, stat_id: 1, stat_value: 2}
+          - {league_id: "1", season: 2026, scoring_period: 1, espn_player_id: 107, espn_game_id: 9001, stat_id: 1, stat_value: 1}
+          - {league_id: "1", season: 2026, scoring_period: 1, espn_player_id: 108, espn_game_id: 9001, stat_id: 45, stat_value: 2}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_period: 1, scoring_date: "2026-06-01"}
+      - input: ref('int_fantasy__matchup_sides')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 1, fantasy_team_id: 1}
+    expect:
+      rows:
+        - {matchup_id: 7, platform_player_id: 102, stat_id: 1, our_value: 3, espn_value: 2, difference: 1, input_status: played, status: difference}
+        - {matchup_id: 7, platform_player_id: 103, stat_id: 1, our_value: 1, espn_value: 0, difference: 1, input_status: played, status: difference}
+        - {matchup_id: 7, platform_player_id: 104, stat_id: 1, our_value: 0, espn_value: 1, difference: -1, input_status: verified_off, status: difference}
+        - {matchup_id: 7, platform_player_id: 106, stat_id: 1, our_value: 0, espn_value: 2, difference: -2, input_status: missing_boxscore, status: unverified}
+        - {matchup_id: 7, platform_player_id: 107, stat_id: 1, our_value: 0, espn_value: 1, difference: -1, input_status: unresolved_player, status: unverified}
+
   - name: matchup_stat_differences_assign_every_status
     description: >
       One case per status. Rules: H = hits, AB = at_bats, AVG = H / AB.
