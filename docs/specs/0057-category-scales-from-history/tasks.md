@@ -1,4 +1,4 @@
-# Category scales from the league's earlier seasons — tasks
+# Category scales from the league's earlier seasons and the season so far — tasks
 
 Issue: #57 · Kind: `impl` = mechanical, delegable · `judgment` = lead agent or person
 
@@ -27,20 +27,21 @@ that they are amended.
      `int_fantasy__reported_category_scales`.
    - Verify: the *Matchups measured* table of requirements.md, and the "Reported, 2026"
      column of the scales table.
-5. The scale in use — `impl` — R3.1–R3.7, R4.3, R4.4, R4.5
+5. The scale in use — `impl` — R3.1–R3.8, R4.3, R4.4, R4.5
    - The new unit tests and singular tests first, seen to fail; the existing unit tests
      of `int_fantasy__category_scales` given an empty earlier history. Then the model,
-     its two new columns in the contract, and the variable in `dbt_project.yml`.
-   - Verify: CI build passes; in CI every scale is `current_season` and the value facts
+     its four new columns in the contract, and the variable in `dbt_project.yml`.
+   - Verify: CI build passes; in CI every scale is `current_season` (no fixture
+     league-season has 100 earlier matchups) and the value facts
      are identical to the starting point.
-6. Headers — `impl` — R3.8
+6. Headers — `impl` — R3.9
    - Rewrite the header of `int_fantasy__category_scales` and the scale paragraphs of
      the three value facts' headers.
    - Verify: `git diff` of the three facts is comments only.
 7. The isolation check — `impl` — R5.1–R5.4
    - pytest first for the seasons a single build copies (the season and every earlier
-     one of the same league, none later, no other league). Then `copy_single`, the
-     threshold in the check's dbt variables, and its docstring.
+     one of the same league, none later, no other league). Then `copy_single`,
+     `fantasy_scale_prior_matchups: 2` in the check's dbt variables, and its docstring.
    - Verify: `.agentic/gates`; 0 differing pairs; the `scale_source` of each fixture
      league-season as in the expected values. A dbt test failing in the check's builds
      because of a two-matchup scale: stop and take it to the owner.

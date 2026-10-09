@@ -1,4 +1,4 @@
-# Category scales from the league's earlier seasons — design
+# Category scales from the league's earlier seasons and the season so far — design
 
 Issue: #57 · Requirements: [requirements.md](requirements.md)
 
@@ -7,8 +7,9 @@ Issue: #57 · Requirements: [requirements.md](requirements.md)
 Two new intermediate models describe what the platform reported, for every league-season
 loaded: the margin of every decided matchup in every scored category, and the scale those
 margins give per league-season. `int_fantasy__category_scales`, which the value facts
-already read, then chooses per category: pooled from the league's earlier seasons where
-they hold enough matchups, the season's own matchups otherwise.
+already read, then chooses per category: where the league's earlier seasons hold enough
+matchups, a blend of those seasons and the season's own decided matchups, the earlier
+seasons counting as a fixed 100; the season's own matchups alone otherwise.
 
 ```mermaid
 flowchart LR
@@ -16,8 +17,8 @@ flowchart LR
     C[int_fantasy__categories] --> M
     K[int_fantasy__stat_components] --> M
     M --> RS[int_fantasy__reported_category_scales<br/>season x category, every season]
-    M -->|earlier seasons of the same league| S[int_fantasy__category_scales<br/>seasons with rosters]
-    V[int_fantasy__matchup_stat_values<br/>our totals, this season] -->|fallback| S
+    M -->|earlier seasons of the same league,<br/>and this season's decided matchups| S[int_fantasy__category_scales<br/>seasons with rosters]
+    V[int_fantasy__matchup_stat_values<br/>our totals, this season] -->|fallback, no history| S
     S --> F1[fct_player_category_value]
     S --> F2[fct_transaction_impact]
     F1 --> F3[fct_player_season_value]
@@ -28,48 +29,54 @@ they do today; what changes is which matchups those two numbers were measured fr
 
 ## Alternatives considered
 
-The owner chose between the first three on 2026-10-08, after the measurements in
-requirements.md.
+The owner chose on 2026-10-08, after the measurements in requirements.md: first B over A
+and C, then E over B when asking how rule changes and changes in pitcher usage would be
+followed.
 
-| | A. Measure only | **B. Earlier seasons where there are enough, the season's own otherwise** | C. Both, selectable | D. Blend, weighted by how much of the season is played |
-|---|---|---|---|---|
-| Scale on day one of a season | none until matchups are decided | yes, for a league with history | either | yes |
-| Moves when a matchup is restated | yes | no, with history | depends | yes, less |
-| Players inside the sample that scales them | yes | no, with history | depends | partly |
-| Works for a new league or a new category | yes | yes, by falling back | yes | yes |
-| Parameters | none | one threshold | one threshold and a switch | a weighting curve |
-| Cost | leaves the early-season noise | 2026 values move (median 0.09 of a top value of 36) | a second grain on both value facts, or a build variable, for a 0.999 rank correlation | a fitted parameter, which ADR 0010 ruled out |
+| | A. Measure only | B. Earlier seasons alone, where there are enough | C. Both methods, selectable | D. Earlier seasons, adjusted for the season's volume | **E. Earlier seasons counted as 100 matchups, plus the season's decided matchups** |
+|---|---|---|---|---|---|
+| Scale on day one of a season | none | yes | either | yes, unadjusted | yes |
+| Follows a rule change | in the season, noisily | no: pooled history, for years | depends | a change of volume only, and worse for the first month | yes, as matchups are decided |
+| Follows a change no one can name (pitcher usage) | yes, noisily | no | depends | no | yes |
+| Moves during the season | yes | no | depends | a little | yes, damped: at most 59% of the gap by the end of a 143-matchup season |
+| Parameters | none | one threshold | a threshold and a switch | a threshold and a functional form | one number, used as threshold and weight |
+| Error predicting the rest of a season, after 2 / 8 / 16 periods | 24.5% / 11.6% / 10.7% | 8.5% / 8.9% / 10.6% | | 11.9% / 8.8% / 10.9% | 8.8% / 8.4% / 9.6% |
 
-- **A lost** because the scale is noisiest when a valuation is most used: 19% typical
-  error after two matchup periods against 7% from earlier seasons.
-- **C lost** because the two methods agree too closely to justify two answers to "what
-  is this player worth".
-- **D lost** because the weighting is a tunable, and past a third of a season it buys
-  nothing measurable.
+- **A lost** because the scale is noisiest when a valuation is most used.
+- **B lost** to E because it cannot follow a change: 11.2% error on the pitching
+  categories at mid-season against 8.5%, and the stolen-base scale of 2023 would have
+  been 21% low all year.
+- **C lost** because the methods agree too closely to justify two answers to "what is
+  this player worth".
+- **D lost** on measurement. A count's scale does follow the square root of its volume,
+  but the season's volume is not known early (the opening matchup period is long), and
+  it does nothing for changes that are not changes of volume.
+- **A declared list of rule changes** (cutting the history at a break) was also
+  considered: it needs someone to keep it, and in the season of a change it falls back
+  to that season alone, which is A.
 
-Within B, three narrower choices:
+Within E, four narrower choices:
 
-- **Which earlier seasons.** All of them. A window of the last 2, 3 or 4 does no better
-  (requirements.md), and "all" has no parameter.
-- **Whose totals for the earlier seasons.** The platform's reported ones, always, even
-  for an earlier season that has rosters (2026, when 2027 is valued). One source for
-  every earlier season; the reconciliation already shows ours and ESPN's agree (largest
-  2026 difference in a scale: ERA, 1.1%). The alternative, ours where there are rosters
-  and ESPN's elsewhere, makes the pooled scale depend on which seasons happen to be
-  covered.
-- **The denominator of a rate.** From the same matchups as the scale (ADR 0027). A
-  rate's gaps are wider when sides pitch fewer innings, so a scale measured on sides of
-  159 outs does not belong with a denominator of 172. Measured both ways, the values of
-  2026 multiply by: WHIP 0.975 together against 0.900 mixed; ERA 0.959 against 0.885;
-  AVG 1.018 against 0.970; K/9 1.142 against 1.053. Three of four move less together.
-  K/9 moves more, and that is a finding and not an artefact: 2026's K/9 gaps are wide
-  for its innings.
+- **The weight of the earlier seasons.** The threshold itself, 100. Not a second number
+  and not fitted: a scale from 100 matchups has a standard error of about 7%, which is
+  how much seasons differ, so that is where history and the season are equally good
+  evidence.
+- **Which earlier seasons.** All of them, pooled. A window of the last 2, 3 or 4 does no
+  better. With the season's own matchups now in the blend, recency is supplied by the
+  season itself.
+- **Whose totals.** The platform's reported ones, for the earlier seasons and for the
+  season's own part of the blend, whether or not a season has rosters. One source for
+  everything blended; ours and ESPN's 2026 scales differ by at most 1.1%. Decided
+  matchups only, so a matchup in progress does not enter.
+- **The denominator of a rate.** From the same matchups as the scale, with the same
+  weights (ADR 0027). A rate's gaps are wider when sides pitch fewer innings, so a scale
+  and a denominator from different matchups do not belong together.
 
 ## Decisions
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0027](../../adr/0027-a-category-scale-is-pooled-from-the-leagues-earlier-seasons.md) | A category's scale, and a rate's denominator with it, is pooled from the league's earlier seasons where they hold enough matchups; amends ADR 0010 | proposed |
+| [0027](../../adr/0027-a-category-scale-blends-the-leagues-earlier-seasons-with-the-season-so-far.md) | A category's scale, and a rate's denominator with it, blends the league's earlier seasons, counted as 100 matchups, with the season's decided matchups; amends ADR 0010 | proposed |
 | [0028](../../adr/0028-a-league-season-may-read-its-leagues-earlier-seasons.md) | A league-season may read its own league's earlier seasons; isolation is checked by building it with them; amends ADR 0013 | proposed |
 
 ## Detailed design
@@ -127,33 +134,44 @@ downstream of it computes a value.
 
 ### `int_fantasy__category_scales`
 
-Same grain, same seasons (those with rosters, ADR 0026), same three numeric columns the
-facts read. Per category of a league-season:
+Same grain, same seasons (those with rosters, ADR 0026). `margin_scale`,
+`side_denominator` and `matchups_measured` keep their names; the facts read the first
+two. With *w* = `var('fantasy_scale_prior_matchups', 100)`, per category of a
+league-season:
 
 1. `prior`: over the `is_measured` rows of `int_fantasy__reported_matchup_margins` of
-   the same platform and league with `season` less than this one: the count, the root
-   mean square (summed in `season`, `matchup_id` order), the mean denominator over
-   sides, and the number of distinct seasons.
-2. `own`: today's computation from `int_fantasy__matchup_stat_values`, unchanged.
-3. If `prior`'s count is at least `var('fantasy_scale_min_prior_matchups', 100)`, the row
-   takes `prior`'s scale, denominator, count and seasons, with `scale_source`
-   `prior_seasons`. Otherwise it takes `own`'s, `seasons_measured` 1 (0 if no matchup
-   was measured), `scale_source` `current_season`.
+   the same platform and league with `season` less than this one: the count *P*, the
+   sum of squared margins, the root mean square *p*, the mean denominator over sides
+   *q*, and the number of distinct seasons. Sums in (`season`, `matchup_id`) order.
+2. `reported_own`: the same over this league-season's own `is_measured` rows: the count
+   *n*, the sum of squares *S*, the sum of side denominators *D*.
+3. `own`: today's computation from `int_fantasy__matchup_stat_values`, unchanged.
+4. If *P* ≥ *w*: `margin_scale` = √((*S* + *w*·*p*²) / (*n* + *w*)); for a rate,
+   `side_denominator` = (*D* + 2*w*·*q*) / (2*n* + 2*w*); `matchups_measured` = *n*;
+   `scale_source` = `prior_and_current_seasons`.
+5. Otherwise the row is `own`'s, with `scale_source` = `current_season` and the three
+   `prior_` columns as measured (so a league one season short of the threshold shows
+   how far short) except `prior_margin_scale`, which is null.
 
-New columns: `scale_source`, `seasons_measured`. `matchups_measured` keeps its name and
-now counts the matchups behind the scale in use.
+New columns: `scale_source`, `prior_matchups_measured` (*P*), `prior_seasons_measured`,
+`prior_margin_scale` (*p*).
 
-**The threshold.** A root mean square of *n* near-normal margins has a relative standard
-error of about 1/√(2n): 7% at 100, which is the season-to-season spread measured. Below
-that the pooled scale is no better than the noise it is meant to remove. 100 is under
-one full season for a 12-team league (143) and for a 10-team one (about 110), so one
-complete earlier season qualifies. It is a dbt variable so that unit tests can lower it;
-it is not a method switch.
+**One number.** A scale from *n* near-normal margins has a relative standard error of
+about 1/√(2n): 7% at 100, the season-to-season spread measured. Below 100 earlier
+matchups, history is noisier than seasons differ and is not used. At or above it,
+history counts as exactly 100, however much there is: more seasons make *p* more
+precise, not more relevant to this season. 100 is under one full season for a 12-team
+league (143) and a 10-team one (about 110). It is a dbt variable so that tests and the
+isolation check can lower it; it is not a method switch.
+
+**Through a season.** With no decided matchup the scale is *p*. After 12 matchup periods
+of a 12-team league (72 matchups) the season carries 42% of the weight; after a full
+season (143), 59%. The scale therefore moves during a season, by design and gradually:
+that is how a change in the game reaches it.
 
 **Why a rate falls back whole.** If earlier seasons report a rate's margins and never
-its denominator, the pooled count for that category is zero by R2.3's rule and the
-category takes the season's own scale and denominator. A pooled scale is never paired
-with the season's own denominator.
+its denominator, *P* is zero by `is_measured` and the category takes `own`'s scale and
+denominator. A blended scale is never paired with another source's denominator.
 
 **A category the league used to score.** SV and CG are in the margins and the reported
 scales for 2018 to 2021 and in no row of `int_fantasy__category_scales` for 2026, which
@@ -163,7 +181,8 @@ does not score them. SVHD has four earlier seasons (590 matchups).
 
 No SQL change. Their headers, and the model header of `int_fantasy__category_scales`
 (which records ADR 0010's three accepted costs and its one-season sample), are rewritten
-to say what holds now. ADR 0010's unit and formula stand.
+to say what holds now: with history, the three costs remain in damped form, since the
+season's own matchups are part of the blend. ADR 0010's unit and formula stand.
 
 ### What a league-season now depends on, and the isolation check
 
@@ -182,10 +201,10 @@ correct results the day a fixture qualified. So the check changes
   earlier season**, with those seasons' MLB data. `copy_single` takes the seasons up to
   the one under test; the comparison is still of that league-season's rows only.
 - Every build of the check, combined and single, passes
-  `fantasy_scale_min_prior_matchups: 2`. The fixture seasons have two decided matchups
-  each, so (111111, 2026) pools 2025, (111111, 2027) pools 2025 and 2026, (222222, 2027)
-  pools 2026, and (222222, 2026), which has no earlier season, falls back. Both paths
-  run, and league 222222's history differs from 111111's, so a scale pooled across
+  `fantasy_scale_prior_matchups: 2`. The fixture seasons have two decided matchups
+  each, so (111111, 2026) blends in 2025, (111111, 2027) blends in 2025 and 2026, (222222, 2027)
+  blends in 2026, and (222222, 2026), which has no earlier season, falls back. Both paths
+  run, and league 222222's history differs from 111111's, so a scale blended across
   leagues or from a later season shows as a difference.
 - The main CI build keeps the default of 100 and so keeps today's values.
 
@@ -195,11 +214,11 @@ correct results the day a fixture qualified. So the check changes
 |---|---|---|
 | R1.1–R1.6, R4.1 | unit tests on the margins model | a bye or an undecided matchup measured; a non-scored stat measured; a denominator taken from the wrong stat |
 | R2.1–R2.4, R4.2 | unit tests on the reported scales; singular test that every scored category of every league-season has a row | an unplayed season vanishing; a rate measured from matchups without denominators |
-| R3.1–R3.5, R4.3 | unit tests on `int_fantasy__category_scales`, with the threshold lowered by `overrides: vars` | the season's own or a later season's matchups pooled; another league's pooled; a mean of season scales in place of a pooled one; a pooled scale with the season's own denominator |
-| R3.6, R4.4 | singular tests on `scale_source` against `matchups_measured`, and on rate rows | a scale labelled pooled that rests on too little |
-| R3.7, R4.5 | the existing coverage and scale tests | a category dropped or added |
-| R3.8 | `git diff` of the three facts shows comments only; `value_facts_share_the_category_scales` | a fact computing its own scale |
-| R5.1–R5.4 | the isolation check, each league-season built with its league's earlier seasons, threshold 2; pytest of `copy_single`'s season selection | another league's or a later season's matchups in a pooled scale; a check that passes only because nothing pools |
+| R3.1–R3.6, R4.3 | unit tests on `int_fantasy__category_scales`, with the variable lowered by `overrides: vars`, against hand-computed blends | a later season's or another league's matchups used; an undecided matchup used; a mean of season scales in place of a pooled one; history weighted by its size and not by the variable; a blended scale with another source's denominator |
+| R3.7, R4.4 | singular tests on `scale_source` against `prior_matchups_measured`, and on rate rows | a scale labelled blended that rests on too little history |
+| R3.8, R4.5 | the existing coverage and scale tests | a category dropped or added |
+| R3.9 | `git diff` of the three facts shows comments only; `value_facts_share_the_category_scales` | a fact computing its own scale |
+| R5.1–R5.4 | the isolation check, each league-season built with its league's earlier seasons, the variable set to 2; pytest of `copy_single`'s season selection | another league's or a later season's matchups in a blended scale; a check that passes only because nothing blends |
 | R6.1–R6.3 | real build; every relation compared with a copy kept before; the expected values | any movement this document does not state |
 
 A dbt unit test can set a variable for one test with `overrides: vars:`, which is how the
@@ -209,17 +228,21 @@ threshold is exercised at 2 matchups without changing it for the build.
 
 - **The owner reads values that moved.** Stated per category in requirements.md; the
   build stops if they differ from it.
-- **Earlier seasons' sides were smaller** (159 outs against 172). Handled by taking the
-  denominator from the same matchups; what remains is K/9, whose values rise 14%: the
-  2026 season has an unusually wide K/9 scale for its innings.
-- **A league whose settings changed** (size, roster slots, categories) pools seasons that
-  are not the same game. For this league the size was 12 throughout and the 16 common
-  categories kept their direction. Nothing detects a change of size; see *Open
+- **Values move during a season again**, which pooling alone would have ended. Accepted
+  by the owner as the price of following a change; damped by the weight of history.
+- **The first season after a rule change is still valued mostly on the old scale early
+  on.** With 24 matchups decided the season carries 19% of the weight. Stolen bases in
+  2023 would have started 21% low and closed the gap through the year.
+- **Earlier seasons' sides were smaller** (159 outs against 172). Handled by blending
+  the denominator with the scale.
+- **A league whose settings changed** (size, roster slots, categories) blends seasons
+  that are not the same game. For this league the size was 12 throughout and the 16
+  common categories kept their direction. Nothing detects a change of size; see *Open
   questions*.
-- **A scale pooled from two fixture matchups may be zero or tiny** in the isolation
+- **A scale blended from two fixture matchups may be zero or tiny** in the isolation
   check's builds (two tied margins). The facts already handle a zero scale; if a test
   of the combined build objects, that is found in task 7 and taken to the owner, not
-  worked around by changing the threshold.
+  worked around by changing the variable.
 - **AVG has one season fewer** (876 matchups, six seasons) because 2018 reports no
   at-bats.
 
@@ -239,8 +262,16 @@ threshold is exercised at 2 matchups without changing it for the build.
 | Source | Finding | Resolution |
 |---|---|---|
 | design-review | F1 (P1): a reported denominator of zero would be measured, against the existing rule that a rate on a zero denominator is undefined | Changed: R1.7 and `is_measured`; R2.3 measures only those rows; a unit test of a decided matchup with a zero-denominator side |
-| design-review | F2 (P1): "a rate's scale and denominator are both null or both present" contradicts today's fallback, which can give a denominator and no scale | Changed: R4.4 holds only `prior_seasons` rows to it |
+| design-review | F2 (P1): "a rate's scale and denominator are both null or both present" contradicts today's fallback, which can give a denominator and no scale | Changed: R4.4 holds only rows that use history to it |
 | design-review | F3 (P1): the isolation gate passes only because no fixture qualifies, and cannot validate the new dependency | Changed: R5, ADR 0028 (proposed, the owner's decision): single builds include the league's earlier seasons, and the check runs at a threshold of 2 so the pooled path is exercised |
 | design-review | F4 (P2): the pooled sum's order is not unique, matchup ids repeat across seasons | Changed: R2.4 orders by (`season`, `matchup_id`) |
 
 ## Amendments
+
+Before approval, 2026-10-08, going through the decisions with the owner: the scale
+pooled from earlier seasons alone (first draft) was replaced by the blend, after the
+owner asked how rule changes and changes in pitcher usage would be followed. A volume
+adjustment was proposed, accepted, then withdrawn the same day when an out-of-sample
+test showed it worse than no adjustment for the first month of a season. R3, the
+expected values and ADR 0027 were rewritten; the design review's findings F1 to F4 were
+made against the first draft and their resolutions carry over unchanged.

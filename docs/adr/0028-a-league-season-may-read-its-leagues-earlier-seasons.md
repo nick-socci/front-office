@@ -11,20 +11,20 @@ ADR 0013 proves there is no cross-attribution by building each league-season alo
 requiring its rows to equal the combined build's. That encodes an invariant: a
 league-season's rows depend on nothing but its own captures.
 
-ADR 0027 breaks that on purpose. A category's scale is pooled from the same league's
+ADR 0027 breaks that on purpose. A category's scale blends in the same league's
 earlier seasons, so a league-season's value facts depend on them. What must still hold
 is narrower: another league's captures, and a later season's, never change a
 league-season's rows.
 
 As written the check would keep passing, because no fixture league-season has the 100
-earlier matchups a pooled scale needs. It would then establish nothing about the new
+earlier matchups the blend needs. It would then establish nothing about the new
 dependency, and would fail on correct results if a fixture ever qualified.
 
 ## Decision drivers
 
 - The check must still name a model that leaks across leagues, including through the
-  new pooled scale, which is where a missing league key would now do most harm.
-- It must exercise the pooled path, not pass because nothing pools.
+  new blended scale, which is where a missing league key would now do most harm.
+- It must exercise the blended path, not pass because nothing blends.
 - No new fixture data.
 - CI time.
 
@@ -44,8 +44,8 @@ Proposed: **option 2**.
 A single build holds the league's captures for the season under test and every earlier
 season, with those seasons' MLB data; the rows compared are still those of the
 league-season under test. Every build of the check, combined and single, sets
-`fantasy_scale_min_prior_matchups` to 2, so that a fixture league-season with an earlier
-season uses a pooled scale and one without falls back. The main CI build keeps the
+`fantasy_scale_prior_matchups` to 2, so that a fixture league-season with an earlier
+season uses a blended scale and one without falls back. The main CI build keeps the
 default.
 
 The invariant becomes: **a league-season's rows depend only on its own league's captures
@@ -57,13 +57,13 @@ hundred matchups of data for a check that two per season can make.
 
 ## Consequences
 
-- Good: a pooled scale that read another league, or a later season, shows as a
+- Good: a blended scale that read another league, or a later season, shows as a
   difference, and the model is named.
-- Good: both the pooled path and the fallback run in every gate.
+- Good: both the blended path and the fallback run in every gate.
 - Bad / accepted cost: single builds are larger, by a league's earlier fixture seasons.
 - Bad / accepted cost: the check runs at a threshold the real build never uses. It shows
-  which matchups are pooled, not that 100 is the right number.
+  which matchups are blended, not that 100 is the right number.
 - Bad / accepted cost: a model that wrongly read an earlier season of its own league
   would no longer be caught by this check. Only the scales are meant to.
-- Bad / accepted cost: a scale pooled from two fixture matchups can be zero. The facts
+- Bad / accepted cost: a scale blended from two fixture matchups can be zero. The facts
   handle a zero scale already.
