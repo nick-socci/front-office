@@ -194,6 +194,18 @@ def test_a_failing_list_request_does_not_stop_the_boxscores_but_exits_1(
     assert "boxscore" in endpoints_landed(zone)
 
 
+def test_a_list_that_is_not_json_does_not_stop_the_boxscores_but_exits_1(zone, served, fail):
+    """Catches a 200 response with a truncated body escaping as a JSONDecodeError and
+    ending the run before the boxscores (R5.3)."""
+    fail["/api/v1/sports/1/players"] = httpx.Response(200, content=b"{")
+    result = run(zone)
+    assert result.exit_code == 1
+    assert "player list" in result.output
+    assert served[-1] == "/api/v1/game/11/boxscore"
+    assert "players" not in endpoints_landed(zone)
+    assert "boxscore" in endpoints_landed(zone)
+
+
 def test_both_failures_are_reported(zone, served, fail):
     """Catches the boxscore failure message being lost when the list also failed."""
     fail["/api/v1/sports/1/players"] = httpx.Response(500)

@@ -7,6 +7,7 @@ than importing the package, so scheduling never needs to know how ingestion work
 from __future__ import annotations
 
 import datetime as dt
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -136,14 +137,20 @@ def backfill_mlb(
             typer.echo(f"landed schedule -> {path}")
         # A failed list does not stop the boxscores; the run exits 1 at the end instead. A
         # 401/403 is MLB refusing a request that carries no login, not an expired one, so it
-        # must not end the run as an expired ESPN login does.
+        # must not end the run as an expired ESPN login does. A 200 whose body is not JSON
+        # (a truncated response) is a failed list too.
         players_error = None
         if only in (None, "players"):
             try:
                 players_path = mlb_players.backfill_players(
                     zone=zone, client=client, season=season, fetched_at=fetched_at
                 )
-            except (AuthExpired, RequestFailed, httpx.HTTPStatusError) as failure:
+            except (
+                AuthExpired,
+                RequestFailed,
+                httpx.HTTPStatusError,
+                json.JSONDecodeError,
+            ) as failure:
                 typer.echo(f"player list: {failure}", err=True)
                 players_error = failure
             else:

@@ -509,21 +509,25 @@ unit_tests:
 
   - name: dim_players_take_names_and_attributes_from_the_best_source
     description: >
-      Nine players, one case each. 1001 is listed in 2025 and 2026 with different
+      Ten players, one case each. 1001 is listed in 2025 and 2026 with different
       spellings and positions: the 2026 name and attributes, mlb_players (catches the
       older season winning). 1002 is listed, with a game line and a platform name that
       both differ: the list's (catches a lower source beating the list). 1003 is not
-      listed and has a batting line and a later pitching line with different spellings:
-      the later game's name, mlb_boxscore, attributes null (catches the wrong game, a
-      source left out of the union, or attributes borrowed). 1004 has a named early line
+      listed and has a batting line and a pitching line with different spellings, the
+      later official date on the lower game id: the later date's name, mlb_boxscore,
+      attributes null (catches the wrong game, ordering by game id before date, a source
+      left out of the union, or attributes borrowed). 1004 has a named early line
       and a later line with a null name: the early name (catches a null name hiding a
       name). 1005 is in no list and has no game, with two league-season rows: the later
       season's name, platform. 1006 has a named earlier league-season and a later
       transaction-only one with a null name: the earlier name (catches the latest row
       chosen before the null filter). 1007 has only a null platform name: the row is kept
       with name and source null (catches a nameless player dropped). 1008 is listed, with
-      no league and no game: a row, mlb_players (catches a free agent dropped). Platform
-      player 9 has a null MLB id: no row (catches an unresolved player given a row).
+      no league and no game: a row, mlb_players (catches a free agent dropped). 1009 is
+      not listed and has two lines with different spellings on the same official date in
+      two games: the higher game id's name, mlb_boxscore (catches a missing or reversed
+      game id tie-break). Platform player 9 has a null MLB id: no row (catches an
+      unresolved player given a row).
     model: dim_players
     given:
       - input: ref('stg_mlb__players')
@@ -535,17 +539,21 @@ unit_tests:
       - input: ref('stg_mlb__batting_game_logs')
         rows:
           - {game_pk: 1, mlbam_player_id: 1002, player_name: "Game Name"}
-          - {game_pk: 2, mlbam_player_id: 1003, player_name: "Early Spelling"}
+          - {game_pk: 3, mlbam_player_id: 1003, player_name: "Early Spelling"}
+          - {game_pk: 4, mlbam_player_id: 1009, player_name: "Lower Game Spelling"}
           - {game_pk: 1, mlbam_player_id: 1004, player_name: "Named Early"}
           - {game_pk: 3, mlbam_player_id: 1004, player_name: null}
       - input: ref('stg_mlb__pitching_game_logs')
         rows:
-          - {game_pk: 3, mlbam_player_id: 1003, player_name: "Late Spelling"}
+          - {game_pk: 2, mlbam_player_id: 1003, player_name: "Late Spelling"}
+          - {game_pk: 5, mlbam_player_id: 1009, player_name: "Higher Game Spelling"}
       - input: ref('stg_mlb__games')
         rows:
           - {game_pk: 1, official_date: "2026-04-01"}
-          - {game_pk: 2, official_date: "2026-04-02"}
-          - {game_pk: 3, official_date: "2026-04-05"}
+          - {game_pk: 2, official_date: "2026-04-05"}
+          - {game_pk: 3, official_date: "2026-04-02"}
+          - {game_pk: 4, official_date: "2026-04-06"}
+          - {game_pk: 5, official_date: "2026-04-06"}
       - input: ref('int_mlb__player_game_days')
         rows:
           - {mlbam_player_id: 1002, season: 2026, game_date: "2026-04-01"}
@@ -553,6 +561,8 @@ unit_tests:
           - {mlbam_player_id: 1003, season: 2026, game_date: "2026-04-05"}
           - {mlbam_player_id: 1004, season: 2026, game_date: "2026-04-01"}
           - {mlbam_player_id: 1004, season: 2026, game_date: "2026-04-05"}
+          - {mlbam_player_id: 1009, season: 2026, game_date: "2026-04-06"}
+          - {mlbam_player_id: 1009, season: 2026, game_date: "2026-04-06"}
       - input: ref('dim_player_league_seasons')
         rows:
           - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, mlbam_player_id: 1002, player_name: "Platform Name", last_rostered_date: "2026-09-01"}
@@ -572,6 +582,7 @@ unit_tests:
         - {mlbam_player_id: 1006, player_name: "Earlier Name", name_source: platform, primary_position: null, bats: null, throws: null, birth_date: null, mlb_debut_date: null}
         - {mlbam_player_id: 1007, player_name: null, name_source: null, primary_position: null, bats: null, throws: null, birth_date: null, mlb_debut_date: null}
         - {mlbam_player_id: 1008, player_name: "Free Agent", name_source: mlb_players, primary_position: "P", bats: R, throws: L, birth_date: "1998-08-08", mlb_debut_date: "2020-08-08"}
+        - {mlbam_player_id: 1009, player_name: "Higher Game Spelling", name_source: mlb_boxscore, primary_position: null, bats: null, throws: null, birth_date: null, mlb_debut_date: null}
 
 # -----------------------------------------------------------------------------
 # fct_player_category_value unit tests (#11): the per-category arithmetic, which lives in
