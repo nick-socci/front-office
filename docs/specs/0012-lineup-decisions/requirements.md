@@ -51,8 +51,9 @@ the issue does not mention.
   the morning. Game-time locks are ignored.
 - **No add or drop.** Only players on the roster that day are considered.
 - **Injured-list slots are not candidates** (ADR 0037).
-- **The games-started limit is not enforced** (ADR 0037); what it costs is measured in
-  the expected values.
+- **The games-started limit is not enforced** (ADR 0037). Each team-day carries the
+  pitcher starts of both lineups (R4.9), so a period over a league's limit can be seen;
+  the limit itself is not read or interpreted.
 - **No reconstruction of a day's true eligibility** for backfilled seasons (ADR 0038).
 - **No BigQuery port of the Python model.** Its header says what porting would take;
   the choice belongs to sub-project 3.
@@ -161,6 +162,10 @@ Every legal (player, slot) pair of a team-day, which is all the solver reads.
   played starters in either role; a singular test fails on either.
 - R4.8 WHEN the gap is at most 1.8e-8 (R3.2) THE SYSTEM SHALL report no player brought in, sat or moved;
   a singular test fails otherwise.
+- R4.9 THE SYSTEM SHALL carry `actual_pitcher_starts` and `optimal_pitcher_starts`: the
+  number of players in a pitcher-role slot of the actual lineup, and of the optimal
+  one, whose day is a `start` (R1.2). The first is never null; the second is null on
+  an unvalued row (R4.6).
 
 ### R5. `fct_lineup_decision_categories`
 
@@ -223,8 +228,8 @@ Real 2026 season. Measured on 2026-10-09 with a throwaway prototype of R1 to R5
 | Actual totals equal to `fct_matchup_category_scores.team_value` | 4,862 of 4,862 | R5.3's test |
 | Results, actual → with the optimal lineups | LOSS→LOSS 1,764 · LOSS→TIE 83 · LOSS→WIN 453 · TIE→LOSS 5 · TIE→TIE 141 · TIE→WIN 116 · WIN→LOSS 6 · WIN→TIE 2 · WIN→WIN 2,292 | group by |
 | Sides that gain / lose category wins; net wins gained | 216 / 1 of 286; 561 | query |
-| Pitcher starts in the optimal lineups against the actual | 2,639 against 2,524 | query over options |
-| Team-periods of seven days whose optimal lineups hold more than 13 pitcher starts | 2 of 264 (the actual lineups: 1); none above 14 | query |
+| Sum of `optimal_pitcher_starts` / of `actual_pitcher_starts` | 2,639 / 2,524 | sums |
+| Team-periods of seven days whose optimal lineups hold more than 13 pitcher starts | 2 of 264 (the actual lineups: 1); none above 14 | the two columns summed by team and matchup period |
 
 Sensitivity, measured with the same prototype and not built: with injured-list slots
 as candidates the season gap is 1,553.98; with eligibility cut back to slots a player
@@ -246,4 +251,5 @@ worth 0, which holds for 6 of the fixtures' 17 scales):
 | Team-days with a gap | 4 of 36 | the last task |
 | Players brought in / sat / moved | 4 / 2 / 0 | the last task |
 | Rows with `is_unvalued` | 0 | the last task |
+| Sum of `actual_pitcher_starts` / `optimal_pitcher_starts` | not measured by the prototype; recorded in the last task | the last task |
 | CI `dbt build`, isolation | no error, today's three warnings, 0 differing pairs | `.agentic/gates` |

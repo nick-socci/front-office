@@ -64,7 +64,10 @@ Option 2 is mostly days that went badly; its size depends on where zero is put. 
 3 can be worse than the actual lineup. Option 4 leaves out the commonest decision. A
 player in an injured-list slot needs a roster move before he can be started, which is
 not a lineup choice. Enforcing the starts limit would turn 2,160 small problems into
-weekly ones for 2 of 264 team-periods, on a setting whose meaning is inferred.
+weekly ones for 2 of 264 team-periods, on a setting whose meaning is inferred. That it
+rarely binds is a fact about a limit of 13; so that a league with a tighter one is not
+misread, each team-day carries the pitcher starts of the actual and of the optimal
+lineup, and the limit itself is not interpreted.
 
 ## Consequences
 
@@ -78,7 +81,8 @@ weekly ones for 2 of 264 team-periods, on a setting whose meaning is inferred.
 - Bad / accepted cost: a starter's ruinous day cannot be avoided by the optimal lineup
   unless someone who played can take the slot, so the true hindsight optimum is higher.
 - Bad / accepted cost: 2 team-periods' optimal lineups hold more pitcher starts than
-  the league allows in a week.
+  the league allows in a week. The counts on each team-day show where; nothing stops
+  it.
 - Bad / accepted cost: game-time locks, and a bench player activated from the injured
   list mid-day, are ignored.
 - Follow-ups: #83 remains the test of whether the scalar predicts winning.

@@ -217,6 +217,7 @@ Grain: team-day, `platform_player_id`, `lineup_slot_id`. Table.
 | `scoring_period` | the roster's period |
 | `lineup_slot`, `slot_role` | from `int_fantasy__lineup_slots` |
 | `option_value` | the `day_value` of the side the slot's role credits |
+| `day_kind` | of that side's day: `batting`, `start` or `relief` |
 | `is_started` | he was in a starting slot that day |
 | `is_actual` | he was in this slot |
 | `eligibility_fetched_at` | `stg_espn__roster_entry_slots.fetched_at` |
@@ -290,6 +291,7 @@ Grain: team-day. Table.
 | `optimal_value` | `sum(option_value)` over the optimal lineup's options, in player order |
 | `value_gap` | `optimal_value - actual_value` |
 | `players_brought_in`, `players_sat`, `players_moved` | R4.2 |
+| `actual_pitcher_starts`, `optimal_pitcher_starts` | options with `day_kind = 'start'` in a pitcher-role slot: the `is_actual` ones, and the optimal lineup's (R4.9) |
 | `missed_start_platform_player_id`, `missed_start_mlbam_player_id`, `missed_start_slot`, `missed_start_value` | R4.3 |
 | `eligibility_fetched_at` | of the team-day's roster |
 | `is_unvalued` | any of the team-day's options has a null value (R3.5) |
@@ -302,6 +304,10 @@ computed in this model from `int_fantasy__lineup_options`, never from whether
 when it is false and "not solved" when it is true.
 `has_unverified_inputs` is true when the date is incomplete in `int_mlb__game_dates`
 or any candidate has no MLB id.
+
+The two pitcher-start counts are there because the starts limit is not enforced (ADR
+0037): summed by team and matchup period they show a period over a league's limit,
+whatever that limit is. The model does not read `lineupSlotStatLimits`.
 
 ### `fct_lineup_decision_categories.sql`
 
@@ -351,7 +357,8 @@ dbt unit tests for the SQL models, with the Python model's output given as an in
 `candidate_day_values` (a hitter's day, a start, a relief day, a two-way day, a null
 level); `lineup_options` (an ineligible slot, an unused slot, a side not played, the
 actual slot); `fct_lineup_decisions` (a replacement, a move, a tie, an unvalued day, a
-day with no options, the missed-start tie-break); `fct_lineup_decision_categories` (a
+day with no options, the missed-start tie-break, a benched start brought in for a
+started relief day); `fct_lineup_decision_categories` (a
 count and a rate that change result, a lower-is-better category, a period with an
 unvalued day, a period with a day on which nobody played, an unverified day).
 
@@ -369,6 +376,7 @@ pytest, `ingestion/tests/test_lineup_solver.py`: the cases of R6.1.
 | R3.3, R6.2 | `optimal_lineups_are_legal` | an illegal lineup from a wrong matrix |
 | R3.5, R4.6 | unit test of the team-day fact | an unvalued day reported as a zero gap |
 | R4.1–R4.5 | unit test of the team-day fact | counts off by a moved player; the wrong missed start; a bye week dropped |
+| R4.9 | unit test of the team-day fact | a relief day counted as a start; a hitter slot counted; the optimal count taken from the actual lineup |
 | R4.7, R4.8 | the two singular tests | an "optimal" lineup below the actual; churn on a tie |
 | R5.1, R5.2, R5.4, R5.5 | unit test of the category fact | a result decided without the rounding; a rate summed as a rate; an idle day nulling a week; an unverified week reported as certain |
 | R5.3 | `fct_lineup_decision_categories_reproduce_the_actual_totals` | a credited component the totals path gets wrong |
@@ -397,8 +405,6 @@ pytest, `ingestion/tests/test_lineup_solver.py`: the cases of R6.1.
 - The fixtures give CI almost no signal on values (6 of 17 scales null or zero) —
   certain — CI proves the plumbing and legality; the unit tests and pytest prove the
   rules; the real season proves the numbers.
-- #60's build (PR #106) is not merged when this is built — possible — R4.3's
-  `relationships` test needs the MLB-keyed `dim_players`; the build waits for it.
 
 ## Open questions
 
@@ -420,5 +426,7 @@ pytest, `ingestion/tests/test_lineup_solver.py`: the cases of R6.1.
 | design-review | F4 (P2): the 21-to-23 candidates could not be verified from the options, which hold only players who played | Changed: verified from `fct_lineup_decisions.candidates` |
 | design-review | F5 (P2): CI's gap and moves had no expected values | Changed: measured with the prototype on the fixture warehouse and added; verified in the last task |
 | design-review | F6 (P3): "2 of 288" and "2 of 264" for the starts limit | Changed: 264 seven-day team-periods throughout |
+| owner, 2026-10-09 | The eight decisions of the spec PR taken as recommended, with one change: the starts limit is not enforced, and the team-day fact carries the pitcher starts of both lineups, so a breach shows in a league whose limit binds | Changed: R4.9; `day_kind` on the options; two columns on `fct_lineup_decisions`; ADR 0037 |
+| owner, 2026-10-09 | #60's build (PR #106) merged before this spec was approved | Changed: the risk that it would not be is removed; the spec is rebased onto it |
 
 ## Amendments

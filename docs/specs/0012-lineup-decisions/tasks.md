@@ -6,7 +6,7 @@ Ordered. Tests before the code they test. This is the plan, not the tracker: pro
 run evidence are recorded on #12 during the build, and this file is not edited to show
 them.
 
-Built after #60 merges (PR #106). The first commit of the build accepts ADRs 0037 to
+Built on #60, which is merged (PR #106). The first commit of the build accepts ADRs 0037 to
 0039.
 
 1. Spike: a Python model that imports a local module and returns a relation —
@@ -43,7 +43,7 @@ Built after #60 merges (PR #106). The first commit of the build accepts ADRs 003
    - `optimal_lineups_are_legal` and the YAML first; then the model and the
      `module_paths` setting.
    - Verify: `dbt build --target ci --select int_fantasy__optimal_lineups` passes.
-8. `fct_lineup_decisions`, tests first — `impl` — R4.1–R4.8
+8. `fct_lineup_decisions`, tests first — `impl` — R4.1–R4.9
    - Verify: `dbt build --target ci --select fct_lineup_decisions` passes.
 9. `fct_lineup_decision_categories`, tests first — `impl` — R5.1–R5.4
    - Verify: `dbt build --target ci --select fct_lineup_decision_categories` passes.
