@@ -252,7 +252,7 @@ def solve_team_day(
 - Cost of (slot, player) is `-(value + 1e-9 if is_actual else value)` where the pair is
   an option, and forbidden otherwise. That is R3.1's objective as written: the bonus
   is in the requirement, not a perturbation of it. Cost of (slot, idle filler of the slot's role) is
-  0, and forbidden across roles. Forbidden is infinite cost: SciPy never assigns such a
+  -1e-9, the same bonus for leaving a slot idle, and forbidden across roles. Forbidden is infinite cost: SciPy never assigns such a
   pair, whatever the size of the values, where a finite constant would have to be
   larger than a bound the option values do not have.
 - `scipy.optimize.linear_sum_assignment` matches every slot instance. The actual lineup
@@ -261,8 +261,13 @@ def solve_team_day(
 - A slot matched to an idle filler is idle. Limiting the fillers is what enforces
   R3.1's "at least as many": a slot of a role can go idle only as often as the actual
   lineup left one without a played starter.
-- The 1e-9 bonus is R3.4. The actual lineup collects it on every played starter, more
-  than any other lineup can, so it wins a tie. Its price is R3.2's bound: the chosen
+- The 1e-9 bonus is R3.4. The actual lineup collects it on every slot: on a played
+  starter where it has one and on the idle filler where it has not. Any other lineup
+  misses it on at least one slot, so the actual lineup wins a tie, and a change is
+  made only for a gain of at least 1e-9. Without the bonus on idle slots a bench
+  player worth exactly 0 beside an idle slot tied with leaving it idle: brute force
+  on 20,000 small tie-heavy cases changed the lineup for no gain in 992 of them
+  without it and in none with it. Its price is R3.2's bound: the chosen
   lineup's plain value can fall short of the true maximum by less than 1.8e-8, which
   the pytest brute-force case checks. An exact two-stage tie-break (maximise value,
   then actual slots among the maxima) was considered and left out: it needs equality
@@ -439,11 +444,10 @@ pytest, `ingestion/tests/test_lineup_solver.py`: the cases of R6.1.
   isolation gate would show it.
 - The 1e-9 bonus prefers a lineup whose value is lower by less than 1.8e-8 — by
   design (R3.2); a day value is of order 0.01 to 5 — accepted.
-- A bench player whose day value is exactly 0 is brought into a slot the actual lineup
-  left idle: the objective is tied, no bonus separates the two, and R4.8's test fails
-  on a changed lineup with no gain — very low; a value is a sum of scaled values over
-  replacement and none was 0 in the prototype (0 of 620) — the test failing would name
-  the team-day, and the rule for it would be an amendment.
+- The prototype had no bonus on idle slots, so a figure in the expected values moves —
+  very low; it moves only where a bench player worth between 0 and 1e-9 sat beside an
+  idle slot, and none of the 620 unchanged team-days had one — the last task reports
+  any figure that differs, with its cause.
 - R5.3's exact equality fails in the last binary digit, because DuckDB sums in a
   different order from the fact — low; the prototype's difference was 0 — the test
   would then compare after the fact's own rounding to nine decimals, as an amendment.
@@ -475,6 +479,7 @@ pytest, `ingestion/tests/test_lineup_solver.py`: the cases of R6.1.
 | owner, 2026-10-09 | The eight decisions of the spec PR taken as recommended, with one change: the starts limit is not enforced, and the team-day fact carries the pitcher starts of both lineups, so a breach shows in a league whose limit binds | Changed: R4.9; `day_kind` on the options; two columns on `fct_lineup_decisions`; ADR 0037 |
 | codex PR review 1 | F1 (P1): R4.8 forbade any change of lineup at a gap up to 1.8e-8, but a correct solver result can gain less than that (a bench player worth 2e-9 beats a starter worth 0) | Changed: R4.8's threshold is 1e-12, "nothing was gained", and no longer R3.2's bound; a risk records the one tie the bonus cannot separate |
 | codex PR review 1 | F2 (P2): a fixed finite cost does not reliably forbid a pair, since option values have no stated bound | Changed (owner, 2026-10-09): forbidden pairs cost infinity; a pytest case with values of very large magnitude |
+| codex PR review 2 | F1 (P2): R4.8's 1e-12 threshold still rejected a correct result, a bench player worth 5e-13 brought into an idle slot | Changed: a slot left idle earns the same 1e-9 as a player left in his actual slot (R3.1), so any change costs at least one bonus (R3.4) and R4.8's threshold of 5e-10 follows from the objective. Checked by brute force |
 | design-review 2 | F1 (P1): the recomputed actual totals were CTEs of the category mart and not selected, so R5.3's test could not read them and would have tested its own copy | Changed (owner chose a model over a column): `int_fantasy__lineup_category_totals`, one row per side, category and lineup; R5.2 to R5.4; the mart sums nothing |
 | design-review 2 | F2 (P2): no task covered R5.5 | Changed: the mart's task lists it |
 | design-review 2 | F3 (P2): CI had no expected value for the pitcher-start counts | Changed: actual 2, measured; optimal at most 2, with the reason |

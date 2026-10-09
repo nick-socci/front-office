@@ -118,20 +118,23 @@ Every legal (player, slot) pair of a team-day, which is all the solver reads.
 ### R3. The optimal lineup
 
 - R3.1 THE SYSTEM SHALL choose, for each team-day, the set of options that maximises
-  the summed `option_value` plus 1e-9 for each player left in his actual slot, such
-  that no player has two slots, no slot holds more players
+  the summed `option_value` plus 1e-9 for each player left in his actual slot and
+  for each slot left idle, such that no player has two slots, no slot holds more players
   than the league's count for it, and, for each of the hitter and pitcher roles, at
   least as many players are assigned as the actual lineup had starters who played on
   that role's side.
-- R3.2 THE SYSTEM SHALL solve R3.1 exactly, as an assignment problem. The 1e-9 term is
-  the tie-break of R3.4 made part of the objective, so the chosen lineup's summed
+- R3.2 THE SYSTEM SHALL solve R3.1 exactly, as an assignment problem. The 1e-9 terms are
+  the tie-break of R3.4 made part of the objective; a slot earns at most one of them,
+  so the chosen lineup's summed
   `option_value` is within 1e-9 times the number of starting slots (1.8e-8 for 18) of
   the greatest possible.
 - R3.3 THE SYSTEM SHALL hold the result in `int_fantasy__optimal_lineups`, one row per
   team-day and assigned player, with his slot.
 - R3.4 WHEN the actual lineup attains the greatest summed `option_value` THE SYSTEM
   SHALL return the actual lineup; among lineups of equal value it keeps the most
-  players in their actual slots.
+  players in their actual slots and fills the fewest idle slots. Any lineup that
+  differs from the actual one gives up at least one 1e-9 term, so it is chosen only
+  for a gain of at least 1e-9.
 - R3.5 IF a team-day has an option whose value is null THEN it is *unvalued* and THE
   SYSTEM SHALL return no rows for it. A team-day with no options at all is not
   unvalued: its optimal lineup is the empty one, with value 0. The two are told apart
@@ -165,11 +168,11 @@ Every legal (player, slot) pair of a team-day, which is all the solver reads.
 - R4.7 THE SYSTEM SHALL never report a gap below zero (to within 1e-9 for the order of
   a floating-point sum), nor fewer assigned players than
   played starters in either role; a singular test fails on either.
-- R4.8 WHEN the gap is at most 1e-12 (nothing was gained: the order of a floating-point
-  sum's error, far below any day value) THE SYSTEM SHALL report no player brought in,
-  sat or moved; a singular test fails otherwise. The threshold is not R3.2's bound: a
-  lineup that differs from the actual one may gain any positive amount, however
-  small, and is then a correct result.
+- R4.8 WHEN the gap is below 5e-10 THE SYSTEM SHALL report no player brought in, sat
+  or moved; a singular test fails otherwise. By R3.4 a lineup that differs from the
+  actual one gains at least 1e-9; the threshold is half of that, to leave room for
+  the order of a floating-point sum. It is not R3.2's bound: a changed lineup with a
+  gap between 1e-9 and 1.8e-8 is a correct result.
 - R4.9 THE SYSTEM SHALL carry `actual_pitcher_starts` and `optimal_pitcher_starts`: the
   number of players in a pitcher-role slot of the actual lineup, and of the optimal
   one, whose day is a `start` (R1.2). The first is never null; the second is null on
@@ -206,7 +209,8 @@ Every legal (player, slot) pair of a team-day, which is all the solver reads.
   eligible at two slots that a greedy pass double-assigns; a slot with a count above
   one; a starter with a bad day and no replacement, who stays; the same starter with a
   bench player who played, who replaces him; a starter with no game displaced by a
-  bench player with one; a two-way player; a tie, which keeps the actual lineup; values of very large magnitude, which never
+  bench player with one; a two-way player; a tie, which keeps the actual lineup; a bench player worth 0, and one worth less than
+  1e-9, beside a slot the actual lineup left idle, neither of whom is brought in; values of very large magnitude, which never
   make an ineligible pair preferable; a
   team-day with no options; input rows in shuffled order; and, on random small cases,
   a summed value within R3.2's bound of the maximum found by trying every legal
@@ -236,7 +240,7 @@ Real 2026 season. Measured on 2026-10-09 with a throwaway prototype of R1 to R5
 | Players brought in / sat / moved, season | 2,533 / 2,427 / 585 | sums |
 | Team-days starting more played players than the actual lineup | 101 | query |
 | Greatest single missed start | 2.462, an `OF` slot, 2026-07-11 | max |
-| Team-days with a gap at most 1.8e-8 and any change of lineup | 0 of 620 | query; R4.8's test covers those at most 1e-12 |
+| Team-days with a gap at most 1.8e-8 and any change of lineup | 0 of 620 | query; R4.8's test covers those below 5e-10 |
 | Rows with `has_unverified_inputs` | 0 | count |
 | Rows with `is_unvalued` | 0 | count |
 | `fct_lineup_decision_categories` rows | 4,862 (286 sides × 17) | count |
