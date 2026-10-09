@@ -495,8 +495,12 @@ def test_committed_pro_schedule_fixture_is_the_allowlist_and_the_fixture_dates()
                 }
                 assert str(game["scoringPeriodId"]) == period
                 games_by_period.setdefault(period, []).append(game)
-    assert set(games_by_period) == {"1", "2"}
-    expected = {"1": (15, "2026-04-29"), "2": (11, "2026-04-30")}
+    assert set(games_by_period) == {"1", "6", "7"}
+    expected = {
+        "1": (14, "2026-04-24"),
+        "6": (15, "2026-04-29"),
+        "7": (11, "2026-04-30"),
+    }
     for period, (count, day) in expected.items():
         assert len({g["id"] for g in games_by_period[period]}) == count
         assert len(games_by_period[period]) == 2 * count  # listed under both teams
@@ -532,10 +536,10 @@ def test_committed_roster_fixtures_carry_allowlisted_lines_of_scheduled_games():
     """Catches a projected or season-total line, a field outside the allowlist, a line of
     another period, a game that is not in the pro schedule fixture for the same period (the
     rosters and the schedule from different days, R1.1), an empty `stats` key on an entry
-    without lines, and a fixture with no real line to compare in either period."""
+    without lines, and a fixture with no real line to compare in any of its three periods."""
     root = Path(__file__).resolve().parents[2] / "fixtures/landing"
     rosters, games = committed_rosters_and_games(root, 2026)
-    assert sorted(period for _, period in rosters) == [1, 2]
+    assert sorted(period for _, period in rosters) == [1, 6, 7]
     for capture, period in rosters:
         payload = capture.payload
         assert payload["scoringPeriodId"] == period
@@ -564,6 +568,76 @@ def test_committed_roster_fixtures_carry_allowlisted_lines_of_scheduled_games():
                     assert line["externalId"] in games[str(period)]
                     non_empty += bool(line["stats"])
         assert non_empty > 0
+
+
+def test_the_2026_matchups_fixture_spans_the_seven_periods():
+    """Catches the committed 2026 matchups keeping the old two-period span, or losing a
+    period of the seven-day season the settings and the pro schedule describe."""
+    root = Path(__file__).resolve().parents[2] / "fixtures/landing"
+    (capture,) = LandingZone(root).committed(
+        source="espn", endpoint="matchups", partitions={"season": 2026, "league_id": "111111"}
+    )
+    kept = {
+        period
+        for matchup in capture.payload["schedule"]
+        for side in ("home", "away")
+        for period in matchup[side]["pointsByScoringPeriod"]
+    }
+    assert kept == {"1", "2", "3", "4", "5", "6", "7"}
+
+
+def test_the_committed_fixtures_hold_a_start_pool_pitcher():
+    """Catches a hand edit, or a regeneration, that leaves the start pool empty again: the
+    committed files must hold a pitcher who started game 824854 (04-24) with outs recorded
+    and no more plate appearances than batters faced, who started a later fixture game, and
+    who is on no roster of that game's period (the check the generator runs on raw data)."""
+    root = Path(__file__).resolve().parents[2] / "fixtures/landing"
+    zone = LandingZone(root)
+
+    def started(game_pk: int) -> dict[str, dict]:
+        # The newest capture, as the model reads it (game 822821 has a later correction).
+        captures = sorted(
+            zone.committed(
+                source="mlb",
+                endpoint="boxscore",
+                partitions={"season": 2026, "game_pk": game_pk},
+            ),
+            key=lambda capture: capture.meta["fetched_at"],
+        )
+        found: dict[str, dict] = {}
+        for side in ("home", "away"):
+            for player in captures[-1].payload["teams"][side]["players"].values():
+                stats = player.get("stats", {})
+                if stats.get("pitching", {}).get("gamesStarted", 0) >= 1:
+                    found[str(player["person"]["id"])] = stats
+        return found
+
+    earlier = {
+        person
+        for person, stats in started(824854).items()
+        if stats["pitching"].get("outs", 0) > 0
+        and stats.get("batting", {}).get("plateAppearances", 0)
+        <= stats["pitching"].get("battersFaced", 0)
+    }
+    assert earlier, "no pitcher starts game 824854 with outs recorded"
+    later = {person for game_pk in (822821, 822907) for person in started(game_pk)} & earlier
+    assert later, "no earlier starter starts again in game 822821 or 822907"
+
+    (id_map,) = zone.committed(source="idmap", endpoint="player_id_map")
+    espn_ids: dict[str, set[str]] = {}
+    for row in id_map.payload:
+        espn_ids.setdefault(str(row["MLBID"]), set()).add(str(row["ESPNID"]))
+    (roster,) = zone.committed(
+        source="espn",
+        endpoint="roster",
+        partitions={"season": 2026, "league_id": "111111", "scoring_period": 6},
+    )
+    rostered = {
+        str(entry["playerId"])
+        for team in roster.payload["teams"]
+        for entry in team["roster"]["entries"]
+    }
+    assert any(not (espn_ids.get(person, set()) & rostered) for person in later)
 
 
 # -- the 2025 past season (spec 0085, R3) ------------------------------------------------------

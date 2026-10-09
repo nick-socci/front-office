@@ -113,7 +113,7 @@ def roster_names(league: str, season: int, period: int) -> dict[int, str]:
 def test_one_player_is_spelled_differently_in_the_two_2026_leagues():
     """Catches a combined fixture where the conformed dimension has no choice to make."""
     differing = set()
-    for period in (1, 2):
+    for period in (1, 6, 7):
         a, b = roster_names("111111", 2026, period), roster_names("222222", 2026, period)
         assert a.keys() == b.keys()
         differing |= {k for k in a if a[k] != b[k]}
