@@ -1,6 +1,6 @@
 # 0010. Category values are scaled by the matchup margin
 
-- Status: accepted
+- Status: accepted, amended by [0027](0027-a-category-scale-blends-the-leagues-earlier-seasons-with-the-season-so-far.md)
 - Date: 2026-10-03
 - Spec: [0055-matchup-margin-scale](../specs/0055-matchup-margin-scale/design.md) · Issue: #55
 

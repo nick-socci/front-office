@@ -1,6 +1,6 @@
 # 0028. A league-season may read its own league's earlier seasons, and isolation is checked by building it with them
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-08
 - Spec: [0057-category-scales-from-history](../specs/0057-category-scales-from-history/design.md) · Issue: #57
 - Amends: [0013](0013-isolation-is-proved-by-building-each-league-season-alone.md)
@@ -39,8 +39,7 @@ dependency, and would fail on correct results if a fixture ever qualified.
 
 ## Decision
 
-Chosen by the owner on 2026-10-08: **option 2**. The status moves to accepted when the
-spec is approved.
+Chosen by the owner on 2026-10-08: **option 2**.
 
 A single build holds the league's captures for the season under test and every earlier
 season, with those seasons' MLB data; the rows compared are still those of the

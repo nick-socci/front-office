@@ -321,3 +321,23 @@ test showed it worse than no adjustment for the first month of a season. Playoff
 matchups were then left out and margins standardised for each period's volume, both at
 the owner's request. R1 to R3, the expected values and ADR 0027 were rewritten; the design review's findings F1 to F4 were
 made against the first draft and their resolutions carry over unchanged.
+
+### 2026-10-08: a matchup period whose volume cannot be measured (second design review)
+
+A second design review, run on the spec as rewritten, found one gap (P2): R1.8 does not
+say what a relative volume is when no counting category can contribute to it, or when
+it comes out as zero. Neither occurs in any landed season. Two rules were put to the
+owner before approval; the owner approved and merged the spec without answering them
+separately, so they are applied as proposed and listed in the build's pull request for
+the owner to confirm or change.
+
+- **No counting category to measure volume from** (a league that scores only rates, or
+  one whose every counting category has a zero median): the relative volume is 1, and
+  margins and denominators are used as reported. Length cannot be measured, so nothing
+  is adjusted; the league still has reported scales.
+- **A relative volume of zero** (a period in which nothing was played in most counting
+  categories): the period's rows are not measured, with a null `standard_margin`.
+
+Each has a unit test. R1.7's `is_measured` additionally requires a relative volume
+above zero.
+
