@@ -40,7 +40,8 @@
 -- levels and the same margin scale and side denominator, READ from
 -- int_fantasy__category_scales, never recomputed over transactions, or a two-week window
 -- and a season would not be comparable. The scales are joined on platform, league, season
--- and category_key.
+-- and category_key. Which matchups they were measured from is that model's business (ADR
+-- 0027): with earlier seasons loaded, a blend of them and the season's decided matchups.
 --
 -- KIND OF DAY (ADR 0008, #52), as in fct_player_category_value. A window's played days are
 -- grouped by kind and each kind is valued against its own replacement level: `batting` (a
