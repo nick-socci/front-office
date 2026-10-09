@@ -41,7 +41,7 @@ C. **Leave the facts alone**; a query joins through the league-season table.
 
 ## Decision
 
-Recommended, for the owner to decide: **1 and A**.
+Chosen by the owner on 2026-10-09: **1 and A**.
 
 The path from a platform's player to an MLB player is his row in
 `dim_player_league_seasons` for the league-season in question. If one platform player
@@ -53,8 +53,9 @@ Each of `fct_player_category_value`, `fct_player_season_value` and
 league-season's row and null for an unresolved player. Nothing else about them changes.
 
 Option 2 needs the "latest" rule ADR 0012 listed as a cost, to produce a table with no
-reader. Option B changes three grains and their tests to gain what one added column
-gives, loses an unresolved player's rows, and merges a player a platform splits in two.
+reader. The owner asked why not keep it: for the 489 players the id map resolves the
+mapping is platform-level, and a one-row lookup is convenient; it was still dropped.
+Option B changes three grains and their tests to gain what one added column gives, loses an unresolved player's rows, and merges a player a platform splits in two.
 Option C leaves every query to make a four-column join before it can name a player.
 
 ## Consequences

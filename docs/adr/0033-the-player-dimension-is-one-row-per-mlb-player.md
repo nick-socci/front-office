@@ -35,10 +35,11 @@ players have no 2026 game. In the CI fixtures 7 transaction-only players have no
 
 ## Decision
 
-Recommended, for the owner to decide: **option 1**.
+Chosen by the owner on 2026-10-09: **option 1**.
 
-`dim_players` has one row per `mlbam_player_id` that appears in the loaded MLB game logs
-or as the resolved id of any league-season's player. A platform player with no MLB id
+`dim_players` has one row per `mlbam_player_id` that appears in a landed MLB player list
+(ADR 0035), in the loaded MLB game logs, or as the resolved id of any league-season's
+player: 1,515 on 2026. A platform player with no MLB id
 has no row; he stays in `dim_player_league_seasons` as `unresolved`, where a warning
 test already names him.
 
@@ -56,7 +57,7 @@ mart on ESPN's key.
   2026; 7 in CI.
 - Bad / accepted cost: the table is still defined over everything loaded, so it stays
   exempt by name from the isolation gate (ADR 0013) and is held to its own tests.
-- Bad / accepted cost: 1,477 rows where there were 498, most of them players no league
+- Bad / accepted cost: 1,515 rows where there were 498, most of them players no league
   touched.
 - Amends ADR 0012: its `dim_players` key and "latest league-season" rule are replaced.
   Its split into a player table and a league-season table stands, and
