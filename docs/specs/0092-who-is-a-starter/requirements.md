@@ -1,6 +1,6 @@
 # Who is a starter, for call-ups and pitchers who change role — requirements
 
-Issue: #92 · Tier: M · Status: draft
+Issue: #92 · Tier: M · Status: approved 2026-10-09
 
 ## Problem
 

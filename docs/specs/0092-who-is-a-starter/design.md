@@ -65,7 +65,7 @@ labels all 282 of these pitchers `P` or nothing).
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0031](../../adr/0031-a-starter-at-the-time-has-not-pitched-yet-has-mostly-started-or-started-his-last-two.md) | A starter at the time has not pitched yet, has mostly started, or started his last two | proposed |
+| [0031](../../adr/0031-a-starter-at-the-time-has-not-pitched-yet-has-mostly-started-or-started-his-last-two.md) | A starter at the time has not pitched yet, has mostly started, or started his last two | accepted |
 
 ## Detailed design
 

@@ -1,6 +1,6 @@
 # 0031. A starter at the time has not pitched yet, has mostly started, or started his last two
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0092-who-is-a-starter](../specs/0092-who-is-a-starter/design.md) · Issue: #92
 - Amends: [0029](0029-the-start-pool-is-every-free-agent-start-by-a-starter.md), for who is a starter at the time
