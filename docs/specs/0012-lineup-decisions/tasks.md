@@ -36,7 +36,7 @@ Built on #60, which is merged (PR #106). The first commit of the build accepts A
 5. Slots and options, tests first — `impl` — R2.1–R2.4
    - Verify: `dbt build --target ci --select int_fantasy__lineup_slots
      int_fantasy__lineup_options` passes.
-6. The solver, tests first — `impl` — R3.1, R3.2, R3.4, R3.6, R6.1
+6. The solver, tests first — `impl` — R3.1, R3.2, R3.4, R3.6, R3.7, R6.1
    - `test_lineup_solver.py` with the cases of R6.1, seen to fail; then
      `dbt/python_modules/lineup_solver.py`; `pyproject.toml` and the lock.
    - Verify: `uv run pytest`, `uv run ruff check`, `uv sync --locked` pass.

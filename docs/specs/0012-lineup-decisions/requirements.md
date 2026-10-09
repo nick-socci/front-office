@@ -131,16 +131,22 @@ Every legal (player, slot) pair of a team-day, which is all the solver reads.
 - R3.3 THE SYSTEM SHALL hold the result in `int_fantasy__optimal_lineups`, one row per
   team-day and assigned player, with his slot.
 - R3.4 WHEN the actual lineup attains the greatest summed `option_value` THE SYSTEM
-  SHALL return the actual lineup; among lineups of equal value it keeps the most
-  players in their actual slots and fills the fewest idle slots. Any lineup that
-  differs from the actual one gives up at least one 1e-9 term, so it is chosen only
-  for a gain of at least 1e-9.
+  SHALL return the actual lineup; among lineups of equal value it returns one that
+  changes the fewest slots, a slot being changed when its actual occupant is not in
+  it or when it was idle and is filled. The two kinds count the same, and which of
+  several such lineups is returned is fixed only by R3.6. Any lineup that differs
+  from the actual one gives up at least one 1e-9 term, so it is chosen only for a
+  gain of at least 1e-9.
 - R3.5 IF a team-day has an option whose value is null THEN it is *unvalued* and THE
   SYSTEM SHALL return no rows for it. A team-day with no options at all is not
   unvalued: its optimal lineup is the empty one, with value 0. The two are told apart
   from the options, never from the absence of rows.
 - R3.6 THE SYSTEM SHALL return the same rows whatever the order of its input, and read
   only the rows of the team-day it is solving.
+- R3.7 IF an option value of a team-day is greater than 1,000 in magnitude THEN THE
+  SYSTEM SHALL fail the build, naming the team-day. The 1e-9 terms of R3.1 are lost
+  in a floating-point sum of far larger values; 1,000 is well inside where they hold
+  (about 25,000 for 18 slots) and far above a day value (of order 0.01 to 5).
 
 ### R4. `fct_lineup_decisions`
 
@@ -210,8 +216,11 @@ Every legal (player, slot) pair of a team-day, which is all the solver reads.
   one; a starter with a bad day and no replacement, who stays; the same starter with a
   bench player who played, who replaces him; a starter with no game displaced by a
   bench player with one; a two-way player; a tie, which keeps the actual lineup; a bench player worth 0, and one worth less than
-  1e-9, beside a slot the actual lineup left idle, neither of whom is brought in; values of very large magnitude, which never
-  make an ineligible pair preferable; a
+  1e-9, beside a slot the actual lineup left idle, neither of whom is brought in; values at the bound of R3.7, which never make an ineligible pair preferable and
+  whose tie still keeps the actual lineup, with the actual players in reverse order
+  of id; a value above the bound, which raises; two lineups of equal value that each
+  change two slots, either of which is accepted and the same one returned for
+  shuffled input; a
   team-day with no options; input rows in shuffled order; and, on random small cases,
   a summed value within R3.2's bound of the maximum found by trying every legal
   lineup.

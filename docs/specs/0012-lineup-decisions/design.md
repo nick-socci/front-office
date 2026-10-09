@@ -272,6 +272,12 @@ def solve_team_day(
   the pytest brute-force case checks. An exact two-stage tie-break (maximise value,
   then actual slots among the maxima) was considered and left out: it needs equality
   of floating-point sums to mean something.
+- Before building the matrix the function raises if any option value is above 1,000
+  in magnitude (R3.7). The bonus is a difference of 1e-9 inside sums of up to 18
+  values; double precision keeps it to about 25,000 and loses it entirely by 1e9.
+- Among lineups of equal value the bonus counts changed slots, of either kind, and
+  ranks nothing else (R3.4): two lineups that each change two slots tie, and which is
+  returned is the solver's choice for that matrix.
 - Sorting rows and columns makes the result independent of input order (R3.6).
 
 ### `int_fantasy__optimal_lineups.py`
@@ -417,7 +423,7 @@ pytest, `ingestion/tests/test_lineup_solver.py`: the cases of R6.1.
 | R1.5 | `candidate_day_values_add_back_to_season_value`, real season | a day value on a different scale from the facts |
 | R2.1–R2.3 | unit test of the options | a slot the league does not use; an ineligible pair; a pitcher's bat credited; a start's option carrying a relief kind |
 | R2.4 | `lineup_options_hold_one_actual_slot_per_played_starter` | an actual lineup the solver could not reproduce |
-| R3.1–R3.4, R3.6, R6.1 | pytest on the solver | a greedy double-assignment; a sit with no replacement; a spurious move on a tie; order dependence |
+| R3.1–R3.4, R3.6, R3.7, R6.1 | pytest on the solver | a greedy double-assignment; a sit with no replacement; a spurious move on a tie; order dependence; a tie lost to rounding at large values |
 | R3.3, R6.2 | `optimal_lineups_are_legal` | an illegal lineup from a wrong matrix |
 | R3.5, R4.6 | unit test of the team-day fact | an unvalued day reported as a zero gap |
 | R4.1–R4.5 | unit test of the team-day fact | counts off by a moved player; the wrong missed start; a bye week dropped |
@@ -480,6 +486,8 @@ pytest, `ingestion/tests/test_lineup_solver.py`: the cases of R6.1.
 | codex PR review 1 | F1 (P1): R4.8 forbade any change of lineup at a gap up to 1.8e-8, but a correct solver result can gain less than that (a bench player worth 2e-9 beats a starter worth 0) | Changed: R4.8's threshold is 1e-12, "nothing was gained", and no longer R3.2's bound; a risk records the one tie the bonus cannot separate |
 | codex PR review 1 | F2 (P2): a fixed finite cost does not reliably forbid a pair, since option values have no stated bound | Changed (owner, 2026-10-09): forbidden pairs cost infinity; a pytest case with values of very large magnitude |
 | codex PR review 2 | F1 (P2): R4.8's 1e-12 threshold still rejected a correct result, a bench player worth 5e-13 brought into an idle slot | Changed: a slot left idle earns the same 1e-9 as a player left in his actual slot (R3.1), so any change costs at least one bonus (R3.4) and R4.8's threshold of 5e-10 follows from the objective. Checked by brute force |
+| codex PR review 3 | F1 (P2): the 1e-9 bonus is lost in floating point at very large values, so a tie could swap players | Changed (owner, 2026-10-09): R3.7, the solver fails above 1,000 in magnitude; pytest cases at and above the bound |
+| codex PR review 3 | F2 (P2): R3.4 promised both the most players kept and the fewest idle slots filled, which can conflict | Changed (owner, 2026-10-09): R3.4 promises the fewest slots changed, of either kind, and nothing between lineups that tie on it |
 | design-review 2 | F1 (P1): the recomputed actual totals were CTEs of the category mart and not selected, so R5.3's test could not read them and would have tested its own copy | Changed (owner chose a model over a column): `int_fantasy__lineup_category_totals`, one row per side, category and lineup; R5.2 to R5.4; the mart sums nothing |
 | design-review 2 | F2 (P2): no task covered R5.5 | Changed: the mart's task lists it |
 | design-review 2 | F3 (P2): CI had no expected value for the pitcher-start counts | Changed: actual 2, measured; optimal at most 2, with the reason |
