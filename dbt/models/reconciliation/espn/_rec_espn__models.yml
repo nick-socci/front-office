@@ -106,10 +106,13 @@ unit_tests:
       him: a difference of minus one, because we say he did not play and every game is
       loaded. 105 is verified_off and ESPN has no line: no row. 106 is missing_boxscore
       and 107 unresolved_player, each with an ESPN line: rows kept, both numbers, but
-      unverified. 108 is a pitcher slot with 5 hits that are not his to score and earned
+      unverified. 106 has one credited hit against ESPN's two, to show a non-zero
+      credited number is kept on an unverified day; 107 has none to credit, as an
+      unresolved player has no MLB stats. 108 is a pitcher slot with 5 hits that are not his to score and earned
       runs equal to ESPN's: no row. Catches a status decided from the wrong column; a
       verified_off line dropped; an unverified row labelled a difference; a table that
-      keeps rows where the numbers agree; a batting line compared for a pitcher slot.
+      keeps rows where the numbers agree; a batting line compared for a pitcher slot; a credited number zeroed on an
+      unverified day.
     model: rec_espn__player_day_differences
     overrides:
       macros:
@@ -127,7 +130,7 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 103, slot_role: hitter, input_status: played, hits: 1}
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 104, slot_role: hitter, input_status: verified_off, hits: 0}
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 105, slot_role: hitter, input_status: verified_off, hits: 0}
-          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 106, slot_role: hitter, input_status: missing_boxscore, hits: 0}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 106, slot_role: hitter, input_status: missing_boxscore, hits: 1}
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 107, slot_role: hitter, input_status: unresolved_player, hits: 0}
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 108, slot_role: pitcher, input_status: played, hits: 5, earned_runs: 2}
       - input: ref('stg_espn__player_game_stats')
@@ -149,7 +152,7 @@ unit_tests:
         - {matchup_id: 7, platform_player_id: 102, stat_id: 1, our_value: 3, espn_value: 2, difference: 1, input_status: played, status: difference}
         - {matchup_id: 7, platform_player_id: 103, stat_id: 1, our_value: 1, espn_value: 0, difference: 1, input_status: played, status: difference}
         - {matchup_id: 7, platform_player_id: 104, stat_id: 1, our_value: 0, espn_value: 1, difference: -1, input_status: verified_off, status: difference}
-        - {matchup_id: 7, platform_player_id: 106, stat_id: 1, our_value: 0, espn_value: 2, difference: -2, input_status: missing_boxscore, status: unverified}
+        - {matchup_id: 7, platform_player_id: 106, stat_id: 1, our_value: 1, espn_value: 2, difference: -1, input_status: missing_boxscore, status: unverified}
         - {matchup_id: 7, platform_player_id: 107, stat_id: 1, our_value: 0, espn_value: 1, difference: -1, input_status: unresolved_player, status: unverified}
 
   - name: matchup_stat_differences_assign_every_status
