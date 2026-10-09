@@ -444,5 +444,5 @@ grain and carries `mlbam_player_id` beside it, and names players through `dim_pl
 - **2026-10-09, after review round 2.** The owner asked for the unit test the second
   amendment left out. `player_season_value_carries_the_mlb_id_of_its_own_league_season`
   is the fact's first unit test: one platform player resolved to different MLB ids in
-  two leagues, on two teams in one of them, and an unresolved player. It was shown to
-  fail with the league dropped from the join, and with the join made inner.
+  two leagues and in two seasons of one league, on two teams in one of them, and an
+  unresolved player.

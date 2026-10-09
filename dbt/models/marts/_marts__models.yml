@@ -1849,13 +1849,17 @@ unit_tests:
   - name: player_season_value_carries_the_mlb_id_of_its_own_league_season
     description: >
       Platform player 1 is rostered in two leagues that resolve him to different MLB
-      ids (1001 in league 1, 2002 in league 2), and in league 1 he started for two teams.
-      Player 2 is unresolved in league 1. Each row takes the MLB id of its own
-      league-season: 1001 on both of player 1's league 1 rows, 2002 on his league 2 row,
-      null for player 2. Catches an id joined without the league or the season (league
-      2's id on a league 1 row, or the rows doubled), an unresolved player's row dropped
-      by an inner join, and a join that multiplies a player's rows when he started for
-      two teams. The day counts show the grain is untouched: one row per player and
+      ids in 2026 (1001 in league 1, 2002 in league 2), in league 1 he started for two
+      teams, and league 1's 2027 season resolves him to a third id (3003). Player 2 is
+      unresolved in league 1. Each row takes the MLB id of its own league-season: 1001
+      on both of player 1's league 1 rows of 2026, 2002 on his league 2 row, 3003 on his
+      2027 row, null for player 2. Player 3 started a day and has no league-season row
+      at all: his row is kept with a null id, so that
+      player_facts_carry_their_league_seasons_mlb_id can name him; an inner join would
+      hide him from it. Catches an id joined without the league or without the season
+      (another league-season's id on the row, or the rows doubled), a row dropped by an
+      inner join, and a join that multiplies a player's rows when he started for two
+      teams. The day counts show the grain is untouched: one row per player and
       team, with its own started days.
     model: fct_player_season_value
     given:
@@ -1870,6 +1874,8 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 2, scoring_date: "2026-04-03", input_status: played, slot_role: hitter, games_batted: 1}
           - {platform: espn, league_id: "2", season: 2026, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2026-04-01", input_status: played, slot_role: hitter, games_batted: 1}
           - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, fantasy_team_id: 1, scoring_date: "2026-04-01", input_status: played, slot_role: hitter, games_batted: 0}
+          - {platform: espn, league_id: "1", season: 2027, platform_player_id: 1, fantasy_team_id: 1, scoring_date: "2027-04-01", input_status: played, slot_role: hitter, games_batted: 1}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, fantasy_team_id: 1, scoring_date: "2026-04-01", input_status: played, slot_role: hitter, games_batted: 1}
       - input: ref('fct_player_category_value')
         rows:
           - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, category_key: 1, scaled_value: 1.5}
@@ -1879,9 +1885,12 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, mlbam_player_id: 1001}
           - {platform: espn, league_id: "2", season: 2026, platform_player_id: 1, mlbam_player_id: 2002}
           - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, mlbam_player_id: null}
+          - {platform: espn, league_id: "1", season: 2027, platform_player_id: 1, mlbam_player_id: 3003}
     expect:
       rows:
-        - {league_id: "1", platform_player_id: 1, fantasy_team_id: 1, started_days: 2, played_started_days: 2, total_value: 2.0, mlbam_player_id: 1001}
-        - {league_id: "1", platform_player_id: 1, fantasy_team_id: 2, started_days: 1, played_started_days: 1, total_value: null, mlbam_player_id: 1001}
-        - {league_id: "2", platform_player_id: 1, fantasy_team_id: 1, started_days: 1, played_started_days: 1, total_value: null, mlbam_player_id: 2002}
-        - {league_id: "1", platform_player_id: 2, fantasy_team_id: 1, started_days: 1, played_started_days: 0, total_value: null, mlbam_player_id: null}
+        - {league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, started_days: 2, played_started_days: 2, total_value: 2.0, mlbam_player_id: 1001}
+        - {league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 2, started_days: 1, played_started_days: 1, total_value: null, mlbam_player_id: 1001}
+        - {league_id: "2", season: 2026, platform_player_id: 1, fantasy_team_id: 1, started_days: 1, played_started_days: 1, total_value: null, mlbam_player_id: 2002}
+        - {league_id: "1", season: 2026, platform_player_id: 2, fantasy_team_id: 1, started_days: 1, played_started_days: 0, total_value: null, mlbam_player_id: null}
+        - {league_id: "1", season: 2027, platform_player_id: 1, fantasy_team_id: 1, started_days: 1, played_started_days: 1, total_value: null, mlbam_player_id: 3003}
+        - {league_id: "1", season: 2026, platform_player_id: 3, fantasy_team_id: 1, started_days: 1, played_started_days: 1, total_value: null, mlbam_player_id: null}
