@@ -82,9 +82,9 @@ Agreed by the owner on 2026-10-08, going through the spec's decisions:
 - a rate's scale and its side denominator from the same matchups with the same weights;
   a rate's margin measured only where both sides' denominators are reported; a rate
   whose denominator earlier seasons never report keeps the season's own for both.
-
-Proposed here and not yet gone through: that a rate on a zero denominator is not
-measured.
+- a rate on a zero denominator is undefined and not measured, even where the league
+  host reports it as zero, as our own totals already have it. No decided matchup of
+  2018 to 2026 has one.
 
 100 is where a scale's sampling error (about 7%) equals how much seasons differ, so it
 is where history and a season's own matchups are equally good evidence. It is used
