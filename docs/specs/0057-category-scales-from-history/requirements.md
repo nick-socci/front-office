@@ -282,6 +282,11 @@ isolation check of ADR 0013 forbids as written: it builds each league-season alo
 
 ## Expected values
 
+The owner accepted the 2026 movements below on 2026-10-08. That starting pitchers take
+half of the top 20, before and after, is not a consequence of this spec or of the
+league's categories (the ten 5x5 categories give the same split); whether value per
+played day flatters starters is a separate issue, filed that day.
+
 Measured on 2026-10-08, read-only, on the real warehouse after #87, by the rule of R1 to
 R3.
 
