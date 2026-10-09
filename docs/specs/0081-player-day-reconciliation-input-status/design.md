@@ -39,7 +39,7 @@ it had been compared, which is the situation this project keeps writing tests ag
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0032](../../adr/0032-a-player-day-difference-carries-the-status-of-its-inputs.md) | A player-day difference carries the status of its inputs; a `verified_off` day with an ESPN line is a difference | proposed |
+| [0032](../../adr/0032-a-player-day-difference-carries-the-status-of-its-inputs.md) | A player-day difference carries the status of its inputs; a `verified_off` day with an ESPN line is a difference | accepted |
 
 The view and test of R3 are not in the ADR: they are a check on the table, and can be
 dropped or changed without touching it.

@@ -1,6 +1,6 @@
 # A player-day difference says whether its inputs were verified — requirements
 
-Issue: #81 · Tier: M · Status: draft
+Issue: #81 · Tier: M · Status: approved 2026-10-09
 
 ## Problem
 

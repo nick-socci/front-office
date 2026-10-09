@@ -1,6 +1,6 @@
 # 0032. A player-day difference carries the status of its inputs
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0081-player-day-reconciliation-input-status](../specs/0081-player-day-reconciliation-input-status/design.md) · Issue: #81
 
