@@ -184,6 +184,49 @@ models:
           arguments:
             expression: "not is_measured or standard_margin is not null"
 
+  - name: int_fantasy__reported_category_scales
+    description: >
+      One row per scored category of every league-season loaded: the scale the league
+      host's reported margins give for that season alone, standardised for volume, and
+      the number of matchups behind it, zero where there are none. The report of how
+      seasons compare and of what was loaded; no value is computed from it.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: league_id
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: season
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: category_key
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: matchups_measured
+        description: Measured rows of int_fantasy__reported_matchup_margins behind the scale.
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: margin_scale
+        description: Root mean square of those rows' standard margins; null when none.
+        data_type: double
+      - name: side_denominator
+        description: >
+          For a rate, the mean over those matchups' sides of the reported denominator
+          divided by the period's relative volume; null for a count or when none.
+        data_type: double
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, category_key]
+      - dbt_utils.expression_is_true:
+          name: int_fantasy__reported_category_scales_have_a_scale_where_measured
+          arguments:
+            expression: "(matchups_measured > 0) = (margin_scale is not null)"
+
   - name: int_fantasy__category_scales
     description: >
       One row per scored category: the usual gap between two teams in it (margin_scale,
@@ -2016,3 +2059,69 @@ unit_tests:
         - {matchup_id: 1, category_key: 1, margin: 0, relative_volume: 0, standard_margin: null, is_measured: false}
         - {matchup_id: 2, category_key: 1, margin: 4, relative_volume: 1, standard_margin: 4, is_measured: true}
         - {matchup_id: 3, category_key: 1, margin: 0, relative_volume: 1, standard_margin: 0, is_measured: true}
+
+# -----------------------------------------------------------------------------
+# Unit tests: reported scales per league-season (spec 0057, R2 and R4.2).
+# -----------------------------------------------------------------------------
+
+  - name: reported_scales_keep_a_league_season_with_nothing_measured
+    description: >
+      Season 2026 has two measured margins of a count, 7 and -1, a root mean square of
+      sqrt((49 + 1) / 2) = 5; season 2020 scores the same category and has no matchup. 2020 is a row with zero measured and no scale.
+      Catches: an unplayed season vanishing from the report.
+    model: int_fantasy__reported_category_scales
+    given:
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 1}
+          - {platform: espn, league_id: "1", season: 2020, category_key: 1}
+      - input: ref('int_fantasy__reported_matchup_margins')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, category_key: 1, standard_margin: 7, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, category_key: 1, standard_margin: -1, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+    expect:
+      rows:
+        - {season: 2026, category_key: 1, matchups_measured: 2, margin_scale: 5, side_denominator: null}
+        - {season: 2020, category_key: 1, matchups_measured: 0, margin_scale: null, side_denominator: null}
+
+  - name: reported_scales_measure_a_rate_and_its_denominator_from_the_same_matchups
+    description: >
+      Three matchups of a rate. Matchup 3 is not measured (no usable denominator) and
+      has a large margin; matchup 4 is a playoff matchup, not measured. The scale is
+      from matchups 1 and 2 only: standard margins 4 and -4 give 4. The side denominator
+      is from the same two: matchup 1 has 100 and 60 in a period of relative volume 2
+      (50 and 30 in a usual period), matchup 2 has 40 and 40, so (50 + 30 + 40 + 40) / 4
+      = 40. Catches: a scale measured from matchups its denominator cannot be; a long
+      period's denominator taken at face value.
+    model: int_fantasy__reported_category_scales
+    given:
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 2}
+      - input: ref('int_fantasy__reported_matchup_margins')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, category_key: 2, standard_margin: 4, home_denominator: 100, away_denominator: 60, relative_volume: 2, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, category_key: 2, standard_margin: -4, home_denominator: 40, away_denominator: 40, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 3, category_key: 2, standard_margin: 50, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 4, category_key: 2, standard_margin: null, home_denominator: 40, away_denominator: 40, relative_volume: null, is_measured: false}
+    expect:
+      rows:
+        - {category_key: 2, matchups_measured: 2, margin_scale: 4, side_denominator: 40}
+
+  - name: reported_scales_do_not_change_when_home_and_away_are_swapped
+    description: >
+      The first test's margins with their signs reversed, as if every home side had been
+      the away side. The scale is still 5. Catches: a spread about the mean in place of
+      a root mean square about zero.
+    model: int_fantasy__reported_category_scales
+    given:
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 1}
+      - input: ref('int_fantasy__reported_matchup_margins')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, category_key: 1, standard_margin: -7, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, category_key: 1, standard_margin: 1, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+    expect:
+      rows:
+        - {category_key: 1, matchups_measured: 2, margin_scale: 5, side_denominator: null}
