@@ -40,6 +40,7 @@ from front_office.landing import (
 )
 from front_office.load import RawKeyCollision, RawSchemaOutdated, connect, load_landing_zone
 from front_office.mlb import boxscore as mlb_boxscore
+from front_office.mlb import players as mlb_players
 from front_office.mlb import schedule as mlb_schedule
 
 DEFAULT_RAW_ROOT = Path("data/raw")
@@ -109,7 +110,7 @@ def backfill_mlb(
     raw_root: RawRoot = DEFAULT_RAW_ROOT,
     only: Annotated[
         str | None,
-        typer.Option("--only", help="Limit to one endpoint: schedule or boxscore."),
+        typer.Option("--only", help="Limit to one endpoint: schedule, players or boxscore."),
     ] = None,
     limit: Annotated[
         int | None, typer.Option("--limit", help="Stop after this many boxscore fetches.")
@@ -119,7 +120,7 @@ def backfill_mlb(
     ] = False,
 ) -> None:
     """Back-fill MLB Stats API data for a season."""
-    endpoints = ("schedule", "boxscore")
+    endpoints = ("schedule", "players", "boxscore")
     if only is not None and only not in endpoints:
         raise typer.BadParameter(
             f"unknown endpoint: {only} (expected one of {', '.join(endpoints)})"
@@ -133,6 +134,20 @@ def backfill_mlb(
                 zone=zone, client=client, season=season, fetched_at=fetched_at
             )
             typer.echo(f"landed schedule -> {path}")
+        # A failed list does not stop the boxscores; the run exits 1 at the end instead. A
+        # 401/403 is MLB refusing a request that carries no login, not an expired one, so it
+        # must not end the run as an expired ESPN login does.
+        players_error = None
+        if only in (None, "players"):
+            try:
+                players_path = mlb_players.backfill_players(
+                    zone=zone, client=client, season=season, fetched_at=fetched_at
+                )
+            except (AuthExpired, RequestFailed, httpx.HTTPStatusError) as failure:
+                typer.echo(f"player list: {failure}", err=True)
+                players_error = failure
+            else:
+                typer.echo(f"landed players -> {players_path}")
         if only in (None, "boxscore"):
             summary = mlb_boxscore.backfill_boxscores(
                 zone=zone,
@@ -148,7 +163,10 @@ def backfill_mlb(
             )
             if summary.failed:
                 typer.echo(f"failed game_pks: {summary.failed_game_pks}", err=True)
-                raise typer.Exit(code=1)
+                if players_error is None:
+                    raise typer.Exit(code=1)
+    if players_error is not None:
+        raise typer.Exit(code=1)
 
 
 def land_pro_schedule(zone: LandingZone, season: int, fetched_at: str) -> Exception | None:

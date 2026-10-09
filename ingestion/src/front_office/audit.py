@@ -11,6 +11,7 @@ checks the files themselves:
   mlb      every played game in the newest schedule has a boxscore, and one was captured
            a settle window (7 days) after its first capture that postdates the game's last
            scheduled start, by the same functions the backfill uses (specs/0030)
+           and, as a warning, that the season has a player-list capture (spec 0060)
   espn     every scoring period has a roster captured after the period closed; period 1's
            date comes from ESPN's pro schedule (ADR 0023), is confirmed against MLB
            opening day, and is the date every in-progress snapshot implies;
@@ -348,9 +349,11 @@ def check_mlb(
     schedule = _newest(captures, "mlb", "schedule", season=str(season))
     if schedule is None:
         return [Finding(Severity.ERROR, "mlb", subject, "no committed schedule capture")], None
+    findings = []
+    if _newest(captures, "mlb", "players", season=str(season)) is None:
+        findings.append(Finding(Severity.WARN, "mlb", subject, "no committed player-list capture"))
     played = mlb_boxscore.games_from_landed_schedule(zone, season=season)
     played_pks = {game.game_pk for game in played}
-    findings = []
 
     # Unplayed games need an explicit disposition, not silence.
     last_state: dict[int, str] = {}
