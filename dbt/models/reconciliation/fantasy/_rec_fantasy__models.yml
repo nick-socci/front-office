@@ -89,6 +89,12 @@ models:
           0.75 or more.
         data_type: boolean
         data_tests: [not_null]
+      - name: problem
+        description: >
+          Why values_track_rescored_category_wins fails the group, or null: a group of
+          100 or more pairs with an unmeasured pair is not checkable; a judged group's
+          slope must lie in 0.34 to 0.47.
+        data_type: varchar
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -361,4 +367,91 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, platform_player_id: 4, fantasy_team_id: 1, total_value: 100}
     expect:
       rows:
-        - {replacement_group: hitter, matchups_rescored: 1, pairs: 4, pairs_unmeasured: 1, slope: 0.5, is_judged: false}
+        - {replacement_group: hitter, matchups_rescored: 1, pairs: 4, pairs_unmeasured: 1, slope: 0.5, is_judged: false, problem: null}
+
+  - name: category_wins_by_group_fail_a_large_group_with_an_unmeasured_pair_however_few_matchups
+    description: >
+      A hundred starters over a single matchup scored again, each with wins added of 0.4
+      times his value, except the first, who has none (an empty pool). The group is far
+      too short of matchups to be judged on its slope, and it still fails as not
+      checkable: an unmeasured pair in a group of 100 is a fault whatever the number of
+      matchups (R3.8). Catches the matchup threshold gating that failure.
+    model: rec_fantasy__category_wins_by_group
+    given:
+      - input: ref('fct_matchup_results')
+        format: sql
+        rows: |
+          select 'espn' as platform, '1' as league_id, 2026 as season, i as matchup_id, 'HOME' as winner, false as has_unverified_inputs
+          from range(1, 1 + 1) as t(i)
+      - input: ref('rec_fantasy__category_wins_added')
+        format: sql
+        rows: |
+          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, case when i = 1 then null else 0.4 * i end as category_wins_added from range(1, 101) as t(i)
+      - input: ref('dim_player_league_seasons')
+        format: sql
+        rows: |
+          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 'SP' as replacement_group from range(1, 101) as t(i)
+      - input: ref('fct_player_season_value')
+        format: sql
+        rows: |
+          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, i::double as total_value from range(1, 101) as t(i)
+    expect:
+      rows:
+        - {replacement_group: SP, matchups_rescored: 1, pairs: 100, pairs_unmeasured: 1, is_judged: false, problem: 'not checkable: a pair has no value or no wins added'}
+
+  - name: category_wins_by_group_fail_a_judged_group_whose_values_are_inflated
+    description: >
+      A hundred starters over a hundred matchups, every one with wins added of 0.3 times
+      his value: the values are a third too large for the wins they bought. The
+      correlation is 1, so the group is judged, and a slope of 0.3 is outside 0.34 to
+      0.47. Catches a band that lets an inflated group through, and a judged group not
+      held to it.
+    model: rec_fantasy__category_wins_by_group
+    given:
+      - input: ref('fct_matchup_results')
+        format: sql
+        rows: |
+          select 'espn' as platform, '1' as league_id, 2026 as season, i as matchup_id, 'HOME' as winner, false as has_unverified_inputs
+          from range(1, 100 + 1) as t(i)
+      - input: ref('rec_fantasy__category_wins_added')
+        format: sql
+        rows: |
+          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, 0.3 * i as category_wins_added from range(1, 101) as t(i)
+      - input: ref('dim_player_league_seasons')
+        format: sql
+        rows: |
+          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 'SP' as replacement_group from range(1, 101) as t(i)
+      - input: ref('fct_player_season_value')
+        format: sql
+        rows: |
+          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, i::double as total_value from range(1, 101) as t(i)
+    expect:
+      rows:
+        - {replacement_group: SP, matchups_rescored: 100, pairs: 100, pairs_unmeasured: 0, slope: 0.3, is_judged: true, problem: 'slope outside 0.34 to 0.47'}
+
+  - name: category_wins_by_group_pass_a_judged_group_at_the_theoretical_slope
+    description: >
+      The same hundred starters with wins added of 0.4 times their value: judged, and
+      no problem. Catches a rule that fails everything.
+    model: rec_fantasy__category_wins_by_group
+    given:
+      - input: ref('fct_matchup_results')
+        format: sql
+        rows: |
+          select 'espn' as platform, '1' as league_id, 2026 as season, i as matchup_id, 'HOME' as winner, false as has_unverified_inputs
+          from range(1, 100 + 1) as t(i)
+      - input: ref('rec_fantasy__category_wins_added')
+        format: sql
+        rows: |
+          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, 0.4 * i as category_wins_added from range(1, 101) as t(i)
+      - input: ref('dim_player_league_seasons')
+        format: sql
+        rows: |
+          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 'SP' as replacement_group from range(1, 101) as t(i)
+      - input: ref('fct_player_season_value')
+        format: sql
+        rows: |
+          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, i::double as total_value from range(1, 101) as t(i)
+    expect:
+      rows:
+        - {replacement_group: SP, matchups_rescored: 100, pairs: 100, pairs_unmeasured: 0, slope: 0.4, is_judged: true, problem: null}

@@ -18,24 +18,18 @@
 -- no wins added (R3.8): a slope from part of a group is not the group's. Smaller groups
 -- are not judged, which is all a two-day fixture is.
 
+-- The rule itself is the `problem` column of the group model, where unit tests hold it.
+
 select
     platform,
     league_id,
     season,
     replacement_group,
+    matchups_rescored,
     pairs,
     pairs_unmeasured,
     slope,
     correlation,
-    case
-        when pairs_unmeasured > 0 then 'not checkable: a pair has no value or no wins added'
-        else 'slope outside 0.34 to 0.47'
-    end as problem
+    problem
 from {{ ref('rec_fantasy__category_wins_by_group') }}
--- is_judged already asks for 100 matchups scored again; an unmeasured pair fails a group
--- of 100 pairs however many matchups there were (R3.8).
-where pairs >= 100
-    and (
-        pairs_unmeasured > 0
-        or (is_judged and (slope < 0.34 or slope > 0.47))
-    )
+where problem is not null
