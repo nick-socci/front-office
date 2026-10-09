@@ -88,14 +88,14 @@ models:
       - name: season
         data_tests: [not_null]
       - name: platform_player_id
+        data_tests: [not_null]
+      - name: mlbam_player_id
+        description: Null only for an unresolved player.
         data_tests:
-          - not_null
           - relationships:
               arguments:
                 to: ref('dim_players')
-                field: platform_player_id
-      - name: mlbam_player_id
-        description: Null only for an unresolved player.
+                field: mlbam_player_id
       - name: player_resolution
         description: How the MLBAM id was found (crosswalk_id, unambiguous_name) or unresolved.
         data_tests:
@@ -127,32 +127,38 @@ models:
 
   - name: dim_players
     description: >
-      One row per platform player id, across every league and season loaded: a reference
-      for who a player is (#28, ADR 0012). His MLBAM id, resolution and name are copied from
-      his latest league-season row of dim_player_league_seasons (highest season, then latest
-      last_rostered_date, then lowest league_id). No league-season number reads from it:
-      position, replacement group and rostered dates are true of a player in a
-      league-season and live in dim_player_league_seasons.
+      One row per MLB player, keyed by mlbam_player_id, for every player the warehouse
+      holds: everyone in a landed MLB season player list, everyone with a played day in
+      the game logs, and every MLB id a league-season resolved a platform player to (#60,
+      ADR 0033). A platform player with no MLB id has no row; he stays in
+      dim_player_league_seasons, the bridge from a platform's player id to an MLB id
+      (ADR 0034). The name is the list's, else the latest boxscore's, else the platform's
+      (ADR 0035), and name_source says which. The five attributes are MLB's, from the
+      latest season that lists the player, and null for a player no list holds. It is
+      defined over everything loaded, so a combined build and a single one differ.
     columns:
-      - name: platform
-        data_tests: [not_null]
-      - name: platform_player_id
+      - name: mlbam_player_id
         data_tests:
           - unique
           - not_null
-          - relationships:
-              arguments:
-                to: ref('dim_player_league_seasons')
-                field: platform_player_id
-      - name: mlbam_player_id
-        description: Null only for a player unresolved in his latest league-season.
-      - name: player_resolution
-        description: How the MLBAM id was found (crosswalk_id, unambiguous_name) or unresolved.
+      - name: player_name
+        description: Null only when no source names the player.
+      - name: name_source
+        description: mlb_players, mlb_boxscore or platform; null when player_name is.
         data_tests:
-          - not_null
           - accepted_values:
               arguments:
-                values: [crosswalk_id, unambiguous_name, unresolved]
+                values: [mlb_players, mlb_boxscore, platform]
+      - name: primary_position
+        description: MLB's designation (P, SS, TWP, ...) as of the list's fetch; not a fantasy position.
+      - name: bats
+        description: L, R or S, from the player list.
+      - name: throws
+        description: L, R or S, from the player list.
+      - name: birth_date
+        description: From the player list.
+      - name: mlb_debut_date
+        description: From the player list; null also for a listed player with no debut.
 
   - name: fct_player_category_value
     description: >
@@ -484,31 +490,71 @@ unit_tests:
         - {league_id: "1", season: 2026, platform_player_id: 31, mlbam_player_id: null, player_resolution: unresolved, replacement_group: null, is_transaction_only: true}
         - {league_id: "1", season: 2027, platform_player_id: 31, mlbam_player_id: 3100, player_resolution: unambiguous_name, replacement_group: hitter, is_transaction_only: false}
 
-  - name: dim_players_one_row_per_player_equal_to_his_latest_league_season
+  - name: dim_players_take_names_and_attributes_from_the_best_source
     description: >
-      Player 40 is in league 1 and league 2 in 2026 and in league 1 in 2027. He has one row,
-      taken whole from his latest league-season: 2027, league 1. His MLBAM id, resolution and
-      name are all that row's, not the 2026 rows'. Player 41 is in two leagues in 2026 on the
-      same last date: the lower league id wins. Player 42 has a rostered 2026 row and a
-      transaction-only 2026 row in another league: the rostered one is later (a null date
-      sorts last). Catches a doubled player, and a name and an id taken from different
-      observations.
+      Nine players, one case each. 1001 is listed in 2025 and 2026 with different
+      spellings and positions: the 2026 name and attributes, mlb_players (catches the
+      older season winning). 1002 is listed, with a game line and a platform name that
+      both differ: the list's (catches a lower source beating the list). 1003 is not
+      listed and has a batting line and a later pitching line with different spellings:
+      the later game's name, mlb_boxscore, attributes null (catches the wrong game, a
+      source left out of the union, or attributes borrowed). 1004 has a named early line
+      and a later line with a null name: the early name (catches a null name hiding a
+      name). 1005 is in no list and has no game, with two league-season rows: the later
+      season's name, platform. 1006 has a named earlier league-season and a later
+      transaction-only one with a null name: the earlier name (catches the latest row
+      chosen before the null filter). 1007 has only a null platform name: the row is kept
+      with name and source null (catches a nameless player dropped). 1008 is listed, with
+      no league and no game: a row, mlb_players (catches a free agent dropped). Platform
+      player 9 has a null MLB id: no row (catches an unresolved player given a row).
     model: dim_players
     given:
+      - input: ref('stg_mlb__players')
+        rows:
+          - {season: 2025, mlbam_player_id: 1001, player_name: "Old Spelling", primary_position: "1B", bats: L, throws: L, birth_date: "1990-01-01", mlb_debut_date: "2012-04-01"}
+          - {season: 2026, mlbam_player_id: 1001, player_name: "New Spelling", primary_position: "DH", bats: S, throws: R, birth_date: "1990-01-01", mlb_debut_date: "2012-04-01"}
+          - {season: 2026, mlbam_player_id: 1002, player_name: "Listed Name", primary_position: "SS", bats: R, throws: R, birth_date: "1995-05-05", mlb_debut_date: null}
+          - {season: 2026, mlbam_player_id: 1008, player_name: "Free Agent", primary_position: "P", bats: R, throws: L, birth_date: "1998-08-08", mlb_debut_date: "2020-08-08"}
+      - input: ref('stg_mlb__batting_game_logs')
+        rows:
+          - {game_pk: 1, mlbam_player_id: 1002, player_name: "Game Name"}
+          - {game_pk: 2, mlbam_player_id: 1003, player_name: "Early Spelling"}
+          - {game_pk: 1, mlbam_player_id: 1004, player_name: "Named Early"}
+          - {game_pk: 3, mlbam_player_id: 1004, player_name: null}
+      - input: ref('stg_mlb__pitching_game_logs')
+        rows:
+          - {game_pk: 3, mlbam_player_id: 1003, player_name: "Late Spelling"}
+      - input: ref('stg_mlb__games')
+        rows:
+          - {game_pk: 1, official_date: "2026-04-01"}
+          - {game_pk: 2, official_date: "2026-04-02"}
+          - {game_pk: 3, official_date: "2026-04-05"}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 1002, season: 2026, game_date: "2026-04-01"}
+          - {mlbam_player_id: 1003, season: 2026, game_date: "2026-04-02"}
+          - {mlbam_player_id: 1003, season: 2026, game_date: "2026-04-05"}
+          - {mlbam_player_id: 1004, season: 2026, game_date: "2026-04-01"}
+          - {mlbam_player_id: 1004, season: 2026, game_date: "2026-04-05"}
       - input: ref('dim_player_league_seasons')
         rows:
-          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 40, mlbam_player_id: 4000, player_resolution: crosswalk_id, player_name: "Old Name", last_rostered_date: "2026-09-01"}
-          - {platform: espn, league_id: "2", season: 2026, platform_player_id: 40, mlbam_player_id: null, player_resolution: unresolved, player_name: "Other League Name", last_rostered_date: "2026-09-20"}
-          - {platform: espn, league_id: "1", season: 2027, platform_player_id: 40, mlbam_player_id: 4001, player_resolution: unambiguous_name, player_name: "New Name", last_rostered_date: "2027-04-02"}
-          - {platform: espn, league_id: "2", season: 2026, platform_player_id: 41, mlbam_player_id: 4100, player_resolution: crosswalk_id, player_name: "League Two", last_rostered_date: "2026-09-01"}
-          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 41, mlbam_player_id: 4101, player_resolution: unambiguous_name, player_name: "League One", last_rostered_date: "2026-09-01"}
-          - {platform: espn, league_id: "2", season: 2026, platform_player_id: 42, mlbam_player_id: 4200, player_resolution: crosswalk_id, player_name: null, last_rostered_date: null}
-          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 42, mlbam_player_id: 4201, player_resolution: unambiguous_name, player_name: "Rostered", last_rostered_date: "2026-05-01"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, mlbam_player_id: 1002, player_name: "Platform Name", last_rostered_date: "2026-09-01"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 5, mlbam_player_id: 1005, player_name: "Older Platform", last_rostered_date: "2026-09-01"}
+          - {platform: espn, league_id: "1", season: 2027, platform_player_id: 5, mlbam_player_id: 1005, player_name: "Newer Platform", last_rostered_date: "2027-04-02"}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 6, mlbam_player_id: 1006, player_name: "Earlier Name", last_rostered_date: "2026-05-01"}
+          - {platform: espn, league_id: "1", season: 2027, platform_player_id: 6, mlbam_player_id: 1006, player_name: null, last_rostered_date: null}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 7, mlbam_player_id: 1007, player_name: null, last_rostered_date: null}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 9, mlbam_player_id: null, player_name: "Unresolved", last_rostered_date: "2026-05-01"}
     expect:
       rows:
-        - {platform_player_id: 40, mlbam_player_id: 4001, player_resolution: unambiguous_name, player_name: "New Name"}
-        - {platform_player_id: 41, mlbam_player_id: 4101, player_resolution: unambiguous_name, player_name: "League One"}
-        - {platform_player_id: 42, mlbam_player_id: 4201, player_resolution: unambiguous_name, player_name: "Rostered"}
+        - {mlbam_player_id: 1001, player_name: "New Spelling", name_source: mlb_players, primary_position: "DH", bats: S, throws: R, birth_date: "1990-01-01", mlb_debut_date: "2012-04-01"}
+        - {mlbam_player_id: 1002, player_name: "Listed Name", name_source: mlb_players, primary_position: "SS", bats: R, throws: R, birth_date: "1995-05-05", mlb_debut_date: null}
+        - {mlbam_player_id: 1003, player_name: "Late Spelling", name_source: mlb_boxscore, primary_position: null, bats: null, throws: null, birth_date: null, mlb_debut_date: null}
+        - {mlbam_player_id: 1004, player_name: "Named Early", name_source: mlb_boxscore, primary_position: null, bats: null, throws: null, birth_date: null, mlb_debut_date: null}
+        - {mlbam_player_id: 1005, player_name: "Newer Platform", name_source: platform, primary_position: null, bats: null, throws: null, birth_date: null, mlb_debut_date: null}
+        - {mlbam_player_id: 1006, player_name: "Earlier Name", name_source: platform, primary_position: null, bats: null, throws: null, birth_date: null, mlb_debut_date: null}
+        - {mlbam_player_id: 1007, player_name: null, name_source: null, primary_position: null, bats: null, throws: null, birth_date: null, mlb_debut_date: null}
+        - {mlbam_player_id: 1008, player_name: "Free Agent", name_source: mlb_players, primary_position: "P", bats: R, throws: L, birth_date: "1998-08-08", mlb_debut_date: "2020-08-08"}
 
 # -----------------------------------------------------------------------------
 # fct_player_category_value unit tests (#11): the per-category arithmetic, which lives in
