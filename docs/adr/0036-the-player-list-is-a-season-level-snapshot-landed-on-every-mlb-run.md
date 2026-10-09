@@ -31,7 +31,7 @@ the boxscores, and exit 1 at the end.
 
 ## Decision
 
-Recommended, for the owner to decide: **option 1, with (b)**.
+Chosen by the owner on 2026-10-09: **option 1, with (b)**.
 
 The capture is `mlb/players/season=<year>/fetched_at=<stamp>/`, fetched with the public
 MLB client. Staging keeps, per season and player, the newest capture that lists him.

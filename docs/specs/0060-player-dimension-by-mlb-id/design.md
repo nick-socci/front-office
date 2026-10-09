@@ -69,8 +69,8 @@ Read-only, 2026-10-09. Real season unless marked.
 
 ## Alternatives considered
 
-Five separable choices. The owner decided the first four on 2026-10-09; the matrices
-record what was weighed.
+Five separable choices, all decided by the owner on 2026-10-09; the matrices record
+what was weighed.
 
 ### The shape of the dimension and the bridge
 
@@ -130,7 +130,7 @@ platform's as the third, so a row is named whichever of the three holds him.
 
 ### How the list is captured
 
-| | A — a snapshot on every `backfill mlb` run (proposed) | B — once per season, refetched only with `--refresh` | C — fetched only when a boxscore names an unlisted player |
+| | A — a snapshot on every `backfill mlb` run (chosen) | B — once per season, refetched only with `--refresh` | C — fetched only when a boxscore names an unlisted player |
 |---|---|---|---|
 | A mid-season call-up appears | the next run | when someone remembers | when he plays |
 | Landing growth | about 1.5 MB a run; some 280 MB over a season of daily runs | 1.5 MB a season | small |
@@ -146,8 +146,8 @@ stale. **C** breaks "ingestion never interprets data".
 |---|---|---|
 | [0033](../../adr/0033-the-player-dimension-is-one-row-per-mlb-player.md) | The player dimension is one row per MLB player, for every player loaded; a player with no MLB id has no row. Amends 0012. Chosen by the owner 2026-10-09 | proposed |
 | [0034](../../adr/0034-the-league-season-table-is-the-bridge-and-facts-carry-the-mlb-id.md) | The league-season table is the bridge; no platform-grain table is kept; facts keep their grain and gain the MLB id. Chosen by the owner 2026-10-09 | proposed |
-| [0035](../../adr/0035-a-players-name-and-attributes-come-from-mlbs-season-player-list.md) | A player's name and attributes come from MLB's season player list, with the boxscore and then the platform as fallback for the name. Source chosen by the owner 2026-10-09; the column set is still to confirm | proposed |
-| [0036](../../adr/0036-the-player-list-is-a-season-level-snapshot-landed-on-every-mlb-run.md) | The player list is a season-level snapshot landed on every MLB run; a failure does not stop the boxscores | proposed |
+| [0035](../../adr/0035-a-players-name-and-attributes-come-from-mlbs-season-player-list.md) | A player's name and attributes come from MLB's season player list, with the boxscore and then the platform as fallback for the name. Source and column set chosen by the owner 2026-10-09 | proposed |
+| [0036](../../adr/0036-the-player-list-is-a-season-level-snapshot-landed-on-every-mlb-run.md) | The player list is a season-level snapshot landed on every MLB run; a failure does not stop the boxscores. Chosen by the owner 2026-10-09 | proposed |
 
 ## Detailed design
 
@@ -170,8 +170,9 @@ Modelled on `mlb/schedule.py`. Fetch-and-save only.
   A warning, because no number depends on the list.
 - No credential is read: `HttpClient("mlb")` is the public client the schedule uses.
 - Tests in `ingestion/tests/test_mlb_players.py`, with the HTTP transport faked as the
-  schedule's tests do: the request made, the capture's path and sidecar, the payload
-  landed byte for byte; `--only players`; a failing request leaves the boxscore step
+  schedule's tests do: the request made, the capture's path and sidecar, the landed
+  payload equal as parsed JSON to the response (`LandingZone.write` re-serialises, so
+  bytes are not compared); `--only players`; a failing request leaves the boxscore step
   run and the exit code 1; the audit finding present and absent.
 
 ### `stg_mlb__players.sql` (new)
@@ -319,8 +320,10 @@ passes on a null, so an unresolved player does not fail it.
 ### Fixtures
 
 - `scripts/make_fixtures.py` gains `build_mlb_players`: reads the newest landed
-  `mlb/players` capture of the fixture season, keeps the people whose `id` is a player
-  of a fixture boxscore, and rebuilds each from the allowlist `id`, `fullName`,
+  `mlb/players` capture of the fixture season, keeps the people whose `id` batted or
+  pitched in a fixture boxscore (`stats.batting.gamesPlayed = 1` or
+  `stats.pitching.gamesPitched = 1`, as the game-log models filter; 74 of the 130
+  people the fixture boxscores name), and rebuilds each from the allowlist `id`, `fullName`,
   `primaryPosition.abbreviation`, `batSide.code`, `pitchHand.code`, `birthDate`,
   `mlbDebutDate`. It stops with a message if no capture is landed. The fixture's
   resolved players with no fixture game are deliberately not in it, so CI exercises the
@@ -344,8 +347,8 @@ because a single build loads a subset of the same captures. No logic changes.
 
 The build runs `front-office backfill mlb --season 2026 --only players` once (one
 public request, no credentials) and `front-office load`, which appends the capture to
-`raw.api_responses`. Both add; neither replaces nor deletes. This needs the owner's
-go-ahead, asked for in the spec PR.
+`raw.api_responses`. Both add; neither replaces nor deletes. The owner gave the
+go-ahead for the build to run them on 2026-10-09.
 
 ### Sequencing with #12
 
@@ -416,6 +419,9 @@ grain and carries `mlbam_player_id` beside it, and names players through `dim_pl
 | design-review, round 1 | F1 (P1): a one-column `relationships` test on `platform_player_id` passes when the player exists only in another league, and a null MLB id then passes too, so R3.1 and R3.3 were not enforced | Changed: R3.4 and the singular test `player_facts_carry_their_league_seasons_mlb_id`, joined on all four keys with a null-safe comparison. The one-column test is removed, not re-pointed |
 | design-review, round 1 | F2 (P2): the design filtered null platform names before choosing the latest row while the requirement read as "the latest row"; a null game name could fall through to the platform | Changed: the requirements say the latest non-null name, on every side; the design says why the filter comes first; unit cases 4 and 6 hold it |
 | design-review, round 1 | F3 (P2): `players.mlbam_player_id` is out of scope in `fct_transaction_impact`'s final select | Changed: the design names `measured.mlbam_player_id`, which the model already carries, and adds no join |
+| design-review, round 2 | F1 (P1): R7.1 selected everyone in a fixture boxscore (130 people) while the expected CI counts assume those with a batting or pitching line (74) | Changed: R7.1 and the fixture design name the game-log models' own filter |
+| design-review, round 2 | F2 (P1), F3 (P2): the attribute column set and the capture policy were written as settled while their ADRs said the owner had still to decide | Asked on 2026-10-09. The owner confirmed the five columns, the every-run snapshot with a failure that does not stop the boxscores, and that the build may land and load the 2026 capture. Recorded in ADR 0035, ADR 0036 and *The real season* |
+| design-review, round 2 | F4 (P2): a byte-for-byte payload test cannot pass, because `LandingZone.write` re-serialises the parsed JSON | Changed: R5.1 preserves the JSON content; the test compares parsed values |
 | owner, 2026-10-09 | Decisions 1 to 6 of the spec PR: key and no row for an unresolved player; every MLB player loaded; no platform bridge; facts gain the MLB id; **land MLB's player list** (against the recommendation); test replacements approved | Changed: R5 to R7, `stg_mlb__players`, the five attributes, the three-source name rule, ADR 0035 rewritten, ADR 0036 added. Round 1 above reviewed the spec before this change; round 2 reviews it after |
 
 ## Amendments

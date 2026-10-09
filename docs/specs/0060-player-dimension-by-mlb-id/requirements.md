@@ -46,7 +46,7 @@ and attributes.
 - **One new endpoint only**: MLB's season player list (ADR 0035, ADR 0036). No
   per-player `/people/{id}` requests, no team or roster endpoints.
 - **No season other than 2026 is landed on the real landing zone here.** The build
-  lands one public capture for 2026 and loads it, on the owner's go-ahead; nothing in
+  lands one public capture for 2026 and loads it (the owner's go-ahead, 2026-10-09); nothing in
   the landing zone or the warehouse is replaced or deleted.
 - **Ingestion stays fetch-and-save.** The new module interprets nothing.
 - **No change to how a player is resolved.** `int_fantasy__player_crosswalk` and its
@@ -156,7 +156,8 @@ and attributes.
 
 - R5.1 WHEN `front-office backfill mlb --season S` runs THE SYSTEM SHALL request
   `/api/v1/sports/1/players?season=S` once, with the public MLB client, and land the
-  response unaltered as a capture under `mlb/players/season=S/`, on every run.
+  response as a capture under `mlb/players/season=S/`, on every run, with its JSON
+  content unchanged (the landing zone re-serialises a payload, so bytes may differ).
 - R5.2 WHEN `--only players` is given THE SYSTEM SHALL land that capture alone.
 - R5.3 IF the player-list request fails THEN THE SYSTEM SHALL report it, go on to the
   boxscores, and exit 1 at the end of the run.
@@ -180,7 +181,9 @@ and attributes.
 
 - R7.1 THE SYSTEM SHALL generate a player-list fixture for the fixture season from the
   landed capture, rebuilt from the allowlist of R6.2's fields, holding the listed
-  players who appear in a fixture boxscore.
+  players who batted or pitched in a fixture boxscore: those with
+  `stats.batting.gamesPlayed = 1` or `stats.pitching.gamesPitched = 1`, the rule the
+  game-log models use. A bench player in a fixture boxscore is not included.
 - R7.2 THE SYSTEM SHALL give the multi-league fixture's 2027 season a player list, the
   2026 fixture's with the season changed.
 
@@ -214,7 +217,7 @@ not touch these models):
 
 | Check | Expected | How to verify |
 |---|---|---|
-| `stg_mlb__players` rows | 74 (the players of the fixture boxscores) | count |
+| `stg_mlb__players` rows | 74 (the players who batted or pitched in a fixture boxscore; the boxscores name 130) | count |
 | `dim_players` rows | 363 | count |
 | by `name_source` | 74 `mlb_players`, 289 `platform`, 0 `mlb_boxscore` | group by |
 | platform players with no `dim_players` row | 7 (transaction-only, `unresolved`) | anti-join |

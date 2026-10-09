@@ -47,8 +47,9 @@ season's list that holds him; else the name on his latest loaded game line; else
 latest name a league-season shows for him. `name_source` says which (`mlb_players`,
 `mlb_boxscore`, `platform`).
 
-**The column set, for the owner to confirm:** `primary_position`, `bats`, `throws`,
-`birth_date` and `mlb_debut_date`, from the same row of the list, null for a player no
+The column set, confirmed by the owner on 2026-10-09 (handedness and position only, and
+the five plus the current team, were the alternatives): `primary_position`, `bats`,
+`throws`, `birth_date` and `mlb_debut_date`, from the same row of the list, null for a player no
 list holds. Not taken: team (it changes within a season), height and weight, `active`
 (true for every row), and age, which is derived from `birth_date` when asked for.
 `fullName` is the only name field read.

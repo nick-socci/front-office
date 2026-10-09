@@ -22,7 +22,7 @@ by 0033, in the ADRs and in the index.
      `mlb/players.py`, the `backfill mlb` step and `--only players`, the audit finding.
    - Verify: `uv run pytest`, `uv run ruff check`, `uv run mypy` pass.
 3. Land and load the 2026 list — `judgment` — R5.1, the real season
-   - With the owner's go-ahead from the spec PR: `front-office backfill mlb --season
+   - The owner gave the go-ahead on 2026-10-09: `front-office backfill mlb --season
      2026 --only players`, `front-office audit`, `front-office load`.
    - Verify: one committed `mlb/players` capture for 2026; the audit has no new error;
      the people count posted on #60 against the probe's 1,511.
