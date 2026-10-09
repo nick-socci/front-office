@@ -56,7 +56,8 @@ and loaded as a table). Nothing holds it to that.
 - **No change to `rec_espn__matchup_stat_differences`, the register seed, or any
   fixture.** The seed has no league or season column, and the matchup-level table joins
   it by matchup, side and stat alone. Adding them is a change to the seed's columns and
-  to that table; here the new test fails closed instead (R3.2).
+  to that table; here the new test fails closed instead (R3.2), and keying the register
+  by league and season is #99 (the owner, 2026-10-09).
 - **No census.** Rows where the numbers agree are not added.
 - **No new warning in CI.** The unverified sides and player-days are already reported by
   `rec_espn__every_side_is_verified` and
@@ -83,7 +84,8 @@ and loaded as a table). Nothing holds it to that.
 - R1.1 THE SYSTEM SHALL carry, on every row of `rec_espn__player_day_differences`, the
   `input_status` of its started player-day, taken from
   `int_fantasy__started_player_days`.
-- R1.2 THE SYSTEM SHALL carry a `status`: `difference` WHEN `input_status` is `played`
+- R1.2 (The owner, 2026-10-09: keep the rows and label them, with both columns.) THE
+  SYSTEM SHALL carry a `status`: `difference` WHEN `input_status` is `played`
   or `verified_off`, and `unverified` otherwise.
 - R1.3 THE SYSTEM SHALL keep a row only where the two numbers differ by more than 1e-9,
   as today, whatever its status.
@@ -92,7 +94,7 @@ and loaded as a table). Nothing holds it to that.
 
 ### R2. What counts as a difference
 
-- R2.1 WHEN a player-day is `verified_off` and ESPN has a line with a non-zero stat for
+- R2.1 (The owner, 2026-10-09: this is a difference.) WHEN a player-day is `verified_off` and ESPN has a line with a non-zero stat for
   it THE SYSTEM SHALL report a row with status `difference`: we say he did not play and
   every game that date is loaded; ESPN says he did.
 - R2.2 WHEN a player-day is `played` and ESPN has no line for it THE SYSTEM SHALL
@@ -102,7 +104,8 @@ and loaded as a table). Nothing holds it to that.
 
 ### R3. The table is held to the register
 
-- R3.1 THE SYSTEM SHALL have a view, `rec_espn__player_day_residuals`, with one row per
+- R3.1 (The owner, 2026-10-09: a build-failing test, its rule in a view.) THE SYSTEM
+  SHALL have a view, `rec_espn__player_day_residuals`, with one row per
   (`league_id`, `season`, `matchup_id`, `fantasy_team_id`, `stat_id`) that has at least
   one `difference` row: the sum of those rows' differences, the `expected_difference`
   of that (matchup, side, stat) in `espn_reconciliation_residuals` (null if none), and

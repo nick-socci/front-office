@@ -34,7 +34,9 @@ not every comparison.
 
 ## Decision
 
-Proposed: **option 1**. The owner decides.
+Chosen by the owner on 2026-10-09, going through the spec's decisions: **option 1**,
+with both columns, `input_status` passed through and `status` derived from it, and a
+`verified_off` day for which ESPN has a line counted as a difference.
 
 A row's `status` is `difference` when its player-day is `played` or `verified_off`, and
 `unverified` when it is `missing_boxscore` or `unresolved_player`. A `verified_off` day
@@ -63,4 +65,6 @@ the issue.
 - Bad / accepted cost: a label needs a row. An unverified player-day whose numbers
   happen to agree has none, so an empty table still does not prove agreement; the
   completeness tests do that.
-- Follow-ups: none.
+- Follow-ups: the register of known differences has no league or season in its key; the
+  owner decided on 2026-10-09 that the spec's test fails closed on that and that keying
+  the register is its own work (#99).

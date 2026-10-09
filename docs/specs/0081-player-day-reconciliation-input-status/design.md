@@ -14,7 +14,7 @@ unit tests hold both rules. One model changed, one view and one test file added.
 
 ## Alternatives considered
 
-| | A — keep the rows, label them (proposed) | B — leave unverified out | C — census of every comparison | D — leave it |
+| | A — keep the rows, label them (chosen) | B — leave unverified out | C — census of every comparison | D — leave it |
 |---|---|---|---|---|
 | A row never claims an unsupported difference | yes | yes | yes | no |
 | CI's table shows that nothing was compared | yes: 467 rows, all `unverified` | no: empty | yes | no |
@@ -86,8 +86,9 @@ is not null.
 `ambiguous_register` is the fail-closed answer to a seed that names a matchup and no
 season. Today one league-season has rosters, so one has differences. When a second does
 (spec 0085 expects past seasons to gain rosters), a matchup id means two things and the
-test stops the build until the register can tell them apart, which is the owner's
-change to make.
+test stops the build until the register can tell them apart. The owner decided on
+2026-10-09: fail closed here, no change to the seed in #81, and key the register by
+league and season as its own work (#99).
 
 It runs one way only. A register row with no player-day rows is not returned: 9 of the
 31 are such, by nature (see the requirements). The matchup-level test already fails on a
@@ -139,8 +140,8 @@ on the real season.
   another has differences, which is what the tenant-isolation rule (ADR 0013) forbids of
   a model — certain in principle, invisible today — the isolation gate still passes,
   because no fixture league-season has a `difference` row. It is a deliberate alarm on
-  a register that cannot tell seasons apart, and it goes when the register can. For the
-  owner to accept or refuse.
+  a register that cannot tell seasons apart. Accepted by the owner on 2026-10-09 until
+  the register is keyed by league and season (#99), which removes it.
 - A reader treats the 467 CI rows as differences — low — they are labelled, and the YAML
   description says to filter.
 - #93 has not merged when this is built — possible — the CI expected values then do not
@@ -150,7 +151,8 @@ on the real season.
 
 - **Whether `status` should use the matchup table's word for a real difference.** That
   table has `registered` and `unexplained`; this one cannot say which without joining
-  the register, which the test does. `difference` is proposed as the honest word for
+  the register, which the test does. The owner chose the two columns on 2026-10-09 and
+  was not asked about the word separately, so it stands: `difference` is the honest word for
   what the row knows.
 - **The pre-#93 CI split by status** was not measured; only its total, 308.
 
@@ -158,8 +160,8 @@ on the real season.
 
 | Source | Finding | Resolution |
 |---|---|---|
-| design-review | F1 (P1): the register test joins by matchup, side and stat with no league or season, so a second season's difference could pass against 2026's register row | Changed: R3.2 `ambiguous_register` fails the build as soon as two league-seasons have differences. Not changed: the seed gets no league or season column here; that is a column-set decision and touches the matchup-level table. Put to the owner |
+| design-review | F1 (P1): the register test joins by matchup, side and stat with no league or season, so a second season's difference could pass against 2026's register row | Changed: R3.2 `ambiguous_register` fails the build as soon as two league-seasons have differences. Not changed: the seed gets no league or season column here; that is a column-set decision and touches the matchup-level table. The owner agreed on 2026-10-09 and had #99 filed for it |
 | design-review | F2 (P2): labelling does not make an empty table mean agreement; an unverified day whose numbers agree has no row | Changed: the alternatives table, the goal and the ADR's driver now claim only that an existing row is labelled |
-| design-review | F3 (P2): no repeatable negative case for the register test | Changed: the rule moves into a view, `rec_espn__player_day_residuals`, with a six-case unit test (R3.1, R3.5); the singular test selects its problems. A new model, so put to the owner |
+| design-review | F3 (P2): no repeatable negative case for the register test | Changed: the rule moves into a view, `rec_espn__player_day_residuals`, with a six-case unit test (R3.1, R3.5); the singular test selects its problems. A new model, approved by the owner on 2026-10-09 |
 
 ## Amendments
