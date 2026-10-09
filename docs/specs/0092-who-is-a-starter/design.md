@@ -27,7 +27,7 @@ flowchart TD
 All measured on 2026's 1,875 free-agent starts. "Opener-like" is a start that faced nine
 batters or fewer, used to describe a pool and never to choose it.
 
-| | A — keep | B — first appearance | C — B and last two starts (proposed) | D — B and last one start | E — window of three | F — judge the outing |
+| | A — keep | B — first appearance | C — B and last two starts (chosen) | D — B and last one start | E — window of three | F — judge the outing |
 |---|---|---|---|---|---|---|
 | Starts / pitchers | 1,290 / 153 | 1,410 / 170 | 1,518 / 182 | 1,584 / 202 | 1,488 / 187 | 1,656 / 209 |
 | Outs a start, ERA | 14.92, 4.90 | 14.82, 4.88 | 14.78, 4.89 | 14.62, 4.89 | 14.77, 4.86 | 14.73, 4.84 |
@@ -142,10 +142,11 @@ would not notice; the pytest of the committed fixtures from #93 is what would.
 - **How much starters' values move.** Not measured: it needs every started day re-valued
   against the new level. The level's components move by about 1%. R5.4 records it.
 - **Whether one season is enough to judge "two".** 2026 is the only MLB season landed.
-  The 108 and the 66 are one year's counts.
+  The 108 and the 66 are one year's counts. #83 would land more seasons to check it on.
 - **A role carried over from last season** would let an established reliever's
   season-opening "start" stay out and is the better answer for the first fortnight. It
-  needs a second MLB season landed. Whether to file it is the owner's call.
+  needs a second MLB season landed, which is #83. The owner decided on 2026-10-09
+  that no separate issue is filed; it is noted on #83.
 
 ## Review log
 

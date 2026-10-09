@@ -42,8 +42,10 @@ pitcher taking his turn; one start after relief is as often an opener.
 
 ## Decision
 
-Proposed: **option 3**. The owner decides, in two parts that can be answered apart:
-whether a first appearance counts, and what shows a change of role.
+Chosen by the owner on 2026-10-09, going through the spec's decisions: **option 3**.
+A pitcher's first appearance of the season, if a start, counts as a starter's; a change
+of role shows when his last two appearances were both starts; and a reliever's first
+two starts stay out, since judging the outing itself is not allowed.
 
 A free-agent start is in the pool when, on the pitcher's MLB days of the season before
 it, he had not pitched, or `fo_replacement_group` says `SP`, or his two most recent
@@ -53,7 +55,7 @@ pitching days were both starts.
 |---|---|---|---|---|---|
 | 1 keep | 1,290 | 153 | 14.92 | 4.90 | 18 (1.4%) |
 | 2 first appearance | 1,410 | 170 | 14.82 | 4.88 | 21 (1.5%) |
-| 3 and last two (proposed) | 1,518 | 182 | 14.78 | 4.89 | 24 (1.6%) |
+| 3 and last two (chosen) | 1,518 | 182 | 14.78 | 4.89 | 24 (1.6%) |
 | 4 and last one | 1,584 | 202 | 14.62 | 4.89 | 42 (2.7%) |
 | 5 window of three | 1,488 | 187 | 14.77 | 4.86 | 27 (1.8%) |
 | 6 outing alone (9 or fewer out) | 1,656 | 209 | 14.73 | 4.84 | 0 |
@@ -81,4 +83,5 @@ landed, and ESPN's eligibility never covers a free agent.
 - Bad / accepted cost: the level moves again, slightly: 14.92 to 14.78 outs, ERA 4.90 to
   4.89. Starters' values move with it.
 - Follow-ups: a role carried from a previous season, once more than one MLB season is
-  landed.
+  landed. That is #83, which would land past seasons' boxscores; no separate issue (the
+  owner, 2026-10-09). It would also give a second season to check "last two" on.

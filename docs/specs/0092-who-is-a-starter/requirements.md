@@ -69,7 +69,8 @@ every one of these pitchers `P`.
 ## Rabbit holes
 
 - *Telling a reliever's first real start from an opener's before the game* → not
-  possible from appearances. Both stay out; 114 full-length starts are the cost.
+  possible from appearances. Both stay out; 114 full-length starts are the cost,
+  accepted by the owner on 2026-10-09.
 - *A window of recent appearances with a size to choose* → measured (2 of the last 3:
   1,488 starts) and not chosen: it adds a parameter and lets 11 starts in straight from
   relief.
