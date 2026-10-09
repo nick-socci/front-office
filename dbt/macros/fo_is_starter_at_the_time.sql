@@ -14,6 +14,12 @@
   Nothing from the outing itself is looked at: a start cut short is a bad start, and the
   pool must keep it.
 
+  In 2026 this takes 1,518 free-agent starts by 182 pitchers (14.78 outs a start, ERA
+  4.89, WHIP 1.404): the 1,290 the count alone takes, 120 admitted by a first appearance
+  and 108 by two starts running. 357 stay out, a reliever's first starts among them: no
+  fact known before the game tells those from an opener's. A role carried from a previous
+  season would help and needs more than one MLB season landed (#83).
+
   The arguments are already-computed values for the day, not columns to aggregate:
     earlier_pitching_days     -- how many days he pitched before this one, this season;
     replacement_group_to_date -- fo_replacement_group over his earlier MLB days;

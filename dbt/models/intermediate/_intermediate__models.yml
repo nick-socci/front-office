@@ -547,10 +547,15 @@ models:
     description: >
       The production of a replacement player, per played day: one row per (league, season,
       day kind, component), the kind being batting, start or relief (ADR 0008). The batting pool is
-      the top N unrostered hitters by plate appearances. A pitching pool is the top N
-      unrostered pitchers with a day of that kind, ranked by how many such days they had,
-      then outs recorded; its level counts only days of that kind, so a swingman's starts
-      are not in the relief level. N is that league-season's own number of fantasy teams, and
+      the top N unrostered hitters by plate appearances. The relief pool is the top N
+      unrostered pitchers with a relief day, ranked by how many such days they had, then
+      outs recorded; its level counts only relief days, so a swingman's starts are not in
+      the relief level. The start pool is not ranked or cut: it is every unrostered start
+      by a pitcher who was a starter at the time (ADR 0029, 0031, #92), that is, one who
+      had not pitched yet that season, or whose earlier appearances were at least half
+      starts, or whose last two pitching days were both starts. In 2026 that is 1,518
+      starts by 182 pitchers, at 14.78 outs, ERA 4.89 and WHIP 1.404. N is that
+      league-season's own number of fantasy teams, and
       its free agents are the players on none of that league's rosters (#28). The level is the pool's
       component total over its played days. Every kind has its rows even with an empty
       pool, where pool_players and pool_played_days are 0 and pool_total and
