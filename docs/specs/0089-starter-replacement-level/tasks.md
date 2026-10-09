@@ -17,9 +17,9 @@ amends them.
      batting and relief rows identical to the starting point.
 3. Headers of the value facts — `impl` — R2.1
    - Verify: `git diff` of the three facts is comments only.
-4. The re-scoring model and its test — `impl` — R3.1–R3.6, R4.5
-   - Unit tests first; then `rec_fantasy__category_wins_added`, its contract, and
-     `values_track_rescored_category_wins`.
+4. The re-scoring model and its test — `impl` — R3.1–R3.9, R4.5
+   - Unit tests first; then `rec_fantasy__category_wins_added`, its contract,
+     `rec_fantasy__category_wins_by_group` and `values_track_rescored_category_wins`.
    - Verify: CI build; two real builds give identical rows; build time recorded.
 5. (last) Verify against the real season — `judgment` — R5.1–R5.3, expected values
    - Full real build and `.agentic/gates`; every relation compared with the starting
