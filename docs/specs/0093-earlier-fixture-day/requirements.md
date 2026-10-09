@@ -1,6 +1,6 @@
 # An earlier fixture day, so the start pool is not empty in CI — requirements
 
-Issue: #93 · Tier: M · Status: draft
+Issue: #93 · Tier: M · Status: approved 2026-10-09
 
 ## Problem
 

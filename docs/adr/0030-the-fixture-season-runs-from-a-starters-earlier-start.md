@@ -1,6 +1,6 @@
 # 0030. The fixture season runs from a starter's earlier start to the fixture days, with a gap
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0093-earlier-fixture-day](../specs/0093-earlier-fixture-day/design.md) · Issue: #93
 - Amends: [0025](0025-fixture-rosters-are-taken-from-the-mlb-fixture-days.md), for the number and numbering of fixture periods
