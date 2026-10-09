@@ -1036,3 +1036,121 @@ def test_a_history_game_that_is_not_landed_stops_generation(roots, monkeypatch):
     with pytest.raises(SystemExit) as stop:
         make_fixtures.build_mlb_boxscores(SEASON_DATES)
     assert "100" in str(stop.value)
+
+
+# -- the purpose check: a free agent starts on the earlier day and again later (spec 0093, R3) ----
+
+
+def pitcher(person_id: int, *, started: int = 1, outs: int = 15, faced: int = 20, pa: int = 0):
+    """One boxscore player entry: a pitcher's line, and his own plate appearances if any."""
+    return {
+        f"ID{person_id}": {
+            "person": {"id": person_id},
+            "stats": {
+                "pitching": {"gamesStarted": started, "outs": outs, "battersFaced": faced},
+                "batting": {"plateAppearances": pa},
+            },
+        }
+    }
+
+
+def land_id_map(raw, pairs: dict[int, int]):
+    """Land a made-up id map: MLB person id -> ESPN player id."""
+    rows = [{"MLBID": str(mlb), "ESPNID": str(espn)} for mlb, espn in pairs.items()]
+    land(raw, "idmap", "player_id_map", {"provider": "sfbb"}, "20260501T000000Z", rows)
+
+
+def start_pool_zone(
+    raw,
+    monkeypatch,
+    *,
+    earlier: dict | None,
+    later: dict | None,
+    rostered_later: tuple[int, ...] = (),
+    id_map: dict[int, int] | None = None,
+):
+    """A landing zone where game 100 is the history game (04-24, period 31), game 200 is
+    played on 04-29 (period 36) and game 300 on 04-30 (period 37)."""
+    monkeypatch.setattr(make_fixtures, "FIXTURE_HISTORY_GAME_PKS", (100,))
+    land_season_schedule(raw, {"2026-04-24": [100], "2026-04-29": [200], "2026-04-30": [300]})
+    land_game(raw, 100, earlier)
+    land_game(raw, 200, later)
+    land_game(raw, 300)
+    land_roster(raw, 31, player_ids=(9011,))  # rostered on the earlier day: irrelevant
+    land_roster(raw, 36, player_ids=rostered_later or (9999,))
+    land_roster(raw, 37)
+    land_id_map(raw, {11: 9011} if id_map is None else id_map)
+
+
+def check_start_pool():
+    make_fixtures.check_a_free_agent_starts_on_the_earlier_day_and_again_later(SEASON_DATES)
+
+
+def test_a_free_agent_who_starts_on_both_days_passes(roots, monkeypatch):
+    """Catches the check refusing a good fixture, or counting a roster of the EARLIER day
+    against the pitcher (he is rostered on 04-24 here and free on 04-29)."""
+    raw, _fixtures = roots
+    start_pool_zone(raw, monkeypatch, earlier=pitcher(11), later=pitcher(11))
+    check_start_pool()
+
+
+def test_a_pitcher_with_no_id_map_row_counts_as_unrostered(roots, monkeypatch):
+    """Catches an unresolved pitcher being treated as rostered: in the model an unresolved
+    roster entry has no mlbam_player_id, so he is a free agent."""
+    raw, _fixtures = roots
+    start_pool_zone(raw, monkeypatch, earlier=pitcher(11), later=pitcher(11), id_map={})
+    check_start_pool()
+
+
+def test_no_start_in_the_earlier_game_fails_condition_a(roots, monkeypatch):
+    """Catches a history game in which nobody started (a wrong named game) passing (R3.1a)."""
+    raw, _fixtures = roots
+    start_pool_zone(raw, monkeypatch, earlier=pitcher(11, started=0), later=pitcher(11))
+    with pytest.raises(SystemExit) as stop:
+        check_start_pool()
+    assert "(a)" in str(stop.value) and "100" in str(stop.value)
+
+
+def test_an_earlier_start_with_no_outs_fails_condition_a(roots, monkeypatch):
+    """Catches a start with no outs recorded counting as a starter's earlier appearance:
+    fo_replacement_group would not call it SP (R3.1a)."""
+    raw, _fixtures = roots
+    start_pool_zone(raw, monkeypatch, earlier=pitcher(11, outs=0), later=pitcher(11))
+    with pytest.raises(SystemExit) as stop:
+        check_start_pool()
+    assert "(a)" in str(stop.value)
+
+
+def test_an_earlier_start_with_more_plate_appearances_than_batters_faced_fails_a(
+    roots, monkeypatch
+):
+    """Catches a two-way player's batting being read as a pitcher's role (R3.1a)."""
+    raw, _fixtures = roots
+    start_pool_zone(raw, monkeypatch, earlier=pitcher(11, faced=3, pa=4), later=pitcher(11))
+    with pytest.raises(SystemExit) as stop:
+        check_start_pool()
+    assert "(a)" in str(stop.value)
+
+
+def test_no_later_start_by_the_earlier_starter_fails_condition_b(roots, monkeypatch):
+    """Catches a fixture where the earlier starter never starts again, so the pool would
+    have an SP with no start to count (R3.1b)."""
+    raw, _fixtures = roots
+    start_pool_zone(raw, monkeypatch, earlier=pitcher(11), later=pitcher(12))
+    with pytest.raises(SystemExit) as stop:
+        check_start_pool()
+    message = str(stop.value)
+    assert "(b)" in message and "(a)" not in message
+
+
+def test_a_later_start_by_a_rostered_pitcher_fails_condition_c(roots, monkeypatch):
+    """Catches a later start by a pitcher on a roster that day, who is not a free agent and
+    so not in the pool (R3.1c); matched through the id map."""
+    raw, _fixtures = roots
+    start_pool_zone(
+        raw, monkeypatch, earlier=pitcher(11), later=pitcher(11), rostered_later=(9011,)
+    )
+    with pytest.raises(SystemExit) as stop:
+        check_start_pool()
+    message = str(stop.value)
+    assert "(c)" in message and "(a)" not in message and "(b)" not in message

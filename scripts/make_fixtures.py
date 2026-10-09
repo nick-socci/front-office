@@ -630,6 +630,81 @@ def check_mlb_has_games_on_the_fixture_dates(
         )
 
 
+def pitchers_who_started(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """MLB person id -> pitching line, for every player with a start in one boxscore."""
+    started: dict[str, dict[str, Any]] = {}
+    for side in ("home", "away"):
+        for player in payload["teams"][side]["players"].values():
+            stats = player.get("stats", {})
+            pitching = stats.get("pitching", {})
+            if pitching.get("gamesStarted", 0) >= 1:
+                batting = stats.get("batting", {})
+                started[str(player["person"]["id"])] = {
+                    "outs": pitching.get("outs", 0),
+                    "batters_faced": pitching.get("battersFaced", 0),
+                    "plate_appearances": batting.get("plateAppearances", 0),
+                }
+    return started
+
+
+def check_a_free_agent_starts_on_the_earlier_day_and_again_later(
+    dates: tuple[str, ...], source_periods: tuple[int, ...] = FIXTURE_SOURCE_SCORING_PERIODS
+) -> None:
+    """Stop unless the fixture can give the start replacement level a pool player (ADR 0030).
+
+    Some pitcher must (a) start in a history game, with outs recorded and no more plate
+    appearances than batters faced (what fo_replacement_group reads to call one earlier
+    start SP), (b) start in a later chosen game, and (c) be on no ESPN roster of that later
+    game's period. A pitcher with no id-map row is unrostered, as he is in the model. Without
+    such a pitcher the fixture regenerates cleanly and the pool is empty again. Reads only
+    what the builders read, before anything is written.
+    """
+    period_of_date = dict(zip(dates, source_periods, strict=True))
+    earlier: set[str] = set()
+    for game_pk in FIXTURE_HISTORY_GAME_PKS:
+        source = landed_boxscore_path(game_pk)
+        if source is None:
+            raise SystemExit(f"mlb/boxscore: the named history game_pk {game_pk} is not landed")
+        for person, line in pitchers_who_started(json.loads(source.read_text())).items():
+            if line["outs"] > 0 and line["plate_appearances"] <= line["batters_faced"]:
+                earlier.add(person)
+    if not earlier:
+        raise SystemExit(
+            "no start pool pitcher: (a) failed, no pitcher starts with outs recorded in the "
+            f"history game(s) {', '.join(map(str, FIXTURE_HISTORY_GAME_PKS))}"
+        )
+    later: list[tuple[str, int]] = []  # (person, source period of a later start)
+    for game_pk, date in select_boxscore_games(dates):
+        source = landed_boxscore_path(game_pk)
+        if source is not None:
+            for person in pitchers_who_started(json.loads(source.read_text())):
+                if person in earlier:
+                    later.append((person, period_of_date[date]))
+    if not later:
+        raise SystemExit(
+            "no start pool pitcher: (b) failed, none of the earlier starters starts in a "
+            "later fixture boxscore"
+        )
+    id_map = json.loads(latest_landed("idmap", "player_id_map").read_text())
+    espn_ids: dict[str, set[str]] = {}
+    for row in id_map:
+        espn_ids.setdefault(str(row.get("MLBID")), set()).add(str(row.get("ESPNID")))
+    rostered: dict[int, set[str]] = {}
+    for _person, period in later:
+        if period not in rostered:
+            payload = latest_espn("roster", scoring_period=period)
+            rostered[period] = {
+                str(entry["playerId"])
+                for team in payload["teams"]
+                for entry in team["roster"]["entries"]
+            }
+    if all(espn_ids.get(person, set()) & rostered[period] for person, period in later):
+        raise SystemExit(
+            "no start pool pitcher: (c) failed, every earlier starter who starts again is on "
+            "an ESPN roster of that later game's period"
+        )
+
+
 def check_one_league(season: int = FIXTURE_SEASON) -> None:
     """Stop when captures of more than one league are landed for the season (R1.5).
 
@@ -988,6 +1063,7 @@ def main() -> None:
     dates = tuple(args.dates)
     check_source_periods_are_the_fixture_dates(FIXTURE_SOURCE_SCORING_PERIODS, dates)
     check_one_league()
+    check_a_free_agent_starts_on_the_earlier_day_and_again_later(dates)
     # Every check of every season first, so a failing past season leaves no half-written run.
     for past in PAST_SEASONS:
         check_source_periods_are_the_fixture_dates(past.source_periods, past.dates, past.season)
