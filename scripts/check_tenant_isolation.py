@@ -119,10 +119,16 @@ def seasons_to_copy(season: int, available: Iterable[int]) -> list[int]:
 
 
 def league_seasons(root: Path, league: str) -> list[int]:
-    """The seasons for which `root` holds ESPN captures of `league`."""
+    """The seasons for which `root` holds committed ESPN captures of `league`.
+
+    Read through the landing zone, never from directory names: a folder that is not a
+    capture is not a season the league has (ADR 0014).
+    """
     found: set[int] = set()
-    for league_dir in (root / "espn").glob(f"*/season=*/league_id={league}"):
-        found.add(int(league_dir.parent.name.removeprefix("season=")))
+    for capture in LandingZone(root=root).iter_landed(source="espn"):
+        partitions = capture.meta["partitions"]
+        if str(partitions.get("league_id")) == league:
+            found.add(int(partitions["season"]))
     return sorted(found)
 
 
