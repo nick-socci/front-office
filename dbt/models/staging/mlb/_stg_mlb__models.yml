@@ -146,6 +146,53 @@ models:
           arguments:
             expression: "earned_runs <= runs_allowed"
 
+  - name: stg_mlb__players
+    description: >
+      One row per (season, mlbam_player_id): the player as the newest capture of that
+      season that lists him describes him. A player a later capture drops keeps his last
+      row. The name is MLB's fullName and nothing else of the name fields is read.
+      primary_position is MLB's designation as of the fetch (P, SS, TWP, ...), not on a
+      date in the season. season comes from the capture's request, because the payload
+      has no season field.
+    columns:
+      - name: season
+        description: The season the list was requested for, from the request_key.
+        data_tests:
+          - not_null
+      - name: mlbam_player_id
+        description: MLB's id for the player.
+        data_tests:
+          - not_null
+      - name: player_name
+        description: MLB's fullName.
+        data_tests:
+          - not_null
+      - name: primary_position
+        description: MLB's primary position abbreviation, as of the fetch.
+        data_tests:
+          - not_null
+      - name: bats
+        description: Batting side, MLB's code (L, R or S).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["L", "R", "S"]
+      - name: throws
+        description: Throwing hand, MLB's code (L, R or S).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["L", "R", "S"]
+      - name: birth_date
+      - name: mlb_debut_date
+        description: Null for a player who has not debuted.
+      - name: fetched_at
+        description: When the capture this row came from was fetched.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [season, mlbam_player_id]
+
 unit_tests:
   - name: games_prefer_the_played_entry_over_a_cancelled_or_postponed_one
     description: >
@@ -232,6 +279,39 @@ unit_tests:
           at_bats: 0
           hits: 0
           stolen_bases: 1
+
+  - name: stg_mlb__players_keeps_the_newest_capture_per_season_and_player
+    description: >
+      Two captures of one season that disagree on a player: the newer one's row wins. A
+      player only the older capture lists keeps his row. The same player in another
+      season is a row of his own.
+    model: stg_mlb__players
+    given:
+      - input: source('raw', 'api_responses')
+        rows:
+          - source: mlb
+            endpoint: players
+            request_key: "season=2026"
+            fetched_at: "20260401T000000Z"
+            file_path: players-2026-20260401T000000Z.json
+            payload: '{"people":[{"id":1,"fullName":"Old Name","primaryPosition":{"abbreviation":"P"},"batSide":{"code":"L"},"pitchHand":{"code":"L"},"birthDate":"1999-06-01","mlbDebutDate":"2023-06-05"},{"id":2,"fullName":"Only Older","primaryPosition":{"abbreviation":"C"},"batSide":{"code":"R"},"pitchHand":{"code":"R"},"birthDate":"1999-06-01","mlbDebutDate":"2023-06-05"}]}'
+          - source: mlb
+            endpoint: players
+            request_key: "season=2026"
+            fetched_at: "20260901T000000Z"
+            file_path: players-2026-20260901T000000Z.json
+            payload: '{"people":[{"id":1,"fullName":"New Name","primaryPosition":{"abbreviation":"SS"},"batSide":{"code":"S"},"pitchHand":{"code":"R"},"birthDate":"1999-06-01","mlbDebutDate":"2023-06-05"}]}'
+          - source: mlb
+            endpoint: players
+            request_key: "season=2025"
+            fetched_at: "20250901T000000Z"
+            file_path: players-2025-20250901T000000Z.json
+            payload: '{"people":[{"id":1,"fullName":"Past Name","primaryPosition":{"abbreviation":"P"},"batSide":{"code":"L"},"pitchHand":{"code":"L"},"birthDate":"1999-06-01","mlbDebutDate":"2023-06-05"}]}'
+    expect:
+      rows:
+        - {season: 2026, mlbam_player_id: 1, player_name: New Name, primary_position: SS, bats: S, throws: R, birth_date: "1999-06-01", mlb_debut_date: "2023-06-05"}
+        - {season: 2026, mlbam_player_id: 2, player_name: Only Older, primary_position: C, bats: R, throws: R, birth_date: "1999-06-01", mlb_debut_date: "2023-06-05"}
+        - {season: 2025, mlbam_player_id: 1, player_name: Past Name, primary_position: P, bats: L, throws: L, birth_date: "1999-06-01", mlb_debut_date: "2023-06-05"}
 
 seeds:
   - name: mlb_game_states
