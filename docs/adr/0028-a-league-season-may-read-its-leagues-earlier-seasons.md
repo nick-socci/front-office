@@ -39,7 +39,8 @@ dependency, and would fail on correct results if a fixture ever qualified.
 
 ## Decision
 
-Proposed: **option 2**.
+Chosen by the owner on 2026-10-08: **option 2**. The status moves to accepted when the
+spec is approved.
 
 A single build holds the league's captures for the season under test and every earlier
 season, with those seasons' MLB data; the rows compared are still those of the
