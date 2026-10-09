@@ -157,3 +157,52 @@ so the relievers' figure is on record every time (R3.9).
 A group of 100 or more pairs with a pair whose value or wins added is null fails as not
 checkable, judged or not, so a slope is never computed from part of a group.
 
+## Test strategy
+
+| Requirement | Test | Catches |
+|---|---|---|
+| R1.1–R1.4, R1.7, R4.1 | unit tests on `int_fantasy__replacement_levels` | a role decided with hindsight; an opener or a first start in the pool; a cap applied; another league's roster removing a free agent |
+| R1.5, R4.2 | the existing batting and relief unit tests; real rows compared | a side effect on the other kinds |
+| R1.6 | the existing empty-pool unit test, for the start kind | a missing row in place of a null level |
+| R4.3, R4.4 | the two singular tests | a batting or relief pool above N; a level that is not the pool's own mean |
+| R2.1 | `git diff` of the facts is comments only | a fact computing its own level |
+| R3.1–R3.4, R3.6, R4.5 | unit tests on the re-scoring; two real builds compared | a tie broken by a fraction; a category judged the wrong way round; a result that changes between builds |
+| R3.5, R3.8, R3.9 | `values_track_rescored_category_wins`; unit tests on `rec_fantasy__category_wins_by_group` for the slope, the correlation and the judged flag | starters' or hitters' values tilted by a quarter; a slope taken from part of a group; an unjudged group going unseen |
+| R5.1–R5.3 | real build; every relation compared with a copy kept before; the expected values | any movement this document does not state |
+
+## Risks
+
+- **The fixture start pool is empty.** Two days cannot hold a pitcher's earlier start, so
+  in CI the start level is null, fixture starts have a null value, and
+  `int_fantasy__replacement_pool_has_played_days` warns. Unit tests carry the rule. If a
+  CI test fails on those nulls, the build stops (R5.3).
+- **Early in a season the pool is thin**: no pitcher is a starter until his second
+  appearance. The level exists from the first days and settles over weeks.
+- **The re-scoring is the heaviest model in the build.** Twenty draws of every
+  pair-matchup-component; measured when built.
+- **The band of R3.5 and the correlation of 0.75 are judgments**, from one season. A
+  second season may show the slopes moving more than this allows.
+- **Relief values are unguarded.** And a group whose values degraded could lose
+  correlation and drop out of judgment; R3.9's report is what would show it.
+- **One season, one league.**
+
+## Open questions
+
+- **Who is a starter for a call-up, and for a pitcher who changes role.** The rule is
+  accepted for now; #92.
+
+- **Whether the relief and batting pools should also be decided at the time.** No gap
+  was measured; both still use whole-season hindsight.
+- **Why relievers' values convert to real wins less steadily** (slope 0.33, correlation
+  0.69).
+- **Hitter pools by position** (ADR 0001's follow-up).
+
+## Review log
+
+| Source | Finding | Resolution |
+|---|---|---|
+| design-review | F1 (P1): a decided matchup can rest on unverified inputs and would be re-scored as real | Changed: R3.1 re-scores only matchups with a winner and `has_unverified_inputs` false; a unit test for the other case |
+| design-review | F2 (P1): nothing says what the re-scoring does when a level is null | Changed: R3.7 (null measures, row kept) and R3.8 (a judged group with a null fails as not checkable) |
+| design-review | F3 (P2): the 0.30 to 0.50 band does not catch the 25% tilt the design claimed | Changed, by the owner's decision of 2026-10-09: 0.34 to 0.47 for groups whose values correlate with real wins at 0.75 or more (starters and hitters), every group's figures reported. It now catches starters inflated by a quarter |
+
+## Amendments
