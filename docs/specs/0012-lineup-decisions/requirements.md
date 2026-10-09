@@ -206,7 +206,8 @@ Every legal (player, slot) pair of a team-day, which is all the solver reads.
   eligible at two slots that a greedy pass double-assigns; a slot with a count above
   one; a starter with a bad day and no replacement, who stays; the same starter with a
   bench player who played, who replaces him; a starter with no game displaced by a
-  bench player with one; a two-way player; a tie, which keeps the actual lineup; a
+  bench player with one; a two-way player; a tie, which keeps the actual lineup; values of very large magnitude, which never
+  make an ineligible pair preferable; a
   team-day with no options; input rows in shuffled order; and, on random small cases,
   a summed value within R3.2's bound of the maximum found by trying every legal
   lineup.

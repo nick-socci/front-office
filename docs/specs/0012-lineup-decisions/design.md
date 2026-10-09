@@ -252,10 +252,12 @@ def solve_team_day(
 - Cost of (slot, player) is `-(value + 1e-9 if is_actual else value)` where the pair is
   an option, and forbidden otherwise. That is R3.1's objective as written: the bonus
   is in the requirement, not a perturbation of it. Cost of (slot, idle filler of the slot's role) is
-  0, and forbidden across roles. Forbidden is a large finite cost.
+  0, and forbidden across roles. Forbidden is infinite cost: SciPy never assigns such a
+  pair, whatever the size of the values, where a finite constant would have to be
+  larger than a bound the option values do not have.
 - `scipy.optimize.linear_sum_assignment` matches every slot instance. The actual lineup
-  is one such matching, so a full matching exists; the function raises if the result
-  uses a forbidden pair.
+  is one such matching, so a full matching exists; were there none, SciPy raises and
+  the function lets that through.
 - A slot matched to an idle filler is idle. Limiting the fillers is what enforces
   R3.1's "at least as many": a slot of a role can go idle only as often as the actual
   lineup left one without a played starter.
@@ -472,6 +474,7 @@ pytest, `ingestion/tests/test_lineup_solver.py`: the cases of R6.1.
 | design-review | F6 (P3): "2 of 288" and "2 of 264" for the starts limit | Changed: 264 seven-day team-periods throughout |
 | owner, 2026-10-09 | The eight decisions of the spec PR taken as recommended, with one change: the starts limit is not enforced, and the team-day fact carries the pitcher starts of both lineups, so a breach shows in a league whose limit binds | Changed: R4.9; `day_kind` on the options; two columns on `fct_lineup_decisions`; ADR 0037 |
 | codex PR review 1 | F1 (P1): R4.8 forbade any change of lineup at a gap up to 1.8e-8, but a correct solver result can gain less than that (a bench player worth 2e-9 beats a starter worth 0) | Changed: R4.8's threshold is 1e-12, "nothing was gained", and no longer R3.2's bound; a risk records the one tie the bonus cannot separate |
+| codex PR review 1 | F2 (P2): a fixed finite cost does not reliably forbid a pair, since option values have no stated bound | Changed (owner, 2026-10-09): forbidden pairs cost infinity; a pytest case with values of very large magnitude |
 | design-review 2 | F1 (P1): the recomputed actual totals were CTEs of the category mart and not selected, so R5.3's test could not read them and would have tested its own copy | Changed (owner chose a model over a column): `int_fantasy__lineup_category_totals`, one row per side, category and lineup; R5.2 to R5.4; the mart sums nothing |
 | design-review 2 | F2 (P2): no task covered R5.5 | Changed: the mart's task lists it |
 | design-review 2 | F3 (P2): CI had no expected value for the pitcher-start counts | Changed: actual 2, measured; optimal at most 2, with the reason |
