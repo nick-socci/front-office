@@ -30,22 +30,23 @@ It also said its evidence, one season of one league, could not show the scale wa
 - **Earlier seasons are a better guide early, the season itself a better guide late, and
   a blend of the two is as good as the better one throughout.** Predicting the scale of
   the *rest* of a season from what is known after *k* matchup periods, mean error over
-  118 category-seasons:
+  118 category-seasons, measured by the rule of R1 to R3:
 
   | Known so far | Earlier seasons only | The season so far only | Blend |
   |---|---|---|---|
-  | 2 periods (12 matchups) | 8.5% | 24.5% | 8.8% |
-  | 4 periods (24) | 8.7% | 15.7% | 8.8% |
-  | 8 periods (48) | 8.9% | 11.6% | 8.4% |
-  | 12 periods (72) | 9.7% | 10.7% | 9.2% |
-  | 16 periods (96) | 10.6% | 10.7% | 9.6% |
+  | 2 periods (12 matchups) | 9.0% | 23.8% | 9.1% |
+  | 4 periods (24) | 9.1% | 14.9% | 9.0% |
+  | 8 periods (48) | 9.5% | 11.9% | 8.9% |
+  | 12 periods (72) | 10.4% | 11.4% | 9.7% |
+  | 16 periods (96) | 12.7% | 11.5% | 11.4% |
 
   The blend counts the earlier seasons as 100 matchups and adds the season's decided
-  matchups to them. The floor is about 7%: the rest of a season is itself a sample.
+  matchups to them. The rest of a season is itself a sample, of fewer matchups as *k*
+  grows, so no method reaches zero.
 - **What changes between seasons is not a trend that history predicts.** The innings
   scale rose from 42 to 59 outs between 2018 and 2023 and fell back to 44 to 47. For
   innings, strikeouts, ERA and WHIP, 12 periods in, earlier seasons alone are off by
-  11.2% and the blend by 8.5%. The stolen-base scale rose from about 3.0 to about 3.9
+  11.7% and the blend by 9.3%. The stolen-base scale rose from about 3.0 to about 3.9
   with the 2023 rule changes.
 - **Adjusting a pooled scale for the season's volume was tried and dropped.** A count's
   scale does follow the square root of its volume (stolen bases: 14% spread between
@@ -55,6 +56,13 @@ It also said its evidence, one season of one league, could not show the scale wa
   8.5%).
 - **A window of recent seasons does no better than all of them** (last 2, 3 or 4 earlier
   seasons against all earlier: mean error 8.0%, 8.3%, 8.7% against 8.1%, 8.3%, 8.6%).
+- **How much is played in a matchup period varies, and the margins follow it.** A
+  period's volume relative to its season's usual one (R1.8) finds the long periods of
+  every season: the opening period and the All-Star break at 1.43 to 1.57 times a usual
+  week, in every season but 2024 and 2025, whose opening periods held the Seoul and
+  Tokyo games and little else (0.69 and 0.65). In the long periods a count's margins are
+  38% wider and a rate's 11% narrower. Playoff periods run at 0.87; once that is allowed
+  for, their margins are within 6% of the regular season's.
 - **A rate's scale and its denominator move together.** ERA's scale is 1.85 over
   earlier seasons, whose sides averaged 159 outs, and 1.64 in 2026, whose sides average
   172: fewer innings, wider gaps in ERA. Taking the scale from one set of matchups and
@@ -98,17 +106,20 @@ be followed, chose the blend.
 - **No rosters, complete-games rule or matchup-period mapping for past seasons** (#83).
 - **No model of winning the matchup.** How often a matchup turned on one category is not
   measured here.
-- **No change to how a scale is measured within a matchup**: home minus away, root mean
-  square about zero, every decided matchup counted once whatever its length or playoff
-  tier.
+- **No change to the form of a scale**: home minus away, root mean square about zero.
+- **No fitted exponent** for how margins grow with volume: the square root, as counts
+  behave, though the data would fit 0.7 for counts and 0.42 for rates.
 
 ## Rabbit holes
 
 - *Weighting recent seasons, or a rolling window* → measured: no better than pooling all.
-- *Dropping playoff matchups* → they run 10% to 15% narrower in counting categories, are
-  17 of about 143 a season, and move a pooled scale by at most 2.2%. Kept, as today.
-- *Adjusting for matchup length* → only 2025 and 2026 carry a per-day breakdown; the
-  other seasons' lengths are not known. Every matchup counts once, as ADR 0010 has it.
+- *Counting days to find a long matchup* → only 2025 and 2026 carry a per-day breakdown,
+  and days mislead: 2025's opening period is 13 days and 0.65 of a usual week's play.
+  Volume is measured in every season.
+- *Leaving the long periods out* → needs a cutoff for "long" and costs a tenth of the
+  matchups. Standardising keeps them.
+- *Keeping the winners' bracket* → five matchups a season, and one rule is simpler than
+  two.
 - *Adjusting for a category's volume, or a list of rule changes* → the first is worse
   early (see *Problem*); the second needs someone to keep it and does worst in the season
   a rule changes. The blend follows a change from the season's own matchups.
@@ -137,11 +148,22 @@ be followed, chose the blend.
 - R1.5 IF a rate's denominator is not reported for either side of a matchup THEN THE
   SYSTEM SHALL keep the row with null denominators, so that the category's scale and its
   denominator can be measured from the same matchups (R2.3).
-- R1.7 THE SYSTEM SHALL carry `is_measured` on every row: true for a count; for a rate,
-  true only when both sides' denominators are reported and greater than zero. A rate on
+- R1.7 THE SYSTEM SHALL carry `is_measured` on every row: true only for a
+  regular-season matchup; and, for a rate, only when both sides' denominators are
+  reported and greater than zero. A rate on
   a zero denominator is undefined, as it is in `int_fantasy__matchup_stat_values`, even
   where the platform reports it as zero.
 - R1.6 THE SYSTEM SHALL NOT include a matchup the platform has not decided, or a bye.
+- R1.8 THE SYSTEM SHALL give every row its matchup period's `relative_volume`: the
+  median, over the counting categories the league-season scores, of the period's mean
+  reported side total divided by the median of that mean over the league-season's
+  regular-season periods. Sides are those of decided two-sided regular-season matchups;
+  a category whose median is zero is left out of the median. A league-season with one
+  such period has a relative volume of 1 for it.
+- R1.9 THE SYSTEM SHALL give every row a `standard_margin`: for a count, the margin
+  divided by the square root of the relative volume; for a rate, multiplied by it.
+- R1.10 THE SYSTEM SHALL keep a playoff matchup's rows, with `is_regular_season` false,
+  a null `relative_volume` and a null `standard_margin`.
 
 ### R2. Reported scales per league-season
 
@@ -154,6 +176,9 @@ be followed, chose the blend.
   with `is_measured` and no others, so that a rate's scale and denominator come from the
   same matchups. A rate whose denominator no matchup reports has `matchups_measured`
   zero.
+- R2.5 THE SYSTEM SHALL measure every scale from `standard_margin`, and a rate's side
+  denominator from the reported denominators divided by the row's `relative_volume`,
+  so that both describe a matchup period of usual volume.
 - R2.4 THE SYSTEM SHALL compute every scale as the root mean square of the margins,
   summed in the order (`season`, `matchup_id`), which is unique within a league: ESPN
   reuses matchup ids across seasons (158 distinct ids over 1,162 matchups), and the last
@@ -169,12 +194,12 @@ history that is used and what that history counts as.
   `fantasy_scale_prior_matchups` measured matchups for a category THE SYSTEM SHALL give
   that category, in `int_fantasy__category_scales`, the blended scale
   √((*S* + *w*·*p*²) / (*n* + *w*)), where *p* is the root mean square of all those
-  earlier margins, *w* is the variable, and *S* and *n* are the sum of squares and the
-  count of the league-season's own measured margins.
+  earlier standard margins, *w* is the variable, and *S* and *n* are the sum of squares
+  and the count of the league-season's own measured standard margins.
 - R3.2 WHEN R3.1 applies to a rate THE SYSTEM SHALL give it the side denominator
-  (*D* + 2*w*·*q*) / (2*n* + 2*w*), where *q* is the mean reported denominator of the
-  earlier matchups' sides and *D* is the sum of the league-season's own measured sides'
-  denominators: the same matchups, with the same weights, as the scale.
+  (*D* + 2*w*·*q*) / (2*n* + 2*w*), where *q* is the mean volume-standardised denominator
+  (R2.5) of the earlier matchups' sides and *D* is the sum of the league-season's own
+  measured sides' standardised denominators: the same matchups, with the same weights, as the scale.
 - R3.3 WHEN a league-season has no decided matchup and R3.1 applies THE SYSTEM SHALL give
   the category exactly *p* and *q*.
 - R3.4 OTHERWISE THE SYSTEM SHALL give the category the scale and denominator it has
@@ -201,7 +226,11 @@ history that is used and what that history counts as.
   gives one row per scored category; an undecided matchup and a bye give none; a
   non-scored stat gives none; a rate carries both denominators, and nulls where one is
   unreported; a decided matchup with a side on a zero denominator is a row that is not
-  measured; a category with no component rule is a count.
+  measured; a category with no component rule is a count; a playoff matchup is a row
+  that is not measured; a period of twice the usual volume has a relative volume of 2,
+  a count's standard margin is its margin over √2 and a rate's is its margin times √2;
+  a category with a zero median does not enter the relative volume; a league-season's
+  first decided period has a relative volume of 1.
 - R4.2 THE SYSTEM SHALL have dbt unit tests for the reported scales: a league-season with
   no decided matchup keeps its categories with zero measured; a rate is measured only
   from matchups with both denominators; the scale is unchanged when home and away are
@@ -256,46 +285,52 @@ isolation check of ADR 0013 forbids as written: it builds each league-season alo
 Measured on 2026-10-08, read-only, on the real warehouse after #87, by the rule of R1 to
 R3.
 
-**Matchups measured, per league-season** (`int_fantasy__reported_category_scales`):
+**Matchups measured, per league-season** (`int_fantasy__reported_category_scales`;
+regular season only):
 
-| Season | Scored categories | Matchups measured, every category but AVG | AVG |
-|---|---|---|---|
-| 2018 | 18 | 143 | 0: at-bats not reported |
-| 2019 | 18 | 143 | 143 |
-| 2020 | 18 | 0: not played | 0 |
-| 2021 | 18 | 143 | 143 |
-| 2022 | 17 | 143 | 143 |
-| 2023 | 17 | 143 | 143 |
-| 2024 | 17 | 155 | 155 |
-| 2025 | 17 | 149 | 149 |
-| 2026 | 17 | 143 | 143 |
+| Season | Scored categories | Matchups measured, every category but AVG | AVG | Periods with a relative volume outside 0.8 to 1.25 |
+|---|---|---|---|---|
+| 2018 | 18 | 126 | 0: at-bats not reported | 1 (1.46), 15 (1.53) |
+| 2019 | 18 | 126 | 126 | 1 (1.49), 14 (1.48) |
+| 2020 | 18 | 0: not played | 0 | |
+| 2021 | 18 | 126 | 126 | 1 (1.48), 14 (1.47) |
+| 2022 | 17 | 126 | 126 | 1 (1.43), 14 (1.50) |
+| 2023 | 17 | 126 | 126 | 1 (1.57), 14 (1.53) |
+| 2024 | 17 | 138 | 138 | 1 (0.69), 16 (1.51) |
+| 2025 | 17 | 132 | 132 | 1 (0.65), 16 (1.53) |
+| 2026 | 17 | 126 | 126 | 1 (1.48), 15 (1.51) |
+
+After standardising, the long periods' margins are 12% wider than a usual period's for
+counts and 9% for rates, against 38% wider and 11% narrower before.
 
 **The 2026 scales**, `int_fantasy__category_scales`, all 17 with `scale_source`
-`prior_and_current_seasons` and `matchups_measured` 143:
+`prior_and_current_seasons` and `matchups_measured` 126:
 
-| Category | Today | Earlier seasons (*p*) | After (blended) | Earlier matchups | Seasons | Denominator today → earlier → after | Values multiply by |
-|---|---|---|---|---|---|---|---|
-| H | 12.7811 | 12.6466 | 12.7228 | 1,019 | 7 | | 1.005 |
-| AVG | 0.0450 | 0.0464 | 0.0455 | 876 | 6 | 207.83 → 197.87 → 203.73 | 1.007 |
-| HR | 4.1010 | 4.5333 | 4.2842 | 1,019 | 7 | | 0.957 |
-| TB | 22.8409 | 24.5673 | 23.5641 | 1,019 | 7 | | 0.969 |
-| B_BB | 8.3971 | 8.0039 | 8.2375 | 1,019 | 7 | | 1.019 |
-| R | 8.4779 | 9.2028 | 8.7834 | 1,019 | 7 | | 0.965 |
-| RBI | 9.9111 | 10.5143 | 10.1669 | 1,019 | 7 | | 0.975 |
-| SB | 3.6201 | 3.4630 | 3.5563 | 1,019 | 7 | | 1.018 |
-| B_SO | 12.3936 | 12.7741 | 12.5516 | 1,019 | 7 | | 0.987 |
-| IP (outs) | 47.1749 | 50.5701 | 48.6009 | 1,019 | 7 | | 0.971 |
-| WHIP | 0.2653 | 0.2948 | 0.2782 | 1,019 | 7 | 172.40 → 159.04 → 166.90 | 0.985 |
-| ERA | 1.6371 | 1.8504 | 1.7382 | 1,019 | 7 | 172.40 → 159.04 → 166.90 | 0.973 |
-| K | 20.3186 | 19.9243 | 20.1573 | 1,019 | 7 | | 1.008 |
-| K/9 | 1.9590 | 1.8597 | 1.9187 | 1,019 | 7 | 172.40 → 159.04 → 166.90 | 1.055 |
-| W | 2.6391 | 2.4044 | 2.5452 | 1,019 | 7 | | 1.037 |
-| L | 2.4947 | 2.3470 | 2.4350 | 1,019 | 7 | | 1.025 |
-| SVHD | 3.5988 | 3.2357 | 3.4593 | 590 | 4 | | 1.040 |
+| Category | Today | 2026 alone, by R1–R2 | Earlier seasons (*p*) | After (blended) | Earlier matchups | Seasons | Denominator today → 2026 alone → earlier → after | Values multiply by |
+|---|---|---|---|---|---|---|---|---|
+| H | 12.7811 | 12.5792 | 12.5310 | 12.5579 | 900 | 7 | | 1.018 |
+| AVG | 0.0450 | 0.0474 | 0.0469 | 0.0472 | 774 | 6 | 207.83 → 202.31 → 194.76 → 198.97 | 0.995 |
+| HR | 4.1010 | 4.0916 | 4.4758 | 4.2659 | 900 | 7 | | 0.961 |
+| TB | 22.8409 | 22.6318 | 24.3351 | 23.4008 | 900 | 7 | | 0.976 |
+| B_BB | 8.3971 | 8.2174 | 7.7952 | 8.0333 | 900 | 7 | | 1.045 |
+| R | 8.4779 | 8.2682 | 9.0166 | 8.6074 | 900 | 7 | | 0.985 |
+| RBI | 9.9111 | 9.9569 | 10.3601 | 10.1373 | 900 | 7 | | 0.978 |
+| SB | 3.6201 | 3.6966 | 3.4056 | 3.5707 | 900 | 7 | | 1.014 |
+| B_SO | 12.3936 | 12.3766 | 12.4068 | 12.3900 | 900 | 7 | | 1.000 |
+| IP (outs) | 47.1749 | 45.8716 | 50.8786 | 48.1514 | 900 | 7 | | 0.980 |
+| WHIP | 0.2653 | 0.2664 | 0.2948 | 0.2793 | 900 | 7 | 172.40 → 169.90 → 157.19 → 164.28 | 0.997 |
+| ERA | 1.6371 | 1.6492 | 1.8665 | 1.7487 | 900 | 7 | 172.40 → 169.90 → 157.19 → 164.28 | 0.982 |
+| K | 20.3186 | 19.8087 | 19.8855 | 19.8427 | 900 | 7 | | 1.024 |
+| K/9 | 1.9590 | 1.9468 | 1.8690 | 1.9128 | 900 | 7 | 172.40 → 169.90 → 157.19 → 164.28 | 1.075 |
+| W | 2.6391 | 2.4878 | 2.4042 | 2.4512 | 900 | 7 | | 1.077 |
+| L | 2.4947 | 2.4732 | 2.3372 | 2.4140 | 900 | 7 | | 1.033 |
+| SVHD | 3.5988 | 3.5986 | 3.2585 | 3.4523 | 522 | 4 | | 1.042 |
 
-"Today" is from our recomputed totals. The blend's own-season part is from ESPN's
-reported totals, which differ from ours by at most 1.1% in a 2026 scale (ERA). With 143
-of its own matchups against 100 for the earlier seasons, 2026 carries 59% of the weight.
+"Today" is from our recomputed totals over all 143 matchups, unstandardised. "2026
+alone" is the same season from ESPN's reported totals, regular season only and
+standardised: the difference between the two columns is what leaving out the playoffs
+and standardising for volume do (wins −5.7%, innings −2.8%, AVG +5.3%). With 126 of its
+own matchups against 100 for the earlier seasons, 2026 carries 56% of the weight.
 
 **The 2026 values**, `fct_player_season_value`, 580 (player, team) pairs:
 
@@ -304,13 +339,13 @@ of its own matchups against 100 for the earlier seasons, 2026 carries 59% of the
 | Rank correlation of `total_value`, before against after | 0.9998 | query against a copy kept before the build |
 | Top 20, before and after | 19 in common: Wheeler in (21st to 20th), Arozarena out (20th to 21st) | the same |
 | Top 20 by group | 10 SP, 10 hitters, 0 RP → 11 SP, 9 hitters, 0 RP | the same |
-| First three | Crow-Armstrong 36.26, Misiorowski 34.77, Ohtani 33.57 → 35.78, 35.13, 33.35, in the same order | the same |
-| Largest move in rank among the top 50 / overall | 4 places / 22 places | the same |
-| Change in `total_value`: largest / median | 0.51 / 0.036 | the same |
-| Median `total_value` by group | hitter 1.32 → 1.31 · SP 1.56 → 1.56 · RP 0.89 → 0.92 | the same |
+| First three | Crow-Armstrong 36.26, Misiorowski 34.77, Ohtani 33.57 → 35.99, 35.70, 33.76, in the same order | the same |
+| Largest move in rank among the top 50 / overall | 4 places / 25 places | the same |
+| Change in `total_value`: largest / median | 0.93 / 0.040 | the same |
+| Median `total_value` by group | hitter 1.32 → 1.32 · SP 1.56 → 1.58 · RP 0.89 → 0.92 | the same |
 | Best reliever (the owner's question, #55) | 31st → 29th; none in the top 20 | the same |
-| Batter strikeouts (the owner's question, #55) | every B_SO value × 0.987; one player-sd 1.225 → 1.210 scale units | the same |
-| Sum of `total_value` | 2,388.89 → 2,388.24 | the same |
+| Batter strikeouts (the owner's question, #55) | every B_SO value × 1.000 (scale 12.3936 → 12.3900); one player-sd stays 1.225 scale units | the same |
+| Sum of `total_value` | 2,388.89 → 2,415.51 | the same |
 | Rows of each value fact | unchanged: 9,860 · 580 · 737 | counts |
 | Real build | passes, 1 warning as today | `dbt build` |
 | CI | passes; warnings unchanged at 3; value facts identical to before | `.agentic/gates` |

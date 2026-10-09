@@ -20,8 +20,9 @@ that they are amended.
 3. The reported margins — `impl` — R1.1–R1.6, R4.1
    - Unit tests first, seen to fail; then `int_fantasy__reported_matchup_margins` with
      its contract and header.
-   - Verify: CI build; real build of the model: 143 to 155 matchups per played season,
-     none for 2020, and AVG's denominators null in 2018 only.
+   - Verify: CI build; real build of the model: 143 to 155 decided matchups per played
+     season of which 126 to 138 regular season, none for 2020, AVG's denominators null
+     in 2018 only, and the relative volumes of the *Matchups measured* table.
 4. The reported scales — `impl` — R2.1–R2.4, R4.2, R4.4
    - Unit tests and the row-per-category singular test first; then
      `int_fantasy__reported_category_scales`.
