@@ -86,9 +86,11 @@ so several leagues and seasons can share one warehouse. Two things enforce it:
 
 - `front-office load` refuses two captures with the same identity, naming both files and
   loading nothing, instead of quietly keeping one.
-- `scripts/check_tenant_isolation.py`, part of the gates, builds a fixture of two leagues
-  by two seasons together and each one alone, and fails if any model gives a
-  league-season different rows.
+- `scripts/check_tenant_isolation.py`, part of the gates, builds a fixture of several
+  league-seasons together, then each one with only its own league's earlier seasons, and
+  fails if any model gives a league-season different rows. A league-season may read its
+  league's earlier seasons (a category's scale blends them in); it may not read another
+  league, or a later season.
 
 ### What a killed run leaves behind
 

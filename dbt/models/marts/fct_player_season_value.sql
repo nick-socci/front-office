@@ -21,7 +21,7 @@
 --
 -- total_value is the matchup margins the pair added over a free agent, summed across every
 -- scored category: the sum of its scaled values (ADR 0010; the sum itself, with no mean
--- subtracted, is ADR 0003). It is NULL if any category's scaled value is NULL, which
+-- subtracted, is ADR 0003; which matchups a margin is measured from, ADR 0027). It is NULL if any category's scaled value is NULL, which
 -- happens only when a played side faces an empty replacement pool: a partial total would
 -- look complete.
 

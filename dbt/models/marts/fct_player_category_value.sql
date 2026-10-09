@@ -55,6 +55,12 @@
 -- teams in it, and for a rate first by the typical side denominator. The scales are joined
 -- with a LEFT join, so a category with no scale is worth 0 by the macro's rules rather
 -- than dropping its rows. total_value one table over is the sum of the scaled values.
+--
+-- Which matchups that scale was measured from is the scale model's business, not this
+-- fact's (ADR 0027): where the league has earlier seasons, a blend of them and the
+-- season's decided matchups; otherwise the season alone. So a scaled value can move as
+-- matchups are decided, and when an earlier season is loaded or corrected, with no change
+-- to the player's own production.
 
 {{ config(materialized='table') }}
 
