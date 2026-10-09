@@ -10,9 +10,9 @@
     "sportId": 1,
     "season": 2027,
     "gameType": "R",
-    "startDate": "2027-04-28",
-    "endDate": "2027-04-28"
+    "startDate": "2027-04-23",
+    "endDate": "2027-04-23"
   },
-  "request_key": "endDate=2027-04-28&gameType=R&season=2027&sportId=1&startDate=2027-04-28",
+  "request_key": "endDate=2027-04-23&gameType=R&season=2027&sportId=1&startDate=2027-04-23",
   "fetched_at": "20270429T160000Z"
 }

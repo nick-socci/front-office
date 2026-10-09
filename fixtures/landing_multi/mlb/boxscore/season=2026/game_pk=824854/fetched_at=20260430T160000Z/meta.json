@@ -1,0 +1,14 @@
+{
+  "source": "mlb",
+  "endpoint": "boxscore",
+  "partitions": {
+    "season": 2026,
+    "game_pk": 824854
+  },
+  "url": "https://statsapi.mlb.com/api/v1/game/824854/boxscore",
+  "params": {
+    "gamePk": 824854
+  },
+  "request_key": "gamePk=824854",
+  "fetched_at": "20260430T160000Z"
+}
