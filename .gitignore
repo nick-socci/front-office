@@ -43,3 +43,8 @@ spikes/
 
 # Agentic review loop scratch (Codex findings per round)
 .review/
+
+# Claude Code: agent worktrees and per-machine settings. Local only; ruff respects this file,
+# so worktrees are not linted either.
+.claude/worktrees/
+.claude/settings.local.json
