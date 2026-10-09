@@ -79,8 +79,12 @@ Agreed by the owner on 2026-10-08, going through the spec's decisions:
   own part included, from decided matchups only. Our recomputed totals remain the
   source only for a league-season with no usable history.
 
-Proposed here and not yet gone through: the rule for a rate's denominator; that a rate
-on a zero denominator is not measured.
+- a rate's scale and its side denominator from the same matchups with the same weights;
+  a rate's margin measured only where both sides' denominators are reported; a rate
+  whose denominator earlier seasons never report keeps the season's own for both.
+
+Proposed here and not yet gone through: that a rate on a zero denominator is not
+measured.
 
 100 is where a scale's sampling error (about 7%) equals how much seasons differ, so it
 is where history and a season's own matchups are equally good evidence. It is used
