@@ -1,6 +1,6 @@
 # 0036. The player list is a season-level snapshot, landed on every MLB run
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0060-player-dimension-by-mlb-id](../specs/0060-player-dimension-by-mlb-id/design.md) · Issue: #60
 

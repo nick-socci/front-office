@@ -1,6 +1,6 @@
 # 0012. Players have a conformed dimension and a per-league-season table
 
-- Status: accepted
+- Status: accepted, amended by [0033](0033-the-player-dimension-is-one-row-per-mlb-player.md)
 - Date: 2026-10-04
 - Spec: [0028-league-season-identity](../specs/0028-league-season-identity/design.md) · Issue: #28
 
