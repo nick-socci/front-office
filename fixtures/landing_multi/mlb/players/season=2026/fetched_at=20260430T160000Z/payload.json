@@ -1,0 +1,1114 @@
+{
+ "people": [
+  {
+   "id": 677800,
+   "fullName": "Wilyer Abreu",
+   "primaryPosition": {
+    "abbreviation": "RF"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "L"
+   },
+   "birthDate": "1999-06-24",
+   "mlbDebutDate": "2023-08-22"
+  },
+  {
+   "id": 677942,
+   "fullName": "Blaze Alexander",
+   "primaryPosition": {
+    "abbreviation": "3B"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1999-06-11",
+   "mlbDebutDate": "2024-03-28"
+  },
+  {
+   "id": 624413,
+   "fullName": "Pete Alonso",
+   "primaryPosition": {
+    "abbreviation": "1B"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1994-12-07",
+   "mlbDebutDate": "2019-03-28"
+  },
+  {
+   "id": 701350,
+   "fullName": "Roman Anthony",
+   "primaryPosition": {
+    "abbreviation": "LF"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "2004-05-13",
+   "mlbDebutDate": "2025-06-09"
+  },
+  {
+   "id": 694212,
+   "fullName": "Samuel Basallo",
+   "primaryPosition": {
+    "abbreviation": "C"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "2004-08-13",
+   "mlbDebutDate": "2025-08-17"
+  },
+  {
+   "id": 687637,
+   "fullName": "Dylan Beavers",
+   "primaryPosition": {
+    "abbreviation": "LF"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "2001-08-11",
+   "mlbDebutDate": "2025-08-16"
+  },
+  {
+   "id": 641355,
+   "fullName": "Cody Bellinger",
+   "primaryPosition": {
+    "abbreviation": "LF"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "L"
+   },
+   "birthDate": "1995-07-13",
+   "mlbDebutDate": "2017-04-25"
+  },
+  {
+   "id": 678394,
+   "fullName": "Brayan Bello",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1999-05-17",
+   "mlbDebutDate": "2022-07-06"
+  },
+  {
+   "id": 656234,
+   "fullName": "Jake Bird",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1995-12-04",
+   "mlbDebutDate": "2022-06-16"
+  },
+  {
+   "id": 669394,
+   "fullName": "Jake Burger",
+   "primaryPosition": {
+    "abbreviation": "1B"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1996-04-10",
+   "mlbDebutDate": "2021-07-02"
+  },
+  {
+   "id": 676609,
+   "fullName": "Jos\u00e9 Caballero",
+   "primaryPosition": {
+    "abbreviation": "SS"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1996-08-30",
+   "mlbDebutDate": "2023-04-15"
+  },
+  {
+   "id": 666974,
+   "fullName": "Yennier Cano",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1994-03-09",
+   "mlbDebutDate": "2022-05-11"
+  },
+  {
+   "id": 694497,
+   "fullName": "Evan Carter",
+   "primaryPosition": {
+    "abbreviation": "CF"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "2002-08-29",
+   "mlbDebutDate": "2023-09-08"
+  },
+  {
+   "id": 665862,
+   "fullName": "Jazz Chisholm Jr.",
+   "primaryPosition": {
+    "abbreviation": "2B"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1998-02-01",
+   "mlbDebutDate": "2020-09-01"
+  },
+  {
+   "id": 676391,
+   "fullName": "Ernie Clement",
+   "primaryPosition": {
+    "abbreviation": "2B"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1996-03-22",
+   "mlbDebutDate": "2021-06-13"
+  },
+  {
+   "id": 575929,
+   "fullName": "Willson Contreras",
+   "primaryPosition": {
+    "abbreviation": "1B"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1992-05-13",
+   "mlbDebutDate": "2016-06-17"
+  },
+  {
+   "id": 518585,
+   "fullName": "Fernando Cruz",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1990-03-28",
+   "mlbDebutDate": "2022-09-02"
+  },
+  {
+   "id": 691176,
+   "fullName": "Jasson Dom\u00ednguez",
+   "primaryPosition": {
+    "abbreviation": "RF"
+   },
+   "batSide": {
+    "code": "S"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "2003-02-07",
+   "mlbDebutDate": "2023-09-01"
+  },
+  {
+   "id": 677649,
+   "fullName": "Ezequiel Duran",
+   "primaryPosition": {
+    "abbreviation": "SS"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1999-05-22",
+   "mlbDebutDate": "2022-06-04"
+  },
+  {
+   "id": 680776,
+   "fullName": "Jarren Duran",
+   "primaryPosition": {
+    "abbreviation": "LF"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1996-09-05",
+   "mlbDebutDate": "2021-07-17"
+  },
+  {
+   "id": 702332,
+   "fullName": "Caleb Durbin",
+   "primaryPosition": {
+    "abbreviation": "3B"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "2000-02-22",
+   "mlbDebutDate": "2025-04-18"
+  },
+  {
+   "id": 543135,
+   "fullName": "Nathan Eovaldi",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1990-02-13",
+   "mlbDebutDate": "2011-08-06"
+  },
+  {
+   "id": 641555,
+   "fullName": "J.C. Escarra",
+   "primaryPosition": {
+    "abbreviation": "C"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1995-04-24",
+   "mlbDebutDate": "2025-03-29"
+  },
+  {
+   "id": 680755,
+   "fullName": "Braydon Fisher",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "2000-07-26",
+   "mlbDebutDate": "2025-05-11"
+  },
+  {
+   "id": 671382,
+   "fullName": "Cameron Foster",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1999-03-17",
+   "mlbDebutDate": "2026-04-16"
+  },
+  {
+   "id": 665926,
+   "fullName": "Andr\u00e9s Gim\u00e9nez",
+   "primaryPosition": {
+    "abbreviation": "SS"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1998-09-04",
+   "mlbDebutDate": "2020-07-24"
+  },
+  {
+   "id": 663757,
+   "fullName": "Trent Grisham",
+   "primaryPosition": {
+    "abbreviation": "CF"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "L"
+   },
+   "birthDate": "1996-11-01",
+   "mlbDebutDate": "2019-08-01"
+  },
+  {
+   "id": 665489,
+   "fullName": "Vladimir Guerrero Jr.",
+   "primaryPosition": {
+    "abbreviation": "1B"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1999-03-16",
+   "mlbDebutDate": "2019-04-26"
+  },
+  {
+   "id": 664059,
+   "fullName": "Sam Haggerty",
+   "primaryPosition": {
+    "abbreviation": "LF"
+   },
+   "batSide": {
+    "code": "S"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1994-05-26",
+   "mlbDebutDate": "2019-09-04"
+  },
+  {
+   "id": 687396,
+   "fullName": "Brent Headrick",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "L"
+   },
+   "birthDate": "1997-12-17",
+   "mlbDebutDate": "2023-04-19"
+  },
+  {
+   "id": 683002,
+   "fullName": "Gunnar Henderson",
+   "primaryPosition": {
+    "abbreviation": "SS"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "2001-06-29",
+   "mlbDebutDate": "2022-08-31"
+  },
+  {
+   "id": 543309,
+   "fullName": "Kyle Higashioka",
+   "primaryPosition": {
+    "abbreviation": "C"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1990-04-20",
+   "mlbDebutDate": "2017-04-10"
+  },
+  {
+   "id": 657612,
+   "fullName": "Tim Hill",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "L"
+   },
+   "birthDate": "1990-02-10",
+   "mlbDebutDate": "2018-03-29"
+  },
+  {
+   "id": 669236,
+   "fullName": "Jeremiah Jackson",
+   "primaryPosition": {
+    "abbreviation": "2B"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "2000-03-26",
+   "mlbDebutDate": "2025-08-01"
+  },
+  {
+   "id": 592450,
+   "fullName": "Aaron Judge",
+   "primaryPosition": {
+    "abbreviation": "RF"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1992-04-26",
+   "mlbDebutDate": "2016-08-13"
+  },
+  {
+   "id": 673962,
+   "fullName": "Josh Jung",
+   "primaryPosition": {
+    "abbreviation": "3B"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1998-02-12",
+   "mlbDebutDate": "2022-09-09"
+  },
+  {
+   "id": 643396,
+   "fullName": "Isiah Kiner-Falefa",
+   "primaryPosition": {
+    "abbreviation": "2B"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1995-03-23",
+   "mlbDebutDate": "2018-04-10"
+  },
+  {
+   "id": 552640,
+   "fullName": "Andrew Kittredge",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1990-03-17",
+   "mlbDebutDate": "2017-07-18"
+  },
+  {
+   "id": 656641,
+   "fullName": "Jacob Latz",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "L"
+   },
+   "birthDate": "1996-04-08",
+   "mlbDebutDate": "2021-08-25"
+  },
+  {
+   "id": 641778,
+   "fullName": "Eric Lauer",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "L"
+   },
+   "birthDate": "1995-06-03",
+   "mlbDebutDate": "2018-04-24"
+  },
+  {
+   "id": 573009,
+   "fullName": "Joe Mantiply",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "L"
+   },
+   "birthDate": "1991-03-01",
+   "mlbDebutDate": "2016-09-03"
+  },
+  {
+   "id": 691785,
+   "fullName": "Marcelo Mayer",
+   "primaryPosition": {
+    "abbreviation": "2B"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "2002-12-12",
+   "mlbDebutDate": "2025-05-24"
+  },
+  {
+   "id": 691723,
+   "fullName": "Coby Mayo",
+   "primaryPosition": {
+    "abbreviation": "3B"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "2001-12-10",
+   "mlbDebutDate": "2024-08-02"
+  },
+  {
+   "id": 641857,
+   "fullName": "Ryan McMahon",
+   "primaryPosition": {
+    "abbreviation": "3B"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1994-12-14",
+   "mlbDebutDate": "2017-08-12"
+  },
+  {
+   "id": 693686,
+   "fullName": "Spencer Miles",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "2000-07-26",
+   "mlbDebutDate": "2026-03-28"
+  },
+  {
+   "id": 655316,
+   "fullName": "Andruw Monasterio",
+   "primaryPosition": {
+    "abbreviation": "SS"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1997-05-30",
+   "mlbDebutDate": "2023-05-28"
+  },
+  {
+   "id": 663558,
+   "fullName": "Jovani Mor\u00e1n",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "L"
+   },
+   "birthDate": "1997-04-24",
+   "mlbDebutDate": "2021-09-12"
+  },
+  {
+   "id": 667297,
+   "fullName": "Tommy Nance",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1991-03-19",
+   "mlbDebutDate": "2021-05-17"
+  },
+  {
+   "id": 665966,
+   "fullName": "Carlos Narv\u00e1ez",
+   "primaryPosition": {
+    "abbreviation": "C"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1998-11-26",
+   "mlbDebutDate": "2024-07-20"
+  },
+  {
+   "id": 607043,
+   "fullName": "Brandon Nimmo",
+   "primaryPosition": {
+    "abbreviation": "RF"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1993-03-27",
+   "mlbDebutDate": "2016-06-26"
+  },
+  {
+   "id": 672960,
+   "fullName": "Kazuma Okamoto",
+   "primaryPosition": {
+    "abbreviation": "3B"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1996-06-30",
+   "mlbDebutDate": "2026-03-27"
+  },
+  {
+   "id": 696030,
+   "fullName": "Alejandro Osuna",
+   "primaryPosition": {
+    "abbreviation": "LF"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "L"
+   },
+   "birthDate": "2002-10-10",
+   "mlbDebutDate": "2025-05-25"
+  },
+  {
+   "id": 592626,
+   "fullName": "Joc Pederson",
+   "primaryPosition": {
+    "abbreviation": "DH"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "L"
+   },
+   "birthDate": "1992-04-21",
+   "mlbDebutDate": "2014-09-01"
+  },
+  {
+   "id": 682818,
+   "fullName": "Yohendrick Pi\u00f1ango",
+   "primaryPosition": {
+    "abbreviation": "LF"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "L"
+   },
+   "birthDate": "2002-05-07",
+   "mlbDebutDate": "2026-04-26"
+  },
+  {
+   "id": 678882,
+   "fullName": "Ceddanne Rafaela",
+   "primaryPosition": {
+    "abbreviation": "CF"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "2000-09-18",
+   "mlbDebutDate": "2023-08-28"
+  },
+  {
+   "id": 700250,
+   "fullName": "Ben Rice",
+   "primaryPosition": {
+    "abbreviation": "DH"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1999-02-22",
+   "mlbDebutDate": "2024-06-18"
+  },
+  {
+   "id": 695684,
+   "fullName": "Elmer Rodr\u00edguez",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "2003-08-18",
+   "mlbDebutDate": "2026-04-29"
+  },
+  {
+   "id": 668939,
+   "fullName": "Adley Rutschman",
+   "primaryPosition": {
+    "abbreviation": "C"
+   },
+   "batSide": {
+    "code": "S"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1998-02-06",
+   "mlbDebutDate": "2022-05-21"
+  },
+  {
+   "id": 660821,
+   "fullName": "Jes\u00fas S\u00e1nchez",
+   "primaryPosition": {
+    "abbreviation": "DH"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1997-10-07",
+   "mlbDebutDate": "2020-08-21"
+  },
+  {
+   "id": 680474,
+   "fullName": "Max Schuemann",
+   "primaryPosition": {
+    "abbreviation": "LF"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1997-06-11",
+   "mlbDebutDate": "2024-04-12"
+  },
+  {
+   "id": 608369,
+   "fullName": "Corey Seager",
+   "primaryPosition": {
+    "abbreviation": "SS"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1994-04-27",
+   "mlbDebutDate": "2015-09-03"
+  },
+  {
+   "id": 543807,
+   "fullName": "George Springer",
+   "primaryPosition": {
+    "abbreviation": "DH"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1989-09-19",
+   "mlbDebutDate": "2014-04-16"
+  },
+  {
+   "id": 596115,
+   "fullName": "Trevor Story",
+   "primaryPosition": {
+    "abbreviation": "SS"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1992-11-15",
+   "mlbDebutDate": "2016-04-04"
+  },
+  {
+   "id": 664702,
+   "fullName": "Myles Straw",
+   "primaryPosition": {
+    "abbreviation": "CF"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1994-10-17",
+   "mlbDebutDate": "2018-09-15"
+  },
+  {
+   "id": 665750,
+   "fullName": "Leody Taveras",
+   "primaryPosition": {
+    "abbreviation": "CF"
+   },
+   "batSide": {
+    "code": "S"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1998-09-08",
+   "mlbDebutDate": "2020-07-24"
+  },
+  {
+   "id": 678218,
+   "fullName": "Brandon Valenzuela",
+   "primaryPosition": {
+    "abbreviation": "C"
+   },
+   "batSide": {
+    "code": "S"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "2000-10-02",
+   "mlbDebutDate": "2026-04-05"
+  },
+  {
+   "id": 662139,
+   "fullName": "Daulton Varsho",
+   "primaryPosition": {
+    "abbreviation": "CF"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1996-07-02",
+   "mlbDebutDate": "2020-07-30"
+  },
+  {
+   "id": 621493,
+   "fullName": "Taylor Ward",
+   "primaryPosition": {
+    "abbreviation": "DH"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1993-12-14",
+   "mlbDebutDate": "2018-08-14"
+  },
+  {
+   "id": 670245,
+   "fullName": "Ryan Watson",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1997-11-15",
+   "mlbDebutDate": "2026-03-28"
+  },
+  {
+   "id": 669711,
+   "fullName": "Greg Weissert",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1995-02-04",
+   "mlbDebutDate": "2022-08-25"
+  },
+  {
+   "id": 676477,
+   "fullName": "Garrett Whitlock",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1996-06-11",
+   "mlbDebutDate": "2021-04-04"
+  },
+  {
+   "id": 657136,
+   "fullName": "Connor Wong",
+   "primaryPosition": {
+    "abbreviation": "C"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1996-05-19",
+   "mlbDebutDate": "2021-06-22"
+  },
+  {
+   "id": 807799,
+   "fullName": "Masataka Yoshida",
+   "primaryPosition": {
+    "abbreviation": "DH"
+   },
+   "batSide": {
+    "code": "L"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1993-07-15",
+   "mlbDebutDate": "2023-03-30"
+  },
+  {
+   "id": 687064,
+   "fullName": "Brandon Young",
+   "primaryPosition": {
+    "abbreviation": "P"
+   },
+   "batSide": {
+    "code": "R"
+   },
+   "pitchHand": {
+    "code": "R"
+   },
+   "birthDate": "1998-08-19",
+   "mlbDebutDate": "2025-04-19"
+  }
+ ]
+}

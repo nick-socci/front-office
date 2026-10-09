@@ -797,6 +797,7 @@ def test_the_2026_fixture_season_is_untouched_by_the_past_season():
         ("espn", "teams"),
         ("espn", "transactions"),
         ("mlb", "boxscore"),
+        ("mlb", "players"),
         ("mlb", "schedule"),
     }
 
@@ -1228,3 +1229,102 @@ def test_a_later_start_by_a_rostered_pitcher_fails_condition_c(roots, monkeypatc
         check_start_pool()
     message = str(stop.value)
     assert "(c)" in message and "(a)" not in message and "(b)" not in message
+
+
+# -- the player list: the listed players of the fixture boxscores (spec 0060, R7.1) ---------------
+
+
+def made_up_person(person_id: int) -> dict:
+    """A person as MLB lists him: the seven wanted fields among many that are not."""
+    return {
+        "id": person_id,
+        "fullName": f"Player {person_id}",
+        "link": f"/api/v1/people/{person_id}",
+        "firstName": "First",
+        "lastName": "Last",
+        "nameFirstLast": f"First Last {person_id}",
+        "birthDate": "1999-06-01",
+        "mlbDebutDate": "2023-06-05",
+        "primaryPosition": {"code": "1", "name": "Pitcher", "abbreviation": "P"},
+        "batSide": {"code": "L", "description": "Left"},
+        "pitchHand": {"code": "R", "description": "Right"},
+    }
+
+
+def write_fixture_boxscore(game_pk: int, players: dict) -> None:
+    """A fixture boxscore (as build_mlb_boxscores leaves it) with these players."""
+    make_fixtures.write_fixture(
+        source="mlb",
+        endpoint="boxscore",
+        partitions={"season": 2026, "game_pk": game_pk},
+        payload={"teams": {"home": {"players": players}, "away": {"players": {}}}},
+        request={"url": "https://x/", "params": {"gamePk": game_pk}},
+    )
+
+
+def test_the_player_fixture_holds_only_allowlisted_keys_of_the_players_who_played(roots):
+    """Catches a fixture that keeps a key nobody listed (a name part, an id link), or a
+    bench player, or a person no fixture boxscore names (R7.1)."""
+    raw, fixtures = roots
+    land(
+        raw,
+        "mlb",
+        "players",
+        {"season": 2026},
+        "20260901T000000Z",
+        {"copyright": "x", "people": [made_up_person(i) for i in (1, 2, 3, 4, 5)]},
+    )
+    write_fixture_boxscore(
+        10,
+        {
+            "ID1": {"person": {"id": 1}, "stats": {"batting": {"gamesPlayed": 1}}},
+            "ID2": {"person": {"id": 2}, "stats": {"pitching": {"gamesPitched": 1}}},
+            # on the bench: in the boxscore, but with no appearance
+            "ID3": {"person": {"id": 3}, "stats": {"batting": {}, "pitching": {}}},
+        },
+    )
+    path = make_fixtures.build_mlb_players()
+    payload = json.loads(path.read_text())
+    assert sorted(p["id"] for p in payload["people"]) == [1, 2]
+    allowed = {
+        "id",
+        "fullName",
+        "primaryPosition",
+        "batSide",
+        "pitchHand",
+        "birthDate",
+        "mlbDebutDate",
+    }
+    for person in payload["people"]:
+        assert set(person) <= allowed
+        assert set(person["primaryPosition"]) == {"abbreviation"}
+        assert set(person["batSide"]) == {"code"}
+        assert set(person["pitchHand"]) == {"code"}
+    assert "firstName" not in path.read_text()
+    meta = json.loads((path.parent / "meta.json").read_text())
+    assert meta["partitions"] == {"season": 2026}
+    assert meta["request_key"] == "season=2026"
+    assert meta["url"] == "https://statsapi.mlb.com/api/v1/sports/1/players"
+    assert LandingZone(fixtures).check(path.parent) is None
+
+
+def test_the_player_fixture_is_built_from_the_newest_capture(roots):
+    """Catches an older player list being read when a newer one is landed."""
+    raw, _fixtures = roots
+    old = made_up_person(1) | {"fullName": "Old Name"}
+    new = made_up_person(1) | {"fullName": "New Name"}
+    land(raw, "mlb", "players", {"season": 2026}, "20260901T000000Z", {"people": [old]})
+    land(raw, "mlb", "players", {"season": 2026}, "20260902T000000Z", {"people": [new]})
+    write_fixture_boxscore(
+        10, {"ID1": {"person": {"id": 1}, "stats": {"batting": {"gamesPlayed": 1}}}}
+    )
+    payload = json.loads(make_fixtures.build_mlb_players().read_text())
+    assert [p["fullName"] for p in payload["people"]] == ["New Name"]
+
+
+def test_no_landed_player_list_stops_generation_with_a_message(roots):
+    """Catches a generator that writes an empty player fixture, or fails with a traceback,
+    when the player list was never landed (R7.1)."""
+    with pytest.raises(SystemExit) as stop:
+        make_fixtures.build_mlb_players()
+    assert "mlb/players" in str(stop.value)

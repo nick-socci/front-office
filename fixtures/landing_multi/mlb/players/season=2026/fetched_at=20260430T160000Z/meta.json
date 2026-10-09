@@ -1,0 +1,13 @@
+{
+  "source": "mlb",
+  "endpoint": "players",
+  "partitions": {
+    "season": 2026
+  },
+  "url": "https://statsapi.mlb.com/api/v1/sports/1/players",
+  "params": {
+    "season": 2026
+  },
+  "request_key": "season=2026",
+  "fetched_at": "20260430T160000Z"
+}
