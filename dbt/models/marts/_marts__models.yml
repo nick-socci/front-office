@@ -180,12 +180,7 @@ models:
       - name: season
         data_tests: [not_null]
       - name: platform_player_id
-        data_tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('dim_players')
-                field: platform_player_id
+        data_tests: [not_null]
       - name: fantasy_team_id
         data_tests: [not_null]
       - name: category_key
@@ -199,6 +194,15 @@ models:
           Value over replacement in matchup margins (ADR 0010). 0 when the pair has no played
           day on the side, or the category's margin scale is null or 0; null only when the
           value over replacement is null.
+      - name: mlbam_player_id
+        description: >
+          The MLB id of the row's own league-season in dim_player_league_seasons (#60,
+          ADR 0034); null for an unresolved player.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_players')
+                field: mlbam_player_id
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -215,14 +219,18 @@ models:
       - name: platform
         data_tests: [not_null]
       - name: platform_player_id
+        data_tests: [not_null]
+      - name: fantasy_team_id
+        data_tests: [not_null]
+      - name: mlbam_player_id
+        description: >
+          The MLB id of the row's own league-season in dim_player_league_seasons (#60,
+          ADR 0034); null for an unresolved player.
         data_tests:
-          - not_null
           - relationships:
               arguments:
                 to: ref('dim_players')
-                field: platform_player_id
-      - name: fantasy_team_id
-        data_tests: [not_null]
+                field: mlbam_player_id
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -252,6 +260,15 @@ models:
         data_tests: [not_null]
       - name: window_end
         data_tests: [not_null]
+      - name: mlbam_player_id
+        description: >
+          The MLB id of the row's own league-season in dim_player_league_seasons (#60,
+          ADR 0034); null for an unresolved player.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_players')
+                field: mlbam_player_id
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -574,7 +591,8 @@ unit_tests:
       applied to the wrong kind of category. Scaled (ADR 0010): the batter-strikeout
       margin scale is 2, so -2 / 2 = -1; ERA is a rate with margin scale 0.5 and side
       denominator 27 outs, so 94.5 / 27 / 0.5 = 7, which also covers a rate in a real
-      category. Without a played day the scaled value is 0.
+      category. Without a played day the scaled value is 0. Player 1 is resolved (MLB id
+      1001) and player 2 is not, so the id is carried and null is carried (#60).
     model: fct_player_category_value
     overrides:
       macros:
@@ -601,16 +619,20 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
           - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 18}
           - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 3}
+      - input: ref('dim_player_league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, mlbam_player_id: 1001}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, mlbam_player_id: null}
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 2}
           - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 0.5, side_denominator: 27}
     expect:
       rows:
-        - {platform_player_id: 1, category_key: 27, played_days: 0, numerator: 0, denominator: null, contribution: 0, value_over_replacement: 0, scaled_value: 0}
-        - {platform_player_id: 1, category_key: 47, played_days: 1, numerator: 27, denominator: 27, contribution: 1, value_over_replacement: 94.5, scaled_value: 7}
-        - {platform_player_id: 2, category_key: 27, played_days: 1, numerator: 3, denominator: null, contribution: 3, value_over_replacement: -2, scaled_value: -1}
-        - {platform_player_id: 2, category_key: 47, played_days: 0, numerator: 0, denominator: 0, contribution: null, value_over_replacement: 0, scaled_value: 0}
+        - {platform_player_id: 1, category_key: 27, played_days: 0, numerator: 0, denominator: null, contribution: 0, value_over_replacement: 0, scaled_value: 0, mlbam_player_id: 1001}
+        - {platform_player_id: 1, category_key: 47, played_days: 1, numerator: 27, denominator: 27, contribution: 1, value_over_replacement: 94.5, scaled_value: 7, mlbam_player_id: 1001}
+        - {platform_player_id: 2, category_key: 27, played_days: 1, numerator: 3, denominator: null, contribution: 3, value_over_replacement: -2, scaled_value: -1, mlbam_player_id: null}
+        - {platform_player_id: 2, category_key: 47, played_days: 0, numerator: 0, denominator: 0, contribution: null, value_over_replacement: 0, scaled_value: 0, mlbam_player_id: null}
 
   - name: player_category_value_a_rate_over_zero_outs_has_no_contribution_and_loses_its_numerator
     description: >
@@ -644,6 +666,8 @@ unit_tests:
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 0.5, side_denominator: 27}
+      - input: ref('dim_player_league_seasons')
+        rows: []
     expect:
       rows:
         - {platform_player_id: 1, category_key: 47, played_days: 1, numerator: 54, denominator: 0, contribution: null, value_over_replacement: -54, scaled_value: -4}
@@ -681,6 +705,8 @@ unit_tests:
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 2}
+      - input: ref('dim_player_league_seasons')
+        rows: []
     expect:
       rows:
         - {platform_player_id: 1, category_key: 27, played_days: 1, value_over_replacement: -2, scaled_value: -1}
@@ -722,6 +748,8 @@ unit_tests:
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 2}
           - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
+      - input: ref('dim_player_league_seasons')
+        rows: []
     expect:
       rows:
         - {platform_player_id: 1, category_key: 27, played_days: 0, numerator: 0, value_over_replacement: 0, scaled_value: 0}
@@ -756,6 +784,8 @@ unit_tests:
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 0}
+      - input: ref('dim_player_league_seasons')
+        rows: []
     expect:
       rows:
         - {platform_player_id: 1, category_key: 34, value_over_replacement: 3, scaled_value: 0}
@@ -796,6 +826,8 @@ unit_tests:
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
+      - input: ref('dim_player_league_seasons')
+        rows: []
     expect:
       rows:
         - {platform_player_id: 1, category_key: 34, played_days: 1, value_over_replacement: null, scaled_value: null}
@@ -831,6 +863,8 @@ unit_tests:
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
+      - input: ref('dim_player_league_seasons')
+        rows: []
     expect:
       rows:
         - {platform_player_id: 1, category_key: 34, played_days: 2, numerator: 21, value_over_replacement: 3}
@@ -864,6 +898,8 @@ unit_tests:
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
+      - input: ref('dim_player_league_seasons')
+        rows: []
     expect:
       rows:
         - {platform_player_id: 1, category_key: 34, played_days: 2, numerator: 21, value_over_replacement: null, scaled_value: null}
@@ -900,6 +936,8 @@ unit_tests:
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
+      - input: ref('dim_player_league_seasons')
+        rows: []
     expect:
       rows:
         - {platform_player_id: 1, category_key: 34, played_days: 2, numerator: 21, value_over_replacement: 3}
@@ -939,6 +977,8 @@ unit_tests:
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 2}
           - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3}
+      - input: ref('dim_player_league_seasons')
+        rows: []
     expect:
       rows:
         - {platform_player_id: 1, category_key: 27, played_days: 1, numerator: 3, contribution: 3, value_over_replacement: -2, scaled_value: -1}
@@ -972,6 +1012,8 @@ unit_tests:
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 3, side_denominator: null}
+      - input: ref('dim_player_league_seasons')
+        rows: []
     expect:
       rows:
         - {platform_player_id: 1, category_key: 27, played_days: 1, value_over_replacement: 6, scaled_value: 2}
@@ -1009,6 +1051,8 @@ unit_tests:
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 0.25, side_denominator: 108}
+      - input: ref('dim_player_league_seasons')
+        rows: []
     expect:
       rows:
         - {platform_player_id: 1, category_key: 47, played_days: 1, value_over_replacement: 54, scaled_value: 2}
@@ -1044,6 +1088,8 @@ unit_tests:
       - input: ref('int_fantasy__category_scales')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: null, side_denominator: null}
+      - input: ref('dim_player_league_seasons')
+        rows: []
     expect:
       rows:
         - {platform_player_id: 1, category_key: 34, value_over_replacement: 3, scaled_value: 0}
@@ -1576,7 +1622,8 @@ unit_tests:
     description: >
       A drop of a player with no MLBAM id and no replacement group: components and played
       days are 0 and total_value is null, not 0. Catches an unknown player scoring as a
-      replacement-level one.
+      replacement-level one. The row carries mlbam_player_id: null for him, and 111 for
+      player 11, a resolved dropped player added to show the id is carried (#60).
     model: fct_transaction_impact
     overrides:
       macros:
@@ -1586,6 +1633,7 @@ unit_tests:
       - input: ref('int_fantasy__transactions')
         rows:
           - {platform: espn, league_id: "1", season: 2026, transaction_id: "d9", transacted_at: "2026-04-03 10:00:00+00", transaction_date: "2026-04-03", platform_player_id: 10, fantasy_team_id: 1, movement: drop}
+          - {platform: espn, league_id: "1", season: 2026, transaction_id: "d11", transacted_at: "2026-04-03 10:00:00+00", transaction_date: "2026-04-03", platform_player_id: 11, fantasy_team_id: 1, movement: drop}
       - input: ref('int_fantasy__matchup_periods')
         rows:
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-04-01"}
@@ -1602,6 +1650,7 @@ unit_tests:
       - input: ref('dim_player_league_seasons')
         rows:
           - {platform: espn, league_id: "1", season: 2026, platform_player_id: 10, mlbam_player_id: null, replacement_group: null}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 11, mlbam_player_id: 111, replacement_group: hitter}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
@@ -1630,7 +1679,8 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 1, side_denominator: 18}
     expect:
       rows:
-        - {transaction_id: d9, window_start: 2026-04-04, window_end: 2026-04-10, played_days: 0, home_runs: 0, total_value: null}
+        - {transaction_id: d9, window_start: 2026-04-04, window_end: 2026-04-10, played_days: 0, home_runs: 0, total_value: null, mlbam_player_id: null}
+        - {transaction_id: d11, window_start: 2026-04-04, window_end: 2026-04-10, played_days: 0, home_runs: 0, total_value: 0, mlbam_player_id: 111}
 
   - name: transaction_impact_a_drop_in_a_short_season_ends_at_its_own_last_date
     description: >

@@ -24,6 +24,9 @@
 -- subtracted, is ADR 0003; which matchups a margin is measured from, ADR 0027). It is NULL if any category's scaled value is NULL, which
 -- happens only when a played side faces an empty replacement pool: a partial total would
 -- look complete.
+--
+-- mlbam_player_id, the last column, is the MLB id of the row's own league-season in
+-- dim_player_league_seasons (#60, ADR 0034), null for an unresolved player.
 
 {{ config(materialized='table') }}
 
@@ -116,7 +119,8 @@ select
     day_counts.unverified_started_days,
     day_counts.first_started_date,
     day_counts.last_started_date,
-    total_values.total_value
+    total_values.total_value,
+    league_seasons.mlbam_player_id
 from day_counts
 left join total_values
     on total_values.platform = day_counts.platform
@@ -124,3 +128,8 @@ left join total_values
     and total_values.season = day_counts.season
     and total_values.platform_player_id = day_counts.platform_player_id
     and total_values.fantasy_team_id = day_counts.fantasy_team_id
+left join {{ ref('dim_player_league_seasons') }} as league_seasons
+    on league_seasons.platform = day_counts.platform
+    and league_seasons.league_id = day_counts.league_id
+    and league_seasons.season = day_counts.season
+    and league_seasons.platform_player_id = day_counts.platform_player_id
