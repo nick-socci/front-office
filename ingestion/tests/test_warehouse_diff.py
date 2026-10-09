@@ -323,6 +323,87 @@ def test_views_naming_two_catalogs_exit_2_and_compare_nothing(tmp_path, capsys):
     assert captured.out == ""
 
 
+def build_with_view(path: Path, view_sql: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    build(
+        path,
+        [
+            "create table marts.t (k varchar, v integer)",
+            "insert into marts.t values ('a', 1)",
+            f"create view marts.v as {view_sql}",
+        ],
+    )
+    return path
+
+
+def test_copy_whose_view_holds_a_catalog_shaped_literal_is_compared(tmp_path, capsys):
+    """Catches a string literal read as a view dependency: 'other.marts.t' names a real
+    schema, so the copy was seen to need two catalogs and the run exited 2."""
+    import compare_warehouses
+
+    original = build_with_view(
+        tmp_path / "a" / "warehouse.duckdb",
+        "select 'other.marts.t' as note, * from warehouse.marts.t",
+    )
+    copy = tmp_path / "b" / "warehouse_before.duckdb"
+    copy.parent.mkdir()
+    shutil.copy(original, copy)
+    other = build_with_view(
+        tmp_path / "c" / "other_wh.duckdb",
+        "select 'other.marts.t' as note, * from other_wh.marts.t",
+    )
+
+    assert compare_warehouses.main([str(copy), str(other)]) == 0
+    assert "compared 2 relations: 2 identical, 0 differ" in capsys.readouterr().out
+
+
+def test_view_catalogs_ignores_literals_in_a_stored_view(tmp_path):
+    """Catches a literal naming a real schema counted as a catalog, read from the SQL that
+    DuckDB stores (which drops comments, so the comment cases are tested below)."""
+    from warehouse_diff import view_catalogs
+
+    path = build_with_view(
+        tmp_path / "warehouse.duckdb",
+        "select 'it''s other.marts.t' as note, * from warehouse.marts.t",
+    )
+    assert view_catalogs(path) == {"warehouse"}
+
+
+def test_view_catalogs_reads_quoted_identifiers(tmp_path):
+    """Catches stripping that eats double-quoted identifiers: they can be the catalog."""
+    from warehouse_diff import view_catalogs
+
+    path = build_with_view(tmp_path / "warehouse.duckdb", 'select * from "warehouse"."marts"."t"')
+    assert view_catalogs(path) == {"warehouse"}
+
+
+def test_strip_removes_literals_and_comments_but_keeps_identifiers():
+    """Catches independent replaces and a stripper that mistakes quote kinds: a comment
+    marker or `'` inside a quoted identifier is not a comment or literal, a `"` inside a
+    literal is not an identifier, and `''` does not end a literal."""
+    from warehouse_diff import strip_literals_and_comments
+
+    sql = (
+        "select 'a.marts.t', 'it''s \"x.marts.t\"', \"we--ird'\".marts.t "
+        "-- other2.marts.t\n from warehouse.marts.t /* other3.marts.t */"
+    )
+    stripped = strip_literals_and_comments(sql)
+    for gone in ("a.marts.t", "x.marts.t", "other2", "other3"):
+        assert gone not in stripped
+    assert '"we--ird\'".marts.t' in stripped
+    assert "from warehouse.marts.t" in stripped
+
+
+def test_view_catalogs_ignores_catalog_shaped_text_in_literals_and_comments():
+    """Catches comment or literal text counted as a catalog, by way of the stripper that
+    view_catalogs applies to each view's SQL."""
+    from warehouse_diff import THREE_PART, strip_literals_and_comments
+
+    sql = "select 'lit.marts.t' -- other2.marts.t\n, * from warehouse.marts.t /* other3.marts.t */"
+    found = {m[0] for m in THREE_PART.findall(strip_literals_and_comments(sql))}
+    assert found == {"warehouse"}
+
+
 def test_inputs_are_untouched_and_the_scratch_is_removed(tmp_path, monkeypatch):
     """Catches a comparison that writes beside the warehouses, or leaves its scratch
     databases behind in the temporary directory."""

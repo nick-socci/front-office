@@ -38,6 +38,17 @@ def attach(con: duckdb.DuckDBPyConnection, path: Path | str) -> str:
 IDENT = r'(?:"(?:[^"]|"")+"|[A-Za-z_][A-Za-z0-9_$]*)'
 THREE_PART = re.compile(f"({IDENT})\\s*\\.\\s*({IDENT})\\s*\\.\\s*{IDENT}")
 BUILT_IN_CATALOGS = {"system", "temp", "memory"}
+# One left-to-right scan: at each position the first alternative that matches wins, so a
+# quoted identifier swallows any `--` or `'` inside it, and a string literal any `"`.
+SQL_TEXT = re.compile(
+    r"""(?P<ident>"(?:[^"]|"")*")|(?P<drop>'(?:[^']|'')*'|--[^\n]*|/\*.*?\*/)""",
+    re.DOTALL,
+)
+
+
+def strip_literals_and_comments(sql: str) -> str:
+    """The SQL without single-quoted string literals and comments; identifiers stay."""
+    return SQL_TEXT.sub(lambda m: m["ident"] or " ", sql)
 
 
 def unquote(ident: str) -> str:
@@ -47,8 +58,9 @@ def unquote(ident: str) -> str:
 def view_catalogs(path: Path | str) -> set[str]:
     """The catalogs a file's views name in three-part names (catalog.schema.name).
 
-    A match counts only if its middle part is a schema of the file, which keeps a string
-    literal like 'a.b.c' from naming a catalog. Opens the file read-only on its own.
+    String literals and comments are removed from each view's SQL first, so catalog-shaped
+    text in them names nothing. A match then counts only if its middle part is a schema of
+    the file. Opens the file read-only on its own.
     """
     con = duckdb.connect(str(path), read_only=True)
     try:
@@ -60,7 +72,10 @@ def view_catalogs(path: Path | str) -> set[str]:
         con.close()
     found = set()
     for (sql,) in sqls:
-        for catalog, schema in ((unquote(m[0]), unquote(m[1])) for m in THREE_PART.findall(sql)):
+        for catalog, schema in (
+            (unquote(m[0]), unquote(m[1]))
+            for m in THREE_PART.findall(strip_literals_and_comments(sql))
+        ):
             if schema in schemas and catalog.lower() not in BUILT_IN_CATALOGS:
                 found.add(catalog)
     return found
