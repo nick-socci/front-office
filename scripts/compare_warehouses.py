@@ -19,18 +19,24 @@ columns: a column on only one side of a relation, and a relation only in NEW, ar
 or relation is printed and passed over, which suits a change that is meant to alter them; use
 it where none should change.
 
-The two files need distinct names: each is attached under its file stem (see warehouse_diff).
+The files may have any names, including the same one, and may be copies of a warehouse. A
+view stores the catalog it was created in (dbt: the file stem), so each file is first read
+alone, under the catalog its views name, and its relations are copied into a scratch database
+in a temporary directory, removed on exit; the comparison runs on the two scratch databases.
+The files themselves are opened read-only. If a file's views name more than one catalog the
+run stops with exit 2 and compares nothing.
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+import tempfile
 from pathlib import Path
 
 import duckdb
 
-from warehouse_diff import RelationDiff, attach, compare_relation, list_relations
+from warehouse_diff import RelationDiff, compare_relation, list_relations, materialise, view_catalog
 
 
 def describe(diff: RelationDiff) -> str:
@@ -51,11 +57,24 @@ def main(argv: list[str] | None = None) -> int:
         help="the two warehouses must hold the same relations with the same columns",
     )
     args = parser.parse_args(argv)
-    if args.old.stem == args.new.stem:
-        parser.error("the two warehouse files need different names (they are attached by stem)")
+    for path in (args.old, args.new):
+        try:
+            view_catalog(path)
+        except ValueError as error:
+            parser.error(str(error))
 
-    con = duckdb.connect()
-    old, new = attach(con, args.old), attach(con, args.new)
+    with tempfile.TemporaryDirectory(prefix="compare_warehouses_") as scratch:
+        scratch_old, scratch_new = Path(scratch) / "old.duckdb", Path(scratch) / "new.duckdb"
+        materialise(args.old, scratch_old)
+        materialise(args.new, scratch_new)
+        con = duckdb.connect()
+        # Aliases of the script's own: the scratch tables hold no catalog-qualified SQL.
+        con.execute(f"attach '{scratch_old}' as old_wh (read_only)")
+        con.execute(f"attach '{scratch_new}' as new_wh (read_only)")
+        return compare(con, "old_wh", "new_wh", args)
+
+
+def compare(con: duckdb.DuckDBPyConnection, old: str, new: str, args: argparse.Namespace) -> int:
     old_names, new_names = list_relations(con, old), list_relations(con, new)
     failed = False
     only_new = 0

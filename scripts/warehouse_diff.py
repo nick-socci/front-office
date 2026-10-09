@@ -5,8 +5,12 @@ functions over one connection with the warehouses ATTACHED.
 
 Attach a warehouse file under its own stem (`attach` does): DuckDB views store the name
 of the catalog they were created in, so a file attached under any other name fails with
-`Catalog "..." does not exist` the moment a view is queried. Distinct files therefore need
-distinct stems.
+`Catalog "..." does not exist` the moment a view is queried. That suits files each built
+under its own name. A COPY of a warehouse (warehouse_before.duckdb) has views that still
+name the original's catalog, and next to that original its views would read the original's
+tables. `materialise` handles both: it opens one file alone, under the catalog its views
+name (`view_catalog`), and copies its relations into a scratch database, which is what
+compare_warehouses.py compares.
 
 Comparison is EXCEPT ALL both ways, never plain EXCEPT: EXCEPT compares sets and would call
 the rows A, A, B, C and A, B, B, C equal.
@@ -14,6 +18,7 @@ the rows A, A, B, C and A, B, B, C equal.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -28,6 +33,75 @@ def attach(con: duckdb.DuckDBPyConnection, path: Path | str) -> str:
     catalog = Path(path).stem
     con.execute(f"attach '{path}' as \"{catalog}\" (read_only)")
     return catalog
+
+
+IDENT = r'(?:"(?:[^"]|"")+"|[A-Za-z_][A-Za-z0-9_$]*)'
+THREE_PART = re.compile(f"({IDENT})\\s*\\.\\s*({IDENT})\\s*\\.\\s*{IDENT}")
+BUILT_IN_CATALOGS = {"system", "temp", "memory"}
+
+
+def unquote(ident: str) -> str:
+    return ident[1:-1].replace('""', '"') if ident.startswith('"') else ident
+
+
+def view_catalogs(path: Path | str) -> set[str]:
+    """The catalogs a file's views name in three-part names (catalog.schema.name).
+
+    A match counts only if its middle part is a schema of the file, which keeps a string
+    literal like 'a.b.c' from naming a catalog. Opens the file read-only on its own.
+    """
+    con = duckdb.connect(str(path), read_only=True)
+    try:
+        schemas = {
+            row[0] for row in con.execute("select schema_name from duckdb_schemas()").fetchall()
+        }
+        sqls = con.execute("select sql from duckdb_views() where not internal").fetchall()
+    finally:
+        con.close()
+    found = set()
+    for (sql,) in sqls:
+        for catalog, schema in ((unquote(m[0]), unquote(m[1])) for m in THREE_PART.findall(sql)):
+            if schema in schemas and catalog.lower() not in BUILT_IN_CATALOGS:
+                found.add(catalog)
+    return found
+
+
+def view_catalog(path: Path | str) -> str:
+    """The one catalog a file's views expect; the file's stem if it has no views.
+
+    Raises ValueError, naming the file and the catalogs, if its views name more than one.
+    """
+    catalogs = view_catalogs(path)
+    if len(catalogs) > 1:
+        raise ValueError(
+            f"{path}: its views name more than one catalog ({', '.join(sorted(catalogs))})"
+        )
+    return next(iter(catalogs), Path(path).stem)
+
+
+def materialise(path: Path | str, scratch: Path | str) -> None:
+    """Copy a warehouse's tables and views, as tables, into a new scratch database.
+
+    The warehouse is attached read-only under the catalog its views name, in a connection
+    where it is the only warehouse. The scratch holds the model schemas under the same
+    names and column types, so it is compared like any warehouse (attach it with `attach`).
+    """
+    catalog = view_catalog(path)
+    con = duckdb.connect()
+    try:
+        con.execute(f"attach '{path}' as {quote(catalog)} (read_only)")
+        relations = sorted(list_relations(con, catalog))
+        con.execute(f"use {quote(catalog)}")
+        con.execute(f"attach '{scratch}' as scratch")
+        for schema in SCHEMAS:
+            con.execute(f"create schema if not exists scratch.{quote(schema)}")
+        for relation in relations:
+            con.execute(
+                f"create table {qualified('scratch', relation)} as "
+                f"select * from {qualified(catalog, relation)}"
+            )
+    finally:
+        con.close()
 
 
 def list_relations(con: duckdb.DuckDBPyConnection, catalog: str) -> set[str]:
