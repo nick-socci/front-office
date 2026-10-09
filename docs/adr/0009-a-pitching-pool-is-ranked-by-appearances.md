@@ -1,6 +1,6 @@
 # 0009. A pitching pool is ranked by appearances
 
-- Status: accepted
+- Status: accepted; the start pool is amended by [0029](0029-the-start-pool-is-every-free-agent-start-by-a-starter.md)
 - Date: 2026-10-03
 - Spec: [0052-pitcher-replacement-by-outing](../specs/0052-pitcher-replacement-by-outing/design.md) · Issue: #52
 
