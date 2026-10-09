@@ -279,6 +279,13 @@ isolation check of ADR 0013 forbids as written: it builds each league-season alo
   derived from them in the three value facts.
 - R6.3 THE SYSTEM SHALL leave CI's value facts unchanged: no fixture league-season has
   100 earlier matchups.
+- R6.4 IF a scale, a count of matchups, a relative volume or a ranking figure differs
+  from *Expected values* beyond the rounding shown, OR a model outside R6.2 changes, OR
+  a dbt test fails in the isolation check's builds because of a scale blended from two
+  matchups, THEN the build SHALL stop and take it to the owner, having first finished
+  every other check so that all such findings are reported together. It SHALL NOT
+  change a test, the variable or an expected value to get past one. Agreed by the owner
+  on 2026-10-08.
 
 ## Expected values
 

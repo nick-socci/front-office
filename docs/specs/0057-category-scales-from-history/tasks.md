@@ -46,8 +46,9 @@ that they are amended.
    - Verify: `.agentic/gates`; 0 differing pairs; the `scale_source` of each fixture
      league-season as in the expected values. A dbt test failing in the check's builds
      because of a two-matchup scale: stop and take it to the owner.
-8. (last) Verify against the real seasons — `judgment` — R6.1–R6.3, expected values
+8. (last) Verify against the real seasons — `judgment` — R6.1–R6.4, expected values
    - A full real build and `.agentic/gates`. Compare every relation with the starting
      point; compute every row of the expected values.
-   - Verify: posted on #57. A scale, a count or a ranking number that differs from
-     requirements.md: stop and take it to the owner with both numbers.
+   - Verify: posted on #57. A scale, a count, a relative volume or a ranking number
+     that differs from requirements.md, or a model outside R6.2 that moved: finish the
+     other checks, then stop and take all of it to the owner with both numbers (R6.4).
