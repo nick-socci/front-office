@@ -181,8 +181,9 @@ game between 1.14 and 1.53 against today's 1.36.
 - R5.3 IF a level, a count or a ranking figure differs from *Expected values* beyond the
   rounding shown, or a re-scored share or slope by more than the tolerance stated, OR a
   model outside R5.2 changes, THEN the build SHALL stop and take it to the owner, having
-  first finished every other check. It SHALL NOT change a test or an expected value to
-  get past one.
+  first finished every other check. A CI test failing on the fixture's null
+  starts is such a stop. It SHALL NOT change a test, a tolerance or an expected value to
+  get past one. Agreed by the owner on 2026-10-09.
 
 ## Expected values
 
