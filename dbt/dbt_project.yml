@@ -43,3 +43,9 @@ vars:
   # League members did not opt into appearing in a public repo, so CI (and anything
   # published) runs with this on; local dev defaults to real names.
   anonymize: false
+  # How many measured matchups of a league's earlier seasons a category needs before its
+  # scale uses them, and what they then count as when blended with the season's own
+  # (ADR 0027). One number with one meaning; not a method switch. Lowered only by unit
+  # tests and by scripts/check_tenant_isolation.py, whose fixtures have two matchups a
+  # season.
+  fantasy_scale_prior_matchups: 100
