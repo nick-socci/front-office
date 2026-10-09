@@ -1834,11 +1834,15 @@ unit_tests:
       910007 has batted this season and never pitched: R1.1 counts pitching days and not
       MLB days, so his first start is in. 910008 makes a debut start on a day league 1
       rosters him, which is out: being a starter does not make a rostered pitcher a free
-      agent. The out start is marked by 100 batters faced; the start level is 15 outs and
-      18 batters over 2 days by 2 pitchers. Catches: another season's start counted as
-      an earlier pitching day; earlier batting days counted as appearances, which would
+      agent. 910009 relieves on 06-01 while league 1 rosters him and starts on 06-03 as a
+      free agent: his rostered relief day is an earlier pitching day, so the start is not
+      a debut and is out (one relief day makes him RP, and his last two are not both
+      starts). The out starts are marked by 100 batters faced; the start level is 15 outs
+      and 18 batters over 2 days by 2 pitchers. Catches: another season's start counted
+      as an earlier pitching day; earlier batting days counted as appearances, which would
       make a player who bats a hitter and keep his first start out; a rostered start in
-      the pool (R1.1, R1.5, ADR 0031).
+      the pool; a pitcher's history taken from his free-agent days only, which would make
+      a start after rostered relief a debut and let it in (R1.1, R1.5, ADR 0031).
     model: int_fantasy__replacement_levels
     overrides:
       macros:
@@ -1853,6 +1857,7 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", mlbam_player_id: 900009}
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", mlbam_player_id: 900009}
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", mlbam_player_id: 910008}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", mlbam_player_id: 910009}
       - input: ref('int_mlb__player_game_days')
         rows:
           - {season: 2025, mlbam_player_id: 910006, game_date: "2025-09-01", games_pitched: 1, games_started: 1, outs_recorded: 18, batters_faced: 24}
@@ -1860,6 +1865,8 @@ unit_tests:
           - {season: 2026, mlbam_player_id: 910007, game_date: "2026-05-30", games_batted: 1, plate_appearances: 4, hits: 1}
           - {season: 2026, mlbam_player_id: 910007, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 6, batters_faced: 7}
           - {season: 2026, mlbam_player_id: 910008, game_date: "2026-06-03", games_pitched: 1, games_started: 1, outs_recorded: 3, batters_faced: 100}
+          - {season: 2026, mlbam_player_id: 910009, game_date: "2026-06-01", games_pitched: 1, outs_recorded: 3, batters_faced: 4}
+          - {season: 2026, mlbam_player_id: 910009, game_date: "2026-06-03", games_pitched: 1, games_started: 1, outs_recorded: 3, batters_faced: 100}
     expect:
       rows:
         - {day_kind: batting, component: games_batted, pool_players: 0, pool_played_days: 0, pool_total: null, level_per_played_day: null}
