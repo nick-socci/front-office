@@ -165,8 +165,11 @@ Every legal (player, slot) pair of a team-day, which is all the solver reads.
 - R4.7 THE SYSTEM SHALL never report a gap below zero (to within 1e-9 for the order of
   a floating-point sum), nor fewer assigned players than
   played starters in either role; a singular test fails on either.
-- R4.8 WHEN the gap is at most 1.8e-8 (R3.2) THE SYSTEM SHALL report no player brought in, sat or moved;
-  a singular test fails otherwise.
+- R4.8 WHEN the gap is at most 1e-12 (nothing was gained: the order of a floating-point
+  sum's error, far below any day value) THE SYSTEM SHALL report no player brought in,
+  sat or moved; a singular test fails otherwise. The threshold is not R3.2's bound: a
+  lineup that differs from the actual one may gain any positive amount, however
+  small, and is then a correct result.
 - R4.9 THE SYSTEM SHALL carry `actual_pitcher_starts` and `optimal_pitcher_starts`: the
   number of players in a pitcher-role slot of the actual lineup, and of the optimal
   one, whose day is a `start` (R1.2). The first is never null; the second is null on
@@ -232,7 +235,7 @@ Real 2026 season. Measured on 2026-10-09 with a throwaway prototype of R1 to R5
 | Players brought in / sat / moved, season | 2,533 / 2,427 / 585 | sums |
 | Team-days starting more played players than the actual lineup | 101 | query |
 | Greatest single missed start | 2.462, an `OF` slot, 2026-07-11 | max |
-| Team-days with a gap at most 1.8e-8 and any change of lineup | 0 of 620 | R4.8's test |
+| Team-days with a gap at most 1.8e-8 and any change of lineup | 0 of 620 | query; R4.8's test covers those at most 1e-12 |
 | Rows with `has_unverified_inputs` | 0 | count |
 | Rows with `is_unvalued` | 0 | count |
 | `fct_lineup_decision_categories` rows | 4,862 (286 sides × 17) | count |

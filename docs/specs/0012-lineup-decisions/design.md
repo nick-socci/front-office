@@ -436,7 +436,12 @@ pytest, `ingestion/tests/test_lineup_solver.py`: the cases of R6.1.
   deterministic for a given matrix and the matrix is built in sorted order; the
   isolation gate would show it.
 - The 1e-9 bonus prefers a lineup whose value is lower by less than 1.8e-8 — by
-  design (R3.2); a day value is of order 0.01 to 5 — R4.8 uses the same bound.
+  design (R3.2); a day value is of order 0.01 to 5 — accepted.
+- A bench player whose day value is exactly 0 is brought into a slot the actual lineup
+  left idle: the objective is tied, no bonus separates the two, and R4.8's test fails
+  on a changed lineup with no gain — very low; a value is a sum of scaled values over
+  replacement and none was 0 in the prototype (0 of 620) — the test failing would name
+  the team-day, and the rule for it would be an amendment.
 - R5.3's exact equality fails in the last binary digit, because DuckDB sums in a
   different order from the fact — low; the prototype's difference was 0 — the test
   would then compare after the fact's own rounding to nine decimals, as an amendment.
@@ -466,6 +471,7 @@ pytest, `ingestion/tests/test_lineup_solver.py`: the cases of R6.1.
 | design-review | F5 (P2): CI's gap and moves had no expected values | Changed: measured with the prototype on the fixture warehouse and added; verified in the last task |
 | design-review | F6 (P3): "2 of 288" and "2 of 264" for the starts limit | Changed: 264 seven-day team-periods throughout |
 | owner, 2026-10-09 | The eight decisions of the spec PR taken as recommended, with one change: the starts limit is not enforced, and the team-day fact carries the pitcher starts of both lineups, so a breach shows in a league whose limit binds | Changed: R4.9; `day_kind` on the options; two columns on `fct_lineup_decisions`; ADR 0037 |
+| codex PR review 1 | F1 (P1): R4.8 forbade any change of lineup at a gap up to 1.8e-8, but a correct solver result can gain less than that (a bench player worth 2e-9 beats a starter worth 0) | Changed: R4.8's threshold is 1e-12, "nothing was gained", and no longer R3.2's bound; a risk records the one tie the bonus cannot separate |
 | design-review 2 | F1 (P1): the recomputed actual totals were CTEs of the category mart and not selected, so R5.3's test could not read them and would have tested its own copy | Changed (owner chose a model over a column): `int_fantasy__lineup_category_totals`, one row per side, category and lineup; R5.2 to R5.4; the mart sums nothing |
 | design-review 2 | F2 (P2): no task covered R5.5 | Changed: the mart's task lists it |
 | design-review 2 | F3 (P2): CI had no expected value for the pitcher-start counts | Changed: actual 2, measured; optimal at most 2, with the reason |
