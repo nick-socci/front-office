@@ -77,6 +77,7 @@ hitters the unranked pool is not the players doing the job.
   whole-season hindsight.
 - Bad / accepted cost: a pitcher's first appearance of a season is never in the pool,
   and early in a season the pool is thin.
-- Bad / accepted cost: on a two-day fixture the pool is empty.
+- Bad / accepted cost: on a two-day fixture the pool is empty, so CI warns and fixture
+  starts have no value until an earlier fixture day is added (#93).
 - Follow-ups: who is a starter for call-ups and role changes (#92); whether the relief
   and batting pools should be decided at the time.

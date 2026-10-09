@@ -177,7 +177,10 @@ checkable, judged or not, so a slope is never computed from part of a group.
 - **The fixture start pool is empty.** Two days cannot hold a pitcher's earlier start, so
   in CI the start level is null, fixture starts have a null value, and
   `int_fantasy__replacement_pool_has_played_days` warns. Unit tests carry the rule. If a
-  CI test fails on those nulls, the build stops (R5.3).
+  CI test fails on those nulls, the build stops (R5.3). Accepted by the owner on
+  2026-10-09; an earlier fixture day, which clears it, is #93. A fallback to today's
+  pool when the new one is empty was considered and left out: it would be a rule that
+  exists for a two-day fixture and would hide a pool that is really empty.
 - **Early in a season the pool is thin**: no pitcher is a starter until his second
   appearance. The level exists from the first days and settles over weeks.
 - **The re-scoring is the heaviest model in the build.** Twenty draws of every
