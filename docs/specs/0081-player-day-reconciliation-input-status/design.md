@@ -39,7 +39,7 @@ it had been compared, which is the situation this project keeps writing tests ag
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0032](../../adr/0032-a-player-day-difference-carries-the-status-of-its-inputs.md) | A player-day difference carries the status of its inputs; a `verified_off` day with an ESPN line is a difference | proposed |
+| [0032](../../adr/0032-a-player-day-difference-carries-the-status-of-its-inputs.md) | A player-day difference carries the status of its inputs; a `verified_off` day with an ESPN line is a difference | accepted |
 
 The view and test of R3 are not in the ADR: they are a check on the table, and can be
 dropped or changed without touching it.
@@ -165,3 +165,16 @@ on the real season.
 | design-review | F3 (P2): no repeatable negative case for the register test | Changed: the rule moves into a view, `rec_espn__player_day_residuals`, with a six-case unit test (R3.1, R3.5); the singular test selects its problems. A new model, approved by the owner on 2026-10-09 |
 
 ## Amendments
+
+- 2026-10-09, R3.1: the spec said what the view holds and did not name two of its
+  columns. They are `difference_sum` (the sum of the key's `difference` rows) and
+  `difference_rows` (how many there are); `expected_difference` is the register's own
+  name. Reported to the owner the same day; open to renaming in review.
+- 2026-10-09, R3.1: the view has no enforced contract, unlike
+  `rec_fantasy__category_wins_by_group`; its two measure columns are tested `not_null`
+  and its key unique. The spec asked for neither.
+- 2026-10-09, R3.5: the six cases are two unit tests, not one. `ambiguous_register`
+  marks every key once two league-seasons have differences, so it cannot share given
+  rows with the other five cases.
+- 2026-10-09, expected values: the CI build before this change is `PASS=482 WARN=3`,
+  not 480: #92 added two unit tests after the spec was written. After: `PASS=496`.
