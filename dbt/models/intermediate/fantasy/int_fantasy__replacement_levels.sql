@@ -285,8 +285,35 @@ roles_to_date as (
 
 ),
 
+-- What each pitcher had done on his pitching days before each of his days, this season:
+-- how many there were, and whether the latest two were starts (null when there is no such
+-- day). Over pitching days only, so a day he only batted is not an appearance and does not
+-- break "his last two". A doubleheader day with a start and a relief outing is one
+-- pitching day, a start, as fo_pitching_day_kind says everywhere else.
+pitching_days_to_date as (
+
+    select
+        mlbam_player_id,
+        season,
+        game_date,
+        row_number() over pitching_order - 1 as earlier_pitching_days,
+        lag({{ fo_pitching_day_kind('games_pitched', 'games_started') }} = 'start', 1)
+            over pitching_order as last_was_start,
+        lag({{ fo_pitching_day_kind('games_pitched', 'games_started') }} = 'start', 2)
+            over pitching_order as one_before_was_start
+    from {{ ref('int_mlb__player_game_days') }}
+    where games_pitched > 0
+    window pitching_order as (
+        partition by mlbam_player_id, season
+        order by game_date
+    )
+
+),
+
 -- The start pool is days, not players (ADR 0029): every free-agent start by a pitcher who
--- was a starter up to then. Not ranked and not cut to N.
+-- was a starter up to then, as fo_is_starter_at_the_time says (ADR 0031). Not ranked and
+-- not cut to N. A day he did not pitch has no row in pitching_days_to_date, but a start
+-- is a pitching day, so the join finds one for every start.
 start_pool_days as (
 
     select
@@ -297,8 +324,17 @@ start_pool_days as (
         on roles_to_date.mlbam_player_id = free_agent_days.mlbam_player_id
         and roles_to_date.season = free_agent_days.season
         and roles_to_date.game_date = free_agent_days.game_date
+    inner join pitching_days_to_date
+        on pitching_days_to_date.mlbam_player_id = free_agent_days.mlbam_player_id
+        and pitching_days_to_date.season = free_agent_days.season
+        and pitching_days_to_date.game_date = free_agent_days.game_date
     where {{ fo_pitching_day_kind('free_agent_days.games_pitched', 'free_agent_days.games_started') }} = 'start'
-        and roles_to_date.role_to_date = 'SP'
+        and {{ fo_is_starter_at_the_time(
+            'pitching_days_to_date.earlier_pitching_days',
+            'roles_to_date.role_to_date',
+            'pitching_days_to_date.last_was_start',
+            'pitching_days_to_date.one_before_was_start'
+        ) }}
 
 ),
 
