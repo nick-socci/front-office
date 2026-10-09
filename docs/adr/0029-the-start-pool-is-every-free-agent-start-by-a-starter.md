@@ -1,6 +1,6 @@
 # 0029. The start pool is every free-agent start by a pitcher who was a starter at the time
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0089-starter-replacement-level](../specs/0089-starter-replacement-level/design.md) · Issue: #89
 - Amends: [0001](0001-replacement-level-is-the-free-agent-pool.md), [0009](0009-a-pitching-pool-is-ranked-by-appearances.md), for the start kind only

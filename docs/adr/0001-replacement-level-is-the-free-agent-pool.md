@@ -1,6 +1,6 @@
 # 0001. Replacement level is the free-agent pool
 
-- Status: accepted; its `SP` and `RP` groups and "outs for pitchers" are superseded by [0008](0008-a-pitchers-day-is-measured-against-the-same-kind-of-outing.md) and [0009](0009-a-pitching-pool-is-ranked-by-appearances.md). The free-agent pool, N and the hitter group stand.
+- Status: accepted; its `SP` and `RP` groups and "outs for pitchers" are superseded by [0008](0008-a-pitchers-day-is-measured-against-the-same-kind-of-outing.md) and [0009](0009-a-pitching-pool-is-ranked-by-appearances.md). The free-agent pool, N and the hitter group stand; the start pool is amended by [0029](0029-the-start-pool-is-every-free-agent-start-by-a-starter.md)
 - Date: 2026-10-03
 - Spec: [0011-player-value](../specs/0011-player-value/design.md) · Issue: #11
 
