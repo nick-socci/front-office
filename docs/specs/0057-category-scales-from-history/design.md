@@ -327,9 +327,8 @@ made against the first draft and their resolutions carry over unchanged.
 A second design review, run on the spec as rewritten, found one gap (P2): R1.8 does not
 say what a relative volume is when no counting category can contribute to it, or when
 it comes out as zero. Neither occurs in any landed season. Two rules were put to the
-owner before approval; the owner approved and merged the spec without answering them
-separately, so they are applied as proposed and listed in the build's pull request for
-the owner to confirm or change.
+owner before approval and applied as proposed in the build; the owner agreed to both on
+2026-10-08, before the build's pull request was merged.
 
 - **No counting category to measure volume from** (a league that scores only rates, or
   one whose every counting category has a zero median): the relative volume is 1, and
