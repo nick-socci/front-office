@@ -1,11 +1,21 @@
-"""Prove that each league-season's models are what they would be if it were built alone.
+"""Prove that a league-season's models depend only on its own league's captures, up to its season.
 
-Spec 0028 R5.3, ADR 0013. Loads fixtures/landing_multi/ into one warehouse and builds it;
-then, for each of the four league-seasons, builds that league-season ALONE (its ESPN
-folders, plus the season-level ESPN captures such as the pro schedule, its season's MLB
-folders, the id map) into a warehouse of its own; then compares
-every model. Any model whose rows for a league-season differ between the combined build and
-the single build is named. Exit 1 if any differ or any dbt step failed.
+Spec 0028 R5.3, ADR 0013 as amended by ADR 0028; spec 0057 R5. The invariant: a
+league-season's rows depend only on its own league's captures of that season and of earlier
+ones (ADR 0028: the blended category scale reads the league's earlier seasons on purpose).
+Another league's captures, or a later season's, changing its rows is what this catches.
+
+Loads fixtures/landing_multi/ into one warehouse and builds it; then, for each league-season,
+builds it with its league's earlier seasons into a warehouse of its own: that league's ESPN
+folders for the season and every earlier season, the season-level ESPN captures such as the
+pro schedule, the MLB folders of those seasons, the id map. Never a later season, never
+another league. Then compares every model on the rows of the league-season under test. Any
+model whose rows for it differ between the combined build and the single build is named.
+Exit 1 if any differ or any dbt step failed.
+
+Every build, combined and single, runs with fantasy_scale_prior_matchups at 2 (spec 0057
+R5.2), so the blended category scale is in use wherever a league-season has an earlier
+season and the fallback runs where it has none. The main CI build keeps the default.
 
 Usage:  uv run python scripts/check_tenant_isolation.py [--keep DIR]
 
@@ -21,6 +31,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Iterable
 from pathlib import Path
 
 import duckdb
@@ -52,8 +63,14 @@ LEAGUE_SEASONS = [
     ("222222", 2027),
     ("111111", 2025),
 ]
-# The same var in every build, or the combined and single warehouses would differ by design.
-DBT_VARS = ["--target", "ci", "--vars", "{anonymize: true}"]
+# The same vars in every build, or the combined and single warehouses would differ by design.
+# The lowered threshold makes two fixture matchups enough to blend in an earlier season.
+DBT_VARS = [
+    "--target",
+    "ci",
+    "--vars",
+    "{anonymize: true, fantasy_scale_prior_matchups: 2}",
+]
 OWN_TESTS = ["--select", "dim_players", "dim_player_league_seasons"]
 
 
@@ -96,28 +113,46 @@ def load(root: Path, db: Path) -> int:
         con.close()
 
 
+def seasons_to_copy(season: int, available: Iterable[int]) -> list[int]:
+    """The season under test and every earlier one the league has; never a later one."""
+    return sorted(s for s in set(available) if s <= season)
+
+
+def league_seasons(root: Path, league: str) -> list[int]:
+    """The seasons for which `root` holds ESPN captures of `league`."""
+    found: set[int] = set()
+    for league_dir in (root / "espn").glob(f"*/season=*/league_id={league}"):
+        found.add(int(league_dir.parent.name.removeprefix("season=")))
+    return sorted(found)
+
+
 def copy_single(league: str, season: int, target: Path) -> None:
-    """One league-season's ESPN folders, its season's MLB folders, and the id map.
+    """One league-season's inputs: its league's ESPN folders for the season and every
+    earlier season, those seasons' MLB folders, and the id map.
 
     An ESPN endpoint whose season partition has no `league_id=` level (the pro schedule
-    belongs to a season, not a league) is copied whole for that season.
+    belongs to a season, not a league) is copied whole for each of those seasons.
     """
+    seasons = seasons_to_copy(season, league_seasons(MULTI_ROOT, league))
+    wanted = {f"season={s}" for s in seasons}
     for source in sorted(MULTI_ROOT.iterdir()):
         for endpoint in sorted(source.iterdir()):
             if source.name == "idmap":
                 shutil.copytree(endpoint, target / source.name / endpoint.name)
                 continue
             for partition in sorted(endpoint.iterdir()):
-                if partition.name != f"season={season}":
+                if partition.name not in wanted:
                     continue
                 season_level = source.name == "espn" and not any(
                     child.name.startswith("league_id=") for child in partition.iterdir()
                 )
                 if source.name == "espn" and not season_level:
-                    shutil.copytree(
-                        partition / f"league_id={league}",
-                        target / "espn" / endpoint.name / partition.name / f"league_id={league}",
-                    )
+                    own = partition / f"league_id={league}"
+                    if own.is_dir():
+                        shutil.copytree(
+                            own,
+                            target / "espn" / endpoint.name / partition.name / own.name,
+                        )
                 else:
                     shutil.copytree(
                         partition, target / source.name / endpoint.name / partition.name
@@ -195,7 +230,8 @@ def compare(combined: Path, singles: dict[tuple[str, int], Path]) -> int:
         comb_cols = columns(con, comb, relation)
         has_league, has_season = "league_id" in comb_cols, "season" in comb_cols
         # A season column without a league_id is an MLB model (R4.5: they describe no
-        # league but do have seasons); it is checked one way, like the league-free ones.
+        # league but do have seasons); it is checked one way, like the league-free ones:
+        # every row of the single build, earlier seasons included, is in the combined one.
         # A league_id without a season cannot be sliced to a league-season: malformed.
         if has_league and not has_season:
             print(f"DIFFERS {relation}: has league_id but no season")
@@ -207,13 +243,27 @@ def compare(combined: Path, singles: dict[tuple[str, int], Path]) -> int:
                     f"cast(league_id as varchar) = '{league}' "
                     f"and cast(season as varchar) = '{season}'"
                 )
-                diff = compare_relation(con, comb, single, relation, left_where=where)
-                bad = diff.differs or diff.left_only_columns or diff.right_only_columns
+                # The single build now holds the league's earlier seasons too, so its
+                # side is sliced to the league-season under test as well. What lies
+                # outside the slice must be that league's own earlier seasons and
+                # nothing else: another league's row, or a later season's, is a leak.
+                outside = (
+                    f"coalesce(not (cast(league_id as varchar) = '{league}' "
+                    f"and try_cast(season as bigint) <= {season}), true)"
+                )
+                strays = count_rows(con, single, relation, outside)
+                diff = compare_relation(
+                    con, comb, single, relation, left_where=where, right_where=where
+                )
+                bad = (
+                    diff.differs or diff.left_only_columns or diff.right_only_columns or strays > 0
+                )
                 detail = (
                     f"combined rows {diff.left_rows}, single rows {diff.right_rows}; "
                     f"only in combined {diff.only_left}, only in single {diff.only_right}"
                     f"; columns only in combined {diff.left_only_columns}, "
                     f"only in single {diff.right_only_columns}"
+                    f"; single rows of another league or a later season {strays}"
                 )
             else:
                 missing = rows_missing_from(con, single, comb, relation)
