@@ -1,0 +1,14 @@
+{
+  "source": "espn",
+  "endpoint": "teams",
+  "partitions": {
+    "season": 2027,
+    "league_id": "222222"
+  },
+  "url": "https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb/seasons/2027/segments/0/leagues/222222",
+  "params": {
+    "view": "mTeam"
+  },
+  "request_key": "view=mTeam",
+  "fetched_at": "20270423T160000Z"
+}

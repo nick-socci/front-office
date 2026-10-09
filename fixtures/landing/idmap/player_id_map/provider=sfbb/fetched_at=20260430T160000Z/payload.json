@@ -1,5 +1,21 @@
 [
  {
+  "PLAYERNAME": "Andrew Abbott",
+  "MLBID": "671096",
+  "ESPNID": "4414528",
+  "TEAM": "CIN",
+  "POS": "P",
+  "IDFANGRAPHS": "29911"
+ },
+ {
+  "PLAYERNAME": "Mick Abel",
+  "MLBID": "690953",
+  "ESPNID": "4718970",
+  "TEAM": "MIN",
+  "POS": "P",
+  "IDFANGRAPHS": "27756"
+ },
+ {
   "PLAYERNAME": "CJ Abrams",
   "MLBID": "682928",
   "ESPNID": "42402",
@@ -182,6 +198,14 @@
   "TEAM": "BAL",
   "POS": "P",
   "IDFANGRAPHS": "20666"
+ },
+ {
+  "PLAYERNAME": "Shane Baz",
+  "MLBID": "669358",
+  "ESPNID": "39639",
+  "TEAM": "BAL",
+  "POS": "P",
+  "IDFANGRAPHS": "22264"
  },
  {
   "PLAYERNAME": "Travis Bazzana",
@@ -568,6 +592,14 @@
   "IDFANGRAPHS": "32127"
  },
  {
+  "PLAYERNAME": "Reid Detmers",
+  "MLBID": "672282",
+  "ESPNID": "4326697",
+  "TEAM": "LAA",
+  "POS": "P",
+  "IDFANGRAPHS": "27468"
+ },
+ {
   "PLAYERNAME": "Rafael Devers",
   "MLBID": "646240",
   "ESPNID": "33859",
@@ -630,6 +662,14 @@
   "TEAM": "COL",
   "POS": "OF",
   "IDFANGRAPHS": "25479"
+ },
+ {
+  "PLAYERNAME": "Jack Dreyer",
+  "MLBID": "676263",
+  "ESPNID": "5136082",
+  "TEAM": "LAD",
+  "POS": "P",
+  "IDFANGRAPHS": "30249"
  },
  {
   "PLAYERNAME": "Mauricio Dubon",
@@ -750,6 +790,14 @@
   "TEAM": "NYY",
   "POS": "P",
   "IDFANGRAPHS": "13743"
+ },
+ {
+  "PLAYERNAME": "Didier Fuentes",
+  "MLBID": "800311",
+  "ESPNID": "5291189",
+  "TEAM": "ATL",
+  "POS": "P",
+  "IDFANGRAPHS": "30661"
  },
  {
   "PLAYERNAME": "Zac Gallen",
@@ -1240,6 +1288,14 @@
   "IDFANGRAPHS": "19608"
  },
  {
+  "PLAYERNAME": "Rhett Lowder",
+  "MLBID": "695076",
+  "ESPNID": "4758873",
+  "TEAM": "CIN",
+  "POS": "P",
+  "IDFANGRAPHS": "33876"
+ },
+ {
   "PLAYERNAME": "Brandon Lowe",
   "MLBID": "664040",
   "ESPNID": "39961",
@@ -1350,6 +1406,14 @@
   "TEAM": "MIL",
   "POS": "P",
   "IDFANGRAPHS": "17722"
+ },
+ {
+  "PLAYERNAME": "Chase Meidroth",
+  "MLBID": "805367",
+  "ESPNID": "5136929",
+  "TEAM": "CHW",
+  "POS": "SS",
+  "IDFANGRAPHS": "31580"
  },
  {
   "PLAYERNAME": "Jackson Merrill",
@@ -1976,6 +2040,14 @@
   "IDFANGRAPHS": "22267"
  },
  {
+  "PLAYERNAME": "Cam Smith",
+  "MLBID": "701358",
+  "ESPNID": "5080766",
+  "TEAM": "HOU",
+  "POS": "OF",
+  "IDFANGRAPHS": "35108"
+ },
+ {
   "PLAYERNAME": "Cade Smith",
   "MLBID": "671922",
   "ESPNID": "4987924",
@@ -2166,6 +2238,14 @@
   "TEAM": "CHW",
   "POS": "P",
   "IDFANGRAPHS": "33927"
+ },
+ {
+  "PLAYERNAME": "Caleb Thielbar",
+  "MLBID": "573204",
+  "ESPNID": "32440",
+  "TEAM": "CHC",
+  "POS": "P",
+  "IDFANGRAPHS": "10078"
  },
  {
   "PLAYERNAME": "Payton Tolle",

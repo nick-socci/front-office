@@ -416,7 +416,9 @@ def test_the_first_transactions_page_is_offset_zero_of_the_newest_run(roots):
     assert make_fixtures.newest_transactions_first_page() == {"page": "new0"}
 
 
-def test_boxscore_fixtures_and_the_correction_are_read_and_written_as_directories(roots):
+def test_boxscore_fixtures_and_the_correction_are_read_and_written_as_directories(
+    roots, monkeypatch
+):
     """Catches the boxscore path (a game folder of captures, then a correction built from
     the fixture just written) still assuming loose files."""
     raw, fixtures = roots
@@ -444,6 +446,7 @@ def test_boxscore_fixtures_and_the_correction_are_read_and_written_as_directorie
         "20260501T000000Z",
         {"teams": {"home": side, "away": side}},
     )
+    monkeypatch.setattr(make_fixtures, "FIXTURE_HISTORY_GAME_PKS", ())
     written = make_fixtures.build_mlb_boxscores(("2026-04-29",))
     assert [p.parent.name for p in written] == [
         "fetched_at=20260430T160000Z",
@@ -492,8 +495,12 @@ def test_committed_pro_schedule_fixture_is_the_allowlist_and_the_fixture_dates()
                 }
                 assert str(game["scoringPeriodId"]) == period
                 games_by_period.setdefault(period, []).append(game)
-    assert set(games_by_period) == {"1", "2"}
-    expected = {"1": (15, "2026-04-29"), "2": (11, "2026-04-30")}
+    assert set(games_by_period) == {"1", "6", "7"}
+    expected = {
+        "1": (14, "2026-04-24"),
+        "6": (15, "2026-04-29"),
+        "7": (11, "2026-04-30"),
+    }
     for period, (count, day) in expected.items():
         assert len({g["id"] for g in games_by_period[period]}) == count
         assert len(games_by_period[period]) == 2 * count  # listed under both teams
@@ -529,10 +536,10 @@ def test_committed_roster_fixtures_carry_allowlisted_lines_of_scheduled_games():
     """Catches a projected or season-total line, a field outside the allowlist, a line of
     another period, a game that is not in the pro schedule fixture for the same period (the
     rosters and the schedule from different days, R1.1), an empty `stats` key on an entry
-    without lines, and a fixture with no real line to compare in either period."""
+    without lines, and a fixture with no real line to compare in any of its three periods."""
     root = Path(__file__).resolve().parents[2] / "fixtures/landing"
     rosters, games = committed_rosters_and_games(root, 2026)
-    assert sorted(period for _, period in rosters) == [1, 2]
+    assert sorted(period for _, period in rosters) == [1, 6, 7]
     for capture, period in rosters:
         payload = capture.payload
         assert payload["scoringPeriodId"] == period
@@ -561,6 +568,76 @@ def test_committed_roster_fixtures_carry_allowlisted_lines_of_scheduled_games():
                     assert line["externalId"] in games[str(period)]
                     non_empty += bool(line["stats"])
         assert non_empty > 0
+
+
+def test_the_2026_matchups_fixture_spans_the_seven_periods():
+    """Catches the committed 2026 matchups keeping the old two-period span, or losing a
+    period of the seven-day season the settings and the pro schedule describe."""
+    root = Path(__file__).resolve().parents[2] / "fixtures/landing"
+    (capture,) = LandingZone(root).committed(
+        source="espn", endpoint="matchups", partitions={"season": 2026, "league_id": "111111"}
+    )
+    kept = {
+        period
+        for matchup in capture.payload["schedule"]
+        for side in ("home", "away")
+        for period in matchup[side]["pointsByScoringPeriod"]
+    }
+    assert kept == {"1", "2", "3", "4", "5", "6", "7"}
+
+
+def test_the_committed_fixtures_hold_a_start_pool_pitcher():
+    """Catches a hand edit, or a regeneration, that leaves the start pool empty again: the
+    committed files must hold a pitcher who started game 824854 (04-24) with outs recorded
+    and no more plate appearances than batters faced, who started a later fixture game, and
+    who is on no roster of that game's period (the check the generator runs on raw data)."""
+    root = Path(__file__).resolve().parents[2] / "fixtures/landing"
+    zone = LandingZone(root)
+
+    def started(game_pk: int) -> dict[str, dict]:
+        # The newest capture, as the model reads it (game 822821 has a later correction).
+        captures = sorted(
+            zone.committed(
+                source="mlb",
+                endpoint="boxscore",
+                partitions={"season": 2026, "game_pk": game_pk},
+            ),
+            key=lambda capture: capture.meta["fetched_at"],
+        )
+        found: dict[str, dict] = {}
+        for side in ("home", "away"):
+            for player in captures[-1].payload["teams"][side]["players"].values():
+                stats = player.get("stats", {})
+                if stats.get("pitching", {}).get("gamesStarted", 0) >= 1:
+                    found[str(player["person"]["id"])] = stats
+        return found
+
+    earlier = {
+        person
+        for person, stats in started(824854).items()
+        if stats["pitching"].get("outs", 0) > 0
+        and stats.get("batting", {}).get("plateAppearances", 0)
+        <= stats["pitching"].get("battersFaced", 0)
+    }
+    assert earlier, "no pitcher starts game 824854 with outs recorded"
+    later = {person for game_pk in (822821, 822907) for person in started(game_pk)} & earlier
+    assert later, "no earlier starter starts again in game 822821 or 822907"
+
+    (id_map,) = zone.committed(source="idmap", endpoint="player_id_map")
+    espn_ids: dict[str, set[str]] = {}
+    for row in id_map.payload:
+        espn_ids.setdefault(str(row["MLBID"]), set()).add(str(row["ESPNID"]))
+    (roster,) = zone.committed(
+        source="espn",
+        endpoint="roster",
+        partitions={"season": 2026, "league_id": "111111", "scoring_period": 6},
+    )
+    rostered = {
+        str(entry["playerId"])
+        for team in roster.payload["teams"]
+        for entry in team["roster"]["entries"]
+    }
+    assert any(not (espn_ids.get(person, set()) & rostered) for person in later)
 
 
 # -- the 2025 past season (spec 0085, R3) ------------------------------------------------------
@@ -835,3 +912,319 @@ def test_the_league_check_runs_per_season(roots):
     with pytest.raises(SystemExit) as stop:
         make_fixtures.check_one_league(2025)
     assert "2 leagues" in str(stop.value)
+
+
+# -- the seven-period fixture season (spec 0093) -------------------------------------------------
+
+SOURCE_PERIODS = (31, 36, 37)
+SEASON_DATES = ("2026-04-24", "2026-04-29", "2026-04-30")
+
+
+def land_roster(raw, source_period: int, player_ids=(5,), lines_period: int | None = None):
+    """Land a made-up roster of one source period; each entry has one game line."""
+    period = source_period if lines_period is None else lines_period
+    entries = [
+        made_up_entry([real_line(scoringPeriodId=period)]) | {"playerId": p} for p in player_ids
+    ]
+    land(
+        raw,
+        "espn",
+        "roster",
+        {"season": 2026, "league_id": "7", "scoring_period": source_period},
+        "20260501T000000Z",
+        {"seasonId": 2026, "teams": [{"id": 1, "roster": {"entries": entries}}]},
+    )
+
+
+def test_pro_schedule_periods_are_numbered_by_offset_from_the_first(roots):
+    """Catches numbering by position (31, 36, 37 -> 1, 2, 3), which would put 04-29 on
+    period 2 and the schedule off its dates; and 2025's (1, 2) moving at all (R1.2)."""
+    raw, _fixtures = roots
+    land_pro_schedule(
+        raw,
+        {"31": ["2026-04-24T19:05"], "36": ["2026-04-29T19:05"], "37": ["2026-04-30T19:05"]},
+    )
+    land_pro_schedule(
+        raw, {"1": ["2025-03-18T06:10"], "2": ["2025-03-19T06:10"], "3": ["2025-03-27T19:05"]}, 2025
+    )
+    path = make_fixtures.build_espn_pro_schedule(2026, SOURCE_PERIODS)
+    (team,) = json.loads(path.read_text())["settings"]["proTeams"]
+    by_period = team["proGamesByScoringPeriod"]
+    assert list(by_period) == ["1", "6", "7"]
+    for period, games in by_period.items():
+        assert {game["scoringPeriodId"] for game in games} == {int(period)}
+    past = make_fixtures.build_espn_pro_schedule(2025, (1, 2), "20250319T160000Z")
+    (past_team,) = json.loads(past.read_text())["settings"]["proTeams"]
+    assert list(past_team["proGamesByScoringPeriod"]) == ["1", "2"]
+
+
+def test_roster_fixtures_and_their_game_lines_are_numbered_by_offset(roots, monkeypatch):
+    """Catches rosters (partition, payload, and the scoringPeriodId of each stat line)
+    numbered by position instead of offset (R1.2), and 2025-style (1, 2) changing."""
+    raw, fixtures = roots
+    for source in SOURCE_PERIODS:
+        land_roster(raw, source)
+    monkeypatch.setattr(make_fixtures, "FIXTURE_SOURCE_SCORING_PERIODS", SOURCE_PERIODS)
+    paths = make_fixtures.build_espn_rosters()
+    assert [p.parent.parent.name for p in paths] == [
+        "scoring_period=1",
+        "scoring_period=6",
+        "scoring_period=7",
+    ]
+    for path, number in zip(paths, (1, 6, 7), strict=True):
+        payload = json.loads(path.read_text())
+        assert payload["scoringPeriodId"] == number
+        (entry,) = payload["teams"][0]["roster"]["entries"]
+        assert [
+            line["scoringPeriodId"] for line in entry["playerPoolEntry"]["player"]["stats"]
+        ] == [number]
+    monkeypatch.setattr(make_fixtures, "FIXTURE_SOURCE_SCORING_PERIODS", (1, 2))
+    for source in (1, 2):
+        land_roster(raw, source)
+    paths = make_fixtures.build_espn_rosters()
+    assert [json.loads(p.read_text())["scoringPeriodId"] for p in paths] == [1, 2]
+    assert fixtures in paths[0].parents
+
+
+def land_settings_and_matchups(raw, season: int):
+    partitions = {"season": season, "league_id": "7"}
+    status = {"latestScoringPeriod": 196, "finalScoringPeriod": 188}
+    scoring = {"scoringType": "H2H_CATEGORY", "scoringItems": []}
+    settings = {"id": 7, "seasonId": season, "scoringPeriodId": 99, "status": status}
+    settings["settings"] = {"name": "Real Name", "scoringSettings": scoring}
+    land(raw, "espn", "settings", partitions, "20260101T000000Z", settings)
+    points = {str(n): 1.0 for n in range(1, 41)}
+    side = {"teamId": 1, "pointsByScoringPeriod": points}
+    schedule = [{"id": n, "matchupPeriodId": 1, "home": side, "away": side} for n in range(5)]
+    land(
+        raw,
+        "espn",
+        "matchups",
+        partitions,
+        "20260101T000000Z",
+        {"seasonId": season, "schedule": schedule},
+    )
+
+
+def test_settings_say_the_span_and_matchup_keys_are_trimmed_not_offset(roots):
+    """Catches settings counting source periods (3) instead of the span (7), and matchup
+    keys being offset or cut to the count: they stay 1 to 7 (R1.3)."""
+    raw, _fixtures = roots
+    land_settings_and_matchups(raw, 2026)
+    settings = json.loads(make_fixtures.build_espn_settings(2026, SOURCE_PERIODS).read_text())
+    assert settings["scoringPeriodId"] == 7
+    assert settings["status"] == {"latestScoringPeriod": 7, "finalScoringPeriod": 7}
+    matchups = json.loads(make_fixtures.build_espn_matchups(2026, SOURCE_PERIODS).read_text())
+    for matchup in matchups["schedule"]:
+        for side in ("home", "away"):
+            assert sorted(matchup[side]["pointsByScoringPeriod"], key=int) == [
+                str(n) for n in range(1, 8)
+            ]
+
+
+def test_the_helpers_give_the_2025_numbers_unchanged():
+    """Catches the offset helpers changing what (1, 2) gives today: 1, 2 and span 2."""
+    assert [make_fixtures.fixture_period_number(s, (1, 2)) for s in (1, 2)] == [1, 2]
+    assert make_fixtures.fixture_span((1, 2)) == 2
+    assert [make_fixtures.fixture_period_number(s, SOURCE_PERIODS) for s in SOURCE_PERIODS] == [
+        1,
+        6,
+        7,
+    ]
+    assert make_fixtures.fixture_span(SOURCE_PERIODS) == 7
+
+
+def test_the_2026_fixture_season_constants_are_the_seven_periods():
+    """Catches the constants not being moved to 2026-04-24 and real periods 31, 36, 37 (R1.1)."""
+    assert make_fixtures.DEFAULT_DATES == SEASON_DATES
+    assert make_fixtures.FIXTURE_SOURCE_SCORING_PERIODS == SOURCE_PERIODS
+    assert make_fixtures.FIXTURE_HISTORY_GAME_PKS == (824854,)
+
+
+def made_up_side(players: dict | None = None) -> dict:
+    return {
+        "team": {"id": 1},
+        "teamStats": {"batting": {"hits": 3, "runs": 1, "atBats": 9}},
+        "players": players
+        or {"ID1": {"stats": {"batting": {"hits": 3, "runs": 1, "atBats": 9, "gamesPlayed": 1}}}},
+    }
+
+
+def land_game(raw, game_pk: int, home_players: dict | None = None):
+    land(
+        raw,
+        "mlb",
+        "boxscore",
+        {"season": 2026, "game_pk": game_pk},
+        "20260501T000000Z",
+        {"teams": {"home": made_up_side(home_players), "away": made_up_side()}},
+    )
+
+
+def land_season_schedule(raw, games_by_date: dict[str, list[int]]):
+    final = {"detailedState": "Final"}
+    land(
+        raw,
+        "mlb",
+        "schedule",
+        {"season": 2026, "game_type": "R"},
+        "20260501T000000Z",
+        {
+            "dates": [
+                {"date": day, "games": [{"gamePk": pk, "status": final} for pk in pks]}
+                for day, pks in games_by_date.items()
+            ]
+        },
+    )
+
+
+def test_an_earlier_date_does_not_displace_the_two_later_games(roots, monkeypatch):
+    """Catches the earlier date's lower game ids (50, 100) displacing the two later games
+    (R2.2): the later games are chosen from the last two dates, the named history game is
+    appended, and the correction snapshot is of the first one written (R2.4)."""
+    raw, _fixtures = roots
+    land_season_schedule(
+        raw,
+        {"2026-04-24": [100, 50], "2026-04-29": [300, 200], "2026-04-30": [400]},
+    )
+    for pk in (50, 100, 200, 300, 400):
+        land_game(raw, pk)
+    monkeypatch.setattr(make_fixtures, "FIXTURE_HISTORY_GAME_PKS", (100,))
+    written = make_fixtures.build_mlb_boxscores(SEASON_DATES)
+    games = [
+        json.loads((p.parent / "meta.json").read_text())["partitions"]["game_pk"] for p in written
+    ]
+    assert games == [200, 300, 100, 200]
+    assert [p.parent.name for p in written][-1] == (
+        f"fetched_at={make_fixtures.CORRECTION_FETCHED_AT}"
+    )
+
+
+def test_a_history_game_that_is_not_landed_stops_generation(roots, monkeypatch):
+    """Catches a missing named game being skipped like an ordinary one: the fixture would
+    regenerate with no earlier start and an empty pool (R2.2)."""
+    raw, _fixtures = roots
+    land_season_schedule(raw, {"2026-04-29": [200], "2026-04-30": [400]})
+    land_game(raw, 200)
+    monkeypatch.setattr(make_fixtures, "FIXTURE_HISTORY_GAME_PKS", (100,))
+    with pytest.raises(SystemExit) as stop:
+        make_fixtures.build_mlb_boxscores(SEASON_DATES)
+    assert "100" in str(stop.value)
+
+
+# -- the purpose check: a free agent starts on the earlier day and again later (spec 0093, R3) ----
+
+
+def pitcher(person_id: int, *, started: int = 1, outs: int = 15, faced: int = 20, pa: int = 0):
+    """One boxscore player entry: a pitcher's line, and his own plate appearances if any."""
+    return {
+        f"ID{person_id}": {
+            "person": {"id": person_id},
+            "stats": {
+                "pitching": {"gamesStarted": started, "outs": outs, "battersFaced": faced},
+                "batting": {"plateAppearances": pa},
+            },
+        }
+    }
+
+
+def land_id_map(raw, pairs: dict[int, int]):
+    """Land a made-up id map: MLB person id -> ESPN player id."""
+    rows = [{"MLBID": str(mlb), "ESPNID": str(espn)} for mlb, espn in pairs.items()]
+    land(raw, "idmap", "player_id_map", {"provider": "sfbb"}, "20260501T000000Z", rows)
+
+
+def start_pool_zone(
+    raw,
+    monkeypatch,
+    *,
+    earlier: dict | None,
+    later: dict | None,
+    rostered_later: tuple[int, ...] = (),
+    id_map: dict[int, int] | None = None,
+):
+    """A landing zone where game 100 is the history game (04-24, period 31), game 200 is
+    played on 04-29 (period 36) and game 300 on 04-30 (period 37)."""
+    monkeypatch.setattr(make_fixtures, "FIXTURE_HISTORY_GAME_PKS", (100,))
+    land_season_schedule(raw, {"2026-04-24": [100], "2026-04-29": [200], "2026-04-30": [300]})
+    land_game(raw, 100, earlier)
+    land_game(raw, 200, later)
+    land_game(raw, 300)
+    land_roster(raw, 31, player_ids=(9011,))  # rostered on the earlier day: irrelevant
+    land_roster(raw, 36, player_ids=rostered_later or (9999,))
+    land_roster(raw, 37)
+    land_id_map(raw, {11: 9011} if id_map is None else id_map)
+
+
+def check_start_pool():
+    make_fixtures.check_a_free_agent_starts_on_the_earlier_day_and_again_later(SEASON_DATES)
+
+
+def test_a_free_agent_who_starts_on_both_days_passes(roots, monkeypatch):
+    """Catches the check refusing a good fixture, or counting a roster of the EARLIER day
+    against the pitcher (he is rostered on 04-24 here and free on 04-29)."""
+    raw, _fixtures = roots
+    start_pool_zone(raw, monkeypatch, earlier=pitcher(11), later=pitcher(11))
+    check_start_pool()
+
+
+def test_a_pitcher_with_no_id_map_row_counts_as_unrostered(roots, monkeypatch):
+    """Catches an unresolved pitcher being treated as rostered: in the model an unresolved
+    roster entry has no mlbam_player_id, so he is a free agent."""
+    raw, _fixtures = roots
+    start_pool_zone(raw, monkeypatch, earlier=pitcher(11), later=pitcher(11), id_map={})
+    check_start_pool()
+
+
+def test_no_start_in_the_earlier_game_fails_condition_a(roots, monkeypatch):
+    """Catches a history game in which nobody started (a wrong named game) passing (R3.1a)."""
+    raw, _fixtures = roots
+    start_pool_zone(raw, monkeypatch, earlier=pitcher(11, started=0), later=pitcher(11))
+    with pytest.raises(SystemExit) as stop:
+        check_start_pool()
+    assert "(a)" in str(stop.value) and "100" in str(stop.value)
+
+
+def test_an_earlier_start_with_no_outs_fails_condition_a(roots, monkeypatch):
+    """Catches a start with no outs recorded counting as a starter's earlier appearance:
+    fo_replacement_group would not call it SP (R3.1a)."""
+    raw, _fixtures = roots
+    start_pool_zone(raw, monkeypatch, earlier=pitcher(11, outs=0), later=pitcher(11))
+    with pytest.raises(SystemExit) as stop:
+        check_start_pool()
+    assert "(a)" in str(stop.value)
+
+
+def test_an_earlier_start_with_more_plate_appearances_than_batters_faced_fails_a(
+    roots, monkeypatch
+):
+    """Catches a two-way player's batting being read as a pitcher's role (R3.1a)."""
+    raw, _fixtures = roots
+    start_pool_zone(raw, monkeypatch, earlier=pitcher(11, faced=3, pa=4), later=pitcher(11))
+    with pytest.raises(SystemExit) as stop:
+        check_start_pool()
+    assert "(a)" in str(stop.value)
+
+
+def test_no_later_start_by_the_earlier_starter_fails_condition_b(roots, monkeypatch):
+    """Catches a fixture where the earlier starter never starts again, so the pool would
+    have an SP with no start to count (R3.1b)."""
+    raw, _fixtures = roots
+    start_pool_zone(raw, monkeypatch, earlier=pitcher(11), later=pitcher(12))
+    with pytest.raises(SystemExit) as stop:
+        check_start_pool()
+    message = str(stop.value)
+    assert "(b)" in message and "(a)" not in message
+
+
+def test_a_later_start_by_a_rostered_pitcher_fails_condition_c(roots, monkeypatch):
+    """Catches a later start by a pitcher on a roster that day, who is not a free agent and
+    so not in the pool (R3.1c); matched through the id map."""
+    raw, _fixtures = roots
+    start_pool_zone(
+        raw, monkeypatch, earlier=pitcher(11), later=pitcher(11), rostered_later=(9011,)
+    )
+    with pytest.raises(SystemExit) as stop:
+        check_start_pool()
+    message = str(stop.value)
+    assert "(c)" in message and "(a)" not in message and "(b)" not in message

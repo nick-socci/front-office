@@ -31,19 +31,25 @@ FIXTURE_ROOT = REPO_ROOT / "fixtures/landing"
 # A fixed stamp: fixtures are regenerated on purpose, and a moving fetched_at would
 # churn the committed diff on every run.
 #
-# The stamp is the Eastern afternoon of the LAST fixture game date. Scoring periods are
-# no longer dated from it: stg_espn__scoring_periods counts from the period-1 date the
-# pro schedule fixture implies (ADR 0023). The pro schedule and the rosters are both built
-# from the real periods of the two MLB fixture dates, so period 1 = 2026-04-29 and
-# period 2 = 2026-04-30, matching the MLB fixture games (#74, ADR 0025). The stamp itself
-# stays, because changing it would rename every fixture capture.
+# The stamp is the Eastern afternoon of the LAST fixture game date, 2026-04-30. Scoring
+# periods are no longer dated from it: stg_espn__scoring_periods counts from the period-1
+# date the pro schedule fixture implies (ADR 0023). The pro schedule and the rosters are
+# both built from the real periods of the three MLB fixture dates, so the season is seven
+# periods, 2026-04-24 to 2026-04-30, with data on periods 1, 6 and 7, matching the MLB
+# fixture games (#74, ADR 0025, ADR 0030). The stamp itself stays, because changing it
+# would rename every fixture capture.
 FIXTURE_FETCHED_AT = "20260430T160000Z"
 
 # Game 823471 was postponed on 2026-04-29 and made up on 2026-04-30. The schedule files
 # the postponed copy under the ORIGINAL calendar date and the makeup under the new one,
 # both sharing one game_pk, so capturing both days exercises the stg_mlb__games dedupe
 # tie-break in CI rather than only locally.
-DEFAULT_DATES = ("2026-04-29", "2026-04-30")
+#
+# 2026-04-24 is the earlier day (#93, ADR 0030): a starter's previous turn comes five or six
+# days before his next, so the fixture season has to run from that day to carry a start the
+# start replacement level can use. The four days between have no data. The last two dates
+# are the days the ordinary boxscores come from.
+DEFAULT_DATES = ("2026-04-24", "2026-04-29", "2026-04-30")
 
 # Dotted paths, relative to one game object in the schedule payload.
 SCHEDULE_GAME_FIELDS = (
@@ -147,16 +153,23 @@ CORRECTION_FETCHED_AT = "20260502T160000Z"
 # pitchers and the relationship back to stg_mlb__games.
 FIXTURE_BOXSCORE_GAMES = 2
 
+# Boston's game of 2026-04-24, one rotation turn before fixture game 822821, in which free
+# agent 678394 starts (ADR 0030, #93). Named, not searched for: a search would pick another
+# game when the landing zone changes and move every fixture with it. Written after the
+# ordinary games; generation checks that it does its job.
+FIXTURE_HISTORY_GAME_PKS = (824854,)
+
 # ESPN fixtures are committed to a public repo, so identifying text is replaced at
 # GENERATION time, not at query time. dbt's anonymize var protects query output; it
 # cannot protect a file. League members never agreed to appear here.
 FIXTURE_LEAGUE_ID = "111111"
 FIXTURE_LEAGUE_NAME = "Fixture League"
 
-# The real scoring periods of DEFAULT_DATES (2026-04-29 and 2026-04-30), used for the
-# rosters AND the pro schedule, RENUMBERED 1 and 2 so the fixture season is
-# self-consistent. Generation checks that they fall on the MLB fixture dates (ADR 0025).
-FIXTURE_SOURCE_SCORING_PERIODS = (36, 37)
+# The real scoring periods of DEFAULT_DATES (2026-04-24, 04-29 and 04-30), used for the
+# rosters AND the pro schedule, RENUMBERED by offset from the first (31 -> 1, 36 -> 6,
+# 37 -> 7) so the fixture season is self-consistent: seven consecutive periods, the four
+# between with no data. Generation checks that they fall on the MLB fixture dates (ADR 0025).
+FIXTURE_SOURCE_SCORING_PERIODS = (31, 36, 37)
 
 # The only season the fixtures are built from: a capture of another season is never chosen.
 FIXTURE_SEASON = 2026
@@ -269,6 +282,16 @@ ESPN_STAT_LINE_FIELDS = (
 # What stg_espn__player_game_stats keeps: actuals (source 0) of a single game (split type 5).
 ESPN_STAT_LINE_SOURCE = 0
 ESPN_STAT_LINE_SPLIT = 5
+
+
+def fixture_period_number(source_period: int, source_periods: tuple[int, ...]) -> int:
+    """A source period's fixture number: its distance from the first, plus one."""
+    return source_period - source_periods[0] + 1
+
+
+def fixture_span(source_periods: tuple[int, ...]) -> int:
+    """How many consecutive fixture periods the source periods cover, gaps included."""
+    return source_periods[-1] - source_periods[0] + 1
 
 
 def pick(source: dict[str, Any], dotted: str) -> tuple[list[str], Any] | None:
@@ -412,53 +435,83 @@ def build_mlb_schedule(
     return path
 
 
-def build_mlb_boxscores(dates: tuple[str, ...]) -> list[Path]:
-    """Boxscores for the first few played games on the fixture dates."""
+def select_boxscore_games(dates: tuple[str, ...]) -> list[tuple[int, str]]:
+    """(game_pk, date) of the ordinary fixture boxscores: the first few played games of the
+    LAST TWO fixture dates, by game id.
+
+    The earlier dates are left out on purpose: their lower game ids would displace the
+    games the existing fixtures are built on. The earlier day's game is named instead
+    (FIXTURE_HISTORY_GAME_PKS).
+    """
     schedule = json.loads(latest_schedule(FIXTURE_SEASON).read_text())
-    game_pks = [
-        game["gamePk"]
-        for day in schedule["dates"]
-        if day["date"] in dates
-        for game in day["games"]
-        if game["status"]["detailedState"] == "Final"
-    ]
+    played: dict[int, str] = {}
+    for day in schedule["dates"]:
+        if day["date"] not in dates[-2:]:
+            continue
+        for game in day["games"]:
+            if game["status"]["detailedState"] == "Final":
+                played.setdefault(game["gamePk"], day["date"])
+    return sorted(played.items())[:FIXTURE_BOXSCORE_GAMES]
+
+
+def landed_boxscore_path(game_pk: int) -> Path | None:
+    payloads = landed("mlb", "boxscore", season=2026, game_pk=game_pk)
+    return payloads[-1] if payloads else None
+
+
+def write_boxscore(game_pk: int, source: Path) -> Path:
+    payload = json.loads(source.read_text())
+    fixture = {
+        "teams": {
+            side: {
+                "team": {"id": payload["teams"][side]["team"]["id"]},
+                **rebuild(payload["teams"][side], BOXSCORE_TEAM_STATS_FIELDS),
+                "players": {
+                    key: rebuild(player, BOXSCORE_PLAYER_FIELDS)
+                    for key, player in payload["teams"][side]["players"].items()
+                },
+            }
+            for side in ("home", "away")
+        }
+    }
+    path = write_fixture(
+        source="mlb",
+        endpoint="boxscore",
+        partitions={"season": 2026, "game_pk": game_pk},
+        payload=fixture,
+        request={
+            "url": f"https://statsapi.mlb.com/api/v1/game/{game_pk}/boxscore",
+            "params": {"gamePk": game_pk},
+        },
+    )
+    players = sum(len(fixture["teams"][s]["players"]) for s in ("home", "away"))
+    print(f"mlb/boxscore: game_pk={game_pk}, {players} players -> {path.relative_to(REPO_ROOT)}")
+    return path
+
+
+def build_mlb_boxscores(dates: tuple[str, ...]) -> list[Path]:
+    """Boxscores for the first few played games of the last two fixture dates, then the
+    named games of the earlier day."""
+    history = {pk: landed_boxscore_path(pk) for pk in FIXTURE_HISTORY_GAME_PKS}
+    missing = [pk for pk, source in history.items() if source is None]
+    if missing:
+        raise SystemExit(
+            f"mlb/boxscore: the named history game_pk {', '.join(map(str, missing))} is not "
+            "landed; the fixture season needs it (ADR 0030)"
+        )
     written: list[Path] = []
-    for game_pk in sorted(set(game_pks))[:FIXTURE_BOXSCORE_GAMES]:
-        payloads = landed("mlb", "boxscore", season=2026, game_pk=game_pk)
-        if not payloads:
+    for game_pk, _date in select_boxscore_games(dates):
+        source = landed_boxscore_path(game_pk)
+        if source is None:
             print(f"mlb/boxscore: game_pk={game_pk} not landed yet, skipping")
             continue
-        payload = json.loads(payloads[-1].read_text())
-        fixture = {
-            "teams": {
-                side: {
-                    "team": {"id": payload["teams"][side]["team"]["id"]},
-                    **rebuild(payload["teams"][side], BOXSCORE_TEAM_STATS_FIELDS),
-                    "players": {
-                        key: rebuild(player, BOXSCORE_PLAYER_FIELDS)
-                        for key, player in payload["teams"][side]["players"].items()
-                    },
-                }
-                for side in ("home", "away")
-            }
-        }
-        path = write_fixture(
-            source="mlb",
-            endpoint="boxscore",
-            partitions={"season": 2026, "game_pk": game_pk},
-            payload=fixture,
-            request={
-                "url": f"https://statsapi.mlb.com/api/v1/game/{game_pk}/boxscore",
-                "params": {"gamePk": game_pk},
-            },
-        )
-        players = sum(len(fixture["teams"][s]["players"]) for s in ("home", "away"))
-        print(
-            f"mlb/boxscore: game_pk={game_pk}, {players} players -> {path.relative_to(REPO_ROOT)}"
-        )
-        written.append(path)
-    if written:
-        written.append(write_boxscore_correction(written[0]))
+        written.append(write_boxscore(game_pk, source))
+    first = written[0] if written else None
+    for game_pk, source in history.items():
+        assert source is not None
+        written.append(write_boxscore(game_pk, source))
+    if first is not None:
+        written.append(write_boxscore_correction(first))
     return written
 
 
@@ -577,6 +630,81 @@ def check_mlb_has_games_on_the_fixture_dates(
         )
 
 
+def pitchers_who_started(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """MLB person id -> pitching line, for every player with a start in one boxscore."""
+    started: dict[str, dict[str, Any]] = {}
+    for side in ("home", "away"):
+        for player in payload["teams"][side]["players"].values():
+            stats = player.get("stats", {})
+            pitching = stats.get("pitching", {})
+            if pitching.get("gamesStarted", 0) >= 1:
+                batting = stats.get("batting", {})
+                started[str(player["person"]["id"])] = {
+                    "outs": pitching.get("outs", 0),
+                    "batters_faced": pitching.get("battersFaced", 0),
+                    "plate_appearances": batting.get("plateAppearances", 0),
+                }
+    return started
+
+
+def check_a_free_agent_starts_on_the_earlier_day_and_again_later(
+    dates: tuple[str, ...], source_periods: tuple[int, ...] = FIXTURE_SOURCE_SCORING_PERIODS
+) -> None:
+    """Stop unless the fixture can give the start replacement level a pool player (ADR 0030).
+
+    Some pitcher must (a) start in a history game, with outs recorded and no more plate
+    appearances than batters faced (what fo_replacement_group reads to call one earlier
+    start SP), (b) start in a later chosen game, and (c) be on no ESPN roster of that later
+    game's period. A pitcher with no id-map row is unrostered, as he is in the model. Without
+    such a pitcher the fixture regenerates cleanly and the pool is empty again. Reads only
+    what the builders read, before anything is written.
+    """
+    period_of_date = dict(zip(dates, source_periods, strict=True))
+    earlier: set[str] = set()
+    for game_pk in FIXTURE_HISTORY_GAME_PKS:
+        source = landed_boxscore_path(game_pk)
+        if source is None:
+            raise SystemExit(f"mlb/boxscore: the named history game_pk {game_pk} is not landed")
+        for person, line in pitchers_who_started(json.loads(source.read_text())).items():
+            if line["outs"] > 0 and line["plate_appearances"] <= line["batters_faced"]:
+                earlier.add(person)
+    if not earlier:
+        raise SystemExit(
+            "no start pool pitcher: (a) failed, no pitcher starts with outs recorded in the "
+            f"history game(s) {', '.join(map(str, FIXTURE_HISTORY_GAME_PKS))}"
+        )
+    later: list[tuple[str, int]] = []  # (person, source period of a later start)
+    for game_pk, date in select_boxscore_games(dates):
+        source = landed_boxscore_path(game_pk)
+        if source is not None:
+            for person in pitchers_who_started(json.loads(source.read_text())):
+                if person in earlier:
+                    later.append((person, period_of_date[date]))
+    if not later:
+        raise SystemExit(
+            "no start pool pitcher: (b) failed, none of the earlier starters starts in a "
+            "later fixture boxscore"
+        )
+    id_map = json.loads(latest_landed("idmap", "player_id_map").read_text())
+    espn_ids: dict[str, set[str]] = {}
+    for row in id_map:
+        espn_ids.setdefault(str(row.get("MLBID")), set()).add(str(row.get("ESPNID")))
+    rostered: dict[int, set[str]] = {}
+    for _person, period in later:
+        if period not in rostered:
+            payload = latest_espn("roster", scoring_period=period)
+            rostered[period] = {
+                str(entry["playerId"])
+                for team in payload["teams"]
+                for entry in team["roster"]["entries"]
+            }
+    if all(espn_ids.get(person, set()) & rostered[period] for person, period in later):
+        raise SystemExit(
+            "no start pool pitcher: (c) failed, every earlier starter who starts again is on "
+            "an ESPN roster of that later game's period"
+        )
+
+
 def check_one_league(season: int = FIXTURE_SEASON) -> None:
     """Stop when captures of more than one league are landed for the season (R1.5).
 
@@ -604,14 +732,16 @@ def build_espn_pro_schedule(
     source_periods: tuple[int, ...] = FIXTURE_SOURCE_SCORING_PERIODS,
     fetched_at: str = FIXTURE_FETCHED_AT,
 ) -> Path:
-    """ESPN's pro schedule: teams and games only, two real periods renumbered 1 and 2."""
+    """ESPN's pro schedule: teams and games only, the real periods renumbered by offset."""
     candidates = landed("espn", "pro_schedule", season=season)
     if not candidates:
         raise SystemExit(
             f"no landed espn/pro_schedule response for {season}: run `front-office backfill`"
         )
     payload = json.loads(sorted(candidates)[-1].read_text())
-    renumber = {str(source): str(fixture) for fixture, source in enumerate(source_periods, start=1)}
+    renumber = {
+        str(source): str(fixture_period_number(source, source_periods)) for source in source_periods
+    }
     teams: list[dict[str, Any]] = []
     for team in payload["settings"]["proTeams"]:
         rebuilt: dict[str, Any] = {"id": team["id"]}
@@ -662,10 +792,12 @@ def build_espn_settings(
     fixture = rebuild(payload, ESPN_SETTINGS_FIELDS)
     fixture["id"] = FIXTURE_LEAGUE_ID
     fixture["settings"]["name"] = FIXTURE_LEAGUE_NAME
-    # The fixture season is two days long; see FIXTURE_FETCHED_AT.
-    fixture["scoringPeriodId"] = len(source_periods)
-    fixture["status"]["latestScoringPeriod"] = len(source_periods)
-    fixture["status"]["finalScoringPeriod"] = len(source_periods)
+    # The fixture season is the span of the source periods (seven days for 2026, with data
+    # on three); see FIXTURE_FETCHED_AT.
+    span = fixture_span(source_periods)
+    fixture["scoringPeriodId"] = span
+    fixture["status"]["latestScoringPeriod"] = span
+    fixture["status"]["finalScoringPeriod"] = span
     fixture["settings"]["scoringSettings"]["scoringItems"] = [
         rebuild(item, ESPN_SCORING_ITEM_FIELDS)
         for item in payload["settings"]["scoringSettings"]["scoringItems"]
@@ -735,7 +867,8 @@ def rebuild_roster_entry(
 
 def build_espn_rosters() -> list[Path]:
     written: list[Path] = []
-    for fixture_period, source_period in enumerate(FIXTURE_SOURCE_SCORING_PERIODS, start=1):
+    for source_period in FIXTURE_SOURCE_SCORING_PERIODS:
+        fixture_period = fixture_period_number(source_period, FIXTURE_SOURCE_SCORING_PERIODS)
         payload = latest_espn("roster", scoring_period=source_period)
         fixture = {
             "id": FIXTURE_LEAGUE_ID,
@@ -782,11 +915,11 @@ def build_espn_rosters() -> list[Path]:
 
 
 def trim_scoring_periods(
-    matchup: dict[str, Any], periods: int = len(FIXTURE_SOURCE_SCORING_PERIODS)
+    matchup: dict[str, Any], periods: int = fixture_span(FIXTURE_SOURCE_SCORING_PERIODS)
 ) -> dict[str, Any]:
     """Cut each side's pointsByScoringPeriod down to the fixture's own scoring periods.
 
-    The real matchup this is copied from spans twelve days; the fixture season is two.
+    The real matchup this is copied from spans twelve days; the fixture season is seven.
     Left whole, stg_espn__matchup_periods would claim days 3-12 exist and the
     relationships test against stg_espn__scoring_periods would fail on ten phantom days.
 
@@ -811,7 +944,7 @@ def build_espn_matchups(
 ) -> Path:
     payload = latest_espn("matchups", season=season)
     schedule = [
-        trim_scoring_periods(rebuild(matchup, ESPN_MATCHUP_FIELDS), len(source_periods))
+        trim_scoring_periods(rebuild(matchup, ESPN_MATCHUP_FIELDS), fixture_span(source_periods))
         for matchup in payload["schedule"][:FIXTURE_MATCHUPS]
     ]
     fixture = {"id": FIXTURE_LEAGUE_ID, "seasonId": payload.get("seasonId"), "schedule": schedule}
@@ -930,6 +1063,7 @@ def main() -> None:
     dates = tuple(args.dates)
     check_source_periods_are_the_fixture_dates(FIXTURE_SOURCE_SCORING_PERIODS, dates)
     check_one_league()
+    check_a_free_agent_starts_on_the_earlier_day_and_again_later(dates)
     # Every check of every season first, so a failing past season leaves no half-written run.
     for past in PAST_SEASONS:
         check_source_periods_are_the_fixture_dates(past.source_periods, past.dates, past.season)

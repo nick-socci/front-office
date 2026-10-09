@@ -6,18 +6,27 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815072,
+       "date": 1777075500000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 13,
+       "awayProTeamId": 11
+      }
+     ],
+     "6": [
+      {
        "id": 401815146,
        "date": 1777513200000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 11,
        "awayProTeamId": 7
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401815156,
        "date": 1777575900000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 11,
        "awayProTeamId": 7
       }
@@ -29,9 +38,18 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815075,
+       "date": 1777076100000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 24,
+       "awayProTeamId": 12
+      }
+     ],
+     "6": [
+      {
        "id": 401815144,
        "date": 1777484400000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 9,
        "awayProTeamId": 12
       }
@@ -43,9 +61,18 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815072,
+       "date": 1777075500000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 13,
+       "awayProTeamId": 11
+      }
+     ],
+     "6": [
+      {
        "id": 401815143,
        "date": 1777487700000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 13,
        "awayProTeamId": 10
       }
@@ -57,18 +84,27 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815066,
+       "date": 1777072020000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 14,
+       "awayProTeamId": 5
+      }
+     ],
+     "6": [
+      {
        "id": 401815133,
        "date": 1777489620000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 14,
        "awayProTeamId": 2
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401815155,
        "date": 1777592400000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 9,
        "awayProTeamId": 14
       }
@@ -80,18 +116,27 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815070,
+       "date": 1777072500000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 15,
+       "awayProTeamId": 22
+      }
+     ],
+     "6": [
+      {
        "id": 401815135,
        "date": 1777504500000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 15,
        "awayProTeamId": 6
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401815149,
        "date": 1777565700000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 15,
        "awayProTeamId": 6
       }
@@ -103,9 +148,18 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815077,
+       "date": 1777083300000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 19,
+       "awayProTeamId": 16
+      }
+     ],
+     "6": [
+      {
        "id": 401815145,
        "date": 1777493400000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 25,
        "awayProTeamId": 16
       }
@@ -117,18 +171,27 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815068,
+       "date": 1777070400000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 17,
+       "awayProTeamId": 6
+      }
+     ],
+     "6": [
+      {
        "id": 401815134,
        "date": 1777502400000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 17,
        "awayProTeamId": 27
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401815148,
        "date": 1777567200000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 17,
        "awayProTeamId": 27
       }
@@ -140,25 +203,34 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815073,
+       "date": 1777075800000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 18,
+       "awayProTeamId": 10
+      }
+     ],
+     "6": [
+      {
        "id": 401815136,
        "date": 1777502100000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 1,
        "awayProTeamId": 18
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401871088,
        "date": 1777578900000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 1,
        "awayProTeamId": 18
       },
       {
        "id": 401815150,
        "date": 1777566900000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 1,
        "awayProTeamId": 18
       }
@@ -170,9 +242,18 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815077,
+       "date": 1777083300000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 19,
+       "awayProTeamId": 16
+      }
+     ],
+     "6": [
+      {
        "id": 401815147,
        "date": 1777489800000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 19,
        "awayProTeamId": 28
       }
@@ -184,18 +265,27 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815076,
+       "date": 1777074000000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 4,
+       "awayProTeamId": 20
+      }
+     ],
+     "6": [
+      {
        "id": 401815140,
        "date": 1777504200000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 21,
        "awayProTeamId": 20
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401815153,
        "date": 1777569000000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 21,
        "awayProTeamId": 20
       }
@@ -207,18 +297,27 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815067,
+       "date": 1777072200000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 21,
+       "awayProTeamId": 27
+      }
+     ],
+     "6": [
+      {
        "id": 401815140,
        "date": 1777504200000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 21,
        "awayProTeamId": 20
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401815153,
        "date": 1777569000000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 21,
        "awayProTeamId": 20
       }
@@ -230,25 +329,34 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815070,
+       "date": 1777072500000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 15,
+       "awayProTeamId": 22
+      }
+     ],
+     "6": [
+      {
        "id": 401815137,
        "date": 1777500600000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 22,
        "awayProTeamId": 26
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401871107,
        "date": 1777584900000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 22,
        "awayProTeamId": 26
       },
       {
        "id": 401815151,
        "date": 1777566900000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 22,
        "awayProTeamId": 26
       }
@@ -260,18 +368,27 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815074,
+       "date": 1777074000000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 8,
+       "awayProTeamId": 23
+      }
+     ],
+     "6": [
+      {
        "id": 401815138,
        "date": 1777502400000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 23,
        "awayProTeamId": 24
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401815152,
        "date": 1777566900000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 23,
        "awayProTeamId": 24
       }
@@ -283,18 +400,27 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815075,
+       "date": 1777076100000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 24,
+       "awayProTeamId": 12
+      }
+     ],
+     "6": [
+      {
        "id": 401815138,
        "date": 1777502400000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 23,
        "awayProTeamId": 24
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401815152,
        "date": 1777566900000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 23,
        "awayProTeamId": 24
       }
@@ -304,11 +430,11 @@
    {
     "id": 25,
     "proGamesByScoringPeriod": {
-     "1": [
+     "6": [
       {
        "id": 401815145,
        "date": 1777493400000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 25,
        "awayProTeamId": 16
       }
@@ -320,25 +446,34 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815078,
+       "date": 1777083300000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 26,
+       "awayProTeamId": 28
+      }
+     ],
+     "6": [
+      {
        "id": 401815137,
        "date": 1777500600000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 22,
        "awayProTeamId": 26
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401871107,
        "date": 1777584900000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 22,
        "awayProTeamId": 26
       },
       {
        "id": 401815151,
        "date": 1777566900000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 22,
        "awayProTeamId": 26
       }
@@ -350,18 +485,27 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815067,
+       "date": 1777072200000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 21,
+       "awayProTeamId": 27
+      }
+     ],
+     "6": [
+      {
        "id": 401815134,
        "date": 1777502400000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 17,
        "awayProTeamId": 27
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401815148,
        "date": 1777567200000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 17,
        "awayProTeamId": 27
       }
@@ -373,9 +517,18 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815078,
+       "date": 1777083300000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 26,
+       "awayProTeamId": 28
+      }
+     ],
+     "6": [
+      {
        "id": 401815147,
        "date": 1777489800000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 19,
        "awayProTeamId": 28
       }
@@ -385,20 +538,20 @@
    {
     "id": 29,
     "proGamesByScoringPeriod": {
-     "1": [
+     "6": [
       {
        "id": 401815142,
        "date": 1777506000000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 8,
        "awayProTeamId": 29
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401815154,
        "date": 1777570800000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 8,
        "awayProTeamId": 29
       }
@@ -410,9 +563,18 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815069,
+       "date": 1777072200000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 30,
+       "awayProTeamId": 9
+      }
+     ],
+     "6": [
+      {
        "id": 401815139,
        "date": 1777482600000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 5,
        "awayProTeamId": 30
       }
@@ -427,25 +589,34 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815065,
+       "date": 1777071900000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 1,
+       "awayProTeamId": 2
+      }
+     ],
+     "6": [
+      {
        "id": 401815136,
        "date": 1777502100000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 1,
        "awayProTeamId": 18
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401871088,
        "date": 1777578900000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 1,
        "awayProTeamId": 18
       },
       {
        "id": 401815150,
        "date": 1777566900000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 1,
        "awayProTeamId": 18
       }
@@ -457,9 +628,18 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815065,
+       "date": 1777071900000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 1,
+       "awayProTeamId": 2
+      }
+     ],
+     "6": [
+      {
        "id": 401815133,
        "date": 1777489620000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 14,
        "awayProTeamId": 2
       }
@@ -471,9 +651,18 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815071,
+       "date": 1777074000000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 7,
+       "awayProTeamId": 3
+      }
+     ],
+     "6": [
+      {
        "id": 401815141,
        "date": 1777482600000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 4,
        "awayProTeamId": 3
       }
@@ -485,9 +674,18 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815076,
+       "date": 1777074000000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 4,
+       "awayProTeamId": 20
+      }
+     ],
+     "6": [
+      {
        "id": 401815141,
        "date": 1777482600000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 4,
        "awayProTeamId": 3
       }
@@ -499,9 +697,18 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815066,
+       "date": 1777072020000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 14,
+       "awayProTeamId": 5
+      }
+     ],
+     "6": [
+      {
        "id": 401815139,
        "date": 1777482600000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 5,
        "awayProTeamId": 30
       }
@@ -513,18 +720,27 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815068,
+       "date": 1777070400000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 17,
+       "awayProTeamId": 6
+      }
+     ],
+     "6": [
+      {
        "id": 401815135,
        "date": 1777504500000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 15,
        "awayProTeamId": 6
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401815149,
        "date": 1777565700000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 15,
        "awayProTeamId": 6
       }
@@ -536,18 +752,27 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815071,
+       "date": 1777074000000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 7,
+       "awayProTeamId": 3
+      }
+     ],
+     "6": [
+      {
        "id": 401815146,
        "date": 1777513200000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 11,
        "awayProTeamId": 7
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401815156,
        "date": 1777575900000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 11,
        "awayProTeamId": 7
       }
@@ -559,18 +784,27 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815074,
+       "date": 1777074000000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 8,
+       "awayProTeamId": 23
+      }
+     ],
+     "6": [
+      {
        "id": 401815142,
        "date": 1777506000000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 8,
        "awayProTeamId": 29
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401815154,
        "date": 1777570800000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 8,
        "awayProTeamId": 29
       }
@@ -582,18 +816,27 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815069,
+       "date": 1777072200000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 30,
+       "awayProTeamId": 9
+      }
+     ],
+     "6": [
+      {
        "id": 401815144,
        "date": 1777484400000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 9,
        "awayProTeamId": 12
       }
      ],
-     "2": [
+     "7": [
       {
        "id": 401815155,
        "date": 1777592400000,
-       "scoringPeriodId": 2,
+       "scoringPeriodId": 7,
        "homeProTeamId": 9,
        "awayProTeamId": 14
       }
@@ -605,9 +848,18 @@
     "proGamesByScoringPeriod": {
      "1": [
       {
+       "id": 401815073,
+       "date": 1777075800000,
+       "scoringPeriodId": 1,
+       "homeProTeamId": 18,
+       "awayProTeamId": 10
+      }
+     ],
+     "6": [
+      {
        "id": 401815143,
        "date": 1777487700000,
-       "scoringPeriodId": 1,
+       "scoringPeriodId": 6,
        "homeProTeamId": 13,
        "awayProTeamId": 10
       }

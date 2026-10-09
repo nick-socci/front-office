@@ -1425,7 +1425,8 @@ unit_tests:
       pool_players 0, pool_played_days 0 and a null level: an inner join would drop the
       kind, and a coalesce to 0 would say replacement relievers produce nothing. So does
       the start pool: a first start is by nobody who was a starter yet (ADR 0029), so the
-      pool is empty, as it is on a two-day fixture.
+      pool is empty whenever no start has an earlier turn behind it, as in a season's first
+      days (and as it was on the CI fixtures before #93).
     model: int_fantasy__replacement_levels
     overrides:
       macros:

@@ -56,7 +56,7 @@ is there to leave out. The empty periods 2 to 5 follow from that in A and B alik
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0030](../../adr/0030-the-fixture-season-runs-from-a-starters-earlier-start.md) | The fixture season runs from a starter's earlier start to the fixture days, with a gap; a roster on each data day | proposed |
+| [0030](../../adr/0030-the-fixture-season-runs-from-a-starters-earlier-start.md) | The fixture season runs from a starter's earlier start to the fixture days, with a gap; a roster on each data day | accepted |
 
 ## Detailed design
 

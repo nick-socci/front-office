@@ -1,0 +1,16 @@
+{
+  "source": "espn",
+  "endpoint": "roster",
+  "partitions": {
+    "season": 2027,
+    "league_id": "222222",
+    "scoring_period": 1
+  },
+  "url": "https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb/seasons/2027/segments/0/leagues/222222",
+  "params": {
+    "view": "mRoster",
+    "scoringPeriodId": 1
+  },
+  "request_key": "scoringPeriodId=1&view=mRoster",
+  "fetched_at": "20270423T160000Z"
+}
