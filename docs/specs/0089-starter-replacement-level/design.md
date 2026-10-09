@@ -89,6 +89,9 @@ No SQL change. `fct_transaction_impact` moves with the others; it reads the same
 
 ### `rec_fantasy__category_wins_added`
 
+The owner agreed its grain and columns on 2026-10-09, and that it stays a
+reconciliation model, not a mart.
+
 In `models/reconciliation/fantasy/`, a table. Grain: (`platform`, `league_id`, `season`,
 `platform_player_id`, `fantasy_team_id`). League-seasons with rosters only.
 
