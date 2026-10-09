@@ -14,9 +14,10 @@
 -- `>` and not `!=`: ESPN's lines cover only rostered players, so a game in which no
 -- rostered player appeared is missing from ESPN's side and is no error.
 --
--- In CI it reads two periods of real ESPN lines: the fixture rosters are from the MLB
--- fixture days (ADR 0025). See stg_espn__scoring_periods_have_game_lines_to_check, which
--- warns when a period has no line to check.
+-- In CI it reads three periods of real ESPN lines (periods 1, 6 and 7 of a seven-period
+-- season): the fixture rosters are from the MLB fixture days (ADR 0025, ADR 0030).
+-- See stg_espn__scoring_periods_have_game_lines_to_check, which warns when a period has
+-- no line to check.
 
 with espn_games as (
     select league_id, season, scoring_period,

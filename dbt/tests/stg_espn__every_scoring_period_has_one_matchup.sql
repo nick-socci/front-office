@@ -6,7 +6,7 @@
 -- not reconcile, which is the expensive kind of wrong.
 --
 -- Asserted in this direction on purpose. The reverse -- every day of every matchup has a
--- scoring period -- does not hold on the CI fixtures, which carry two scoring periods and
+-- scoring period -- does not hold on the CI fixtures, which carry seven scoring periods and
 -- the twelve-day matchup period that contains them.
 
 --

@@ -16,7 +16,7 @@
 --
 -- A group of 100 or more pairs fails as not checkable if any of its pairs has no value or
 -- no wins added (R3.8): a slope from part of a group is not the group's. Smaller groups
--- are not judged, which is all a two-day fixture is.
+-- are not judged, which is all the small CI fixture is: seven days, with rosters on three.
 
 -- The rule itself is the `problem` column of the group model, where unit tests hold it.
 

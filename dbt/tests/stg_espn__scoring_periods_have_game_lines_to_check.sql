@@ -8,8 +8,9 @@
 --
 -- A warning, not an error: it is expected for a day or two in season, before a period's
 -- roster is captured again after it closes (a roster is captured before its games are
--- played). It returns nothing in CI, whose fixture rosters carry two periods of real
--- game lines (ADR 0025), and on the real 2026 season.
+-- played). It returns nothing in CI, whose fixture rosters carry three periods of real
+-- game lines (periods 1, 6 and 7 of a seven-period season; ADR 0025, ADR 0030), and on the
+-- real 2026 season.
 
 with rostered_league_seasons as (
     select distinct league_id, season
