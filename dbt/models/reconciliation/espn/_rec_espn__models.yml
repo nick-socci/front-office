@@ -64,6 +64,37 @@ models:
           arguments:
             combination_of_columns: [league_id, season, scoring_period, fantasy_team_id, platform_player_id, stat_id]
 
+  - name: rec_espn__player_day_residuals
+    description: >
+      One row per league-season, matchup, side and stat that has at least one player-day
+      row with status difference: the sum of those rows' differences, how many there are,
+      the difference the espn_reconciliation_residuals register expects for that matchup,
+      side and stat (null if none), and a problem column that is null when the key is
+      accounted for. unverified rows are not counted. A view, so that the singular test
+      rec_espn__player_day_differences_are_registered judges the table as it is now. The
+      register names a matchup and no season, so problem is ambiguous_register on every
+      key while difference rows exist in more than one league-season (#99 removes this).
+      See the model header.
+    columns:
+      - name: difference_sum
+        data_tests: [not_null]
+      - name: difference_rows
+        data_tests: [not_null]
+      - name: problem
+        description: >
+          ambiguous_register, unregistered, wrong_size, or null when the key is accounted
+          for, checked in that order.
+        data_tests:
+          # Null is allowed: accepted_values passes a null, which is a key that is
+          # accounted for.
+          - accepted_values:
+              arguments:
+                values: [ambiguous_register, unregistered, wrong_size]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, matchup_id, fantasy_team_id, stat_id]
+
 unit_tests:
   - name: player_day_differences_label_their_inputs
     description: >
@@ -269,3 +300,58 @@ unit_tests:
         - {fantasy_team_id: 2, category_key: 20, status: unexplained}
         - {fantasy_team_id: 1, category_key: 23, status: missing_espn}
         - {fantasy_team_id: 1, category_key: 47, status: missing_ours}
+
+  - name: player_day_residuals_judge_each_key_against_the_register
+    description: >
+      One league-season, five keys, all of team 1 and stat 1, one matchup each. Matchup 1:
+      two difference rows of 1 and 1 against a register row of 2, plus an unverified row
+      of 5 that is not counted: the sum is 2 and no problem. Matchup 2: a difference of 1
+      and no register row: unregistered. Matchup 3: a difference of 1 against a register
+      row of 2: wrong_size. Matchup 4: differences of 1 and minus 1 that cancel, and no
+      register row: unregistered, with a sum of 0. Matchup 5: only an unverified row, and
+      no register row: no row at all. Catches a key checked for existence but not size; a
+      cancelling pair passing; unverified rows judged or summed.
+    model: rec_espn__player_day_residuals
+    given:
+      - input: ref('rec_espn__player_day_differences')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, fantasy_team_id: 1, stat_id: 1, difference: 1, status: difference}
+          - {league_id: "1", season: 2026, matchup_id: 1, fantasy_team_id: 1, stat_id: 1, difference: 1, status: difference}
+          - {league_id: "1", season: 2026, matchup_id: 1, fantasy_team_id: 1, stat_id: 1, difference: 5, status: unverified}
+          - {league_id: "1", season: 2026, matchup_id: 2, fantasy_team_id: 1, stat_id: 1, difference: 1, status: difference}
+          - {league_id: "1", season: 2026, matchup_id: 3, fantasy_team_id: 1, stat_id: 1, difference: 1, status: difference}
+          - {league_id: "1", season: 2026, matchup_id: 4, fantasy_team_id: 1, stat_id: 1, difference: 1, status: difference}
+          - {league_id: "1", season: 2026, matchup_id: 4, fantasy_team_id: 1, stat_id: 1, difference: -1, status: difference}
+          - {league_id: "1", season: 2026, matchup_id: 5, fantasy_team_id: 1, stat_id: 1, difference: 3, status: unverified}
+      - input: ref('espn_reconciliation_residuals')
+        rows:
+          - {matchup_id: 1, team_id: 1, stat_id: 1, expected_difference: 2}
+          - {matchup_id: 3, team_id: 1, stat_id: 1, expected_difference: 2}
+    expect:
+      rows:
+        - {matchup_id: 1, difference_sum: 2, difference_rows: 2, expected_difference: 2, problem: null}
+        - {matchup_id: 2, difference_sum: 1, difference_rows: 1, expected_difference: null, problem: unregistered}
+        - {matchup_id: 3, difference_sum: 1, difference_rows: 1, expected_difference: 2, problem: wrong_size}
+        - {matchup_id: 4, difference_sum: 0, difference_rows: 2, expected_difference: null, problem: unregistered}
+
+  - name: player_day_residuals_refuse_a_register_that_cannot_tell_seasons_apart
+    description: >
+      Matchup 1 of team 1 and stat 1 has a difference in league-season 1 / 2026 and
+      another in 1 / 2027, and the register has one row for matchup 1 that equals the
+      2026 sum. The register names a matchup and no season, so it cannot say whose
+      residual it is: both keys are ambiguous_register, even the one that would match.
+      Catches a second season's difference passing against the first season's register
+      row.
+    model: rec_espn__player_day_residuals
+    given:
+      - input: ref('rec_espn__player_day_differences')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, fantasy_team_id: 1, stat_id: 1, difference: 1, status: difference}
+          - {league_id: "1", season: 2027, matchup_id: 1, fantasy_team_id: 1, stat_id: 1, difference: 1, status: difference}
+      - input: ref('espn_reconciliation_residuals')
+        rows:
+          - {matchup_id: 1, team_id: 1, stat_id: 1, expected_difference: 1}
+    expect:
+      rows:
+        - {season: 2026, matchup_id: 1, difference_sum: 1, expected_difference: 1, problem: ambiguous_register}
+        - {season: 2027, matchup_id: 1, difference_sum: 1, expected_difference: 1, problem: ambiguous_register}
