@@ -10,6 +10,9 @@ whatever else is lying around) and writes each fixture as a capture directory,
 `fetched_at=<stamp>/payload.json` beside `meta.json`, with the sidecar as it always was.
 The real landing zone must already be in the directory layout (ADR 0014).
 
+The MLB player list is cut to the people who batted or pitched in a fixture boxscore, and
+rebuilt from the allowlist of the seven fields stg_mlb__players reads (spec 0060).
+
 Usage:  uv run python scripts/make_fixtures.py [--date 2026-04-30]
 """
 
@@ -78,6 +81,18 @@ SCHEDULE_GAME_FIELDS = (
     "venue.name",
 )
 
+
+# Per-person fields read by stg_mlb__players. MLB's list carries firstName, lastName and
+# more besides; only fullName is wanted, and only these are kept (spec 0060, R6.2).
+PLAYER_LIST_FIELDS = (
+    "id",
+    "fullName",
+    "primaryPosition.abbreviation",
+    "batSide.code",
+    "pitchHand.code",
+    "birthDate",
+    "mlbDebutDate",
+)
 
 # Per-player fields read by stg_mlb__batting_game_logs / stg_mlb__pitching_game_logs.
 BOXSCORE_PLAYER_FIELDS = (
@@ -513,6 +528,56 @@ def build_mlb_boxscores(dates: tuple[str, ...]) -> list[Path]:
     if first is not None:
         written.append(write_boxscore_correction(first))
     return written
+
+
+def latest_players(season: int) -> Path:
+    """payload.json of the newest committed MLB player list of one season."""
+    candidates = landed_in("mlb", "players", season=season)
+    if not candidates:
+        raise SystemExit(f"no landed mlb/players response for {season} under {RAW_ROOT}")
+    return sorted(candidates)[-1]
+
+
+def people_who_played() -> set[int]:
+    """MLB ids that batted or pitched in a fixture boxscore: the rule the game-log models use
+    (gamesPlayed or gamesPitched is 1). A bench player is in a boxscore and is not one."""
+    played: set[int] = set()
+    for capture in LandingZone(FIXTURE_ROOT).committed(source="mlb", endpoint="boxscore"):
+        for side in capture.payload["teams"].values():
+            for player in side["players"].values():
+                stats = player.get("stats", {})
+                if (
+                    stats.get("batting", {}).get("gamesPlayed") == 1
+                    or stats.get("pitching", {}).get("gamesPitched") == 1
+                ):
+                    played.add(player["person"]["id"])
+    return played
+
+
+def build_mlb_players(season: int = FIXTURE_SEASON) -> Path:
+    """The player list of the fixture season, cut to the people of the fixture boxscores.
+
+    Run after build_mlb_boxscores: the people are read from the fixture boxscores. Fixture
+    resolved players with no fixture game are deliberately not listed, so CI exercises the
+    platform-name fallback beside the list (spec 0060)."""
+    payload = json.loads(latest_players(season).read_text())
+    played = people_who_played()
+    people = [rebuild(p, PLAYER_LIST_FIELDS) for p in payload["people"] if p["id"] in played]
+    path = write_fixture(
+        source="mlb",
+        endpoint="players",
+        partitions={"season": season},
+        payload={"people": people},
+        request={
+            "url": "https://statsapi.mlb.com/api/v1/sports/1/players",
+            "params": {"season": season},
+        },
+    )
+    print(
+        f"mlb/players: {len(people)} of {len(payload['people'])} people "
+        f"-> {path.relative_to(REPO_ROOT)}"
+    )
+    return path
 
 
 def corrected_boxscore(payload: dict[str, Any]) -> dict[str, Any]:
@@ -1076,6 +1141,7 @@ def main() -> None:
         check_one_league(past.season)
     build_mlb_schedule(tuple(args.dates))
     build_mlb_boxscores(tuple(args.dates))
+    build_mlb_players()
     build_espn_pro_schedule()
     build_espn_settings()
     build_espn_teams()

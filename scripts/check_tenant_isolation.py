@@ -51,9 +51,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DBT_DIR = REPO_ROOT / "dbt"
 MULTI_ROOT = REPO_ROOT / "fixtures/landing_multi"
 
-# dim_players is defined over everything loaded (ADR 0012), so its rows legitimately differ
-# between a combined and a single build. It is held to its own dbt tests instead
-# (R4.9), which this script runs in every single build and the combined build runs too.
+# dim_players takes a player's name and attributes from the latest season of everything
+# loaded (ADR 0033, ADR 0035), and a single build never holds a later season, so its rows
+# legitimately differ between a combined and a single build. It is held to its own dbt
+# tests instead (R4.1 of spec 0060), which this script runs in every single build and the
+# combined build runs too.
 EXEMPT_FROM_ROW_COMPARISON = frozenset({"dim_players"})
 
 LEAGUE_SEASONS = [

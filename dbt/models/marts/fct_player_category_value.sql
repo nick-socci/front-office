@@ -64,6 +64,10 @@
 -- season's decided matchups; otherwise the season alone. So a scaled value can move as
 -- matchups are decided, and when an earlier season is loaded or corrected, with no change
 -- to the player's own production.
+--
+-- mlbam_player_id, the last column, is the MLB id of the row's own league-season in
+-- dim_player_league_seasons (#60, ADR 0034), null for an unresolved player. That table is
+-- unique on the four keys joined, so the join cannot add rows.
 
 {{ config(materialized='table') }}
 
@@ -340,10 +344,16 @@ select
     {{ fo_scaled_value(
         'with_value.value_over_replacement', 'with_value.played_days',
         'scales.margin_scale', 'scales.side_denominator', 'with_value.is_rate'
-    ) }} as scaled_value
+    ) }} as scaled_value,
+    league_seasons.mlbam_player_id
 from with_value
 left join {{ ref('int_fantasy__category_scales') }} as scales
     on scales.platform = with_value.platform
     and scales.league_id = with_value.league_id
     and scales.season = with_value.season
     and scales.category_key = with_value.category_key
+left join {{ ref('dim_player_league_seasons') }} as league_seasons
+    on league_seasons.platform = with_value.platform
+    and league_seasons.league_id = with_value.league_id
+    and league_seasons.season = with_value.season
+    and league_seasons.platform_player_id = with_value.platform_player_id

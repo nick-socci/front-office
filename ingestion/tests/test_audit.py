@@ -156,6 +156,10 @@ def land_boxscore(zone, pk, fetched_at, payload=None):
     )
 
 
+def land_players(zone, fetched_at=RUN):
+    return land(zone, "mlb", "players", {"season": SEASON}, {"people": []}, fetched_at=fetched_at)
+
+
 def land_settings(zone, *, latest, final=2, fetched_at=RUN, league=LEAGUE):
     status = {"firstScoringPeriod": 1, "latestScoringPeriod": latest, "finalScoringPeriod": final}
     land(
@@ -200,6 +204,7 @@ def zone(tmp_path):
     zone = LandingZone(root=tmp_path / "raw")
     land_schedule(zone, [schedule_game(1, "2026-03-25")])
     land_boxscore(zone, 1, "20260410T160000Z")
+    land_players(zone)
     land_pro_schedule(zone, [pro_game(401, "2026-03-25T20:00:00", 1)])
     land_settings(zone, latest=3)
     for period in (1, 2):
@@ -229,7 +234,7 @@ def test_the_clean_world_audits_clean(zone):
     findings = audit(zone)
     assert problems(findings) == []
     info = details(findings, Severity.INFO)
-    assert "all 9 committed capture(s) loaded" in info
+    assert "all 10 committed capture(s) loaded" in info
     assert "1 settings capture(s) taken after the final period" in info
     assert "period 1 = 2026-03-25 per ESPN's schedule (20260320T120000Z, 1 games)" in info
     assert "2 of 2 rosters captured after their period closed" in info
@@ -356,7 +361,7 @@ def test_a_clean_tree_has_no_layout_line_and_counts_checksums(zone):
     findings, _ = check_landing(zone)
     assert not [f for f in findings if f.subject == "layout"]
     info = details(findings, Severity.INFO)
-    assert "9 capture(s) checksum-verified, 0 with no recorded checksum" in info
+    assert "10 capture(s) checksum-verified, 0 with no recorded checksum" in info
 
 
 def test_a_capture_with_no_recorded_checksum_is_counted_not_failed(zone):
@@ -368,7 +373,7 @@ def test_a_capture_with_no_recorded_checksum_is_counted_not_failed(zone):
     meta_path.write_text(json.dumps(meta))
     findings, _ = check_landing(zone)
     assert problems(findings) == []
-    assert "8 capture(s) checksum-verified, 1 with no recorded checksum" in details(
+    assert "9 capture(s) checksum-verified, 1 with no recorded checksum" in details(
         findings, Severity.INFO
     )
 
@@ -1291,3 +1296,14 @@ def test_transactions_are_still_checked_when_the_newest_status_is_unusable(zone)
     land_status(zone, {"firstScoringPeriod": 1, "finalScoringPeriod": None}, "20260328T160000Z")
     after = [f.detail for f in audit(zone) if "transactions" in f.detail]
     assert after == before
+
+
+def test_a_season_with_a_schedule_and_no_player_list_warns(zone):
+    """Catches a missing player-list capture going unreported (spec 0060, R5.5)."""
+    drop(zone, "mlb/players/**")
+    assert "no committed player-list capture" in details(audit(zone), Severity.WARN)
+
+
+def test_a_season_with_a_player_list_does_not_warn(zone):
+    """Catches the warning firing although a player-list capture is committed."""
+    assert "player-list" not in details(audit(zone), Severity.WARN)

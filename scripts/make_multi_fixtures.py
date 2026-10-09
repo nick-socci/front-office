@@ -15,6 +15,9 @@ It is copied and is never a source: the others are derived from BASE_SEASON alon
 ESPN's pro schedule belongs to a season, not a league: the 2026 capture is copied once, and
 one 2027 capture is derived (period 1 only, game dates shifted with the rest of 2027).
 
+MLB's player list is a season-level capture too: the 2026 one is copied, and the 2027 one
+is the same list with the season, request and stamp moved (spec 0060).
+
 Usage:  uv run python scripts/make_multi_fixtures.py
 """
 
@@ -212,7 +215,8 @@ def shift_day(text: str, fmt: str) -> str:
 
 
 def build_2027_mlb(mlb: list[Capture]) -> list[Capture]:
-    """The first fixture date's games, copied to the shifted date with new game ids."""
+    """The first fixture date's games, copied to the shifted date with new game ids, and the
+    2026 player list, with its season and stamp moved to 2027."""
     schedule_meta, schedule = next((m, p) for m, p in mlb if m["endpoint"] == "schedule")
     first = schedule["dates"][0]
     # Entries of the first calendar day only. The postponed games the schedule files under
@@ -247,6 +251,14 @@ def build_2027_mlb(mlb: list[Capture]) -> list[Capture]:
         m["request_key"] = request_key(m["params"])
         m["fetched_at"] = shift_day(m["fetched_at"], STAMP_FORMAT)
         out.append((m, box))
+
+    players_meta, players = next((m, p) for m, p in mlb if m["endpoint"] == "players")
+    meta = json.loads(json.dumps(players_meta))
+    meta["partitions"]["season"] = NEW_SEASON
+    meta["params"]["season"] = NEW_SEASON
+    meta["request_key"] = request_key(meta["params"])
+    meta["fetched_at"] = shift_day(meta["fetched_at"], STAMP_FORMAT)
+    out.append((meta, players))
     return out
 
 

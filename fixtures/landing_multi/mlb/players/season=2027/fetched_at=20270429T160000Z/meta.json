@@ -1,0 +1,13 @@
+{
+  "source": "mlb",
+  "endpoint": "players",
+  "partitions": {
+    "season": 2027
+  },
+  "url": "https://statsapi.mlb.com/api/v1/sports/1/players",
+  "params": {
+    "season": 2027
+  },
+  "request_key": "season=2027",
+  "fetched_at": "20270429T160000Z"
+}

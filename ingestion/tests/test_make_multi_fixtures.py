@@ -299,3 +299,20 @@ def test_the_committed_multi_tree_carries_2025_for_the_base_league_only():
             capture.directory / "payload.json"
         ).read_bytes()
         assert (twin / "meta.json").read_bytes() == (capture.directory / "meta.json").read_bytes()
+
+
+def test_the_2027_player_list_is_the_2026_one_with_the_season_changed():
+    """Catches a multi tree with no 2027 player list, one that still names 2026, or one
+    whose people differ from the 2026 fixture's (R7.2)."""
+    (base,) = LandingZone(COMMITTED).committed(
+        source="mlb", endpoint="players", partitions={"season": 2026}
+    )
+    (new,) = LandingZone(COMMITTED).committed(
+        source="mlb", endpoint="players", partitions={"season": 2027}
+    )
+    assert new.meta["partitions"] == {"season": 2027}
+    assert new.meta["params"] == {"season": 2027}
+    assert new.meta["request_key"] == "season=2027"
+    assert new.meta["fetched_at"] > base.meta["fetched_at"]
+    assert new.payload == base.payload
+    assert new.payload["people"]

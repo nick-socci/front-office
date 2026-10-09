@@ -1,6 +1,6 @@
 # 0035. A player's name and attributes come from MLB's season player list
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0060-player-dimension-by-mlb-id](../specs/0060-player-dimension-by-mlb-id/design.md) · Issue: #60
 

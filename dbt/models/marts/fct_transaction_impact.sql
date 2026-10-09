@@ -35,6 +35,10 @@
 -- with no MLBAM id or group is unresolved: zeroes, and a NULL total_value, because 0
 -- would read as replacement level.
 --
+-- mlbam_player_id, the last column, is the MLB id of the transaction's own league-season
+-- row (#60, ADR 0034), already carried here from dim_player_league_seasons; null when
+-- unresolved.
+--
 -- total_value is on the scale of fct_player_category_value, in matchup margins (ADR 0010):
 -- the same per-category arithmetic (the fo_category_value macros), the same replacement
 -- levels and the same margin scale and side denominator, READ from
@@ -628,7 +632,8 @@ select
     case
         when measured.movement = 'drop' and measured.replacement_group is null then null
         else total_values.total_value
-    end as total_value
+    end as total_value,
+    measured.mlbam_player_id
 from measured
 left join total_values
     on total_values.platform = measured.platform

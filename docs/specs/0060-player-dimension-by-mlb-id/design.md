@@ -425,3 +425,24 @@ grain and carries `mlbam_player_id` beside it, and names players through `dim_pl
 | owner, 2026-10-09 | Decisions 1 to 6 of the spec PR: key and no row for an unresolved player; every MLB player loaded; no platform bridge; facts gain the MLB id; **land MLB's player list** (against the recommendation); test replacements approved | Changed: R5 to R7, `stg_mlb__players`, the five attributes, the three-source name rule, ADR 0035 rewritten, ADR 0036 added. Round 1 above reviewed the spec before this change; round 2 reviews it after |
 
 ## Amendments
+
+- **2026-10-09, during the build.** The audit finding is `Severity.WARN`; the design
+  wrote `Severity.WARNING`, which is not the enum's name. No change of meaning.
+- **2026-10-09, during the build.** `fct_player_season_value` has no unit test, so "one
+  existing unit test per fact gains `mlbam_player_id`" cannot apply to it. No unit test
+  was written for it here: its new column is held by the `relationships` test (R3.3),
+  by the singular test of R3.4, which compares every row's id with its league-season
+  row's, and by the real-season comparison of its existing columns (R3.2). The owner is
+  told in the PR.
+- **2026-10-09, during the build.** Task 7's commit does not build cleanly on its own:
+  the two value facts' one-column `relationships` tests to `dim_players` still exist at
+  that commit and are removed in task 9's, as the tasks order them. The branch head
+  builds cleanly.
+- **2026-10-09, during the build.** In CI, `fct_transaction_impact.mlbam_player_id` is
+  null for 7 of 11 rows (the transaction-only, unresolved players), which the expected
+  values did not spell out. The two value facts have no null.
+- **2026-10-09, after review round 2.** The owner asked for the unit test the second
+  amendment left out. `player_season_value_carries_the_mlb_id_of_its_own_league_season`
+  is the fact's first unit test: one platform player resolved to different MLB ids in
+  two leagues and in two seasons of one league, on two teams in one of them, and an
+  unresolved player.

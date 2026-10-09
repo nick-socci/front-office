@@ -1,6 +1,6 @@
 # 0033. The player dimension is one row per MLB player
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0060-player-dimension-by-mlb-id](../specs/0060-player-dimension-by-mlb-id/design.md) · Issue: #60
 - Amends: [0012](0012-players-have-a-conformed-dimension-and-a-league-season-table.md)

@@ -1,6 +1,6 @@
 # 0034. The league-season table is the bridge, and facts carry the MLB id
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0060-player-dimension-by-mlb-id](../specs/0060-player-dimension-by-mlb-id/design.md) · Issue: #60
 

@@ -280,3 +280,27 @@ def test_a_committed_capture_with_an_unparseable_payload_fails_the_load(zone, co
         load_landing_zone(con, zone)
     assert str(bad / "payload.json") in str(excinfo.value)
     assert row_count(con) == 0, "nothing from a failed run is inserted"
+
+
+def test_a_player_list_capture_loads_as_one_row_with_no_loader_change(zone, con):
+    """Catches the loader needing to know the new endpoint (spec 0060, R5.6)."""
+    zone.write(
+        source="mlb",
+        endpoint="players",
+        partitions={"season": 2026},
+        name="fetched_at=20261009T000000Z",
+        payload={"people": [{"id": 660271}]},
+        request={
+            "url": "https://statsapi.mlb.com/api/v1/sports/1/players",
+            "params": {"season": 2026},
+        },
+        fetched_at="20261009T000000Z",
+    )
+    assert load_landing_zone(con, zone) == 1
+    rows = con.execute(
+        "select source, endpoint, request_key, payload from raw.api_responses"
+    ).fetchall()
+    assert len(rows) == 1
+    source, endpoint, request_key, payload = rows[0]
+    assert (source, endpoint, request_key) == ("mlb", "players", "season=2026")
+    assert json.loads(payload) == {"people": [{"id": 660271}]}

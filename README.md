@@ -58,7 +58,7 @@ Only 2,402 games were Final; the remaining backfill and correction refresh are
 
 ```bash
 uv sync
-uv run front-office backfill mlb --season 2026     # schedule + ~2,400 boxscores
+uv run front-office backfill mlb --season 2026     # schedule + player list + ~2,400 boxscores
 uv run front-office backfill espn --season 2026    # needs ESPN cookies, see below
 uv run front-office backfill idmap
 uv run front-office load

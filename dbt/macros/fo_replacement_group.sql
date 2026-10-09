@@ -2,7 +2,7 @@
   The replacement group of an MLB player, from his appearances: hitter, SP or RP.
 
   Shared by int_fantasy__replacement_levels (over a player's free-agent days) and
-  dim_players (over his whole season, for a player with no default position), because
+  dim_player_league_seasons (over his whole season, for a player with no default position), because
   the two must agree on what makes someone a starter and a second copy of the rule is
   how they would drift.
 
