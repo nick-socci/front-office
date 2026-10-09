@@ -51,10 +51,7 @@ rate_stats as (
 single_component_stats as (
 
     -- The bridge from a component column to the ESPN stat that is exactly it.
-    select stat_key, max(component) as component
-    from rules
-    group by stat_key
-    having count(*) = 1 and max(part) = 'numerator' and max(weight) = 1
+    {{ fo_single_component_stats('rules') }}
 
 ),
 
