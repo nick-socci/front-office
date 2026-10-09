@@ -22,17 +22,23 @@ season and in a throwaway spike on 2026-10-09 (not committed):
   calendar days counted from period 1 (ADR 0023,
   `stg_espn__scoring_periods_are_consecutive`). An MLB game before fixture period 1 fails
   the build. The earlier day has to become period 1.
-- **It cannot be the day before.** Of the 46 starts on the two fixture dates, none is by
-  a pitcher who started fewer than 5 days earlier. Over all of 2026, 13 starts of 3,478
-  came within 3 days of the pitcher's previous start.
-- **There is one candidate that needs one new boxscore.** Both fixture boxscores (games
-  822821 and 822907) are from 2026-04-29. Pitcher 678394 started game 822821, was on no
-  roster of the league that day, and had made five earlier appearances, all starts, the
-  last on 2026-04-24 in game 824854. That is real scoring period 31; the fixture days are
+- **It cannot be the day before.** Starters pitch in a rotation: a turn comes every
+  fifth day, or every sixth when a team carries six starters. In 2026, 1,338 starts came
+  5 days after the pitcher's previous one and 2,111 came 6 days after; 13 came within 3
+  days, which is an opener or an emergency, not a starter's turn. So a fixture that
+  holds a start and the same pitcher's previous turn spans at least six consecutive
+  scoring periods, whichever days are chosen. (The owner, 2026-10-09: this is how
+  baseball works, not a finding about these dates.)
+- **One turn back from an existing fixture game is one new boxscore.** Both fixture
+  boxscores (games 822821 and 822907) are from 2026-04-29. Pitcher 678394 started game
+  822821 for Boston, was on no roster of the league that day, and had made five earlier
+  appearances, all starts. His previous turn was Boston's game five days earlier, on
+  2026-04-24: game 824854. That is real scoring period 31; the fixture days are
   36 and 37.
 
-So the fixture season has to run from 2026-04-24 to 2026-04-30, seven periods, with data
-on the first and the last two.
+So the fixture season has to run from 2026-04-24 to 2026-04-30: seven periods, the six a
+rotation turn needs plus the existing second day, with data on the first and the last
+two. The four periods between are the days between two turns.
 
 ## Goals
 
@@ -101,7 +107,7 @@ on the first and the last two.
   decision for the owner: see ADR 0030.)
 - R2.2 THE SYSTEM SHALL choose the two existing boxscores as today, from the dates of the
   last two periods only, and SHALL add the boxscore of one named game of the first date:
-  824854.
+  824854, the previous turn of a starter of game 822821.
 - R2.3 THE SYSTEM SHALL rebuild that boxscore from the existing boxscore allowlists.
 - R2.4 THE SYSTEM SHALL still write the synthetic correction snapshot for game 822821.
 

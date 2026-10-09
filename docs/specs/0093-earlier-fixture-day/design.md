@@ -18,18 +18,18 @@ both trees. No dbt model, macro, seed or test SQL changes.
 | MLB schedule, pro schedule | 14 games | — | 13 (15 listed by ESPN) | 11 |
 | Roster with game lines | new | — | was period 1 | was period 2 |
 | Boxscores | 824854 (new) | — | 822821, 822907 | none, as today |
-| What it gives the start pool | 678394's earlier start | | 678394's start, a free agent | |
+| What it gives the start pool | 678394's previous turn | the days between turns | 678394's start, a free agent | |
 
 ## Alternatives considered
 
-| | A — seven periods, roster on each data day (proposed) | B — seven periods, period 1 MLB-only | C — all seven periods full | D — move to three consecutive days | E — synthetic earlier start | F — leave it |
-|---|---|---|---|---|---|---|
-| Start pool has a played day in CI | yes | yes | yes | only if a short-rest free-agent starter exists | yes | no |
-| CI warnings | 3 | 4 (a different fourth) | 3 | unknown | 3 | 4 |
-| Real data only | yes | yes | yes | yes | no | yes |
-| Keeps game 823471 and existing boxscores | yes | yes | yes | no | yes | yes |
-| Multi script unchanged | yes (spiked) | no: 2027 has no roster | yes | no | yes | yes |
-| Fixture growth, both trees | about 1.0 MB | about 0.1 MB | about 4 MB | none | none | none |
+| | A — seven periods, roster on each data day (proposed) | B — seven periods, period 1 MLB-only | C — all seven periods full | D — synthetic earlier start | E — leave it |
+|---|---|---|---|---|---|
+| Start pool has a played day in CI | yes | yes | yes | yes | no |
+| CI warnings | 3 | 4 (a different fourth) | 3 | 3 | 4 |
+| Real data only | yes | yes | yes | no | yes |
+| Keeps game 823471 and existing boxscores | yes | yes | yes | yes | yes |
+| Multi script unchanged | yes (spiked) | no: 2027 has no roster | yes | yes | yes |
+| Fixture growth, both trees | about 1.0 MB | about 0.1 MB | about 4 MB | none | none |
 
 **A.** Spiked: `PASS=480 WARN=3 ERROR=0`, isolation 0, three pytest to update.
 
@@ -42,14 +42,15 @@ renumber a later period into it.
 **C.** Four more rosters at about 300 KB each, three times over in the multi tree, for
 days with no boxscore.
 
-**D.** Thirteen starts of 2026 came within three days of the pitcher's last. Whether any
-is by a free agent who was a starter at the time was not looked up, because the option
-already loses: every fixture moves and the postponed game goes (rejected in ADR 0025).
-
-**E.** The correction snapshot is synthetic, but it tests a mechanism (latest snapshot
+**D.** The correction snapshot is synthetic, but it tests a mechanism (latest snapshot
 wins). An invented start would be the pool's only member.
 
-**F.** Accepted in spec 0089 as temporary; #93 is its end.
+**E.** Accepted in spec 0089 as temporary; #93 is its end.
+
+Not an option: a shorter season. A starter's turn comes every fifth or sixth day, so a
+start and the pitcher's previous turn are never fewer than six periods apart. The few
+starts on shorter rest are openers and emergencies, the pitchers ADR 0029's role filter
+is there to leave out. The empty periods 2 to 5 follow from that in A and B alike.
 
 ## Decisions
 
@@ -168,6 +169,7 @@ compares rows, not warnings.
 | design-review | F1 (P1): the purpose check proves two starts and an unrostered day, not the model's `SP` role; and R5.1 is held in CI only by a warning | Changed in part: R3.1(a) now requires outs and no more plate appearances than batters faced in the earlier start, which is the role rule for one appearance. Not changed: no hard CI assertion is added. It would be a test that fails on fixtures and warns on real data, which the owner declined for a similar test on 2026-10-07 (spec 0074), and test SQL is a no-go here. Put to the owner in the PR |
 | design-review | F2 (P2): R1.2 said the offset applies to matchups, whose keys are trimmed, not mapped | Changed: R1.2 and R1.3 |
 | design-review | F3 (P2): the tasks named two cases for R3.1's three conditions | Changed: R6.1, task 3 and the test strategy name one case per condition, by message |
+| owner, 2026-10-09 | The five- or six-day gap between a starter's turns is how a rotation works, not a finding about the fixture dates | Changed: the problem statement and ADR 0030 state it as the constraint. The alternative of moving the fixtures to three consecutive days around a short-rest start is removed as never real. A wrong figure is corrected: "13 starts of 3,478" counted only gaps of six days or fewer in its denominator |
 | design-review | F4 (P3): `stg_espn__every_scoring_period_has_one_matchup.sql` also describes a two-period fixture | Changed: added to R6.3 |
 
 ## Amendments
