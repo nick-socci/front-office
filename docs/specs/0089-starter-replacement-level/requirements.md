@@ -181,6 +181,8 @@ game between 1.14 and 1.53 against today's 1.36.
 
 ## Expected values
 
+The owner accepted the 2026 movements below on 2026-10-09.
+
 Measured on 2026-10-09, read-only, on the real warehouse after #90. The values were
 recomputed from `int_fantasy__started_player_days` by the facts' own arithmetic, which
 reproduces `fct_player_season_value` with today's level to 7e-15.
