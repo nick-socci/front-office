@@ -441,3 +441,8 @@ grain and carries `mlbam_player_id` beside it, and names players through `dim_pl
 - **2026-10-09, during the build.** In CI, `fct_transaction_impact.mlbam_player_id` is
   null for 7 of 11 rows (the transaction-only, unresolved players), which the expected
   values did not spell out. The two value facts have no null.
+- **2026-10-09, after review round 2.** The owner asked for the unit test the second
+  amendment left out. `player_season_value_carries_the_mlb_id_of_its_own_league_season`
+  is the fact's first unit test: one platform player resolved to different MLB ids in
+  two leagues, on two teams in one of them, and an unresolved player. It was shown to
+  fail with the league dropped from the join, and with the join made inner.
