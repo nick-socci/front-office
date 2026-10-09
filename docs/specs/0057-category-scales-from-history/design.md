@@ -85,6 +85,9 @@ Within E, four narrower choices:
 
 ## Detailed design
 
+The owner agreed the column sets of the two new models, and the four columns added to
+`int_fantasy__category_scales`, on 2026-10-08.
+
 ### `int_fantasy__reported_matchup_margins`
 
 Grain: (`platform`, `league_id`, `season`, `matchup_id`, `category_key`). A table. Every
