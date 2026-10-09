@@ -9,8 +9,20 @@
 -- ESPN's game lines are summed per day, so a doubleheader is compared whole. A started
 -- player with no ESPN line that day is compared against zero.
 --
--- Only differences are kept. On the 2026 data every row here is an official scoring
--- change ESPN never applied (MLB's boxscore, fetched later, has the corrected call).
+-- Rows are kept only where the two numbers differ, and each says what its inputs were.
+-- input_status is the started player-day's (#25), and status follows from it:
+--   difference  played or verified_off: every game that date is loaded, so the gap is
+--               real. That includes a verified_off day for which ESPN has a line: we say
+--               he did not play and ESPN says he did, and that is what this table is for.
+--   unverified  missing_boxscore or unresolved_player: our number may be zero only because
+--               the boxscore is not loaded. The row is kept so the comparison is visible,
+--               and it is evidence of nothing; readers filter on status = 'difference'.
+-- A row needs a gap to exist, so an unverified day whose numbers happen to agree has none:
+-- completeness is reported by int_fantasy__started_player_days_inputs_all_verified and
+-- rec_espn__every_side_is_verified, not by the absence of rows here (ADR 0032).
+--
+-- On the 2026 data every row here is a difference, an official scoring change ESPN never
+-- applied (MLB's boxscore, fetched later, has the corrected call).
 
 {{ config(materialized='table') }}
 
@@ -46,6 +58,7 @@ credited as (
         platform_player_id,
         player_name,
         roster_slot,
+        input_status,
         '{{ column }}' as component,
         cast({{ column }} as double) as our_value
     from {{ ref('int_fantasy__started_player_days') }}
@@ -105,7 +118,12 @@ select
     compared.our_value,
     compared.espn_value,
     compared.our_value - compared.espn_value as difference,
-    compared.espn_games
+    compared.espn_games,
+    compared.input_status,
+    case
+        when compared.input_status in ('played', 'verified_off') then 'difference'
+        else 'unverified'
+    end as status
 from compared
 inner join {{ ref('int_fantasy__matchup_periods') }} as periods
     on periods.platform = 'espn'

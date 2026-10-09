@@ -37,15 +37,23 @@ models:
     description: >
       Started player-days where our credited number for a stat differs from ESPN's own
       per-game lines summed for the day. The evidence behind each registered
-      official_scoring_change residual.
+      official_scoring_change residual. A row is kept only where the two numbers differ,
+      and says what its inputs were. status is difference when the player-day is played
+      or verified_off (every game that date is loaded), which includes a verified_off day
+      for which ESPN has a line; it is unverified when the boxscore is not loaded or the
+      player is not resolved, and such a row is kept so the comparison is visible and is
+      evidence of nothing. Filter on status = 'difference'. An unverified day whose
+      numbers agree has no row, so an empty table does not prove agreement. See ADR 0032.
     columns:
       - name: input_status
+        description: input_status of the started player-day, from int_fantasy__started_player_days.
         data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: [played, verified_off, missing_boxscore, unresolved_player]
       - name: status
+        description: difference when input_status is played or verified_off, else unverified.
         data_tests:
           - not_null
           - accepted_values:
