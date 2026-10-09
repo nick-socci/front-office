@@ -45,8 +45,8 @@ rest is an opener's or an emergency's, which ADR 0029 keeps out of the pool.
 
 ## Decision
 
-Proposed: **option 1**. The owner decides; the question that most needs an answer is
-option 1 against option 2.
+Chosen by the owner on 2026-10-09, going through the spec's decisions: **option 1**,
+the seven-period season, with a roster on the earlier day (option 1 over option 2).
 
 The fixture season is real periods 31 to 37, numbered 1 to 7 by offset, so a fixture
 period keeps its real distance from the others. Calendars (MLB schedule, pro schedule),

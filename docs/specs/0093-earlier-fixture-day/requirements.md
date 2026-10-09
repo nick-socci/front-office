@@ -103,8 +103,8 @@ two. The four periods between are the days between two turns.
 ### R2. The earlier day's data
 
 - R2.1 THE SYSTEM SHALL write a roster fixture for each of the three periods, by the
-  existing allowlists, with the period's game lines (spec 0074, R2). (Recommended, and a
-  decision for the owner: see ADR 0030.)
+  existing allowlists, with the period's game lines (spec 0074, R2). (The owner,
+  2026-10-09: a roster on the earlier day too; ADR 0030.)
 - R2.2 THE SYSTEM SHALL choose the two existing boxscores as today, from the dates of the
   last two periods only, and SHALL add the boxscore of one named game of the first date:
   824854, the previous turn of a starter of game 822821.

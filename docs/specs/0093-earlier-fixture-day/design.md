@@ -22,7 +22,7 @@ both trees. No dbt model, macro, seed or test SQL changes.
 
 ## Alternatives considered
 
-| | A — seven periods, roster on each data day (proposed) | B — seven periods, period 1 MLB-only | C — all seven periods full | D — synthetic earlier start | E — leave it |
+| | A — seven periods, roster on each data day (chosen) | B — seven periods, period 1 MLB-only | C — all seven periods full | D — synthetic earlier start | E — leave it |
 |---|---|---|---|---|---|
 | Start pool has a played day in CI | yes | yes | yes | yes | no |
 | CI warnings | 3 | 4 (a different fourth) | 3 | 3 | 4 |
@@ -145,8 +145,8 @@ compares rows, not warnings.
   their shape.
 - Something reads "fixture period 2" by number and now finds no roster — low — the
   spike's full pytest run found three tests and the CI build none.
-- Fixtures grow by about 1.0 MB — certain — for the owner to accept or refuse with
-  option B.
+- Fixtures grow by about 1.0 MB — certain — accepted by the owner on 2026-10-09 with
+  the roster on the earlier day.
 
 ## Open questions
 
@@ -154,7 +154,8 @@ compares rows, not warnings.
   pair with a start" among the effects. The model is empty in CI before and after,
   because no fixture matchup is re-scorable: the fixture has 3 of 38 boxscores. Filling
   it needs every game of a matchup's days, which is a different and much larger fixture.
-  Not in scope; whether it deserves an issue is the owner's call.
+  The owner decided on 2026-10-09: out of scope, and no issue is filed; the
+  real-season build exercises the model.
 - **Period 1's roster has game lines on 285 of 308 entries** (period 6: all 307; period
   7: 178 of 306). Not looked into, as in spec 0074; the model keeps only lines with
   stats and the tests pass on all three.
@@ -166,7 +167,7 @@ compares rows, not warnings.
 
 | Source | Finding | Resolution |
 |---|---|---|
-| design-review | F1 (P1): the purpose check proves two starts and an unrostered day, not the model's `SP` role; and R5.1 is held in CI only by a warning | Changed in part: R3.1(a) now requires outs and no more plate appearances than batters faced in the earlier start, which is the role rule for one appearance. Not changed: no hard CI assertion is added. It would be a test that fails on fixtures and warns on real data, which the owner declined for a similar test on 2026-10-07 (spec 0074), and test SQL is a no-go here. Put to the owner in the PR |
+| design-review | F1 (P1): the purpose check proves two starts and an unrostered day, not the model's `SP` role; and R5.1 is held in CI only by a warning | Changed in part: R3.1(a) now requires outs and no more plate appearances than batters faced in the earlier start, which is the role rule for one appearance. Not changed: no hard CI assertion is added. It would be a test that fails on fixtures and warns on real data, which the owner declined for a similar test on 2026-10-07 (spec 0074), and test SQL is a no-go here. The owner confirmed on 2026-10-09: the generator check, the pytest and the existing warning are enough |
 | design-review | F2 (P2): R1.2 said the offset applies to matchups, whose keys are trimmed, not mapped | Changed: R1.2 and R1.3 |
 | design-review | F3 (P2): the tasks named two cases for R3.1's three conditions | Changed: R6.1, task 3 and the test strategy name one case per condition, by message |
 | owner, 2026-10-09 | The five- or six-day gap between a starter's turns is how a rotation works, not a finding about the fixture dates | Changed: the problem statement and ADR 0030 state it as the constraint. The alternative of moving the fixtures to three consecutive days around a short-rest start is removed as never real. A wrong figure is corrected: "13 starts of 3,478" counted only gaps of six days or fewer in its denominator |
