@@ -14,10 +14,9 @@
 -- against another (spec 0089, R3.5). Which groups are judged is decided in
 -- rec_fantasy__category_wins_by_group, by a measure and not by name.
 --
--- A group of 100 or more pairs in a league-season with 100 or more matchups scored again
--- fails as not checkable if any of its pairs has no value or no wins added (R3.8): a
--- slope from part of a group is not the group's. Smaller league-seasons and groups are
--- not judged, which is all a two-day fixture is.
+-- A group of 100 or more pairs fails as not checkable if any of its pairs has no value or
+-- no wins added (R3.8): a slope from part of a group is not the group's. Smaller groups
+-- are not judged, which is all a two-day fixture is.
 
 select
     platform,
@@ -33,8 +32,9 @@ select
         else 'slope outside 0.34 to 0.47'
     end as problem
 from {{ ref('rec_fantasy__category_wins_by_group') }}
-where matchups_rescored >= 100
-    and pairs >= 100
+-- is_judged already asks for 100 matchups scored again; an unmeasured pair fails a group
+-- of 100 pairs however many matchups there were (R3.8).
+where pairs >= 100
     and (
         pairs_unmeasured > 0
         or (is_judged and (slope < 0.34 or slope > 0.47))

@@ -21,7 +21,9 @@
 -- values_track_rescored_category_wins fails a group of 100 or more pairs that has any, so
 -- a slope from part of a group is never taken as the group's.
 
-{{ config(materialized='table') }}
+-- A view, so that it is never older than the values and the wins it compares: a table
+-- would keep the slope of the last time it was built, and the test would judge that.
+{{ config(materialized='view') }}
 
 with matchups as (
 

@@ -53,33 +53,31 @@ models:
       One row per league-season and replacement group: the slope through the origin of
       real category wins added on total_value, their correlation, and whether the group
       is judged by values_track_rescored_category_wins. Every group is a row, judged or
-      not.
+      not. A view: a contract's not_null constraints do not apply to one, so the
+      columns that are never null are tested for it.
     config:
       contract:
         enforced: true
     columns:
       - name: platform
         data_type: varchar
-        constraints: [{type: not_null}]
       - name: league_id
         data_type: varchar
-        constraints: [{type: not_null}]
       - name: season
         data_type: bigint
-        constraints: [{type: not_null}]
       - name: replacement_group
         data_type: varchar
       - name: matchups_rescored
         description: Matchups of the league-season with a winner and no unverified inputs.
         data_type: bigint
-        constraints: [{type: not_null}]
+        data_tests: [not_null]
       - name: pairs
         data_type: bigint
-        constraints: [{type: not_null}]
+        data_tests: [not_null]
       - name: pairs_unmeasured
         description: Pairs with a null total_value or null category_wins_added.
         data_type: bigint
-        constraints: [{type: not_null}]
+        data_tests: [not_null]
       - name: slope
         description: sum(wins * value) / sum(value squared) over the measured pairs; theory gives 0.40.
         data_type: double
@@ -90,7 +88,7 @@ models:
           At least 100 matchups scored again, at least 100 pairs, and a correlation of
           0.75 or more.
         data_type: boolean
-        constraints: [{type: not_null}]
+        data_tests: [not_null]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -206,6 +204,58 @@ unit_tests:
         - {platform_player_id: 12, fantasy_team_id: 1, matchups_rescored: 1, category_wins_added: 0, matchup_wins_added: 0}
         - {platform_player_id: 13, fantasy_team_id: 1, matchups_rescored: 1, category_wins_added: 1, matchup_wins_added: 1}
         - {platform_player_id: 31, fantasy_team_id: 3, matchups_rescored: 1, category_wins_added: 0.5, matchup_wins_added: 0.5}
+
+  - name: category_wins_added_draw_a_fraction_of_replacement_as_a_whole_number
+    description: >
+      One category, hits, and a matchup level at 6 hits each. Player 11 batted one day
+      for no hits; replacement is a quarter of a hit a day. Used as a fraction, the
+      swapped side would have 6.25 hits and win the tied category in every draw: half a
+      category win lost, and half a matchup. Drawn as a whole number it has 7 hits in
+      the draws that round up and 6 in the rest. The draw is a fixed function of the
+      pair, the matchup, the component and the draw's number, and for these keys it
+      rounds up in 4 of the 20 (draws 8, 13, 17 and 19), so both measures are -0.5 * 4 /
+      20 = -0.1. Catches the fraction used directly (-0.5), a change in the number of
+      draws, and a draw that is not the same on every build.
+    model: rec_fantasy__category_wins_added
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, hits]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded]
+    given:
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 1, part: numerator, component: hits, weight: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 1, is_lower_better: false}
+      - input: ref('fct_matchup_results')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, winner: TIE, has_unverified_inputs: false}
+      - input: ref('int_fantasy__matchup_sides')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 1, fantasy_team_id: 1, opponent_team_id: 2}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 1, fantasy_team_id: 2, opponent_team_id: 1}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 11, slot_role: hitter, games_batted: 1, hits: 0, games_pitched: 0, games_started: 0, outs_recorded: 0}
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, games_batted: 9, hits: 6, games_pitched: 0, games_started: 0, outs_recorded: 0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, games_batted: 9, hits: 6, games_pitched: 0, games_started: 0, outs_recorded: 0}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 1, stat_value: 6}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 1, stat_value: 6}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: hits, level_per_played_day: 0.25}
+    expect:
+      rows:
+        - {platform_player_id: 11, fantasy_team_id: 1, matchups_rescored: 1, category_wins_added: -0.1, matchup_wins_added: -0.1}
 
   - name: category_wins_added_are_null_where_a_kind_of_day_has_no_level
     description: >
