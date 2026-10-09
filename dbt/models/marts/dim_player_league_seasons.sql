@@ -6,10 +6,11 @@
 --
 -- WHY it exists. A player's MLBAM id is resolved per league and season (see
 -- int_fantasy__player_crosswalk): the name fallback depends on which MLB players appeared in
--- that season and on the name ESPN showed in that league. One row per player, as dim_players
--- is, would let a later season's or another league's match decide an earlier season's
--- number. So the per-player attributes that can differ between league-seasons live here and
--- dim_players is built from this table.
+-- that season and on the name ESPN showed in that league. A table with one row per platform
+-- player would let a later season's or another league's match decide an earlier season's
+-- number. So the per-player attributes that can differ between league-seasons live here, and
+-- this table is the bridge from a platform's player id to an MLB id (ADR 0034); dim_players,
+-- keyed by MLB id, reads the ids and the fallback names from it.
 --
 -- WHY the union. Five players in 2026 were added or dropped without ever sitting on a roster
 -- snapshot. Facts about them still need a row, so they are kept: resolved through the id map
