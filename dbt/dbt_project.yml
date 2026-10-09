@@ -35,6 +35,8 @@ models:
     reconciliation:
       # The only layer that pairs our numbers with the platform's own (#10). Source-
       # specific by design: each platform gets a folder, and nothing reads from here.
+      # `fantasy/` holds the other kind of check: our values against matchups scored
+      # again with each player swapped for replacement (spec 0089).
       +materialized: table
       +schema: reconciliation
 
