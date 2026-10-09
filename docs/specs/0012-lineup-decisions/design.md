@@ -10,7 +10,9 @@ player who could have been started, in the unit the player facts use, and every 
 assignment problem with SciPy and returns only who goes where. Two marts read that: one
 row per team-day with the actual lineup's value, the optimal lineup's and the gap; and
 one row per matchup side and category with the team's total under each lineup against
-the opponent's actual total. The optimal lineup may replace a starter who played only
+the opponent's actual total. Between the solver and the second mart, one model holds
+each category's total under both lineups, made by the same statements, so that the
+actual lineup's can be tested against the totals the project already reconciles. The optimal lineup may replace a starter who played only
 with another player who played, so the gap measures choices between players, not days
 a manager could not have known were bad.
 
@@ -41,12 +43,17 @@ flowchart LR
   sv -.->|"imported"| ol
   ol -->|"one row per assigned player"| f1
   op -->|"values, actual slots"| f1
-  ol -->|"assigned players, by slot role"| f2
-  gd -->|"credited components"| f2
+  ct["int_fantasy__lineup_category_totals"]
+  ol -->|"assigned players, by slot role"| ct
+  rd -->|"started players, by slot role"| ct
+  gd -->|"credited components"| ct
+  ct -->|"the optimal totals"| f2
+  op -->|"which days are unvalued"| ct
+  f1 -->|"unverified days"| f2
   mc -->|"actual and opponent totals"| f2
 
   classDef new stroke-width:3px,stroke-dasharray:0
-  class dv,op,ol,sv,f1,f2 new
+  class dv,op,ol,sv,ct,f1,f2 new
 ```
 
 Thick border: new. Nothing existing changes except one added seed column.
@@ -269,7 +276,10 @@ ordered by their keys, groups the options by team-day in Python, skips a team-da
 has an option with a null value (R3.5: unvalued), calls `solve_team_day` with that league-season's
 slots, inserts the rows into a temporary table and returns it as a DuckDB relation. It
 computes no total. `profiles.yml` gains `module_paths: ["python_modules"]` on both
-targets so the model can import the solver; `pyproject.toml` adds `scipy` to the dev
+targets so the model can import the solver; dbt-duckdb appends that path to
+`sys.path` as written, so it resolves against the working directory and the model
+builds only when dbt is run from `dbt/`, as the gates and `check_tenant_isolation.py`
+do; the model's header says so; `pyproject.toml` adds `scipy` to the dev
 group and `dbt/python_modules` to pytest's `pythonpath` and ruff's `src`.
 
 The header states the BigQuery implication: there a Python model needs a Spark or
@@ -309,6 +319,38 @@ The two pitcher-start counts are there because the starts limit is not enforced 
 0037): summed by team and matchup period they show a period over a league's limit,
 whatever that limit is. The model does not read `lineupSlotStatLimits`.
 
+### `int_fantasy__lineup_category_totals.sql`
+
+Grain: (`matchup_id`, `fantasy_team_id`, `category_key`, `lineup`). Table.
+
+| Column | Meaning |
+|---|---|
+| `matchup_period` | of the side |
+| `lineup` | `actual` or `optimal` |
+| `numerator`, `denominator` | weighted sums of the credited components; `denominator` null for a count |
+| `category_value` | numerator over denominator, or the numerator for a count |
+
+- The spine is every side and category of `fct_matchup_category_scores` crossed with
+  the two lineups, so a side whose lineup credits nothing still has a row.
+- `lineup_player_days`: two sets of (team-day, player, `slot_role`) under the `lineup`
+  label: `actual` from the started roster days, `optimal` from
+  `int_fantasy__optimal_lineups` with its slot's role.
+- One path for both: joined to `int_mlb__player_game_days`, a hitter role crediting the
+  batting columns and a pitcher role the pitching ones (as
+  `int_fantasy__started_player_days` does), summed per matchup side over the dates of
+  its matchup period, then numerator over denominator by `int_fantasy__stat_components`.
+  No statement after the label is applied names a lineup.
+- An `optimal` row's numerator, denominator and value are null when any team-day of
+  the side's period is unvalued (R5.4): it has an option with a null value in
+  `int_fantasy__lineup_options`, the rule `fct_lineup_decisions.is_unvalued` uses. It
+  is read from the options so that an intermediate model does not rest on a mart. A day with no
+  assigned player adds nothing to the sums and is not a reason for null.
+- It exists as a model, not as CTEs of the mart, because a test reads only what a model
+  selects: R5.3's test compares the `actual` rows with
+  `fct_matchup_category_scores.team_value`, and that proves the path the `optimal`
+  rows came through. The mart's `actual_value` is copied from that fact and could not
+  prove it.
+
 ### `fct_lineup_decision_categories.sql`
 
 Grain: (`matchup_id`, `fantasy_team_id`, `category_key`). Table.
@@ -317,23 +359,13 @@ Grain: (`matchup_id`, `fantasy_team_id`, `category_key`). Table.
 |---|---|
 | `matchup_period`, `opponent_team_id`, `category_label`, `is_lower_better` | from `fct_matchup_category_scores` |
 | `actual_value`, `opponent_value`, `actual_result` | that fact's `team_value`, `opponent_value`, `result` |
-| `optimal_value` | the team's total under the optimal lineups |
+| `optimal_value` | `category_value` of the `optimal` row of `int_fantasy__lineup_category_totals` |
 | `optimal_result` | `optimal_value` against `opponent_value`, by that fact's rule: both rounded to nine decimals, `is_lower_better` applied |
 | `has_unverified_inputs` | R5.5 |
 
-- `lineup_player_days`: two sets of (team-day, player, `slot_role`) under a `lineup`
-  label: `actual` from the started roster days, `optimal` from
-  `int_fantasy__optimal_lineups` with its slot's role.
-- One path for both: joined to `int_mlb__player_game_days`, a hitter role crediting the
-  batting columns and a pitcher role the pitching ones (as
-  `int_fantasy__started_player_days` does), summed per matchup side over the dates of
-  its matchup period, then numerator over denominator by `int_fantasy__stat_components`.
-- The final select takes the `optimal` totals beside `fct_matchup_category_scores`.
-  The `actual` totals are not selected; R5.3's test compares them with `team_value`,
-  which proves the path the `optimal` totals came through.
-- `optimal_value` and `optimal_result` are null when any team-day of the side's period
-  has `is_unvalued` in `fct_lineup_decisions` (R5.4). A day with no assigned player
-  adds nothing to the sums and is not a reason for null.
+- `fct_matchup_category_scores` joined to the `optimal` rows of
+  `int_fantasy__lineup_category_totals`. It sums nothing itself.
+- `optimal_result` is null where `optimal_value` is (R5.4).
 - The opponent is held at what it actually did. Two teams both re-optimised is a
   different question and is not asked.
 
@@ -347,7 +379,7 @@ Singular tests in `dbt/tests/`, each with a comment saying what it catches:
   that is not an option.
 - `fct_lineup_decisions_are_never_worse_than_the_actual_lineup` (R4.7).
 - `fct_lineup_decisions_change_nothing_when_nothing_is_gained` (R4.8).
-- `fct_lineup_decision_categories_reproduce_the_actual_totals` (R5.3).
+- `lineup_category_totals_reproduce_the_actual_totals` (R5.3).
 
 Generic tests: `unique_combination_of_columns` on each grain; `not_null` on keys;
 `accepted_values` on `side`, `day_kind`, the two results; `relationships` from
@@ -358,7 +390,9 @@ dbt unit tests for the SQL models, with the Python model's output given as an in
 level); `lineup_options` (an ineligible slot, an unused slot, a side not played, the
 actual slot); `fct_lineup_decisions` (a replacement, a move, a tie, an unvalued day, a
 day with no options, the missed-start tie-break, a benched start brought in for a
-started relief day); `fct_lineup_decision_categories` (a
+started relief day); `lineup_category_totals` (a count and a rate under both lineups,
+a pitcher slot not credited with a bat, a period with an unvalued day, a period with a
+day on which nobody played); `fct_lineup_decision_categories` (a
 count and a rate that change result, a lower-is-better category, a period with an
 unvalued day, a period with a day on which nobody played, an unverified day).
 
@@ -370,7 +404,7 @@ pytest, `ingestion/tests/test_lineup_solver.py`: the cases of R6.1.
 |---|---|---|
 | R1.1–R1.4 | unit test of the day values | a bench or IL player in or out wrongly; a relief day at a start's level; a null level read as zero |
 | R1.5 | `candidate_day_values_add_back_to_season_value`, real season | a day value on a different scale from the facts |
-| R2.1–R2.3 | unit test of the options | a slot the league does not use; an ineligible pair; a pitcher's bat credited |
+| R2.1–R2.3 | unit test of the options | a slot the league does not use; an ineligible pair; a pitcher's bat credited; a start's option carrying a relief kind |
 | R2.4 | `lineup_options_hold_one_actual_slot_per_played_starter` | an actual lineup the solver could not reproduce |
 | R3.1–R3.4, R3.6, R6.1 | pytest on the solver | a greedy double-assignment; a sit with no replacement; a spurious move on a tie; order dependence |
 | R3.3, R6.2 | `optimal_lineups_are_legal` | an illegal lineup from a wrong matrix |
@@ -378,8 +412,9 @@ pytest, `ingestion/tests/test_lineup_solver.py`: the cases of R6.1.
 | R4.1–R4.5 | unit test of the team-day fact | counts off by a moved player; the wrong missed start; a bye week dropped |
 | R4.9 | unit test of the team-day fact | a relief day counted as a start; a hitter slot counted; the optimal count taken from the actual lineup |
 | R4.7, R4.8 | the two singular tests | an "optimal" lineup below the actual; churn on a tie |
-| R5.1, R5.2, R5.4, R5.5 | unit test of the category fact | a result decided without the rounding; a rate summed as a rate; an idle day nulling a week; an unverified week reported as certain |
-| R5.3 | `fct_lineup_decision_categories_reproduce_the_actual_totals` | a credited component the totals path gets wrong |
+| R5.2, R5.4 | unit test of the lineup totals | a rate summed as a rate; a slot's role crediting the wrong side; an idle day nulling a week; an unvalued week reported as a partial total |
+| R5.1, R5.5 | unit test of the category fact | a result decided without the rounding; an unverified week reported as certain |
+| R5.3 | `lineup_category_totals_reproduce_the_actual_totals`, real season | a credited component the totals path gets wrong, in the model's own statements |
 | R6.3 | `.agentic/gates` | a team-day reading another league's rows |
 | R6.4 | review | — |
 | Expected values | the last task | numbers that moved from the prototype's |
@@ -427,6 +462,11 @@ pytest, `ingestion/tests/test_lineup_solver.py`: the cases of R6.1.
 | design-review | F5 (P2): CI's gap and moves had no expected values | Changed: measured with the prototype on the fixture warehouse and added; verified in the last task |
 | design-review | F6 (P3): "2 of 288" and "2 of 264" for the starts limit | Changed: 264 seven-day team-periods throughout |
 | owner, 2026-10-09 | The eight decisions of the spec PR taken as recommended, with one change: the starts limit is not enforced, and the team-day fact carries the pitcher starts of both lineups, so a breach shows in a league whose limit binds | Changed: R4.9; `day_kind` on the options; two columns on `fct_lineup_decisions`; ADR 0037 |
+| design-review 2 | F1 (P1): the recomputed actual totals were CTEs of the category mart and not selected, so R5.3's test could not read them and would have tested its own copy | Changed (owner chose a model over a column): `int_fantasy__lineup_category_totals`, one row per side, category and lineup; R5.2 to R5.4; the mart sums nothing |
+| design-review 2 | F2 (P2): no task covered R5.5 | Changed: the mart's task lists it |
+| design-review 2 | F3 (P2): CI had no expected value for the pitcher-start counts | Changed: actual 2, measured; optimal at most 2, with the reason |
+| design-review 2 | F4 (P3): `day_kind` on the options had no requirement; R4.6's "the counts" contradicted R4.9 | Changed: R2.1 carries it; R4.6 names the columns that go null |
+| design-review 2 | F5 (P3): `module_paths` is resolved against the working directory, which the spec did not say | Changed: stated with the Python model; the spike records it |
 | owner, 2026-10-09 | #60's build (PR #106) merged before this spec was approved | Changed: the risk that it would not be is removed; the spec is rebased onto it |
 
 ## Amendments

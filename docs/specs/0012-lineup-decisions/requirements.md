@@ -108,7 +108,7 @@ Every legal (player, slot) pair of a team-day, which is all the solver reads.
   and starting slot such that the league uses the slot (`slot_count > 0`), ESPN lists
   the player as eligible for it in that period's roster of that team, and the slot's
   role credits a side he played that day; with `option_value`, the day value of that
-  side.
+  side, and `day_kind`, the kind of that side's day (R1.2).
 - R2.2 THE SYSTEM SHALL mark `is_actual` on the option whose slot the player sat in.
 - R2.3 THE SYSTEM SHALL carry `eligibility_fetched_at`, the fetch time of the roster
   the eligibility was read from.
@@ -155,8 +155,11 @@ Every legal (player, slot) pair of a team-day, which is all the solver reads.
 - R4.5 THE SYSTEM SHALL set `has_unverified_inputs` when any candidate of the team-day
   rests on a missing boxscore or an unresolved player.
 - R4.6 THE SYSTEM SHALL carry `is_unvalued` (R3.5) on every row. IF it is true THEN
-  THE SYSTEM SHALL leave the optimal value, the gap, the counts and the missed start
-  null; otherwise none of the values or counts is null.
+  THE SYSTEM SHALL leave null what rests on the solver: `optimal_value`, `value_gap`,
+  `optimal_starters`, the three counts of R4.2, `optimal_pitcher_starts` and the
+  missed start. `candidates`, `played_starters`, `actual_value` where every actual
+  option is valued, and `actual_pitcher_starts` do not rest on it. Otherwise none of
+  the values or counts is null.
 - R4.7 THE SYSTEM SHALL never report a gap below zero (to within 1e-9 for the order of
   a floating-point sum), nor fewer assigned players than
   played starters in either role; a singular test fails on either.
@@ -173,13 +176,19 @@ Every legal (player, slot) pair of a team-day, which is all the solver reads.
   team's actual total, its total had it set the optimal lineup on every day of the
   matchup period, the opponent's actual total, and the result of each against the
   opponent's (`WIN`, `LOSS`, `TIE`, as `fct_matchup_category_scores` words them).
-- R5.2 THE SYSTEM SHALL compute both totals from credited components by the rules of
-  `int_fantasy__stat_components`, crediting an assigned player by his optimal slot's
-  role.
-- R5.3 THE SYSTEM SHALL fail the build if the actual total differs from
-  `fct_matchup_category_scores.team_value` for any row.
+- R5.2 THE SYSTEM SHALL hold, in `int_fantasy__lineup_category_totals`, one row per
+  matchup side, scored category and lineup (`actual`, `optimal`), with the numerator,
+  denominator and value of the category under that lineup, both lineups computed by
+  the same statements from credited components by the rules of
+  `int_fantasy__stat_components`, a player credited by the role of the slot the lineup
+  puts him in. The mart's optimal total is that model's `optimal` row.
+- R5.3 THE SYSTEM SHALL fail the build if the value of an `actual` row of
+  `int_fantasy__lineup_category_totals` differs from
+  `fct_matchup_category_scores.team_value`, or if a side and category of that fact
+  has no `actual` row.
 - R5.4 IF any team-day of the side's matchup period is unvalued (R4.6) THEN THE SYSTEM
-  SHALL leave the optimal total and its result null. A day on which nobody was
+  SHALL leave the `optimal` row's numerator, denominator and value null, and with them
+  the mart's optimal total and its result. A day on which nobody was
   assigned contributes zero.
 - R5.5 THE SYSTEM SHALL set `has_unverified_inputs` when
   `fct_matchup_category_scores` has it set for the row, or any team-day of the side's
@@ -225,7 +234,8 @@ Real 2026 season. Measured on 2026-10-09 with a throwaway prototype of R1 to R5
 | Rows with `has_unverified_inputs` | 0 | count |
 | Rows with `is_unvalued` | 0 | count |
 | `fct_lineup_decision_categories` rows | 4,862 (286 sides × 17) | count |
-| Actual totals equal to `fct_matchup_category_scores.team_value` | 4,862 of 4,862 | R5.3's test |
+| `int_fantasy__lineup_category_totals` rows | 9,724 (4,862 × 2 lineups) | count |
+| `actual` rows equal to `fct_matchup_category_scores.team_value` | 4,862 of 4,862 | R5.3's test |
 | Results, actual → with the optimal lineups | LOSS→LOSS 1,764 · LOSS→TIE 83 · LOSS→WIN 453 · TIE→LOSS 5 · TIE→TIE 141 · TIE→WIN 116 · WIN→LOSS 6 · WIN→TIE 2 · WIN→WIN 2,292 | group by |
 | Sides that gain / lose category wins; net wins gained | 216 / 1 of 286; 561 | query |
 | Sum of `optimal_pitcher_starts` / of `actual_pitcher_starts` | 2,639 / 2,524 | sums |
@@ -251,5 +261,7 @@ worth 0, which holds for 6 of the fixtures' 17 scales):
 | Team-days with a gap | 4 of 36 | the last task |
 | Players brought in / sat / moved | 4 / 2 / 0 | the last task |
 | Rows with `is_unvalued` | 0 | the last task |
-| Sum of `actual_pitcher_starts` / `optimal_pitcher_starts` | not measured by the prototype; recorded in the last task | the last task |
+| `int_fantasy__lineup_category_totals` rows | 136 (68 × 2 lineups) | count |
+| Sum of `actual_pitcher_starts` | 2 (measured on the fixture warehouse, 2026-10-09) | the last task |
+| Sum of `optimal_pitcher_starts` | at most 2: no benched pitcher started a game on a fixture date. The exact figure was not measured and is recorded in the last task | the last task |
 | CI `dbt build`, isolation | no error, today's three warnings, 0 differing pairs | `.agentic/gates` |
