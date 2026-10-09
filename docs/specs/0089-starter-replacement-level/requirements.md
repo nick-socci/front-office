@@ -130,16 +130,21 @@ game between 1.14 and 1.53 against today's 1.36.
   break every tie in its category.
 - R3.4 THE SYSTEM SHALL carry `matchups_rescored`, `category_wins_added` (a win 1, a tie
   one half) and `matchup_wins_added` (the same, for the matchup by most categories).
-- R3.5 THE SYSTEM SHALL fail the build when, for a league-season and a replacement group
-  with at least 100 pairs, the slope through the origin of `category_wins_added` on
-  `total_value` is outside 0.30 to 0.50. A league-season with fewer than 100 decided
-  matchups is not judged.
+- R3.5 THE SYSTEM SHALL fail the build when, for a league-season and a judged
+  replacement group, the slope through the origin of `category_wins_added` on
+  `total_value` is outside 0.34 to 0.47. A group is judged when it has at least 100
+  pairs and the correlation of the two measures over them is at least 0.75. A
+  league-season with fewer than 100 re-scorable matchups is not judged. Chosen by the
+  owner on 2026-10-09 over one looser band for every group.
+- R3.9 THE SYSTEM SHALL report every group's pairs, slope and correlation, judged or not,
+  in a model or a test's output that the run evidence can quote, so that a group left
+  unjudged is seen and not forgotten.
 - R3.6 THE SYSTEM SHALL give the same result on every build of the same data.
 - R3.7 IF the level of a kind of day the pair played in a re-scorable matchup is null
   (an empty pool) THEN THE SYSTEM SHALL give the pair null `category_wins_added` and
   `matchup_wins_added`, as the value facts give it a null value, and SHALL still carry
   its row and `matchups_rescored`.
-- R3.8 IF a group judged under R3.5 holds a pair with a null `total_value` or a null
+- R3.8 IF a group of at least 100 pairs holds a pair with a null `total_value` or a null
   `category_wins_added` THEN THE SYSTEM SHALL fail the build for that group as not
   checkable, and SHALL NOT compute a slope from the rest.
 
@@ -232,6 +237,7 @@ tolerance shown, not to the digit.
 | ERA / WHIP, category wins added | 101 / 106 | 70 / 76 | ±8 each |
 | Matchup wins added: SP / hitters / RP | 44 / 48 / 15 | 33 / 48 / 14 | ±4 each |
 | Slope of category wins on `total_value`: SP / hitters / RP | | 0.43 / 0.40 / 0.33 | ±0.03 |
+| Judged under R3.5 | | SP and hitters, both inside 0.34 to 0.47; RP not judged (correlation 0.69) | |
 | Correlation with `total_value`: SP / hitters / RP | 0.86 / 0.81 / 0.69 | 0.85 / 0.81 / 0.69 | ±0.03 |
 
 | Check | Expected |

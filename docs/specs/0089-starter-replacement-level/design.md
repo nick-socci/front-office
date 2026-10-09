@@ -128,65 +128,32 @@ stays.
 
 ### The test
 
-`values_track_rescored_category_wins`: per league-season with at least 100 decided
-matchups and replacement group (`dim_player_league_seasons.replacement_group`) with at
-least 100 pairs, Σ(wins × value) / Σ(value²) must lie in 0.30 to 0.50. If margins are
-normal with the scale as their root mean square, a small contribution of *x* scale
-units changes the expected result by *x*/√(2π) = 0.399*x*. Measured after the change:
-0.43, 0.40 and 0.33 for starters, hitters and relievers. The band is as narrow as the relievers allow. Scaling a group's values up by a factor
-*f* divides its slope by *f*, so from the measured slopes the test fails when hitters'
-values are inflated by a third or more (0.40 / 0.30), starters' by 43%, or when either
-is deflated by 14% to 20%. It does not catch a tilt of a quarter, and does not claim
-to: it is a guard against gross drift, and the measured slopes are recorded as run
-evidence on every build that changes a level or a scale.
+If margins are normal with the scale as their root mean square, a small contribution of
+*x* scale units changes the expected result by *x*/√(2π) = 0.399*x*. So the slope
+through the origin of `category_wins_added` on `total_value`, Σ(wins × value) / Σ(value²),
+should be about 0.40 for every group of players, and equal between groups if the model
+is even-handed. Measured after the change: 0.43 for starters, 0.40 for hitters, 0.33
+for relievers.
 
-A judged group with a pair whose value or wins added is null fails as not checkable,
-so a slope is never computed from part of a group.
+`values_track_rescored_category_wins` fails for a judged group whose slope is outside
+0.34 to 0.47, about 15% either side of 0.40. Scaling a group's values by a factor *f*
+divides its slope by *f*, so it fails when starters' values are inflated by about a
+quarter (0.43 / 0.34) or hitters' by 18%, and when either is deflated by 9% to 15%.
 
-## Test strategy
+A group is judged when it has at least 100 pairs and its two measures correlate at 0.75
+or more. Starters (0.85) and hitters (0.81) are; relievers (0.69) are not. The owner
+chose this on 2026-10-09 over one band of 0.30 to 0.50 for every group, which had to be
+loose enough for the relievers and so guarded nothing well. The question the issue asked
+is whether starters are overvalued against hitters, and this is the test of it. The
+exclusion is by a measure and not by name: relief values are the model's known weak
+spot (ADR 0009), and a relief group whose values came to track real wins would be
+judged without the test changing.
 
-| Requirement | Test | Catches |
-|---|---|---|
-| R1.1–R1.4, R1.7, R4.1 | unit tests on `int_fantasy__replacement_levels` | a role decided with hindsight; an opener or a first start in the pool; a cap applied; another league's roster removing a free agent |
-| R1.5, R4.2 | the existing batting and relief unit tests; real rows compared | a side effect on the other kinds |
-| R1.6 | the existing empty-pool unit test, for the start kind | a missing row in place of a null level |
-| R4.3, R4.4 | the two singular tests | a batting or relief pool above N; a level that is not the pool's own mean |
-| R2.1 | `git diff` of the facts is comments only | a fact computing its own level |
-| R3.1–R3.4, R3.6, R4.5 | unit tests on the re-scoring; two real builds compared | a tie broken by a fraction; a category judged the wrong way round; a result that changes between builds |
-| R3.5 | `values_track_rescored_category_wins` | one group's values tilted against another's |
-| R5.1–R5.3 | real build; every relation compared with a copy kept before; the expected values | any movement this document does not state |
+`rec_fantasy__category_wins_by_group`, a view over the model and
+`fct_player_season_value`, holds each league-season and group's pairs, slope,
+correlation and whether it is judged. The test reads it, and so does the run evidence,
+so the relievers' figure is on record every time (R3.9).
 
-## Risks
+A group of 100 or more pairs with a pair whose value or wins added is null fails as not
+checkable, judged or not, so a slope is never computed from part of a group.
 
-- **The fixture start pool is empty.** Two days cannot hold a pitcher's earlier start, so
-  in CI the start level is null, fixture starts have a null value, and
-  `int_fantasy__replacement_pool_has_played_days` warns. Unit tests carry the rule. If a
-  CI test fails on those nulls, the build stops (R5.3).
-- **Early in a season the pool is thin**: no pitcher is a starter until his second
-  appearance. The level exists from the first days and settles over weeks.
-- **The re-scoring is the heaviest model in the build.** Twenty draws of every
-  pair-matchup-component; measured when built.
-- **The band of R3.5 is a judgment, and loose.** Relievers sit at 0.33; a tilt under a
-  third passes.
-- **One season, one league.**
-
-## Open questions
-
-- **Who is a starter for a call-up, and for a pitcher who changes role.** The rule is
-  accepted for now; #92.
-
-- **Whether the relief and batting pools should also be decided at the time.** No gap
-  was measured; both still use whole-season hindsight.
-- **Why relievers' values convert to real wins less steadily** (slope 0.33, correlation
-  0.69).
-- **Hitter pools by position** (ADR 0001's follow-up).
-
-## Review log
-
-| Source | Finding | Resolution |
-|---|---|---|
-| design-review | F1 (P1): a decided matchup can rest on unverified inputs and would be re-scored as real | Changed: R3.1 re-scores only matchups with a winner and `has_unverified_inputs` false; a unit test for the other case |
-| design-review | F2 (P1): nothing says what the re-scoring does when a level is null | Changed: R3.7 (null measures, row kept) and R3.8 (a judged group with a null fails as not checkable) |
-| design-review | F3 (P2): the 0.30 to 0.50 band does not catch the 25% tilt the design claimed | Changed the claim, not the band: the design now says what the band catches (a third or more) and that it is a guard against gross drift. Tightening it would fail on relievers at 0.33; for the owner under *Decisions* |
-
-## Amendments
