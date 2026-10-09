@@ -74,11 +74,13 @@ Agreed by the owner on 2026-10-08, going through the spec's decisions:
 
 - the number 100, counted per category, as the least history used;
 - all earlier seasons pooled, with the season's own matchups blended in, in place of a
-  window or a volume adjustment.
+  window or a volume adjustment;
+- the league host's reported totals as the source of everything blended, the season's
+  own part included, from decided matchups only. Our recomputed totals remain the
+  source only for a league-season with no usable history.
 
-Proposed here and not yet gone through: the platform's reported totals as the source
-for everything blended; the rule for a rate's denominator; that a rate on a zero
-denominator is not measured.
+Proposed here and not yet gone through: the rule for a rate's denominator; that a rate
+on a zero denominator is not measured.
 
 100 is where a scale's sampling error (about 7%) equals how much seasons differ, so it
 is where history and a season's own matchups are equally good evidence. It is used
