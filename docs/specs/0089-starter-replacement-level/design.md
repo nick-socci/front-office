@@ -94,7 +94,7 @@ In `models/reconciliation/fantasy/`, a table. Grain: (`platform`, `league_id`, `
 
 | Column | Meaning |
 |---|---|
-| `matchups_rescored` | decided two-sided matchups in which the pair had a started day |
+| `matchups_rescored` | re-scorable matchups in which the pair had a started day: `fct_matchup_results` gives a winner and `has_unverified_inputs` is false |
 | `category_wins_added` | actual category points minus points with replacement in his place, summed over those matchups and scored categories; a win is 1, a tie one half; averaged over the draws |
 | `matchup_wins_added` | the same for the matchup, decided by most categories |
 
@@ -115,8 +115,13 @@ Steps, all in components (AGENTS.md rule 4):
    category undefined on either side in a draw is left out of that draw.
 6. Sum and average.
 
-The matchups are all decided ones, playoffs included: the values being checked count
-every started day.
+The matchups are all re-scorable ones, playoffs included: the values being checked count
+every started day. All 143 matchups of 2026 are re-scorable (none has unverified
+inputs); the fixture's are not, so in CI the model is empty.
+
+If a kind of day the pair played in such a matchup has a null level, both measures are
+null for the pair, by the rule the value facts follow for an empty pool, and the row
+stays.
 
 ### The test
 
@@ -125,9 +130,15 @@ matchups and replacement group (`dim_player_league_seasons.replacement_group`) w
 least 100 pairs, Σ(wins × value) / Σ(value²) must lie in 0.30 to 0.50. If margins are
 normal with the scale as their root mean square, a small contribution of *x* scale
 units changes the expected result by *x*/√(2π) = 0.399*x*. Measured after the change:
-0.43, 0.40 and 0.33 for starters, hitters and relievers. The band is wide enough for the
-relievers and narrow enough to fail if a group's values were scaled by a quarter more or
-less than another's.
+0.43, 0.40 and 0.33 for starters, hitters and relievers. The band is as narrow as the relievers allow. Scaling a group's values up by a factor
+*f* divides its slope by *f*, so from the measured slopes the test fails when hitters'
+values are inflated by a third or more (0.40 / 0.30), starters' by 43%, or when either
+is deflated by 14% to 20%. It does not catch a tilt of a quarter, and does not claim
+to: it is a guard against gross drift, and the measured slopes are recorded as run
+evidence on every build that changes a level or a scale.
+
+A judged group with a pair whose value or wins added is null fails as not checkable,
+so a slope is never computed from part of a group.
 
 ## Test strategy
 
@@ -152,7 +163,8 @@ less than another's.
   appearance. The level exists from the first days and settles over weeks.
 - **The re-scoring is the heaviest model in the build.** Twenty draws of every
   pair-matchup-component; measured when built.
-- **The band of R3.5 is a judgment.** Relievers sit at 0.33.
+- **The band of R3.5 is a judgment, and loose.** Relievers sit at 0.33; a tilt under a
+  third passes.
 - **One season, one league.**
 
 ## Open questions
@@ -164,5 +176,11 @@ less than another's.
 - **Hitter pools by position** (ADR 0001's follow-up).
 
 ## Review log
+
+| Source | Finding | Resolution |
+|---|---|---|
+| design-review | F1 (P1): a decided matchup can rest on unverified inputs and would be re-scored as real | Changed: R3.1 re-scores only matchups with a winner and `has_unverified_inputs` false; a unit test for the other case |
+| design-review | F2 (P1): nothing says what the re-scoring does when a level is null | Changed: R3.7 (null measures, row kept) and R3.8 (a judged group with a null fails as not checkable) |
+| design-review | F3 (P2): the 0.30 to 0.50 band does not catch the 25% tilt the design claimed | Changed the claim, not the band: the design now says what the band catches (a third or more) and that it is a guard against gross drift. Tightening it would fail on relievers at 0.33; for the owner under *Decisions* |
 
 ## Amendments

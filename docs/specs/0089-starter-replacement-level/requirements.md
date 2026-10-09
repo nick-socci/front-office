@@ -114,7 +114,10 @@ game between 1.14 and 1.53 against today's 1.36.
 
 - R3.1 THE SYSTEM SHALL provide `rec_fantasy__category_wins_added` with one row per
   (`platform`, `league_id`, `season`, `platform_player_id`, `fantasy_team_id`) that has a
-  started day inside a decided matchup of a league-season with rosters.
+  started day inside a re-scorable matchup of a league-season with rosters. A matchup is
+  re-scorable when `fct_matchup_results` gives it a winner and
+  `has_unverified_inputs` is false: a result resting on a missing boxscore or an
+  unresolved player is not a real result to re-score.
 - R3.2 THE SYSTEM SHALL, for each such pair and matchup, recompute the pair's side with
   the pair's started production removed and replacement production put in its place
   (the level of each kind of day times the pair's played days of that kind), recompute
@@ -132,6 +135,13 @@ game between 1.14 and 1.53 against today's 1.36.
   `total_value` is outside 0.30 to 0.50. A league-season with fewer than 100 decided
   matchups is not judged.
 - R3.6 THE SYSTEM SHALL give the same result on every build of the same data.
+- R3.7 IF the level of a kind of day the pair played in a re-scorable matchup is null
+  (an empty pool) THEN THE SYSTEM SHALL give the pair null `category_wins_added` and
+  `matchup_wins_added`, as the value facts give it a null value, and SHALL still carry
+  its row and `matchups_rescored`.
+- R3.8 IF a group judged under R3.5 holds a pair with a null `total_value` or a null
+  `category_wins_added` THEN THE SYSTEM SHALL fail the build for that group as not
+  checkable, and SHALL NOT compute a slope from the rest.
 
 ### R4. Tests
 
@@ -152,7 +162,9 @@ game between 1.14 and 1.53 against today's 1.36.
   replacement adds nothing; a win that becomes a loss without him adds 1 and a tie that
   becomes a loss adds one half; a lower-is-better category is judged the right way; a
   matchup won 9 to 8 with him and lost 8 to 9 without adds one matchup win; an
-  undecided matchup and a bye are not re-scored.
+  undecided matchup and a bye are not re-scored; a matchup with a winner and unverified
+  inputs is not re-scored; a pair with a start in a league-season whose start level is
+  null has null wins added and keeps its row.
 
 ### R5. The real season
 
