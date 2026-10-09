@@ -157,9 +157,11 @@ Every legal (player, slot) pair of a team-day, which is all the solver reads.
 - R4.6 THE SYSTEM SHALL carry `is_unvalued` (R3.5) on every row. IF it is true THEN
   THE SYSTEM SHALL leave null what rests on the solver: `optimal_value`, `value_gap`,
   `optimal_starters`, the three counts of R4.2, `optimal_pitcher_starts` and the
-  missed start. `candidates`, `played_starters`, `actual_value` where every actual
-  option is valued, and `actual_pitcher_starts` do not rest on it. Otherwise none of
-  the values or counts is null.
+  missed start. `candidates`, `played_starters` and `actual_pitcher_starts` do not
+  rest on it and are never null. `actual_value` is null when any actual option of the
+  team-day has a null value, since a sum would skip it and report a part as the
+  whole, and is never null otherwise. On a row that is not unvalued none of the
+  values or counts is null.
 - R4.7 THE SYSTEM SHALL never report a gap below zero (to within 1e-9 for the order of
   a floating-point sum), nor fewer assigned players than
   played starters in either role; a singular test fails on either.

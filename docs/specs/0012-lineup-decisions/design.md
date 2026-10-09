@@ -297,7 +297,7 @@ Grain: team-day. Table.
 | `candidates` | roster days in a starting or bench slot |
 | `played_starters` | started players with an `is_actual` option |
 | `optimal_starters` | assigned players |
-| `actual_value` | `sum(option_value)` over `is_actual` options, in player order |
+| `actual_value` | `sum(option_value)` over `is_actual` options, in player order; null if any of them is null |
 | `optimal_value` | `sum(option_value)` over the optimal lineup's options, in player order |
 | `value_gap` | `optimal_value - actual_value` |
 | `players_brought_in`, `players_sat`, `players_moved` | R4.2 |
@@ -330,8 +330,11 @@ Grain: (`matchup_id`, `fantasy_team_id`, `category_key`, `lineup`). Table.
 | `numerator`, `denominator` | weighted sums of the credited components; `denominator` null for a count |
 | `category_value` | numerator over denominator, or the numerator for a count |
 
-- The spine is every side and category of `fct_matchup_category_scores` crossed with
-  the two lineups, so a side whose lineup credits nothing still has a row.
+- The spine is every side of `int_fantasy__matchup_side_totals` crossed with its
+  league-season's rows of `int_fantasy__categories` and with the two lineups, so a
+  side whose lineup credits nothing still has a row. Those two models are what
+  `fct_matchup_category_scores` is built from, so the rows are the fact's (4,862 on
+  2026) without an intermediate model reading a mart.
 - `lineup_player_days`: two sets of (team-day, player, `slot_role`) under the `lineup`
   label: `actual` from the started roster days, `optimal` from
   `int_fantasy__optimal_lineups` with its slot's role.
@@ -339,12 +342,13 @@ Grain: (`matchup_id`, `fantasy_team_id`, `category_key`, `lineup`). Table.
   batting columns and a pitcher role the pitching ones (as
   `int_fantasy__started_player_days` does), summed per matchup side over the dates of
   its matchup period, then numerator over denominator by `int_fantasy__stat_components`.
-  No statement after the label is applied names a lineup.
+  The sums name no lineup; the one statement that does is the null of R5.4, applied
+  after them.
 - An `optimal` row's numerator, denominator and value are null when any team-day of
   the side's period is unvalued (R5.4): it has an option with a null value in
   `int_fantasy__lineup_options`, the rule `fct_lineup_decisions.is_unvalued` uses. It
-  is read from the options so that an intermediate model does not rest on a mart. A day with no
-  assigned player adds nothing to the sums and is not a reason for null.
+  is read from the options so that an intermediate model does not rest on a mart. A
+  day with no assigned player adds nothing to the sums and is not a reason for null.
 - It exists as a model, not as CTEs of the mart, because a test reads only what a model
   selects: R5.3's test compares the `actual` rows with
   `fct_matchup_category_scores.team_value`, and that proves the path the `optimal`
@@ -467,6 +471,9 @@ pytest, `ingestion/tests/test_lineup_solver.py`: the cases of R6.1.
 | design-review 2 | F3 (P2): CI had no expected value for the pitcher-start counts | Changed: actual 2, measured; optimal at most 2, with the reason |
 | design-review 2 | F4 (P3): `day_kind` on the options had no requirement; R4.6's "the counts" contradicted R4.9 | Changed: R2.1 carries it; R4.6 names the columns that go null |
 | design-review 2 | F5 (P3): `module_paths` is resolved against the working directory, which the spec did not say | Changed: stated with the Python model; the spike records it |
+| design-review 3 | F1 (P2): the totals model took its spine from a mart, against its own stated rule | Changed: the spine is `int_fantasy__matchup_side_totals` crossed with `int_fantasy__categories` |
+| design-review 3 | F2 (P3): R4.6 left `actual_value` open when an actual option is unvalued | Changed: null then, never otherwise |
+| design-review 3 | F3 (P3): "no statement names a lineup" contradicted the null of R5.4 | Changed: the sums name none; the null is the one statement that does |
 | owner, 2026-10-09 | #60's build (PR #106) merged before this spec was approved | Changed: the risk that it would not be is removed; the spec is rebased onto it |
 
 ## Amendments
