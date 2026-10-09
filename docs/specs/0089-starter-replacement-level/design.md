@@ -107,7 +107,9 @@ Steps, all in components (AGENTS.md rule 4):
    `int_fantasy__started_player_days`, the dates of `int_fantasy__matchup_periods` and
    the sides of `int_fantasy__matchup_sides`.
 2. Replacement's expected components: played days of each kind times that kind's level.
-3. Twenty draws. A draw's amount is the floor of the expectation plus 1 when a uniform
+3. Twenty draws (agreed by the owner on 2026-10-09: with fractional amounts the
+   measured slopes were 0.36, 0.32 and 0.46 where whole numbers give 0.41, 0.39 and
+   0.39). A draw's amount is the floor of the expectation plus 1 when a uniform
    number is below its fraction. The uniform number is the first 32 bits of the MD5 of
    the pair, matchup, component and draw number, over 2³²: the same on every build and
    every DuckDB version, which `hash()` does not promise.
