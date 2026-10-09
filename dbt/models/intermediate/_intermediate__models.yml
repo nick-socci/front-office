@@ -113,6 +113,77 @@ models:
           arguments:
             combination_of_columns: [platform, league_id, season, category_key]
 
+  - name: int_fantasy__reported_matchup_margins
+    description: >
+      One row per (decided two-sided matchup, scored category), for every league-season
+      loaded: the margin the league host reported, home minus away, restated for a
+      matchup period of usual volume, and whether it counts toward a scale (ADR 0027).
+      Playoff matchups and rates with no usable denominator are kept, unmeasured.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: league_id
+        data_type: varchar
+        constraints: [{type: not_null}]
+      - name: season
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: matchup_id
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: category_key
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: is_regular_season
+        description: False for a playoff matchup of any tier.
+        data_type: boolean
+        constraints: [{type: not_null}]
+      - name: margin
+        description: Home's reported total minus away's, as reported.
+        data_type: double
+        constraints: [{type: not_null}]
+      - name: is_rate
+        description: The category has a denominator part in int_fantasy__stat_components.
+        data_type: boolean
+        constraints: [{type: not_null}]
+      - name: home_denominator
+        description: >
+          For a rate, the home side's reported denominator; null for a count, or when
+          the host does not report it.
+        data_type: double
+      - name: away_denominator
+        data_type: double
+      - name: relative_volume
+        description: >
+          How much was played in the matchup period against the league-season's usual
+          regular-season period; 1 is usual. Null for a playoff matchup.
+        data_type: double
+      - name: standard_margin
+        description: >
+          The margin restated for a period of usual volume: divided by the square root
+          of relative_volume for a count, multiplied by it for a rate. Null where there
+          is no relative volume above zero.
+        data_type: double
+      - name: is_measured
+        description: >
+          Whether the row counts toward a scale: a regular-season matchup, in a period
+          with a relative volume above zero, and for a rate both denominators reported
+          and above zero.
+        data_type: boolean
+        constraints: [{type: not_null}]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, matchup_id, category_key]
+      - dbt_utils.expression_is_true:
+          name: int_fantasy__reported_matchup_margins_measured_rows_have_a_standard_margin
+          arguments:
+            expression: "not is_measured or standard_margin is not null"
+
   - name: int_fantasy__category_scales
     description: >
       One row per scored category: the usual gap between two teams in it (margin_scale,
@@ -1715,3 +1786,233 @@ unit_tests:
       rows:
         - {category_key: 0, matchups_measured: 1, margin_scale: 2, side_denominator: null}
         - {category_key: 5, matchups_measured: 0, margin_scale: null, side_denominator: null}
+
+# -----------------------------------------------------------------------------
+# Unit tests: the league host's reported margins (spec 0057, R1 and R4.1).
+# Category 1 is a count (hits), 2 a rate (hits over at-bats, whose reported total is
+# stat 0), 62 a category with no rule.
+# -----------------------------------------------------------------------------
+
+  - name: reported_margins_are_one_row_per_decided_matchup_and_scored_category
+    description: >
+      Matchup 1 is decided and regular season: one row per scored category, the rate
+      with both sides' reported at-bats, the category with no rule as a count. Matchup 2
+      is in progress and matchup 3 is a bye: no rows. Matchup 4 is a playoff matchup: a
+      row, not measured, with no relative volume. Stat 99 is reported and not scored: no
+      row. Matchup 4 reports nothing for categories 2 and 62: no rows for them. With
+      one regular-season period its relative volume is 1. Catches: a bye, an undecided
+      or a playoff matchup measured; a non-scored stat measured; a denominator read
+      from the wrong stat.
+    model: int_fantasy__reported_matchup_margins
+    given:
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 1, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 0, part: numerator, component: at_bats, weight: 1}
+          - {platform: espn, stat_key: 2, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 2, part: denominator, component: at_bats, weight: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 1}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 2}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 62}
+      - input: ref('stg_espn__matchups')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, matchup_period: 1, home_team_id: 1, away_team_id: 2, winner: HOME, playoff_tier: NONE}
+          - {league_id: "1", season: 2026, matchup_id: 2, matchup_period: 1, home_team_id: 3, away_team_id: 4, winner: UNDECIDED, playoff_tier: NONE}
+          - {league_id: "1", season: 2026, matchup_id: 3, matchup_period: 1, home_team_id: 5, away_team_id: null, winner: UNDECIDED, playoff_tier: NONE}
+          - {league_id: "1", season: 2026, matchup_id: 4, matchup_period: 2, home_team_id: 1, away_team_id: 3, winner: AWAY, playoff_tier: WINNERS_BRACKET}
+      - input: ref('stg_espn__matchup_category_results')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 1, score: 10}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 1, score: 7}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 2, score: 0.5}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 2, score: 0.25}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 0, score: 40}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 0, score: 36}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 62, score: 1}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 62, score: 0}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 99, score: 5}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 99, score: 3}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: home, stat_id: 1, score: 3}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: away, stat_id: 1, score: 2}
+          - {league_id: "1", season: 2026, matchup_id: 3, side: home, stat_id: 1, score: 6}
+          - {league_id: "1", season: 2026, matchup_id: 4, side: home, stat_id: 1, score: 4}
+          - {league_id: "1", season: 2026, matchup_id: 4, side: away, stat_id: 1, score: 9}
+    expect:
+      rows:
+        - {matchup_id: 1, category_key: 1, is_regular_season: true, margin: 3, is_rate: false, home_denominator: null, away_denominator: null, relative_volume: 1, standard_margin: 3, is_measured: true}
+        - {matchup_id: 1, category_key: 2, is_regular_season: true, margin: 0.25, is_rate: true, home_denominator: 40, away_denominator: 36, relative_volume: 1, standard_margin: 0.25, is_measured: true}
+        - {matchup_id: 1, category_key: 62, is_regular_season: true, margin: 1, is_rate: false, home_denominator: null, away_denominator: null, relative_volume: 1, standard_margin: 1, is_measured: true}
+        - {matchup_id: 4, category_key: 1, is_regular_season: false, margin: -5, is_rate: false, home_denominator: null, away_denominator: null, relative_volume: null, standard_margin: null, is_measured: false}
+
+  - name: reported_margins_are_restated_for_a_period_of_usual_volume
+    description: >
+      Three regular-season periods. Hits average 40 a side in period 1 and 10 in periods
+      2 and 3, so the usual period is 10 and period 1 has a relative volume of 4. Its
+      count margin of 40 is restated as 20 (over the square root of 4) and its rate
+      margin of 0.25 as 0.5 (times it). Category 5 averages 2, 0 and 0: its usual total
+      is zero, so it is left out of the volume, and without that rule period 1 would
+      have no defined volume or a division by zero. Catches: a long period counted at
+      face value; a rate restated the way a count is; one category's empty weeks moving
+      or breaking the relative volume.
+    model: int_fantasy__reported_matchup_margins
+    given:
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 1, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 0, part: numerator, component: at_bats, weight: 1}
+          - {platform: espn, stat_key: 2, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 2, part: denominator, component: at_bats, weight: 1}
+          - {platform: espn, stat_key: 5, part: numerator, component: home_runs, weight: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 1}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 2}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5}
+      - input: ref('stg_espn__matchups')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, matchup_period: 1, home_team_id: 1, away_team_id: 2, winner: HOME, playoff_tier: NONE}
+          - {league_id: "1", season: 2026, matchup_id: 2, matchup_period: 2, home_team_id: 1, away_team_id: 2, winner: HOME, playoff_tier: NONE}
+          - {league_id: "1", season: 2026, matchup_id: 3, matchup_period: 3, home_team_id: 1, away_team_id: 2, winner: TIE, playoff_tier: NONE}
+      - input: ref('stg_espn__matchup_category_results')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 1, score: 60}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 1, score: 20}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 2, score: 0.5}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 2, score: 0.25}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 0, score: 120}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 0, score: 80}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 5, score: 4}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 5, score: 0}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: home, stat_id: 1, score: 12}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: away, stat_id: 1, score: 8}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: home, stat_id: 5, score: 0}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: away, stat_id: 5, score: 0}
+          - {league_id: "1", season: 2026, matchup_id: 3, side: home, stat_id: 1, score: 10}
+          - {league_id: "1", season: 2026, matchup_id: 3, side: away, stat_id: 1, score: 10}
+          - {league_id: "1", season: 2026, matchup_id: 3, side: home, stat_id: 5, score: 0}
+          - {league_id: "1", season: 2026, matchup_id: 3, side: away, stat_id: 5, score: 0}
+    expect:
+      rows:
+        - {matchup_id: 1, category_key: 1, margin: 40, relative_volume: 4, standard_margin: 20, is_measured: true}
+        - {matchup_id: 1, category_key: 2, margin: 0.25, relative_volume: 4, standard_margin: 0.5, is_measured: true}
+        - {matchup_id: 1, category_key: 5, margin: 4, relative_volume: 4, standard_margin: 2, is_measured: true}
+        - {matchup_id: 2, category_key: 1, margin: 4, relative_volume: 1, standard_margin: 4, is_measured: true}
+        - {matchup_id: 2, category_key: 5, margin: 0, relative_volume: 1, standard_margin: 0, is_measured: true}
+        - {matchup_id: 3, category_key: 1, margin: 0, relative_volume: 1, standard_margin: 0, is_measured: true}
+        - {matchup_id: 3, category_key: 5, margin: 0, relative_volume: 1, standard_margin: 0, is_measured: true}
+
+  - name: reported_margins_do_not_measure_a_rate_without_a_usable_denominator
+    description: >
+      Matchup 1: the away side has zero at-bats, and the host reports its average as 0.
+      Matchup 2: the host reports the averages and no at-bats at all. Both are rows, and
+      neither is measured; the count in the same matchups is. Catches: a rate on a zero
+      denominator read as the best rate there is; a rate's scale measured from matchups
+      its denominator cannot be.
+    model: int_fantasy__reported_matchup_margins
+    given:
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 1, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 0, part: numerator, component: at_bats, weight: 1}
+          - {platform: espn, stat_key: 2, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 2, part: denominator, component: at_bats, weight: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 1}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 2}
+      - input: ref('stg_espn__matchups')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, matchup_period: 1, home_team_id: 1, away_team_id: 2, winner: HOME, playoff_tier: NONE}
+          - {league_id: "1", season: 2026, matchup_id: 2, matchup_period: 1, home_team_id: 3, away_team_id: 4, winner: AWAY, playoff_tier: NONE}
+      - input: ref('stg_espn__matchup_category_results')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 1, score: 10}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 1, score: 0}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 2, score: 0.25}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 2, score: 0}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 0, score: 40}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 0, score: 0}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: home, stat_id: 1, score: 8}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: away, stat_id: 1, score: 12}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: home, stat_id: 2, score: 0.25}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: away, stat_id: 2, score: 0.5}
+    expect:
+      rows:
+        - {matchup_id: 1, category_key: 1, margin: 10, is_rate: false, home_denominator: null, away_denominator: null, is_measured: true}
+        - {matchup_id: 1, category_key: 2, margin: 0.25, is_rate: true, home_denominator: 40, away_denominator: 0, is_measured: false}
+        - {matchup_id: 2, category_key: 1, margin: -4, is_rate: false, home_denominator: null, away_denominator: null, is_measured: true}
+        - {matchup_id: 2, category_key: 2, margin: -0.25, is_rate: true, home_denominator: null, away_denominator: null, is_measured: false}
+
+  - name: reported_margins_with_no_counting_category_have_a_relative_volume_of_1
+    description: >
+      A league-season that scores only a rate: there is no counting category to measure
+      a period's volume from, so the relative volume is 1 and the margin is used as
+      reported (spec 0057, amendment of 2026-10-08). Catches: such a league left with
+      no measured margin at all, or a null volume passed into the standard margin.
+    model: int_fantasy__reported_matchup_margins
+    given:
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 1, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 0, part: numerator, component: at_bats, weight: 1}
+          - {platform: espn, stat_key: 2, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 2, part: denominator, component: at_bats, weight: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 2}
+      - input: ref('stg_espn__matchups')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, matchup_period: 1, home_team_id: 1, away_team_id: 2, winner: HOME, playoff_tier: NONE}
+          - {league_id: "1", season: 2026, matchup_id: 2, matchup_period: 2, home_team_id: 1, away_team_id: 2, winner: HOME, playoff_tier: NONE}
+      - input: ref('stg_espn__matchup_category_results')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 2, score: 0.5}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 2, score: 0.25}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 0, score: 400}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 0, score: 360}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: home, stat_id: 2, score: 0.25}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: away, stat_id: 2, score: 0.25}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: home, stat_id: 0, score: 40}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: away, stat_id: 0, score: 36}
+    expect:
+      rows:
+        - {matchup_id: 1, category_key: 2, margin: 0.25, relative_volume: 1, standard_margin: 0.25, is_measured: true}
+        - {matchup_id: 2, category_key: 2, margin: 0, relative_volume: 1, standard_margin: 0, is_measured: true}
+
+  - name: reported_margins_do_not_measure_a_period_in_which_nothing_was_played
+    description: >
+      Hits average 0 a side in period 1 and 10 in periods 2 and 3, so period 1 has a
+      relative volume of 0: its row is kept, with no standard margin, and is not
+      measured (spec 0057, amendment of 2026-10-08). Catches: a division by zero, or an
+      empty week measured as a matchup.
+    model: int_fantasy__reported_matchup_margins
+    given:
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 1, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 0, part: numerator, component: at_bats, weight: 1}
+          - {platform: espn, stat_key: 2, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 2, part: denominator, component: at_bats, weight: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 1}
+      - input: ref('stg_espn__matchups')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, matchup_period: 1, home_team_id: 1, away_team_id: 2, winner: TIE, playoff_tier: NONE}
+          - {league_id: "1", season: 2026, matchup_id: 2, matchup_period: 2, home_team_id: 1, away_team_id: 2, winner: HOME, playoff_tier: NONE}
+          - {league_id: "1", season: 2026, matchup_id: 3, matchup_period: 3, home_team_id: 1, away_team_id: 2, winner: TIE, playoff_tier: NONE}
+      - input: ref('stg_espn__matchup_category_results')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 1, score: 0}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 1, score: 0}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: home, stat_id: 1, score: 12}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: away, stat_id: 1, score: 8}
+          - {league_id: "1", season: 2026, matchup_id: 3, side: home, stat_id: 1, score: 10}
+          - {league_id: "1", season: 2026, matchup_id: 3, side: away, stat_id: 1, score: 10}
+    expect:
+      rows:
+        - {matchup_id: 1, category_key: 1, margin: 0, relative_volume: 0, standard_margin: null, is_measured: false}
+        - {matchup_id: 2, category_key: 1, margin: 4, relative_volume: 1, standard_margin: 4, is_measured: true}
+        - {matchup_id: 3, category_key: 1, margin: 0, relative_volume: 1, standard_margin: 0, is_measured: true}
