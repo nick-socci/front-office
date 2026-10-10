@@ -167,6 +167,17 @@ def check_expectations(
             problems.append(f"{stem}: rows must be a whole number of at least 1, got {rows!r}")
         for key in sorted(set(entry) - _EXPECTATION_KEYS, key=str):
             problems.append(f"{stem}: unknown key {key!r}")
+        if "rows_with_a_value" in entry:
+            counts = entry["rows_with_a_value"]
+            if not isinstance(counts, dict):
+                problems.append(f"{stem}: rows_with_a_value must be a mapping of column to count")
+            else:
+                for column, expected in sorted(counts.items(), key=str):
+                    if not _is_whole_number(expected) or expected < 0:
+                        problems.append(
+                            f"{stem}: rows_with_a_value for {column} must be a whole number "
+                            f"of at least 0, got {expected!r}"
+                        )
         variables = entry.get("variables") or {}
         if not isinstance(variables, dict):
             problems.append(f"{stem}: variables must be a mapping")
@@ -212,6 +223,8 @@ def _run_stated(
         if column not in columns:
             problems.append(f"{path.name}: states a count for column {column}, which it lacks")
             continue
+        if not _is_whole_number(expected):
+            continue  # check_expectations reports it; `True` must not compare equal to 1
         found = sum(1 for row in rows if row[columns.index(column)] is not None)
         if found != expected:
             problems.append(

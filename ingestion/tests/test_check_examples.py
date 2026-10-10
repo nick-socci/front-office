@@ -346,6 +346,46 @@ def test_an_example_as_stated_has_no_problems(tmp_path):
     assert run_stated(tmp_path, {"q": sql}, expectations) == []
 
 
+def test_rows_with_a_value_that_is_not_a_mapping_is_reported():
+    """Catches a malformed block (a list) silently holding the example to no counts."""
+    problems = ce.check_expectations({"q": "select 1"}, {"q": {"rows": 1, "rows_with_a_value": []}})
+    assert any("q" in p and "rows_with_a_value" in p for p in problems)
+
+
+def test_a_boolean_count_is_reported():
+    """Catches a boolean count comparing equal to 1, because Python has True == 1."""
+    problems = ce.check_expectations(
+        {"q": "select 1"}, {"q": {"rows": 1, "rows_with_a_value": {"vcol": True}}}
+    )
+    assert any("vcol" in p for p in problems)
+
+
+def test_a_negative_or_text_count_is_reported():
+    """Catches a count that no result could ever match passing the pure check."""
+    for bad in (-1, "two"):
+        problems = ce.check_expectations(
+            {"q": "select 1"}, {"q": {"rows": 1, "rows_with_a_value": {"vcol": bad}}}
+        )
+        assert any("vcol" in p for p in problems), bad
+
+
+def test_a_count_of_zero_is_allowed():
+    """Catches the validation refusing a column legitimately stated as having no values."""
+    problems = ce.check_expectations(
+        {"q": "select 1"}, {"q": {"rows": 1, "rows_with_a_value": {"vcol": 0}}}
+    )
+    assert problems == []
+
+
+def test_a_boolean_count_never_passes_unreported(tmp_path):
+    """Catches `True` passing as a count of 1 in the run, with the pure check also silent."""
+    sql = "select 'a' as vcol"
+    expectations = {"q": {"rows": 1, "rows_with_a_value": {"vcol": True}}}
+    assert ce.check_expectations({"q": sql}, expectations)
+    # The run must not raise; the problem is the pure check's to report.
+    assert run_stated(tmp_path, {"q": sql}, expectations) == []
+
+
 EXAMPLES_DIR = Path(__file__).resolve().parents[2] / "docs/examples"
 
 

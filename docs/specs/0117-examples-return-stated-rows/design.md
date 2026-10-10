@@ -316,3 +316,13 @@ The gate itself is the test of the four stated numbers: `.agentic/gates` and CI.
 
 ## Amendments
 
+- **2026-10-10, PR #126 review, F2.** The no-go "No check of the committed default
+  parameters in CI" contradicted the test strategy's text test of R2.1, which the owner
+  kept on 2026-10-10 (PR #124, *Settled by the owner*). The no-go is reworded to what was
+  meant: CI does not check what the defaults *return*; it does hold the three values in
+  the file's text. No requirement and no test changes.
+- **2026-10-10, PR #126 review, F1.** `check_expectations` also refuses a
+  `rows_with_a_value` that is not a mapping of column to a whole number of at least 0
+  (a boolean is not a whole number here). The design listed the checks on `rows`, on the
+  keys and on `variables`, and was silent on this one; without it a malformed block held
+  the example to no counts, and `true` compared equal to 1. Zero stays allowed.
