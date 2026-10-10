@@ -94,6 +94,31 @@ models:
           arguments:
             combination_of_columns: [league_id, season, matchup_id, fantasy_team_id, stat_id]
 
+  - name: rec_espn__register_rows
+    description: >
+      One row per row of the espn_reconciliation_residuals register whose league-season is
+      loaded, with the status the reconciliation gave its side and stat (null if none) and
+      a problem column that is null when the row is accounted for. Rows of a league-season
+      that is not loaded are left out: a league-scoped relation holds no row of a league
+      that is not loaded, and rec_espn__register_matchups_exist reports those from the
+      seed. A view, read by the singular tests fct_matchup_scores_match_espn and
+      rec_espn__register_matchups_exist. See the model header.
+    columns:
+      - name: problem
+        description: >
+          matchup_absent, explains_nothing, or null when the row is accounted for, checked
+          in that order.
+        data_tests:
+          # Null is allowed: accepted_values passes a null, which is a row that is
+          # accounted for.
+          - accepted_values:
+              arguments:
+                values: [matchup_absent, explains_nothing]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, matchup_id, team_id, stat_id]
+
 unit_tests:
   - name: player_day_differences_label_their_inputs
     description: >
@@ -434,3 +459,59 @@ unit_tests:
         - {league_id: "1", season: 2026, matchup_id: 1, difference_sum: 1, expected_difference: 1, problem: null}
         - {league_id: "1", season: 2027, matchup_id: 1, difference_sum: 1, expected_difference: null, problem: unregistered}
         - {league_id: "2", season: 2026, matchup_id: 1, difference_sum: 1, expected_difference: 2, problem: wrong_size}
+
+  - name: register_rows_are_judged_in_their_own_league_season
+    description: >
+      Seven register rows, all of team 1 with a difference of 1, against three loaded
+      league-seasons -- 1 / 2026, 1 / 2027 and 2 / 2026; league 3 is not loaded. Row 1
+      (1 / 2026, matchup 1, stat 1) is registered: no problem. Row 2 (matchup 2) is
+      unverified: no problem. Row 3 (matchup 3) is a match, so the row explains nothing.
+      Row 4 (matchup 4, stat 99) names a stat ESPN does not have on a matchup that exists:
+      explains_nothing, with no status. Row 5 (1 / 2027, matchup 1, stat 1) is a match
+      there, though 1 / 2026 registers the same key: explains_nothing. Row 6 (2 / 2026,
+      matchup 5) names a matchup league 2 does not have, though 1 / 2026 has one and it is
+      registered there: matchup_absent. Row 7 (league 3) is in no loaded league-season and
+      has no row. Catches a row satisfied by another league-season's residual; a stale row
+      passing; a row of a league that is not loaded appearing in the view, which the
+      tenant-isolation gate would count as a leak.
+    model: rec_espn__register_rows
+    given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+          - {platform: espn, league_id: "1", season: 2027, has_rosters: true}
+          - {platform: espn, league_id: "2", season: 2026, has_rosters: true}
+      - input: ref('stg_espn__matchup_category_results')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, team_id: 1, stat_id: 1, score: 1}
+          - {league_id: "1", season: 2026, matchup_id: 2, team_id: 1, stat_id: 1, score: 1}
+          - {league_id: "1", season: 2026, matchup_id: 3, team_id: 1, stat_id: 1, score: 1}
+          - {league_id: "1", season: 2026, matchup_id: 4, team_id: 1, stat_id: 1, score: 1}
+          - {league_id: "1", season: 2026, matchup_id: 5, team_id: 1, stat_id: 1, score: 1}
+          - {league_id: "1", season: 2027, matchup_id: 1, team_id: 1, stat_id: 1, score: 1}
+          - {league_id: "2", season: 2026, matchup_id: 1, team_id: 1, stat_id: 1, score: 1}
+      - input: ref('rec_espn__matchup_stat_differences')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, fantasy_team_id: 1, stat_key: 1, status: registered}
+          - {league_id: "1", season: 2026, matchup_id: 2, fantasy_team_id: 1, stat_key: 1, status: unverified}
+          - {league_id: "1", season: 2026, matchup_id: 3, fantasy_team_id: 1, stat_key: 1, status: match}
+          - {league_id: "1", season: 2026, matchup_id: 4, fantasy_team_id: 1, stat_key: 1, status: match}
+          - {league_id: "1", season: 2026, matchup_id: 5, fantasy_team_id: 1, stat_key: 1, status: registered}
+          - {league_id: "1", season: 2027, matchup_id: 1, fantasy_team_id: 1, stat_key: 1, status: match}
+      - input: ref('espn_reconciliation_residuals')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, team_id: 1, stat_id: 1, expected_difference: 1, cause: official_scoring_change, evidence: x}
+          - {league_id: "1", season: 2026, matchup_id: 2, team_id: 1, stat_id: 1, expected_difference: 1, cause: official_scoring_change, evidence: x}
+          - {league_id: "1", season: 2026, matchup_id: 3, team_id: 1, stat_id: 1, expected_difference: 1, cause: official_scoring_change, evidence: x}
+          - {league_id: "1", season: 2026, matchup_id: 4, team_id: 1, stat_id: 99, expected_difference: 1, cause: official_scoring_change, evidence: x}
+          - {league_id: "1", season: 2027, matchup_id: 1, team_id: 1, stat_id: 1, expected_difference: 1, cause: official_scoring_change, evidence: x}
+          - {league_id: "2", season: 2026, matchup_id: 5, team_id: 1, stat_id: 1, expected_difference: 1, cause: official_scoring_change, evidence: x}
+          - {league_id: "3", season: 2026, matchup_id: 1, team_id: 1, stat_id: 1, expected_difference: 1, cause: official_scoring_change, evidence: x}
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, matchup_id: 1, stat_id: 1, reconciliation_status: registered, problem: null}
+        - {league_id: "1", season: 2026, matchup_id: 2, stat_id: 1, reconciliation_status: unverified, problem: null}
+        - {league_id: "1", season: 2026, matchup_id: 3, stat_id: 1, reconciliation_status: match, problem: explains_nothing}
+        - {league_id: "1", season: 2026, matchup_id: 4, stat_id: 99, reconciliation_status: null, problem: explains_nothing}
+        - {league_id: "1", season: 2027, matchup_id: 1, stat_id: 1, reconciliation_status: match, problem: explains_nothing}
+        - {league_id: "2", season: 2026, matchup_id: 5, stat_id: 1, reconciliation_status: null, problem: matchup_absent}
