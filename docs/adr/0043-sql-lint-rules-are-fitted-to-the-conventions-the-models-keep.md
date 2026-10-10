@@ -1,4 +1,4 @@
-# 0041. SQL lint rules are fitted to the conventions the models already keep, and no rule may change a relation
+# 0043. SQL lint rules are fitted to the conventions the models already keep, and no rule may change a relation
 
 - Status: proposed
 - Date: 2026-10-09

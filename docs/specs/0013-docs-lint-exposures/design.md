@@ -64,16 +64,16 @@ rule and because the README's numbers would be re-read twice; it would win if an
 SQL change were in flight.
 
 **C — separate workflows.** `docs/design/02` sketched a `docs.yml`. It rebuilds the
-fixture warehouse a second time and can deploy from a red commit (ADR 0040).
+fixture warehouse a second time and can deploy from a red commit (ADR 0042).
 
 ## Decisions
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0040](../../adr/0040-the-docs-site-is-built-in-ci-from-the-fixtures.md) | The docs site is built in CI from the fixtures, and deployed by the Pages actions | proposed |
-| [0041](../../adr/0041-sql-lint-rules-are-fitted-to-the-conventions-the-models-keep.md) | SQL lint rules are fitted to the conventions the models already keep, and no rule may change a relation | proposed |
-| [0042](../../adr/0042-sql-is-linted-as-dbt-compiles-it.md) | SQL is linted as dbt compiles it | proposed |
-| [0043](../../adr/0043-an-example-query-is-an-exposure-and-the-dashboard-reads-every-mart.md) | An example query is an exposure the gates check, and the planned dashboard reads every mart | proposed |
+| [0042](../../adr/0042-the-docs-site-is-built-in-ci-from-the-fixtures.md) | The docs site is built in CI from the fixtures, and deployed by the Pages actions | proposed |
+| [0043](../../adr/0043-sql-lint-rules-are-fitted-to-the-conventions-the-models-keep.md) | SQL lint rules are fitted to the conventions the models already keep, and no rule may change a relation | proposed |
+| [0044](../../adr/0044-sql-is-linted-as-dbt-compiles-it.md) | SQL is linted as dbt compiles it | proposed |
+| [0045](../../adr/0045-an-example-query-is-an-exposure-and-the-dashboard-reads-every-mart.md) | An example query is an exposure the gates check, and the planned dashboard reads every mart | proposed |
 
 ### The owner's choices, 2026-10-09
 
@@ -83,11 +83,11 @@ approved.
 | Question | Chosen |
 |---|---|
 | Tier | M |
-| Where the site is built and deployed (ADR 0040) | in CI's existing job, as recommended |
+| Where the site is built and deployed (ADR 0042) | in CI's existing job, as recommended |
 | Who enables GitHub Pages | the owner, before the build's PR merges |
-| Lint rules (ADR 0041) | fitted to the existing style, as recommended |
-| Templater (ADR 0042) | dbt, as recommended |
-| What the exposures declare (ADR 0043) | every mart for the dashboard, and checked examples, as recommended |
+| Lint rules (ADR 0043) | fitted to the existing style, as recommended |
+| Templater (ADR 0044) | dbt, as recommended |
+| What the exposures declare (ADR 0045) | every mart for the dashboard, and checked examples, as recommended |
 | Mart example queries | add three (R3.8) |
 | The team named in `roster_day_query.sql` | select by `team_id` instead (R3.9) |
 | Per-source freshness | a follow-up issue, #114 |
@@ -97,7 +97,7 @@ approved.
 
 ### 1. SQL lint (R2)
 
-`.sqlfluff`, at the repository root, as the starting point (ADR 0041, 0042):
+`.sqlfluff`, at the repository root, as the starting point (ADR 0043, 0044):
 
 ```ini
 [sqlfluff]
@@ -180,7 +180,7 @@ exposures:
       Planned for sub-project 3 and not built. Declared so that the lineage ends where
       the marts are meant to be read, and so that everything the dashboard will need
       can be selected in one expression. It names every mart; when the dashboard
-      exists this list is rewritten from what it queries (ADR 0043).
+      exists this list is rewritten from what it queries (ADR 0045).
     depends_on:
       - ref('dim_players')
       # … all nine marts, alphabetical

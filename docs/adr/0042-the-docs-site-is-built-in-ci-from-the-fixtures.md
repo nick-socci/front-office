@@ -1,4 +1,4 @@
-# 0040. The docs site is built in CI from the fixtures, and deployed by the Pages actions
+# 0042. The docs site is built in CI from the fixtures, and deployed by the Pages actions
 
 - Status: proposed
 - Date: 2026-10-09

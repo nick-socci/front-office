@@ -1,4 +1,4 @@
-# 0043. An example query is an exposure the gates check, and the planned dashboard reads every mart
+# 0045. An example query is an exposure the gates check, and the planned dashboard reads every mart
 
 - Status: proposed
 - Date: 2026-10-09

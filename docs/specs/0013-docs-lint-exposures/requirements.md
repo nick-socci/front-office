@@ -48,7 +48,7 @@ proof that they work and the statement of why nothing runs them.
   dormant until the 2027 daily schedule (sub-project 3).
 - **No per-source freshness.** The raw table holds three sources with different
   cadences; splitting its freshness is #114 (owner, 2026-10-09).
-- **No linting of macros, of `docs/examples/`, or of Python.** (ADR 0042; ruff already
+- **No linting of macros, of `docs/examples/`, or of Python.** (ADR 0044; ruff already
   covers Python.)
 - **No pre-commit lint hook.** The hook stays what it is: the privacy guard.
 - **No edit to `docs/design/`.** It is the pre-spec record.
@@ -63,7 +63,7 @@ proof that they work and the statement of why nothing runs them.
 - Tuning the docs site's look → dbt's stock site, plus one overview page. No theme, no
   custom JavaScript.
 - Guessing which marts each dashboard page will read → the dashboard exposure names
-  every mart, and says it is a plan (ADR 0043).
+  every mart, and says it is a plan (ADR 0045).
 - Rewriting the README from scratch → the listed stale statements are replaced and the
   listed sections added (R5); the rest stands.
 
@@ -97,11 +97,11 @@ A reviewer opens one URL and sees the lineage.
 ### R2. SQL lint
 
 - R2.1 THE SYSTEM SHALL lint every `.sql` file under `dbt/models` and `dbt/tests` with
-  sqlfluff (DuckDB dialect, dbt templater, ADR 0042) in the gates and in CI, and fail on
+  sqlfluff (DuckDB dialect, dbt templater, ADR 0044) in the gates and in CI, and fail on
   any violation, a file it cannot parse included.
 - R2.2 THE SYSTEM SHALL keep the rule configuration in one `.sqlfluff` file at the
   repository root, in which every rule turned off or reconfigured carries a comment
-  saying why (ADR 0041).
+  saying why (ADR 0043).
 - R2.3 THE SYSTEM SHALL make the one-off reformatting in a commit that holds nothing
   but the output of `sqlfluff fix` on `.sql` files. Hand edits come in a commit before
   it; configuration, dependencies and CI in commits of their own.
@@ -199,7 +199,7 @@ and the real warehouse (`data/warehouse.duckdb`, built 2026-10-09 21:02).
 | Site contents, fixtures | 56 models, 7 seeds, 1 source, 433 data tests, 149 unit tests; exposures = 5 | counts read from `site/manifest.json` |
 | Site check on today's output | passes; the only GUID matches are `invocation_id` (manifest, catalog) and `user_id` (manifest); no forbidden key as a JSON key | `scripts/build_docs_site.py` |
 | Site check, negative | fails on each of: an extra file, a non-`ci` database, a forbidden key, a stray GUID | its pytest cases (R1.3) |
-| Lint, before any change | 1,843 violations in 105 of 117 files with default rules; 774 in 94 with ADR 0041's starting configuration; 2 parse errors, both in `int_fantasy__category_scales.sql` | `sqlfluff lint dbt/models dbt/tests` |
+| Lint, before any change | 1,843 violations in 105 of 117 files with default rules; 774 in 94 with ADR 0043's starting configuration; 2 parse errors, both in `int_fantasy__category_scales.sql` | `sqlfluff lint dbt/models dbt/tests` |
 | Lint, after | 0 violations, 0 parse errors, 117 files linted (55 models, 62 tests) | the gate |
 | Lint run time | about 1 minute (53 to 62 s measured) | the gate's output |
 | Fixture build | PASS=641 WARN=3 ERROR=0 TOTAL=644 before; the same after (an exposure adds no test) | `dbt build --target ci --vars '{anonymize: true}'` |

@@ -1,4 +1,4 @@
-# 0042. SQL is linted as dbt compiles it
+# 0044. SQL is linted as dbt compiles it
 
 - Status: proposed
 - Date: 2026-10-09

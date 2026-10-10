@@ -6,7 +6,7 @@ Ordered. Tests before the code they test. This is the plan, not the tracker: pro
 run evidence are recorded on #13 during the build, and this file is not edited to show
 them.
 
-The first commit of the build accepts ADRs 0040 to 0043. If a SQL pull request is open
+The first commit of the build accepts ADRs 0042 to 0045. If a SQL pull request is open
 when the build starts, stop and say so: the reformat (task 7) would conflict with it.
 
 1. Record the starting point — `judgment` — R2.4, R2.5, R5.5, expected values
@@ -29,7 +29,7 @@ when the build starts, stop and say so: the reformat (task 7) would conflict wit
    - In `int_fantasy__category_scales.sql` only, to `earlier_seasons`. Its own commit.
    - Verify: no parse error is reported; `dbt build --target ci --select
      int_fantasy__category_scales+` passes.
-5. Rule triage — `judgment` — R2.2, R2.6, ADR 0041
+5. Rule triage — `judgment` — R2.2, R2.6, ADR 0043
    - Run `sqlfluff fix` in the working tree, uncommitted, and lint again. For each rule
      still reporting, in design §1's order: leave on, fix by hand, or turn off with its
      reason in `.sqlfluff`. Read the `RF04` and `CP02` hits one by one.
