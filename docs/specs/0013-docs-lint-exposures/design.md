@@ -75,6 +75,24 @@ fixture warehouse a second time and can deploy from a red commit (ADR 0040).
 | [0042](../../adr/0042-sql-is-linted-as-dbt-compiles-it.md) | SQL is linted as dbt compiles it | proposed |
 | [0043](../../adr/0043-an-example-query-is-an-exposure-and-the-dashboard-reads-every-mart.md) | An example query is an exposure the gates check, and the planned dashboard reads every mart | proposed |
 
+### The owner's choices, 2026-10-09
+
+Made on the spec PR (#112), before approval. The ADRs stay `proposed` until the spec is
+approved.
+
+| Question | Chosen |
+|---|---|
+| Tier | M |
+| Where the site is built and deployed (ADR 0040) | in CI's existing job, as recommended |
+| Who enables GitHub Pages | the owner, before the build's PR merges |
+| Lint rules (ADR 0041) | fitted to the existing style, as recommended |
+| Templater (ADR 0042) | dbt, as recommended |
+| What the exposures declare (ADR 0043) | every mart for the dashboard, and checked examples, as recommended |
+| Mart example queries | add three (R3.8) |
+| The team named in `roster_day_query.sql` | select by `team_id` instead (R3.9) |
+| Per-source freshness | a follow-up issue, #114 |
+| One PR or three | one |
+
 ## Detailed design
 
 ### 1. SQL lint (R2)
@@ -204,10 +222,17 @@ exposures:
 - Its functions are plain and tested with pytest on small temporary files; the
   database step is covered by the gate itself.
 
-If the owner chooses R3.8, three files are added under `docs/examples/`, each a single
-`select` over marts joined to `dim_players` where a name is wanted, with no parameter
-that names a team, and each with an `analysis` exposure. What each one shows is
-`judgment`; that each runs and matches its exposure is the gate's.
+Three files are added under `docs/examples/` (R3.8), each a single `select` over marts
+joined to `dim_players` where a player's name is wanted, with no parameter that names a
+team, and each with an `analysis` exposure. What each one shows is `judgment`, and the
+owner sees its real-season output before it is committed; that each runs and matches
+its exposure is the gate's.
+
+`roster_day_query.sql` changes in one place (R3.9): its `params` CTE carries a
+`team_id` in place of a team name, the join to `params` is on `team_id`, and the
+header comment's wording follows. It still prints `team_name` in its output, which is
+the real name on a local warehouse and an alias on the fixtures. The models it reads
+do not change, so its exposure is as sketched above.
 
 ### 3. The docs site (R1)
 
@@ -327,6 +352,7 @@ not satisfy it.
 | R2.5 | dbt result counts, fixtures and real season, before against after | a test silently dropped or broken by the reformat |
 | R3.3, R3.5, R3.6 | pytest on `check_examples`: missing relation, extra relation, file without exposure, exposure without file, mart missing from the dashboard, owner with an email; a relation-shaped name inside a string literal, a `--` comment and a block comment is not counted | an exposure that says something untrue |
 | R3.4 | the gate runs each example on the fixture warehouse | an example broken by a renamed model or column |
+| R3.8, R3.9 | each example run on the real season and read by the owner; `roster_day_query.sql`'s rows before against after | an example that shows something wrong or names a team; a `team_id` that is a different team |
 | R3.7 | `dbt build --target ci --select +exposure:…`, once per exposure, at verification | an exposure dbt cannot resolve |
 | R4.2 | `dbt source freshness` on the real warehouse against `max(fetched_at)` | a time-zone or parsing error in `loaded_at_field` |
 | R5.1, R5.2 | `test_readme.py`, on the parsed mart table | a mart added later and never documented; a mart dropped from the table but still named in prose; a row with no grain or count |
@@ -359,13 +385,8 @@ not satisfy it.
 - Which column names trip `RF04`, and which four files trip `CP02`, were counted but
   not read one by one. Triage (§1, step 2) reads them.
 - Freshness is one age for a table of three sources: on 2026-10-09 the id map's newest
-  capture is 13 days old and the table's is hours old. A per-source check needs either
-  a `filter` or a different source layout. Proposed as a follow-up issue for the 2027
-  schedule, not solved here.
-- `docs/examples/roster_day_query.sql` names a real fantasy team in its `params`. It is
-  already public and is not one of AGENTS.md rule 2's keys, but everything else
-  published aliases team names. Whether to change it is the owner's call (PR,
-  *Decisions for you*).
+  capture is 13 days old and the table's is hours old. Not solved here; it is #114, for
+  the 2027 schedule (owner, 2026-10-09).
 
 ## Review log
 

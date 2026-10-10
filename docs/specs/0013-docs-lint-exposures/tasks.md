@@ -66,10 +66,16 @@ when the build starts, stop and say so: the reformat (task 7) would conflict wit
     - Verify: `uv run python scripts/check_examples.py --db dbt/ci.duckdb` passes;
       `dbt build --target ci --select +exposure:front_office_dashboard` and
       `+exposure:roster_day_query` pass.
-12. *(Only if the owner chose R3.8.)* Three mart examples — `judgment` — R3.8, R5.8
-    - What each shows is decided here and shown to the owner with its real-season
-      output, which is not committed. Each gets its exposure.
-    - Verify: task 11's commands, for the new files.
+12. The examples: three over the marts, and `team_id` in the existing one — `judgment`
+    — R3.8, R3.9, R5.8
+    - `roster_day_query.sql`: run it on the real season and keep the output aside;
+      read the named team's `team_id` from `stg_espn__teams`; change `params` and the
+      join; run it again.
+    - The three mart examples: what each shows is decided here and shown to the owner
+      with its real-season output, which is not committed. Each gets its exposure.
+    - Verify: `roster_day_query.sql` returns the same 18 rows before and after;
+      `git grep` for the team's name finds nothing in the repository; task 11's
+      commands pass for all four files; the owner has seen the three outputs.
 13. The site builder, tests first — `impl` — R1.3, R1.4
     - `ingestion/tests/test_build_docs_site.py` with the positive and four negative
       cases, seen to fail; then `scripts/build_docs_site.py`; `site/` in `.gitignore`.

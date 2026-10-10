@@ -47,7 +47,7 @@ proof that they work and the statement of why nothing runs them.
 - **No scheduled freshness run, and no change to the thresholds.** Freshness stays
   dormant until the 2027 daily schedule (sub-project 3).
 - **No per-source freshness.** The raw table holds three sources with different
-  cadences; splitting its freshness is a follow-up issue (design, *Open questions*).
+  cadences; splitting its freshness is #114 (owner, 2026-10-09).
 - **No linting of macros, of `docs/examples/`, or of Python.** (ADR 0042; ruff already
   covers Python.)
 - **No pre-commit lint hook.** The hook stays what it is: the privacy guard.
@@ -140,10 +140,14 @@ lineage and makes `--select +exposure:<name>` mean "everything this needs".
 - R3.6 Every exposure's `owner` SHALL carry a name and no email address.
 - R3.7 WHEN `dbt build --target ci --select +exposure:<name>` is run for any declared
   exposure, THE SYSTEM SHALL build and test that exposure's upstream models and pass.
-- R3.8 *(Only if the owner chooses it — PR, Decisions for you.)* THE SYSTEM SHALL add
-  three example files, one per question the marts answer (matchup results, player
-  value, lineup decisions), each reading marts only, naming no fantasy team, and each
-  with its exposure.
+- R3.8 THE SYSTEM SHALL add three example files, one per question the marts answer
+  (matchup results, player value, lineup decisions), each reading marts only, naming no
+  fantasy team, and each with its exposure. (Owner, 2026-10-09.) The owner sees each
+  one's real-season output before the file is committed; the output is not committed.
+- R3.9 `docs/examples/roster_day_query.sql` SHALL select its team by `team_id`, and
+  SHALL name no fantasy team in its SQL or its comments. (Owner, 2026-10-09.) The id is
+  that of the team the file names today, so that on the real season its output is the
+  same 18 rows.
 
 ### R4. Source freshness
 
@@ -192,7 +196,7 @@ and the real warehouse (`data/warehouse.duckdb`, built 2026-10-09 21:02).
 | Check | Expected | How to verify |
 |---|---|---|
 | Site files | exactly `index.html`, `manifest.json`, `catalog.json`; about 1.8, 4.1 and 0.1 MB | `ls -la site/` |
-| Site contents, fixtures | 56 models, 7 seeds, 1 source, 433 data tests, 149 unit tests; exposures = 2, or 5 with R3.8 | counts read from `site/manifest.json` |
+| Site contents, fixtures | 56 models, 7 seeds, 1 source, 433 data tests, 149 unit tests; exposures = 5 | counts read from `site/manifest.json` |
 | Site check on today's output | passes; the only GUID matches are `invocation_id` (manifest, catalog) and `user_id` (manifest); no forbidden key as a JSON key | `scripts/build_docs_site.py` |
 | Site check, negative | fails on each of: an extra file, a non-`ci` database, a forbidden key, a stray GUID | its pytest cases (R1.3) |
 | Lint, before any change | 1,843 violations in 105 of 117 files with default rules; 774 in 94 with ADR 0041's starting configuration; 2 parse errors, both in `int_fantasy__category_scales.sql` | `sqlfluff lint dbt/models dbt/tests` |
@@ -202,7 +206,8 @@ and the real warehouse (`data/warehouse.duckdb`, built 2026-10-09 21:02).
 | Real warehouse, before against after | exit 0: no relation or column on one side only, no difference in any relation; identical `information_schema.columns` (name, position, type) for the four dbt schemas | `scripts/compare_warehouses.py --strict-columns`, and one query |
 | Relations, real season | staging 18, intermediate 22, marts 9, reconciliation 6 | `information_schema.tables` |
 | `+exposure:front_office_dashboard` | selects all 9 marts and their upstream; builds and passes | `dbt build --target ci --select` |
-| Example query | runs on fixtures (0 rows: team names are aliased there) and on the real season (18 rows) | `scripts/check_examples.py`; by hand on the real season |
+| `roster_day_query.sql` | runs on the fixtures; on the real season the same 18 rows before and after it selects by `team_id` (R3.9) | `scripts/check_examples.py`; by hand on the real season, before against after |
+| Example files | 4: the existing one and R3.8's three, each with an exposure | `ls docs/examples/*.sql`; the gate |
 | Freshness, fixtures | status `error`, newest capture `2026-05-02T16:00:00+00:00`, exit 1 | `dbt source freshness --target ci` |
 | Freshness, real season | newest capture `2026-10-09T19:42:27Z` (MLB; ESPN `2026-10-08T16:38:28Z`, id map `2026-09-26T17:36:54Z`); status follows from the age when run | `dbt source freshness`, against `max(fetched_at)` |
 | Mart rows, 2026 | `dim_players` 1,515 · `dim_player_league_seasons` 498 · `fct_matchup_results` 143 · `fct_matchup_category_scores` 4,862 · `fct_player_season_value` 580 · `fct_player_category_value` 9,860 · `fct_transaction_impact` 737 · `fct_lineup_decisions` 2,160 · `fct_lineup_decision_categories` 4,862 | `count(*)` per mart, re-read at build time |
