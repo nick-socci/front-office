@@ -287,18 +287,26 @@ The gate itself is the test of the four stated numbers: `.agentic/gates` and CI.
   header (a `set variable` line piped ahead of the file, or `-cmd`), is checked in task 1
   on a machine with the client. If the client behaves differently, stop: ADR 0049 is
   then wrong.
-- **The values in a stat line are not held.** The gate counts rows that have a line. A
-  third optional key, stated totals of named columns, would hold the values too.
-  Measured on the fixtures for team 11 on 2026-04-29: `at_bats` 7, `hits` 4,
-  `innings_pitched` 4.0, `strikeouts` 3, `earned_runs` 2. It is the same mechanism as
-  `rows_with_a_value` and a few more numbers to move at a fixture rebuild; it would catch
-  a line summed twice or read from the wrong column. Not in this spec unless the owner
-  asks for it: it goes past what the issue found.
+
+## Settled by the owner (2026-10-10, PR #124)
+
+- **What the gate asserts:** option 1, stated rows and stated counts of rows with a value
+  (ADR 0048).
+- **How the roster example gets rows in CI:** option A, variables with the committed
+  values as defaults (ADR 0049).
+- **The values in a stat line are not held, and column totals stay out.** A third
+  optional key, stated totals of named columns, would hold them (measured on the
+  fixtures for team 11 on 2026-04-29: `at_bats` 7, `hits` 4, `innings_pitched` 4.0,
+  `strikeouts` 3, `earned_runs` 2). The values are tested where they are produced:
+  `stg_mlb__batting_totals_match_team_stats` holds at-bats, hits and runs to each
+  boxscore's team totals, `stg_mlb__pitching_outs_match_innings` holds outs to innings,
+  and the ESPN player-day reconciliation covers the scoring categories on the real
+  season. What stays untested is the example's own sums and column names.
 - **The league filter is not held.** Measured, and accepted in ADR 0048. Running the
-  examples on the two-league fixture inside `check_tenant_isolation.py` would hold it,
-  and is not in this spec. The owner decides whether it is worth an issue.
-- **The committed defaults are not held in CI**, beyond the text check of R2.1. Accepted
-  in ADR 0049; the alternative that holds them is option C.
+  examples on the two-league fixture inside `check_tenant_isolation.py` would hold it;
+  it is not in this spec and no issue is opened for it.
+- **The committed defaults are not held in CI**, beyond the text check of R2.1, which
+  stays. Accepted in ADR 0049; the alternative that holds them is option C.
 
 ## Review log
 

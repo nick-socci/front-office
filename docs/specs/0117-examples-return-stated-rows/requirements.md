@@ -37,8 +37,8 @@ removed, 54. Today both would pass.
 - No comparison of an example's rows with a stored copy of its output.
 - No check of the values in a stat line. The gate counts the rows that have a batting
   line and the rows that have a pitching line; a line with wrong numbers in it passes.
-  Stated column totals would hold them and are a decision for the owner (design, *Open
-  questions*).
+  Stated column totals would hold them; the owner left them out on 2026-10-10 (design,
+  *Settled by the owner*).
 - No parameters for the three mart examples: they select no team and no day.
 
 ## Rabbit holes

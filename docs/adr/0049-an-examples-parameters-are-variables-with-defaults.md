@@ -36,7 +36,7 @@ requires. The command-line client was not available to check.
 
 ## Decision
 
-Recommended, for the owner to decide: **option 1**.
+Chosen: **option 1** (owner, 2026-10-10, PR #124).
 
 Option 2 tests a query nobody committed and depends on a text pattern surviving every
 edit to the block. Option 3 is the only one that tests the committed values themselves,

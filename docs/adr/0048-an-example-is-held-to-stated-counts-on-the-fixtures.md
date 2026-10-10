@@ -36,7 +36,7 @@ holds one league. Of the 36 team-days in the fixtures, 35 return 18 rows.
 
 ## Decision
 
-Recommended, for the owner to decide: **option 1**.
+Chosen: **option 1** (owner, 2026-10-10, PR #124).
 
 The numbers live in `docs/examples/expected_on_fixtures.yml`, beside the examples. A
 stated number of rows is never zero. The roster example states its rows and the rows
@@ -58,5 +58,8 @@ rewritten at every fixture rebuild into a diff nobody can review.
 - Bad / accepted cost: counts do not tell one valid team from another by design. Under
   the parameters chosen they often do (team 3 returns 1 and 0 against 2 and 1), which is
   a property of the fixtures and not a guarantee.
+- Bad / accepted cost: a count of rows with a value holds that a stat line is present,
+  not the numbers in it. Stated column totals would; the owner left them out, since the
+  values are tested where they are produced (spec 0117, *Settled by the owner*).
 - Follow-ups: running the examples on the two-league fixture would hold the league
-  filter; not scheduled.
+  filter; no issue is opened for it (owner, 2026-10-10).
