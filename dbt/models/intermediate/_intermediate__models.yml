@@ -978,6 +978,60 @@ models:
           arguments:
             expression: "numerator is not null"
 
+  - name: int_fantasy__lineup_category_totals
+    description: >
+      One row per matchup side, scored category and lineup (actual, optimal) (#12, R5): the
+      numerator, denominator and value of the category under that lineup, both lineups
+      computed by the same statements from credited components by the rules of
+      int_fantasy__stat_components, a player credited by the role of the slot the lineup puts
+      him in. The actual rows must equal the value of fct_matchup_category_scores (the
+      singular test lineup_category_totals_reproduce_the_actual_totals). An optimal row is
+      null when any team-day of the side's matchup period is unvalued (R5.4); a day on which
+      nobody was assigned adds zero. THE OPTIMAL ROWS ARE HINDSIGHT OPPORTUNITY under the rule
+      that a starter who played is replaced only by another player who played (ADR 0037), NOT
+      A MEASURE OF MANAGER SKILL, and rest on ESPN's eligibility as fetched (ADR 0038).
+    columns:
+      - name: platform
+        data_tests: [not_null]
+      - name: league_id
+        data_tests: [not_null]
+      - name: season
+        data_tests: [not_null]
+      - name: matchup_id
+        data_tests: [not_null]
+      - name: fantasy_team_id
+        data_tests: [not_null]
+      - name: category_key
+        data_tests: [not_null]
+      - name: matchup_period
+        description: The matchup period of the side.
+        data_tests: [not_null]
+      - name: lineup
+        description: The lineup credited, actual (as started) or optimal (as solved).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [actual, optimal]
+      - name: numerator
+        description: >
+          The weighted sum of the credited components. Null on an optimal row of a side with
+          an unvalued team-day. Deliberately not tested not_null.
+      - name: denominator
+        description: >
+          The weighted sum of the denominator's components; null for a count, and null on an
+          optimal row of a side with an unvalued team-day. Deliberately not tested not_null.
+      - name: category_value
+        description: >
+          Numerator over denominator, or the numerator for a count; null over a zero
+          denominator, as in int_fantasy__matchup_stat_values. Deliberately not tested
+          not_null.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              [platform, league_id, season, matchup_id, fantasy_team_id, category_key, lineup]
+
 # -----------------------------------------------------------------------------
 # Unit tests: int_fantasy__player_crosswalk (review R6).
 #
@@ -3319,3 +3373,307 @@ unit_tests:
     expect:
       rows:
         - {platform_player_id: 1, lineup_slot_id: 12, lineup_slot: UTIL, slot_role: hitter, option_value: 2, day_kind: batting, is_started: true, is_actual: true, eligibility_fetched_at: "2026-09-26 12:00:00"}
+
+# -----------------------------------------------------------------------------
+# int_fantasy__lineup_category_totals unit tests (#12, R5.2 to R5.4): one path for both
+# lineups, a slot's role deciding what a player is credited, and the null of an unvalued
+# week. int_fantasy__optimal_lineups is given as an input, as the solver's output.
+# -----------------------------------------------------------------------------
+
+  - name: lineup_category_totals_a_count_and_a_rate_under_both_lineups
+    description: >
+      One side, two days. Player 1 started at UTIL: day 1 1 hit in 1 at-bat and 1 home run,
+      day 2 1 hit in 3 at-bats. The optimal lineup puts bench player 2 at UTIL: day 1 0 hits
+      in 2 at-bats and 2 home runs, day 2 3 hits in 3 at-bats. The rate is recomputed from the
+      period's summed components (actual 2 over 4, optimal 3 over 5), the count is the summed
+      count. Catches a rate summed or averaged as a rate (1.333 or 0.667 for the actual
+      average), a lineup read from the other's players, and an optimal total taken from the
+      actual lineup.
+    model: int_fantasy__lineup_category_totals
+    given:
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, matchup_period: 1, fantasy_team_id: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 2}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-02"}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 5, part: numerator, component: home_runs, weight: 1}
+          - {platform: espn, stat_key: 2, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 2, part: denominator, component: at_bats, weight: 1}
+          - {platform: espn, stat_key: 47, part: numerator, component: earned_runs, weight: 27}
+          - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__lineup_slots')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 12, slot_role: hitter}
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 14, slot_role: pitcher}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, slot_role: hitter}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, slot_role: hitter}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 910002, is_started: false, slot_role: bench}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 910002, is_started: false, slot_role: bench}
+      - input: ref('int_fantasy__optimal_lineups')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 12}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 12}
+      - input: ref('int_fantasy__lineup_options')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 12, option_value: 1.5}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 12, option_value: 1.5}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 12, option_value: 2.5}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 12, option_value: 2.5}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910001, game_date: "2026-06-01", at_bats: 1, hits: 1, home_runs: 1}
+          - {mlbam_player_id: 910001, game_date: "2026-06-02", at_bats: 3, hits: 1, home_runs: 0}
+          - {mlbam_player_id: 910002, game_date: "2026-06-01", at_bats: 2, hits: 0, home_runs: 2}
+          - {mlbam_player_id: 910002, game_date: "2026-06-02", at_bats: 3, hits: 3, home_runs: 0}
+    expect:
+      rows:
+        - {fantasy_team_id: 1, category_key: 5, lineup: actual, numerator: 1, denominator: null, category_value: 1}
+        - {fantasy_team_id: 1, category_key: 5, lineup: optimal, numerator: 2, denominator: null, category_value: 2}
+        - {fantasy_team_id: 1, category_key: 2, lineup: actual, numerator: 2, denominator: 4, category_value: 0.5}
+        - {fantasy_team_id: 1, category_key: 2, lineup: optimal, numerator: 3, denominator: 5, category_value: 0.6}
+
+  - name: lineup_category_totals_a_slots_role_decides_what_a_player_is_credited
+    description: >
+      One day. Player 1 is two-way (4 at-bats, 2 hits, 1 home run; 27 outs, 3 earned runs) and
+      started at SP, a pitcher slot; bench player 2 pitched 18 outs and 1 earned run. The
+      optimal lineup moves player 1 to UTIL and puts player 2 at SP. Actual: pitching only
+      (no home run, no at-bats, so the average has a zero denominator and a null value; ERA 3).
+      Optimal: player 1's bat (1 home run, 2 over 4) and player 2's arm (ERA 1.5), none of
+      player 1's pitching. Catches a pitcher slot credited with a bat, a hitter slot credited
+      with an arm, and the moved player credited by the slot he was in rather than the one the
+      lineup puts him in.
+    model: int_fantasy__lineup_category_totals
+    given:
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, matchup_period: 1, fantasy_team_id: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 2}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 5, part: numerator, component: home_runs, weight: 1}
+          - {platform: espn, stat_key: 2, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 2, part: denominator, component: at_bats, weight: 1}
+          - {platform: espn, stat_key: 47, part: numerator, component: earned_runs, weight: 27}
+          - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__lineup_slots')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 12, slot_role: hitter}
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 14, slot_role: pitcher}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, slot_role: pitcher}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 910002, is_started: false, slot_role: bench}
+      - input: ref('int_fantasy__optimal_lineups')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 12}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 14}
+      - input: ref('int_fantasy__lineup_options')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 14, option_value: 1.5}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 12, option_value: 2.5}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 14, option_value: 2.5}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910001, game_date: "2026-06-01", at_bats: 4, hits: 2, home_runs: 1, outs_recorded: 27, earned_runs: 3}
+          - {mlbam_player_id: 910002, game_date: "2026-06-01", at_bats: 0, hits: 0, home_runs: 0, outs_recorded: 18, earned_runs: 1}
+    expect:
+      rows:
+        - {fantasy_team_id: 1, category_key: 5, lineup: actual, numerator: 0, denominator: null, category_value: 0}
+        - {fantasy_team_id: 1, category_key: 5, lineup: optimal, numerator: 1, denominator: null, category_value: 1}
+        - {fantasy_team_id: 1, category_key: 2, lineup: actual, numerator: 0, denominator: 0, category_value: null}
+        - {fantasy_team_id: 1, category_key: 2, lineup: optimal, numerator: 2, denominator: 4, category_value: 0.5}
+        - {fantasy_team_id: 1, category_key: 47, lineup: actual, numerator: 81, denominator: 27, category_value: 3}
+        - {fantasy_team_id: 1, category_key: 47, lineup: optimal, numerator: 27, denominator: 18, category_value: 1.5}
+
+  - name: lineup_category_totals_an_unvalued_day_nulls_only_its_sides_optimal_rows
+    description: >
+      Matchup 1 (period 1, days 1 and 2) has teams 1 and 2; team 1 has an option with a null
+      value on day 2 (it has no optimal rows that day, as the solver leaves an unvalued
+      team-day unsolved). Team 1 also has matchup 2 (period 2, day 3), fully valued. Team 1's
+      optimal rows of matchup 1 have a null numerator, denominator and value for every
+      category, so a partial total is not reported as the whole; its actual rows, team 2's
+      optimal rows and team 1's matchup 2 are untouched. Catches an unvalued week reported as
+      a partial total, a null that leaks to the other side or the other period, and the
+      actual lineup nulled.
+    model: int_fantasy__lineup_category_totals
+    given:
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, matchup_period: 1, fantasy_team_id: 1}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, matchup_period: 1, fantasy_team_id: 2}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, matchup_period: 2, fantasy_team_id: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-02"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-08"}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 5, part: numerator, component: home_runs, weight: 1}
+          - {platform: espn, stat_key: 2, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 2, part: denominator, component: at_bats, weight: 1}
+          - {platform: espn, stat_key: 47, part: numerator, component: earned_runs, weight: 27}
+          - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__lineup_slots')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 12, slot_role: hitter}
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 14, slot_role: pitcher}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, slot_role: hitter}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, slot_role: hitter}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-08", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, slot_role: hitter}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 2, platform_player_id: 3, mlbam_player_id: 910003, is_started: true, slot_role: hitter}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 2, platform_player_id: 3, mlbam_player_id: 910003, is_started: true, slot_role: hitter}
+      - input: ref('int_fantasy__optimal_lineups')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 12}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-08", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 12}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 2, platform_player_id: 3, lineup_slot_id: 12}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 2, platform_player_id: 3, lineup_slot_id: 12}
+      - input: ref('int_fantasy__lineup_options')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 12, option_value: 1.5}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 12, option_value: null}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-08", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 12, option_value: 1.5}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 2, platform_player_id: 3, lineup_slot_id: 12, option_value: 1.5}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 2, platform_player_id: 3, lineup_slot_id: 12, option_value: 1.5}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910001, game_date: "2026-06-01", home_runs: 1}
+          - {mlbam_player_id: 910001, game_date: "2026-06-02", home_runs: 2}
+          - {mlbam_player_id: 910001, game_date: "2026-06-08", home_runs: 4}
+          - {mlbam_player_id: 910003, game_date: "2026-06-01", home_runs: 1}
+          - {mlbam_player_id: 910003, game_date: "2026-06-02", home_runs: 1}
+    expect:
+      rows:
+        - {matchup_id: 1, fantasy_team_id: 1, category_key: 5, lineup: actual, numerator: 3, denominator: null, category_value: 3}
+        - {matchup_id: 1, fantasy_team_id: 1, category_key: 5, lineup: optimal, numerator: null, denominator: null, category_value: null}
+        - {matchup_id: 1, fantasy_team_id: 1, category_key: 47, lineup: actual, numerator: 0, denominator: 0, category_value: null}
+        - {matchup_id: 1, fantasy_team_id: 1, category_key: 47, lineup: optimal, numerator: null, denominator: null, category_value: null}
+        - {matchup_id: 1, fantasy_team_id: 2, category_key: 5, lineup: actual, numerator: 2, denominator: null, category_value: 2}
+        - {matchup_id: 1, fantasy_team_id: 2, category_key: 5, lineup: optimal, numerator: 2, denominator: null, category_value: 2}
+        - {matchup_id: 1, fantasy_team_id: 2, category_key: 47, lineup: actual, numerator: 0, denominator: 0, category_value: null}
+        - {matchup_id: 1, fantasy_team_id: 2, category_key: 47, lineup: optimal, numerator: 0, denominator: 0, category_value: null}
+        - {matchup_id: 2, fantasy_team_id: 1, category_key: 5, lineup: actual, numerator: 4, denominator: null, category_value: 4}
+        - {matchup_id: 2, fantasy_team_id: 1, category_key: 5, lineup: optimal, numerator: 4, denominator: null, category_value: 4}
+        - {matchup_id: 2, fantasy_team_id: 1, category_key: 47, lineup: actual, numerator: 0, denominator: 0, category_value: null}
+        - {matchup_id: 2, fantasy_team_id: 1, category_key: 47, lineup: optimal, numerator: 0, denominator: 0, category_value: null}
+
+  - name: lineup_category_totals_a_day_nobody_was_assigned_adds_zero_and_nulls_nothing
+    description: >
+      One side, two days. On day 1 the team has no option at all (nobody could be credited, so
+      nobody was assigned) and its started player has no game; on day 2 player 1 started and
+      the optimal lineup keeps him (1 home run). Both lineups total day 2 alone, the
+      optimal rows are not null, and ERA has a zero denominator and a null value. Catches an
+      idle day, or a day with no assigned player, nulling a week (a team-day with no options
+      is not unvalued), and a day without rows dropping the side.
+    model: int_fantasy__lineup_category_totals
+    given:
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, matchup_period: 1, fantasy_team_id: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-02"}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 5, part: numerator, component: home_runs, weight: 1}
+          - {platform: espn, stat_key: 2, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 2, part: denominator, component: at_bats, weight: 1}
+          - {platform: espn, stat_key: 47, part: numerator, component: earned_runs, weight: 27}
+          - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__lineup_slots')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 12, slot_role: hitter}
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 14, slot_role: pitcher}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, slot_role: hitter}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, slot_role: hitter}
+      - input: ref('int_fantasy__optimal_lineups')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 12}
+      - input: ref('int_fantasy__lineup_options')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 12, option_value: 1.5}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910001, game_date: "2026-06-02", home_runs: 1}
+    expect:
+      rows:
+        - {fantasy_team_id: 1, category_key: 5, lineup: actual, numerator: 1, denominator: null, category_value: 1}
+        - {fantasy_team_id: 1, category_key: 5, lineup: optimal, numerator: 1, denominator: null, category_value: 1}
+        - {fantasy_team_id: 1, category_key: 47, lineup: actual, numerator: 0, denominator: 0, category_value: null}
+        - {fantasy_team_id: 1, category_key: 47, lineup: optimal, numerator: 0, denominator: 0, category_value: null}
+
+  - name: lineup_category_totals_a_side_that_credits_nothing_still_has_its_rows
+    description: >
+      A side with no roster days, no optimal lineup and no options. It has a row for every
+      category and lineup: the count is 0, the numerator of a rate 0 and its value null (a
+      zero denominator, as in int_fantasy__matchup_stat_values), and the optimal rows are not
+      null. Catches a side dropped because nothing was credited, so that the fact it
+      reproduces would have a row the totals lack.
+    model: int_fantasy__lineup_category_totals
+    given:
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, matchup_period: 1, fantasy_team_id: 3}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 2}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 5, part: numerator, component: home_runs, weight: 1}
+          - {platform: espn, stat_key: 2, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 2, part: denominator, component: at_bats, weight: 1}
+          - {platform: espn, stat_key: 47, part: numerator, component: earned_runs, weight: 27}
+          - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__lineup_slots')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 12, slot_role: hitter}
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 14, slot_role: pitcher}
+      - input: ref('int_fantasy__roster_days')
+        rows: []
+      - input: ref('int_fantasy__optimal_lineups')
+        rows: []
+      - input: ref('int_fantasy__lineup_options')
+        rows: []
+      - input: ref('int_mlb__player_game_days')
+        rows: []
+    expect:
+      rows:
+        - {fantasy_team_id: 3, category_key: 5, lineup: actual, numerator: 0, denominator: null, category_value: 0}
+        - {fantasy_team_id: 3, category_key: 5, lineup: optimal, numerator: 0, denominator: null, category_value: 0}
+        - {fantasy_team_id: 3, category_key: 2, lineup: actual, numerator: 0, denominator: 0, category_value: null}
+        - {fantasy_team_id: 3, category_key: 2, lineup: optimal, numerator: 0, denominator: 0, category_value: null}
