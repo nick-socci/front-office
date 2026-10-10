@@ -53,11 +53,11 @@ What a feed's age is the age of:
 
 ## Decision
 
-Recommended, for the owner to decide: **option 1 with a**.
+Chosen: **option 1 with a** (owner, 2026-10-10, PR #125).
 
 The run markers are the schedule for `mlb`, settings for `espn`, and the id map's one
 endpoint. `mlb` and `espn` keep 36 hours to warn and 7 days to error. `idmap` warns at
-14 days and never errors; that number is a recommendation, not a measurement.
+14 days and never errors; that number is the owner's choice, not a measurement.
 
 Option 2 makes a declaration named for one feed return every feed's rows, since
 `identifier` only renames. Option 3 puts a time-dependent test into every build, which

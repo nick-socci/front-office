@@ -46,8 +46,8 @@ spec settles its shape before then; it does not wake it.
   Every model keeps reading `source('raw', 'api_responses')`.
 - No freshness per endpoint, and no check that a run landed every endpoint it should
   have. Named as a remaining limit (see *Rabbit holes*).
-- No freshness per league. Named as a limit, with the alternative that removes it, for
-  the owner to decide (design, *Open questions*).
+- No freshness per league. Named as a limit, with the alternative that removes it; the
+  owner accepted the limit on 2026-10-10 (design, *Settled by the owner*).
 - No change to `front-office audit`.
 - No daily schedule, and no alerting.
 
@@ -66,8 +66,8 @@ spec settles its shape before then; it does not wake it.
   → Written down as the remaining limit (R5.1); not solved.
 - **Choosing thresholds from evidence.** There is none: the 2026 landing zone holds four
   capture days for `espn`, six for `mlb` and one for `idmap`, all taken after the season
-  ended. → The two daily feeds keep the thresholds they have. The id map's is the owner's
-  choice, with a recommendation.
+  ended. → The two daily feeds keep the thresholds they have. The id map's was the owner's
+  choice: 14 days, warn only (2026-10-10).
 - **Proving it in CI.** Freshness errors on the fixtures by design, so it cannot be a
   gate. → What CI holds is the declarations. The ages are checked by hand, on the
   fixtures, on a scratch copy and on the real season.
@@ -86,7 +86,7 @@ spec settles its shape before then; it does not wake it.
   | `espn` | `endpoint = 'settings'` | the first call that needs the login; landed by the full run and by `--only matchups`, not by `--only pro-schedule` |
   | `idmap` | `endpoint = 'player_id_map'` | its only endpoint |
 
-  (Which capture marks a run is the owner's decision; these are the recommendation.)
+  (Which capture marks a run was the owner's decision: these, 2026-10-10, PR #125.)
 - R1.2 WHEN `dbt source freshness` is run, THE SYSTEM SHALL report exactly one result
   per feed, whose `max_loaded_at` is the newest `fetched_at` of that feed's run marker,
   read as UTC.
@@ -104,8 +104,7 @@ spec settles its shape before then; it does not wake it.
 - R2.1 The `mlb` and `espn` declarations SHALL warn after 36 hours and error after 7
   days: the thresholds the table has today, unchanged.
 - R2.2 The `idmap` declaration SHALL warn after 14 days and SHALL have no error
-  threshold. (Recommended; the owner decides the number, or none. See design,
-  *Thresholds*.)
+  threshold. (The owner's choice, 2026-10-10. See design, *Thresholds*.)
 
 ### R3. Every feed with fixtures is declared
 

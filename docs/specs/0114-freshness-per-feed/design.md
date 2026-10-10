@@ -128,7 +128,7 @@ stalled league behind a live one, because leagues are rows and dbt's freshness
 declarations are written by hand. It loses today on what it does to the build: the test
 depends on the time of day, fails on the fixtures by design, and so has to be excluded
 from `.agentic/gates`, CI, the tenant-isolation script and every documented `dbt build`.
-One league is fetched today. See *Open questions*: this is the owner's call.
+One league is fetched today. The owner accepted the limit (*Settled by the owner*).
 
 **D — the audit.** `front-office audit` is where operational checks live, and it reads
 the landing zone, not the warehouse. It loses because it would be a second definition
@@ -299,25 +299,29 @@ and against a deliberately wrong copy for the others.
 
 ## Open questions
 
-- **Which capture marks a run.** Settings for `espn` and the schedule for `mlb` are a
-  recommendation read from the order of calls in `cli.py`. What counts as "the feed ran"
-  is the owner's to say, the more so because no daily command exists yet: the 2027
-  schedule may run something other than today's `backfill` commands, and the markers
-  must be checked against it then.
-- **A run that starts and then fails shows as fresh**, and nothing else catches it at
-  the time: the audit checks the season, not the latest run. Not in this spec. Whether it
-  is worth an issue before 2027 is the owner's call.
-- **One age for `espn`, however many leagues.** With two leagues fetched, one that has
-  stopped hides behind the other, which is this issue again one level down. One league is
-  fetched today. dbt's freshness cannot follow leagues without a hand-written declaration
-  per league; alternative C can. The owner decides whether to accept the limit now and
-  revisit when a second league is fetched (recommended), or to take C in place of A.
-- **The id map's threshold**: 14 days and warn only, another number, or none. The
-  owner's.
-- **Whether `raw_feeds` and `*_runs` are the names.** They appear in the docs site and
-  in `dbt source freshness --select source:raw_feeds`. The owner's to rename.
+- **The markers against the 2027 schedule.** Settings for `espn` and the schedule for
+  `mlb` are read from the order of calls in `cli.py` today. No daily command exists yet:
+  the 2027 schedule may run something other than today's `backfill` commands, and the
+  markers must be checked against it then.
 - **`dbt source freshness` on the real warehouse** was not run for this spec (it opens
   the file for writing). Task 5 runs it.
+
+## Settled by the owner (2026-10-10, PR #125)
+
+- **What an age measures:** each feed's run marker, not any capture of the feed. The
+  schedule for `mlb`, settings for `espn`, the one endpoint for `idmap`.
+- **How the check is split:** alternative A, one source declaration per feed over the
+  same relation, each with a freshness filter (ADR 0050).
+- **The id map's threshold:** 14 days, warn only.
+- **A run that lands its marker and then fails shows as fresh**, and nothing else catches
+  it at the time: the audit checks the season, not the latest run. Accepted; not in this
+  spec, and no issue is opened for it.
+- **One age for `espn`, however many leagues.** With two leagues fetched, one that has
+  stopped hides behind the other. One league is fetched today. Accepted, to be revisited
+  when a second league is fetched; alternative C is the design that removes it.
+- **A feed added with no fixtures is not caught by the declaration tests.** Accepted.
+- **The names** `raw_feeds`, `mlb_runs`, `espn_runs` and `idmap_runs`, and tier M, were
+  put to the owner and not changed.
 
 ## Review log
 
