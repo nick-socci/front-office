@@ -2523,6 +2523,46 @@ unit_tests:
         - {matchup_id: 4, category_key: 1, relative_volume: 1}
         - {matchup_id: 5, category_key: 1, relative_volume: 1}
 
+  - name: reported_margins_sum_a_denominator_in_component_order
+    description: >
+      A made-up rate (stat 2) whose denominator has three components, a, b and c, each a
+      host stat of its own (10, 11, 12), listed here c first. A side reports 0.1, 0.2 and
+      0.3 for them, so its denominator is expected to the last digit of the sum taken in
+      component order, (0.1 + 0.2) + 0.3 = 0.6000000000000001; taken c first it is 0.6.
+      No league scores such a rate today: every real denominator has one component.
+      Catches the order by removed from the sum, or put on a column that does not order
+      the components (ADR 0046).
+    model: int_fantasy__reported_matchup_margins
+    given:
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 12, part: numerator, component: c, weight: 1}
+          - {platform: espn, stat_key: 11, part: numerator, component: b, weight: 1}
+          - {platform: espn, stat_key: 10, part: numerator, component: a, weight: 1}
+          - {platform: espn, stat_key: 2, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 2, part: denominator, component: c, weight: 1}
+          - {platform: espn, stat_key: 2, part: denominator, component: b, weight: 1}
+          - {platform: espn, stat_key: 2, part: denominator, component: a, weight: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 2}
+      - input: ref('stg_espn__matchups')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, matchup_period: 1, home_team_id: 1, away_team_id: 2, winner: HOME, playoff_tier: NONE}
+      - input: ref('stg_espn__matchup_category_results')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 12, score: 0.3}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 11, score: 0.2}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 10, score: 0.1}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 12, score: 0.3}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 11, score: 0.2}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 10, score: 0.1}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 2, score: 0.5}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 2, score: 0.25}
+    expect:
+      rows:
+        - {matchup_id: 1, category_key: 2, is_rate: true, home_denominator: 0.6000000000000001, away_denominator: 0.6000000000000001}
+
   - name: reported_margins_do_not_measure_a_rate_without_a_usable_denominator
     description: >
       Matchup 1: the away side has zero at-bats, and the host reports its average as 0.
