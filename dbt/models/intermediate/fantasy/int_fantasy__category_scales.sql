@@ -163,7 +163,7 @@ covered_categories as (
 
 ),
 
-prior as (
+earlier_seasons as (
 
     select
         categories.platform,
@@ -211,29 +211,30 @@ chosen as (
         categories.league_id,
         categories.season,
         categories.category_key,
-        coalesce(prior.prior_matchups, 0) >= {{ var('fantasy_scale_prior_matchups') }} as uses_history,
+        coalesce(earlier_seasons.prior_matchups, 0) >= {{ var('fantasy_scale_prior_matchups') }} as uses_history,
         {{ var('fantasy_scale_prior_matchups') }} as history_weight,
-        coalesce(prior.prior_matchups, 0) as prior_matchups,
-        coalesce(prior.prior_seasons, 0) as prior_seasons,
-        prior.prior_sum_of_squares / prior.prior_matchups as prior_mean_square,
-        prior.prior_denominator_sum / (2 * prior.prior_matchups) as prior_side_denominator,
+        coalesce(earlier_seasons.prior_matchups, 0) as prior_matchups,
+        coalesce(earlier_seasons.prior_seasons, 0) as prior_seasons,
+        earlier_seasons.prior_sum_of_squares / earlier_seasons.prior_matchups as prior_mean_square,
+        earlier_seasons.prior_denominator_sum
+            / (2 * earlier_seasons.prior_matchups) as prior_side_denominator,
         coalesce(reported_own.own_matchups, 0) as own_matchups,
         coalesce(reported_own.own_sum_of_squares, 0) as own_sum_of_squares,
         -- Null for a count, whose denominators are null in every row; zero for a rate
         -- with no decided matchup yet.
         case
-            when prior.prior_denominator_sum is not null
+            when earlier_seasons.prior_denominator_sum is not null
                 then coalesce(reported_own.own_denominator_sum, 0)
         end as own_denominator_sum,
         coalesce(margin_scales.matchups_measured, 0) as season_matchups_measured,
         margin_scales.margin_scale as season_margin_scale,
         side_denominators.side_denominator as season_side_denominator
     from covered_categories as categories
-    left join prior
-        on prior.platform = categories.platform
-        and prior.league_id = categories.league_id
-        and prior.season = categories.season
-        and prior.category_key = categories.category_key
+    left join earlier_seasons
+        on earlier_seasons.platform = categories.platform
+        and earlier_seasons.league_id = categories.league_id
+        and earlier_seasons.season = categories.season
+        and earlier_seasons.category_key = categories.category_key
     left join reported_own
         on reported_own.platform = categories.platform
         and reported_own.league_id = categories.league_id
