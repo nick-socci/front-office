@@ -1,6 +1,6 @@
 # 0044. SQL is linted as dbt compiles it
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0013-docs-lint-exposures](../specs/0013-docs-lint-exposures/design.md) · Issue: #13
 
