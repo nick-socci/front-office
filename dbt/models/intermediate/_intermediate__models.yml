@@ -2287,6 +2287,36 @@ unit_tests:
         - {category_key: 0, matchups_measured: 1, margin_scale: 2, side_denominator: null}
         - {category_key: 47, matchups_measured: 1, margin_scale: 1, side_denominator: 180}
 
+  - name: category_scales_take_a_side_denominator_in_matchup_order
+    description: >
+      A rate (stat 47) with non-integer denominators on six sides, listed from matchup 3
+      down to matchup 1: 295.48, 336.62, 128.16, 108.5, 350.73 and 229.83 in matchup order.
+      No earlier season, so the plain average is the side denominator, expected to the
+      last digit of the mean taken in matchup order, 241.5533333333333; taken in the order
+      listed it is 241.55333333333337. Catches the order by removed from avg, or put on
+      columns that do not order the rows (ADR 0046).
+    model: int_fantasy__category_scales
+    given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+      - input: ref('int_fantasy__reported_matchup_margins')
+        rows: []
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 3, is_home: true, stat_key: 47, denominator: 229.83, stat_value: 7}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 3, is_home: false, stat_key: 47, denominator: 350.73, stat_value: 6}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, is_home: true, stat_key: 47, denominator: 108.5, stat_value: 6}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, is_home: false, stat_key: 47, denominator: 128.16, stat_value: 5}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: true, stat_key: 47, denominator: 336.62, stat_value: 5}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: false, stat_key: 47, denominator: 295.48, stat_value: 4}
+    expect:
+      rows:
+        - {category_key: 47, side_denominator: 241.5533333333333}
+
   - name: category_scales_leave_a_zero_denominator_side_out
     description: >
       A rate with sides of 180 and 0 outs; the zero-out side has a null value. The mean denominator is 180, not 90, and the matchup contributes no margin. Catches an undefined rate halving the divisor and inflating every player's rate value.
@@ -2446,6 +2476,52 @@ unit_tests:
         - {matchup_id: 2, category_key: 5, margin: 0, relative_volume: 1, standard_margin: 0, is_measured: true}
         - {matchup_id: 3, category_key: 1, margin: 0, relative_volume: 1, standard_margin: 0, is_measured: true}
         - {matchup_id: 3, category_key: 5, margin: 0, relative_volume: 1, standard_margin: 0, is_measured: true}
+
+  - name: reported_margins_take_a_period_mean_in_matchup_order
+    description: >
+      One counting category, hits, in three regular-season periods. Period 1 holds matchups
+      1 to 3 with non-integer totals, listed from matchup 3 down: 20.53, 53.5, 30.37,
+      29.37, 59.83 and 38.81 in matchup and side order. Periods 2 and 3 hold one matchup of
+      10 a side each, so the usual total is 10 and period 1's relative volume is its mean
+      over 10, expected to the last digit of the mean taken in matchup and side order,
+      3.873500000000001; taken in the order listed it is 3.8735. The totals are not whole
+      numbers, as a real count would be, because whole numbers average the same in any
+      order. Catches the order by removed from avg, or put on columns that do not order
+      the rows (ADR 0046).
+    model: int_fantasy__reported_matchup_margins
+    given:
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 1, part: numerator, component: hits, weight: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 1}
+      - input: ref('stg_espn__matchups')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, matchup_period: 1, home_team_id: 1, away_team_id: 2, winner: HOME, playoff_tier: NONE}
+          - {league_id: "1", season: 2026, matchup_id: 2, matchup_period: 1, home_team_id: 3, away_team_id: 4, winner: HOME, playoff_tier: NONE}
+          - {league_id: "1", season: 2026, matchup_id: 3, matchup_period: 1, home_team_id: 5, away_team_id: 6, winner: HOME, playoff_tier: NONE}
+          - {league_id: "1", season: 2026, matchup_id: 4, matchup_period: 2, home_team_id: 1, away_team_id: 3, winner: TIE, playoff_tier: NONE}
+          - {league_id: "1", season: 2026, matchup_id: 5, matchup_period: 3, home_team_id: 1, away_team_id: 3, winner: TIE, playoff_tier: NONE}
+      - input: ref('stg_espn__matchup_category_results')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 3, side: home, stat_id: 1, score: 38.81}
+          - {league_id: "1", season: 2026, matchup_id: 3, side: away, stat_id: 1, score: 59.83}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: home, stat_id: 1, score: 29.37}
+          - {league_id: "1", season: 2026, matchup_id: 2, side: away, stat_id: 1, score: 30.37}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: home, stat_id: 1, score: 53.5}
+          - {league_id: "1", season: 2026, matchup_id: 1, side: away, stat_id: 1, score: 20.53}
+          - {league_id: "1", season: 2026, matchup_id: 5, side: home, stat_id: 1, score: 10}
+          - {league_id: "1", season: 2026, matchup_id: 5, side: away, stat_id: 1, score: 10}
+          - {league_id: "1", season: 2026, matchup_id: 4, side: home, stat_id: 1, score: 10}
+          - {league_id: "1", season: 2026, matchup_id: 4, side: away, stat_id: 1, score: 10}
+    expect:
+      rows:
+        - {matchup_id: 1, category_key: 1, relative_volume: 3.873500000000001}
+        - {matchup_id: 2, category_key: 1, relative_volume: 3.873500000000001}
+        - {matchup_id: 3, category_key: 1, relative_volume: 3.873500000000001}
+        - {matchup_id: 4, category_key: 1, relative_volume: 1}
+        - {matchup_id: 5, category_key: 1, relative_volume: 1}
 
   - name: reported_margins_do_not_measure_a_rate_without_a_usable_denominator
     description: >
