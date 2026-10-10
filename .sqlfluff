@@ -14,7 +14,11 @@ large_file_skip_byte_limit = 0
 #         (entry.playerId would become entry.playerid). The keys are the source's.
 #   ST07  forbids `using`. Its fix rewrites a three-column `using` into one `on` line of
 #         140 characters; `using` is what those joins mean.
-exclude_rules = ST06, RF04, RF01, CP02, ST07
+#   RF03  wants references in a single-table select all qualified or all not. It takes
+#         struct access (team.id) and a table function's column for qualified
+#         references, so it fired only in five ESPN staging models, and its fix wrote
+#         league_seasons.generate_series, a column that does not exist.
+exclude_rules = ST06, RF04, RF01, CP02, ST07, RF03
 
 [sqlfluff:templater:dbt]
 project_dir = dbt
