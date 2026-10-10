@@ -98,7 +98,7 @@ pair_matchups as (
                 and {{ fo_pitching_day_kind('days.games_pitched', 'days.games_started') }} = 'relief'
         ) as relief_days,
         {%- for column in batting_columns + pitching_columns %}
-        sum(coalesce(days.{{ column }}, 0)) as {{ column }}{{ ',' if not loop.last }}
+        sum(coalesce(days.{{ column }}, 0)) as {{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from {{ ref('int_fantasy__started_player_days') }} as days
     inner join {{ ref('int_fantasy__matchup_periods') }} as periods

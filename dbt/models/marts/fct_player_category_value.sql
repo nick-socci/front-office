@@ -79,7 +79,7 @@ with pairs as (
 
     select distinct
         {%- for key in pair_keys %}
-        {{ key }}{{ ',' if not loop.last }}
+        {{ key }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from {{ ref('int_fantasy__started_player_days') }}
 
@@ -122,7 +122,7 @@ kind_days as (
         day_kind,
         count(*) as played_days,
         {%- for column in batting_columns + pitching_columns %}
-        coalesce(sum({{ column }}), 0) as {{ column }}{{ ',' if not loop.last }}
+        coalesce(sum({{ column }}), 0) as {{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from kinded_days
     where day_kind is not null

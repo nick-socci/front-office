@@ -177,7 +177,7 @@ add_started as (
         count(*) filter (where days.slot_role = 'hitter' and days.games_batted > 0) as hitter_played_days,
         count(*) filter (where days.slot_role = 'pitcher' and days.games_pitched > 0) as pitcher_played_days,
         {%- for column in component_columns %}
-        coalesce(sum(days.{{ column }}), 0) as {{ column }}{{ ',' if not loop.last }}
+        coalesce(sum(days.{{ column }}), 0) as {{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from windows
     inner join {{ ref('int_fantasy__started_player_days') }} as days
@@ -210,7 +210,7 @@ drop_games as (
         {%- endfor %}
         {%- for column in pitching_columns %}
         coalesce(sum(case when windows.replacement_group in ('SP', 'RP') then games.{{ column }} end), 0)
-            as {{ column }}{{ ',' if not loop.last }}
+            as {{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from windows
     inner join {{ ref('int_mlb__player_game_days') }} as games
@@ -273,7 +273,7 @@ measured as (
         next_adds.next_added_at,
         next_adds.next_added_by_team_id,
         {%- for column in component_columns %}
-        coalesce(add_started.{{ column }}, drop_games.{{ column }}, 0) as {{ column }}{{ ',' if not loop.last }}
+        coalesce(add_started.{{ column }}, drop_games.{{ column }}, 0) as {{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from windows
     left join add_rostered
@@ -313,7 +313,7 @@ add_kinded_days as (
             when 'pitcher' then {{ fo_pitching_day_kind('days.games_pitched', 'days.games_started') }}
         end as day_kind,
         {%- for column in component_columns %}
-        days.{{ column }}{{ ',' if not loop.last }}
+        days.{{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from windows
     inner join {{ ref('int_fantasy__started_player_days') }} as days
@@ -342,7 +342,7 @@ drop_kinded_days as (
                 then {{ fo_pitching_day_kind('games.games_pitched', 'games.games_started') }}
         end as day_kind,
         {%- for column in component_columns %}
-        games.{{ column }}{{ ',' if not loop.last }}
+        games.{{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from windows
     inner join {{ ref('int_mlb__player_game_days') }} as games
@@ -377,7 +377,7 @@ kind_days as (
         day_kind,
         count(*) as played_days,
         {%- for column in component_columns %}
-        coalesce(sum({{ column }}), 0) as {{ column }}{{ ',' if not loop.last }}
+        coalesce(sum({{ column }}), 0) as {{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from (
         select platform, league_id, season, transaction_id, day_kind, {{ component_columns | join(', ') }} from add_kinded_days

@@ -48,7 +48,7 @@ select
         where days.input_status = 'unresolved_player'
     ) as unresolved_player_days,
     {%- for column in stat_columns %}
-    coalesce(sum(days.{{ column }}), 0) as {{ column }}{{ ',' if not loop.last }}
+    coalesce(sum(days.{{ column }}), 0) as {{ column }}{% if not loop.last %},{% endif %}
     {%- endfor %}
 from {{ ref('int_fantasy__matchup_sides') }} as sides
 inner join {{ ref('int_fantasy__league_seasons') }} as league_seasons

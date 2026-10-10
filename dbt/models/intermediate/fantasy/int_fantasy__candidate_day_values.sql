@@ -78,7 +78,7 @@ played_sides as (
         'batting' as side,
         'batting' as day_kind,
         {%- for column in batting_columns + pitching_columns %}
-        stats.{{ column }}{{ ',' if not loop.last }}
+        stats.{{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from candidates
     inner join {{ ref('int_mlb__player_game_days') }} as stats
@@ -93,7 +93,7 @@ played_sides as (
         'pitching' as side,
         {{ fo_pitching_day_kind('stats.games_pitched', 'stats.games_started') }} as day_kind,
         {%- for column in batting_columns + pitching_columns %}
-        stats.{{ column }}{{ ',' if not loop.last }}
+        stats.{{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from candidates
     inner join {{ ref('int_mlb__player_game_days') }} as stats
@@ -231,7 +231,7 @@ day_values as (
     from day_category_values
     group by
         {%- for key in day_keys %}
-        {{ key }}{{ ',' if not loop.last }}
+        {{ key }}{% if not loop.last %},{% endif %}
         {%- endfor %}
 
 )

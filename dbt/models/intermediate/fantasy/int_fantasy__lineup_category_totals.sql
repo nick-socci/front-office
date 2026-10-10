@@ -125,7 +125,7 @@ side_totals as (
         {%- endfor %}
         lineups.lineup,
         {%- for column in stat_columns %}
-        coalesce(sum(credited.{{ column }}), 0) as {{ column }}{{ ',' if not loop.last }}
+        coalesce(sum(credited.{{ column }}), 0) as {{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from sides
     cross join (values ('actual'), ('optimal')) as lineups (lineup)
