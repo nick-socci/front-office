@@ -21,7 +21,9 @@
 .mode box
 
 with params as (
-    select 'Wonder Wharf Wonderdogs' as team_name, date '2026-07-02' as on_date
+    -- A team is chosen by its id, so that this file names no team. The output still
+    -- shows team_name: the real one on your own warehouse, an alias in CI.
+    select 6 as team_id, date '2026-07-02' as on_date
 ),
 
 unambiguous_names as (
@@ -74,7 +76,7 @@ roster as (
     ) as name_fallback
         on name_fallback.match_name = strip_accents(entries.player_name)
     inner join params
-        on params.team_name = teams.team_name
+        on params.team_id = teams.team_id
         and params.on_date = periods.scoring_date
     -- BE is the bench and IL is the injured list: neither scores that day.
     where entries.lineup_slot not in ('BE', 'IL')
