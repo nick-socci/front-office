@@ -34,6 +34,10 @@
 -- team-day has no optimal lineup (the solver leaves it unsolved), so its sum would be a part
 -- reported as the whole. A day with no assigned player, or with no options at all, is not
 -- unvalued: it adds nothing to the sums and nulls nothing.
+--
+-- The lineup maximises summed day value over all categories, not any one of them, so an
+-- optimal row can be worse than its actual row. Injured-list slots are not candidates, and
+-- the league's limit on pitcher starts is not applied (ADR 0037).
 
 {{ config(materialized='table') }}
 

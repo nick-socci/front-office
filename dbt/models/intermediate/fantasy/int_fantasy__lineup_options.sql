@@ -15,7 +15,9 @@
 -- eligibility_fetched_at, not of the day, and a move that was not legal on the day can look
 -- legal. That is why the fetch time is carried on every row. Eligibility only grows in a
 -- season, so the slot a player actually sat in is inside it (R2.4's singular test holds
--- that to the data).
+-- that to the data). Measured on the 2026 backfill (2026-10-09): scoring periods 1 to 178
+-- carry the eligibility of 2026-09-26, and periods 179 and 180, whose rosters were captured
+-- again once settled, that of 2026-10-07. A team-day has one roster and so one fetch time.
 --
 -- Candidates (R1.1) are the roster days in a starting slot, or in a bench slot that is not an
 -- injured-list slot (is_injured_list_slot in the espn_lineup_slots seed), selected exactly as
@@ -27,6 +29,12 @@
 -- pitching) and day_kind that side's kind (batting, start or relief). option_value is carried
 -- as it is, null when the day value is unknown: a later model reads the null, and it is never
 -- coalesced here.
+--
+-- THE RULE THESE ARE CHOSEN UNDER (R3.1, ADR 0037): a starter who played is replaced only by
+-- another player who played, and a tie keeps the actual lineup. That is why a player with no
+-- line on a slot's side has no option there, and why injured-list slots give none. The
+-- league's limit on pitcher starts is not applied: day_kind is carried so the starts of each
+-- lineup can be counted downstream, not so that they can be capped.
 
 {{ config(materialized='table') }}
 

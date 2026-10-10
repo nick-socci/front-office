@@ -10,6 +10,13 @@
 -- slot_role (hitter or pitcher) is the seed's fact about which side of a player's game the
 -- slot credits; the options model reads it to pick the side whose day value applies.
 -- Staging has no platform, so it is the literal 'espn', as int_fantasy__roster_days does.
+--
+-- WHAT THE COMPARISON BUILT ON THESE IS (ADR 0037, ADR 0038). The lineup decisions are
+-- hindsight opportunity, not a measure of manager skill, under the rule of R3.1: a starter
+-- who played is replaced only by another player who played, and a tie keeps the actual
+-- lineup. Which of these slots a player may fill is ESPN's eligibility as fetched, not of the
+-- day (int_fantasy__lineup_options). slot_count is the only limit read from the settings: the
+-- league's limit on pitcher starts is not applied, and this model does not read it.
 
 {{ config(materialized='view') }}
 

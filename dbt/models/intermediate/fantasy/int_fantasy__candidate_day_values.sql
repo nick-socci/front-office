@@ -34,6 +34,13 @@
 -- level means unknown, and a plain sum would skip it and report a partial value as complete.
 -- The singular test candidate_day_values_add_back_to_season_value holds the started days'
 -- values to fct_player_season_value.total_value (R1.5).
+--
+-- WHAT THE COMPARISON BUILT ON THESE IS (ADR 0037, ADR 0038). The optimal lineup downstream
+-- follows the rule of R3.1: a starter who played is replaced only by another player who
+-- played; injured-list slots are not candidates, which is why they have no row here; a tie
+-- keeps the actual lineup. A day value itself rests on no eligibility: where a player could
+-- have started is ESPN's eligibility as fetched, not of the day, and enters in
+-- int_fantasy__lineup_options. The league's limit on pitcher starts is not applied anywhere.
 
 {{ config(materialized='table') }}
 

@@ -12,7 +12,9 @@
 -- player order, because a sum of doubles is reproducible only in a fixed order.
 --
 -- ELIGIBILITY IS ESPN'S AS FETCHED (ADR 0038): as of eligibility_fetched_at, not of the day,
--- so a move that was not legal on the day can look legal. The league's limit on pitcher
+-- so a move that was not legal on the day can look legal. For the 2026 backfill that is
+-- 2026-09-26 for scoring periods 1 to 178 and 2026-10-07 for periods 179 and 180; measured
+-- there, it overstates the season's gap by at most about 8%. The league's limit on pitcher
 -- starts is NOT applied (ADR 0037). That is why actual_pitcher_starts and
 -- optimal_pitcher_starts are carried: summed by team and matchup period they show a period
 -- over the limit, whatever it is.

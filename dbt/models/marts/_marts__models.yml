@@ -284,7 +284,8 @@ models:
       only by another player who played, so the gap counts choices between players and not
       days that went badly; injured-list slots are not candidates; and a tie keeps the actual
       lineup. Eligibility is ESPN's as fetched, as of eligibility_fetched_at, not of the day
-      (ADR 0038), so a move that was not legal on the day can look legal. The league's limit
+      (ADR 0038), so a move that was not legal on the day can look legal; for a season
+      backfilled after it ended, that is the eligibility of the backfill. The league's limit
       on pitcher starts is NOT applied, which is why actual_pitcher_starts and
       optimal_pitcher_starts are carried: summed by team and matchup period they show a
       period over the limit, whatever it is. Values are on the scale of the player facts (ADR

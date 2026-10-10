@@ -7,7 +7,8 @@ dbt/python_modules/lineup_solver.py builds the matrix and this model only feeds 
 What the rows mean (R6.4): hindsight opportunity under the rule of R3.1 -- a starter who
 played is replaced only by another player who played (ADR 0037), and ties keep the actual
 lineup. They are NOT a measure of manager skill. The eligibility they rest on is ESPN's as
-fetched, not of the day (ADR 0038).
+fetched, not of the day (ADR 0038). Injured-list slots are not candidates, and the league's
+limit on pitcher starts is not applied: each team-day is solved alone (ADR 0037).
 
 Unvalued team-days (R3.5): a team-day with any option whose value is null has no rows. A
 team-day with no options never reaches this model (no option rows), so it has none either.
