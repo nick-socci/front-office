@@ -904,6 +904,38 @@ models:
             combination_of_columns:
               [platform, league_id, season, scoring_date, fantasy_team_id, platform_player_id, lineup_slot_id]
 
+  - name: int_fantasy__optimal_lineups
+    description: >
+      The best lineup each team-day could have fielded (#12, R3): one row per team-day and
+      assigned player, with his slot. Solved exactly as an assignment problem by SciPy (ADR
+      0039). A team-day with an option whose value is null is unvalued and has no rows; a
+      team-day with no options has no rows either, its optimal lineup being the empty one.
+      THESE LINEUPS ARE HINDSIGHT OPPORTUNITY under the rule of R3.1 (a starter who played is
+      replaced only by another player who played, ADR 0037; ties keep the actual lineup), NOT
+      A MEASURE OF MANAGER SKILL. The eligibility they rest on is ESPN's as fetched (ADR 0038).
+      This is a Python model: on BigQuery it needs a Spark or BigQuery DataFrames runtime, so
+      it either stays DuckDB-only or the solver moves; sub-project 3 decides.
+    columns:
+      - name: platform
+        data_tests: [not_null]
+      - name: league_id
+        data_tests: [not_null]
+      - name: season
+        data_tests: [not_null]
+      - name: scoring_date
+        data_tests: [not_null]
+      - name: fantasy_team_id
+        data_tests: [not_null]
+      - name: platform_player_id
+        data_tests: [not_null]
+      - name: lineup_slot_id
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              [platform, league_id, season, scoring_date, fantasy_team_id, platform_player_id]
+
   # ---------------------------------------------------------------------------
   # Matchup aggregation (#10): credited components per side, then stat values.
   # ---------------------------------------------------------------------------
