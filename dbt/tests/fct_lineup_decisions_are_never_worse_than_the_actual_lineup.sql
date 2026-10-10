@@ -13,7 +13,12 @@
 with actual_by_role as (
 
     select
-        platform, league_id, season, scoring_date, fantasy_team_id, slot_role,
+        platform,
+        league_id,
+        season,
+        scoring_date,
+        fantasy_team_id,
+        slot_role,
         count(*) as played_starters
     from {{ ref('int_fantasy__lineup_options') }}
     where is_actual
@@ -24,8 +29,12 @@ with actual_by_role as (
 assigned_by_role as (
 
     select
-        lineups.platform, lineups.league_id, lineups.season, lineups.scoring_date,
-        lineups.fantasy_team_id, options.slot_role,
+        lineups.platform,
+        lineups.league_id,
+        lineups.season,
+        lineups.scoring_date,
+        lineups.fantasy_team_id,
+        options.slot_role,
         count(*) as assigned_players
     from {{ ref('int_fantasy__optimal_lineups') }} as lineups
     inner join {{ ref('int_fantasy__lineup_options') }} as options
@@ -46,7 +55,11 @@ gap_below_zero as (
 
     select
         'gap_below_zero' as broken_rule,
-        platform, league_id, season, scoring_date, fantasy_team_id,
+        platform,
+        league_id,
+        season,
+        scoring_date,
+        fantasy_team_id,
         cast(null as varchar) as slot_role,
         value_gap as measured,
         cast(null as bigint) as expected_at_least
@@ -59,8 +72,12 @@ fewer_than_played as (
 
     select
         'fewer_than_played' as broken_rule,
-        actual.platform, actual.league_id, actual.season, actual.scoring_date,
-        actual.fantasy_team_id, actual.slot_role,
+        actual.platform,
+        actual.league_id,
+        actual.season,
+        actual.scoring_date,
+        actual.fantasy_team_id,
+        actual.slot_role,
         cast(coalesce(assigned.assigned_players, 0) as double) as measured,
         actual.played_starters as expected_at_least
     from actual_by_role as actual

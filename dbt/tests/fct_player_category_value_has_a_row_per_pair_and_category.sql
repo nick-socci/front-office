@@ -7,7 +7,12 @@
 
 with pairs as (
 
-    select distinct platform, league_id, season, platform_player_id, fantasy_team_id
+    select distinct
+        platform,
+        league_id,
+        season,
+        platform_player_id,
+        fantasy_team_id
     from {{ ref('int_fantasy__started_player_days') }}
 
 ),
@@ -30,7 +35,9 @@ actual as (
 
 )
 
-select expected_rows, actual_rows
+select
+    expected_rows,
+    actual_rows
 from expected
 cross join actual
 where expected_rows <> actual_rows

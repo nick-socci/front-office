@@ -32,5 +32,6 @@ select
 from {{ ref('dim_players') }} as players
 full outer join expected
     on expected.mlbam_player_id = players.mlbam_player_id
-where players.mlbam_player_id is null
+where
+    players.mlbam_player_id is null
     or expected.mlbam_player_id is null

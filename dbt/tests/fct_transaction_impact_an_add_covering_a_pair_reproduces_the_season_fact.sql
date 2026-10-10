@@ -51,6 +51,7 @@ covered as (
 
 select *
 from covered
-where add_started_days <> season_started_days
+where
+    add_started_days <> season_started_days
     or (add_total_value is null) <> (season_total_value is null)
     or abs(add_total_value - season_total_value) > 1e-9

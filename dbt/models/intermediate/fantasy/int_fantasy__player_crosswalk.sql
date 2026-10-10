@@ -66,7 +66,10 @@ with mlb_players as (
 
 unambiguous_names as (
 
-    select match_name, season, min(mlbam_player_id) as mlbam_player_id
+    select
+        match_name,
+        season,
+        min(mlbam_player_id) as mlbam_player_id
     from mlb_players
     group by match_name, season
     having count(distinct mlbam_player_id) = 1

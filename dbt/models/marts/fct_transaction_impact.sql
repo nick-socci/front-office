@@ -174,8 +174,10 @@ add_started as (
         windows.season,
         windows.transaction_id,
         count(*) as started_days,
-        count(*) filter (where days.slot_role = 'hitter' and days.games_batted > 0) as hitter_played_days,
-        count(*) filter (where days.slot_role = 'pitcher' and days.games_pitched > 0) as pitcher_played_days,
+        count(*) filter (where days.slot_role = 'hitter' and days.games_batted > 0)
+            as hitter_played_days,
+        count(*) filter (where days.slot_role = 'pitcher' and days.games_pitched > 0)
+            as pitcher_played_days,
         {%- for column in component_columns %}
         coalesce(sum(days.{{ column }}), 0) as {{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
@@ -202,16 +204,20 @@ drop_games as (
         windows.transaction_id,
         count(*) filter (where windows.replacement_group = 'hitter' and games.games_batted > 0)
             as hitter_played_days,
-        count(*) filter (where windows.replacement_group in ('SP', 'RP') and games.games_pitched > 0)
+        count(*) filter (
+            where windows.replacement_group in ('SP', 'RP') and games.games_pitched > 0
+        )
             as pitcher_played_days,
         {%- for column in batting_columns %}
         coalesce(sum(case when windows.replacement_group = 'hitter' then games.{{ column }} end), 0)
             as {{ column }},
         {%- endfor %}
-        {%- for column in pitching_columns %}
-        coalesce(sum(case when windows.replacement_group in ('SP', 'RP') then games.{{ column }} end), 0)
-            as {{ column }}{% if not loop.last %},{% endif %}
-        {%- endfor %}
+    {%- for column in pitching_columns %}
+    coalesce(
+        sum(case when windows.replacement_group in ('SP', 'RP') then games.{{ column }} end), 0
+    )
+        as {{ column }}{% if not loop.last %},{% endif %}
+    {%- endfor %}
     from windows
     inner join {{ ref('int_mlb__player_game_days') }} as games
         on games.mlbam_player_id = windows.mlbam_player_id
@@ -262,18 +268,30 @@ measured as (
 
     select
         windows.*,
-        case windows.movement when 'add' then coalesce(add_rostered.rostered_days, 0) end as rostered_days,
-        case windows.movement when 'add' then coalesce(add_started.started_days, 0) end as started_days,
+        case windows.movement when 'add' then coalesce(add_rostered.rostered_days, 0) end
+            as rostered_days,
+        case windows.movement when 'add' then coalesce(add_started.started_days, 0) end
+            as started_days,
         case windows.movement
-            when 'add' then coalesce(add_started.hitter_played_days, 0) + coalesce(add_started.pitcher_played_days, 0)
+            when
+                'add'
+                then
+                    coalesce(add_started.hitter_played_days, 0)
+                    + coalesce(add_started.pitcher_played_days, 0)
         end as played_started_days,
         case windows.movement
-            when 'drop' then coalesce(drop_games.hitter_played_days, 0) + coalesce(drop_games.pitcher_played_days, 0)
+            when
+                'drop'
+                then
+                    coalesce(drop_games.hitter_played_days, 0)
+                    + coalesce(drop_games.pitcher_played_days, 0)
         end as played_days,
         next_adds.next_added_at,
         next_adds.next_added_by_team_id,
         {%- for column in component_columns %}
-        coalesce(add_started.{{ column }}, drop_games.{{ column }}, 0) as {{ column }}{% if not loop.last %},{% endif %}
+        coalesce(add_started.{{ column }}, drop_games.{{ column }}, 0)
+            as {{ column }}{% if not loop.last %},
+        {% endif %}
         {%- endfor %}
     from windows
     left join add_rostered
@@ -310,7 +328,9 @@ add_kinded_days as (
         windows.transaction_id,
         case days.slot_role
             when 'hitter' then case when days.games_batted > 0 then 'batting' end
-            when 'pitcher' then {{ fo_pitching_day_kind('days.games_pitched', 'days.games_started') }}
+            when
+                'pitcher'
+                then {{ fo_pitching_day_kind('days.games_pitched', 'days.games_started') }}
         end as day_kind,
         {%- for column in component_columns %}
         days.{{ column }}{% if not loop.last %},{% endif %}
@@ -356,12 +376,16 @@ drop_kinded_days as (
 component_sides as (
 
     {%- for column in batting_columns %}
-    select '{{ column }}' as component, 'batting' as side
+    select
+        '{{ column }}' as component,
+        'batting' as side
     union all
     {%- endfor %}
     {%- for column in pitching_columns %}
-    select '{{ column }}' as component, 'pitching' as side
-        {{- '\n    union all' if not loop.last }}
+    select
+        '{{ column }}' as component,
+        'pitching' as side
+    {{- '\n    union all' if not loop.last }}
     {%- endfor %}
 
 ),
@@ -380,9 +404,23 @@ kind_days as (
         coalesce(sum({{ column }}), 0) as {{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from (
-        select platform, league_id, season, transaction_id, day_kind, {{ component_columns | join(', ') }} from add_kinded_days
+        select
+            platform,
+            league_id,
+            season,
+            transaction_id,
+            day_kind,
+            {{ component_columns | join(', ') }}
+        from add_kinded_days
         union all
-        select platform, league_id, season, transaction_id, day_kind, {{ component_columns | join(', ') }} from drop_kinded_days
+        select
+            platform,
+            league_id,
+            season,
+            transaction_id,
+            day_kind,
+            {{ component_columns | join(', ') }}
+        from drop_kinded_days
     )
     where day_kind is not null
     group by platform, league_id, season, transaction_id, day_kind
@@ -439,7 +477,14 @@ kind_parts as (
         and levels.season = totals.season
         and levels.component = totals.component
         and levels.day_kind = totals.day_kind
-    group by totals.platform, totals.league_id, totals.season, totals.transaction_id, totals.day_kind, rules.stat_key, rules.part
+    group by
+        totals.platform,
+        totals.league_id,
+        totals.season,
+        totals.transaction_id,
+        totals.day_kind,
+        rules.stat_key,
+        rules.part
 
 ),
 

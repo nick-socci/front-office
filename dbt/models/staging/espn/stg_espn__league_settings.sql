@@ -15,7 +15,8 @@ select
     ) }} as league_name,
     {{ fo_json_text('payload', '$.settings.scoringSettings.scoringType') }} as scoring_type,
     {{ fo_json_int('payload', '$.settings.size') }} as team_count,
-    {{ fo_json_int('payload', '$.settings.scheduleSettings.playoffTeamCount') }} as playoff_team_count,
+    {{ fo_json_int('payload', '$.settings.scheduleSettings.playoffTeamCount') }}
+        as playoff_team_count,
     {{ fo_json_int('payload', '$.status.currentMatchupPeriod') }} as current_matchup_period,
     {{ fo_json_int('payload', '$.status.latestScoringPeriod') }} as latest_scoring_period,
     {{ fo_json_int('payload', '$.status.finalScoringPeriod') }} as final_scoring_period,

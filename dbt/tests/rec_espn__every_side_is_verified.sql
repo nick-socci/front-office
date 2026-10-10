@@ -5,6 +5,8 @@
 -- nothing about. A warning, not an error, because the CI fixtures are incomplete on
 -- purpose and every fixture side is unverified.
 
-select distinct matchup_id, fantasy_team_id
+select distinct
+    matchup_id,
+    fantasy_team_id
 from {{ ref('rec_espn__matchup_stat_differences') }}
 where status = 'unverified'

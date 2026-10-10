@@ -78,9 +78,9 @@
 with pairs as (
 
     select distinct
-        {%- for key in pair_keys %}
+    {%- for key in pair_keys %}
         {{ key }}{% if not loop.last %},{% endif %}
-        {%- endfor %}
+    {%- endfor %}
     from {{ ref('int_fantasy__started_player_days') }}
 
 ),
@@ -103,12 +103,16 @@ kinded_days as (
 component_sides as (
 
     {%- for column in batting_columns %}
-    select '{{ column }}' as component, 'batting' as side
+    select
+        '{{ column }}' as component,
+        'batting' as side
     union all
     {%- endfor %}
     {%- for column in pitching_columns %}
-    select '{{ column }}' as component, 'pitching' as side
-        {{- '\n    union all' if not loop.last }}
+    select
+        '{{ column }}' as component,
+        'pitching' as side
+    {{- '\n    union all' if not loop.last }}
     {%- endfor %}
 
 ),

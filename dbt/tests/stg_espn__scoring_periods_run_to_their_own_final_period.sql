@@ -32,7 +32,8 @@ from {{ ref('stg_espn__league_settings') }} as settings
 left join periods
     on periods.league_id = settings.league_id
     and periods.season = settings.season
-where periods.periods is null
-   or periods.periods != settings.final_scoring_period
-   or periods.max_period != settings.final_scoring_period
-   or periods.min_period != 1
+where
+    periods.periods is null
+    or periods.periods != settings.final_scoring_period
+    or periods.max_period != settings.final_scoring_period
+    or periods.min_period != 1

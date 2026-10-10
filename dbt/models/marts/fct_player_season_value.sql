@@ -58,7 +58,7 @@ started_days as (
         days.scoring_date,
         days.input_status,
         (days.slot_role = 'hitter' and days.games_batted > 0)
-            or (days.slot_role = 'pitcher' and days.games_pitched > 0) as played_on_credited_side,
+        or (days.slot_role = 'pitcher' and days.games_pitched > 0) as played_on_credited_side,
         (team_matchup_dates.scoring_date is not null) as in_matchup
     from {{ ref('int_fantasy__started_player_days') }} as days
     left join team_matchup_dates
@@ -81,7 +81,8 @@ day_counts as (
         count(*) as started_days,
         count(*) filter (where played_on_credited_side) as played_started_days,
         count(*) filter (where not in_matchup) as started_days_outside_matchups,
-        count(*) filter (where input_status not in ('played', 'verified_off')) as unverified_started_days,
+        count(*) filter (where input_status not in ('played', 'verified_off'))
+            as unverified_started_days,
         min(scoring_date) as first_started_date,
         max(scoring_date) as last_started_date
     from started_days

@@ -19,13 +19,15 @@ select
     register.team_id,
     register.stat_id
 from {{ ref('espn_reconciliation_residuals') }} as register
-where not exists (
-    select 1
-    from {{ ref('int_fantasy__league_seasons') }} as league_seasons
-    where league_seasons.platform = 'espn'
-        and league_seasons.league_id = register.league_id
-        and league_seasons.season = register.season
-)
+where
+    not exists (
+        select 1
+        from {{ ref('int_fantasy__league_seasons') }} as league_seasons
+        where
+            league_seasons.platform = 'espn'
+            and league_seasons.league_id = register.league_id
+            and league_seasons.season = register.season
+    )
 
 union all
 

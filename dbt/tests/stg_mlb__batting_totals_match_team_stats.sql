@@ -31,7 +31,8 @@ claimed as (
         '{{ side }}' as side,
         {{ fo_json_int('payload', '$.teams.' ~ side ~ '.teamStats.batting.hits') }} as team_hits,
         {{ fo_json_int('payload', '$.teams.' ~ side ~ '.teamStats.batting.runs') }} as team_runs,
-        {{ fo_json_int('payload', '$.teams.' ~ side ~ '.teamStats.batting.atBats') }} as team_at_bats
+        {{ fo_json_int('payload', '$.teams.' ~ side ~ '.teamStats.batting.atBats') }}
+            as team_at_bats
     from latest_responses
     {{ 'union all' if not loop.last }}
     {% endfor %}
@@ -62,11 +63,12 @@ select
     coalesce(s.at_bats, 0) as at_bats
 from claimed as c
 full outer join summed as s
-    on c.game_pk = s.game_pk
-    and c.side = s.side
-where c.team_hits is null
-   or c.team_runs is null
-   or c.team_at_bats is null
-   or c.team_hits != coalesce(s.hits, 0)
-   or c.team_runs != coalesce(s.runs, 0)
-   or c.team_at_bats != coalesce(s.at_bats, 0)
+    on s.game_pk = c.game_pk
+    and s.side = c.side
+where
+    c.team_hits is null
+    or c.team_runs is null
+    or c.team_at_bats is null
+    or c.team_hits != coalesce(s.hits, 0)
+    or c.team_runs != coalesce(s.runs, 0)
+    or c.team_at_bats != coalesce(s.at_bats, 0)

@@ -20,8 +20,9 @@ with responses as (
         {{ fo_json_text('partitions', '$.league_id') }} as league_id,
         {{ fo_json_int('partitions', '$.season') }}::integer as season
     from {{ source('raw', 'api_responses') }}
-    where source = 'espn'
-      and endpoint in ('settings', 'teams', 'roster', 'matchups')
+    where
+        source = 'espn'
+        and endpoint in ('settings', 'teams', 'roster', 'matchups')
 
 ),
 
@@ -39,5 +40,6 @@ header as (
 
 select *
 from header
-where partition_league_id is distinct from payload_league_id
-   or partition_season is distinct from payload_season
+where
+    partition_league_id is distinct from payload_league_id
+    or partition_season is distinct from payload_season

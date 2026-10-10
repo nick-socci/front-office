@@ -65,7 +65,8 @@ with candidates as (
     from {{ ref('int_fantasy__roster_days') }} as days
     inner join {{ ref('espn_lineup_slots') }} as slots
         on slots.lineup_slot_id = days.roster_slot_id
-    where days.mlbam_player_id is not null
+    where
+        days.mlbam_player_id is not null
         and (days.is_started or (days.slot_role = 'bench' and not slots.is_injured_list_slot))
 
 ),
@@ -129,7 +130,7 @@ day_components as (
         cast(coalesce({{ column }}, 0) as double) as component_total
     from played_sides
     where side = 'pitching'
-        {{- '\n    union all' if not loop.last }}
+    {{- '\n    union all' if not loop.last }}
     {%- endfor %}
 
 ),
@@ -230,9 +231,9 @@ day_values as (
         end as day_value
     from day_category_values
     group by
-        {%- for key in day_keys %}
+    {%- for key in day_keys %}
         {{ key }}{% if not loop.last %},{% endif %}
-        {%- endfor %}
+    {%- endfor %}
 
 )
 

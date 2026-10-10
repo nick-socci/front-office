@@ -14,7 +14,11 @@ select
     max(levels.pool_players) as pool_players
 from {{ ref('int_fantasy__replacement_levels') }} as levels
 inner join (
-    select platform, league_id, season, count(*) as team_count
+    select
+        platform,
+        league_id,
+        season,
+        count(*) as team_count
     from {{ ref('int_fantasy__teams') }}
     group by platform, league_id, season
 ) as sizes

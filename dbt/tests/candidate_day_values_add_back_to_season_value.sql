@@ -64,5 +64,6 @@ left join day_sums as sums
     and sums.season = seasons.season
     and sums.platform_player_id = seasons.platform_player_id
     and sums.fantasy_team_id = seasons.fantasy_team_id
-where (seasons.total_value is null) != (coalesce(sums.null_days, 0) > 0)
+where
+    (seasons.total_value is null) != (coalesce(sums.null_days, 0) > 0)
     or abs(seasons.total_value - coalesce(sums.day_total, 0)) > 1e-9

@@ -17,5 +17,6 @@ select distinct
 from {{ ref('stg_espn__roster_entries') }} as entries
 left join {{ ref('stg_idmap__players') }} as crosswalk
     on crosswalk.espn_player_id = entries.espn_player_id
-where crosswalk.mlbam_player_id is null
-  and entries.lineup_slot not in ('BE', 'IL')
+where
+    crosswalk.mlbam_player_id is null
+    and entries.lineup_slot not in ('BE', 'IL')

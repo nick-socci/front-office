@@ -55,7 +55,11 @@ direct as (
 from_fact as (
 
     select
-        platform, league_id, season, fantasy_team_id, category_key,
+        platform,
+        league_id,
+        season,
+        fantasy_team_id,
+        category_key,
         'numerator' as part,
         sum(numerator) as fact_total
     from {{ ref('fct_player_category_value') }}
@@ -64,7 +68,11 @@ from_fact as (
     union all
 
     select
-        platform, league_id, season, fantasy_team_id, category_key,
+        platform,
+        league_id,
+        season,
+        fantasy_team_id,
+        category_key,
         'denominator' as part,
         sum(denominator) as fact_total
     from {{ ref('fct_player_category_value') }}
@@ -87,6 +95,7 @@ full outer join from_fact
     and from_fact.fantasy_team_id = direct.fantasy_team_id
     and from_fact.category_key = direct.category_key
     and from_fact.part = direct.part
-where direct.direct_total is null
+where
+    direct.direct_total is null
     or from_fact.fact_total is null
     or direct.direct_total <> from_fact.fact_total

@@ -6,7 +6,11 @@
 
 with impact as (
 
-    select platform, league_id, season, count(*) as impact_rows
+    select
+        platform,
+        league_id,
+        season,
+        count(*) as impact_rows
     from {{ ref('fct_transaction_impact') }}
     group by platform, league_id, season
 
@@ -14,7 +18,11 @@ with impact as (
 
 interface as (
 
-    select platform, league_id, season, count(*) as transaction_rows
+    select
+        platform,
+        league_id,
+        season,
+        count(*) as transaction_rows
     from {{ ref('int_fantasy__transactions') }}
     group by platform, league_id, season
 

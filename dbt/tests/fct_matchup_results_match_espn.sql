@@ -11,7 +11,11 @@
 
 with espn_matchups as (
 
-    select matchups.league_id, matchups.season, matchups.matchup_id, matchups.winner
+    select
+        matchups.league_id,
+        matchups.season,
+        matchups.matchup_id,
+        matchups.winner
     from {{ ref('stg_espn__matchups') }} as matchups
     inner join {{ ref('int_fantasy__league_seasons') }} as league_seasons
         on league_seasons.platform = 'espn'
@@ -43,6 +47,7 @@ full outer join espn_matchups as espn
     on espn.league_id = ours.league_id
     and espn.season = ours.season
     and espn.matchup_id = ours.matchup_id
-where ours.matchup_id is null
-   or espn.matchup_id is null
-   or (not ours.has_unverified_inputs and ours.winner is distinct from espn.winner)
+where
+    ours.matchup_id is null
+    or espn.matchup_id is null
+    or (not ours.has_unverified_inputs and ours.winner is distinct from espn.winner)

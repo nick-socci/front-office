@@ -32,8 +32,9 @@ with responses as (
         {{ fo_json_text('partitions', '$.league_id') }} as league_id,
         {{ fo_json_int('partitions', '$.season') }}::integer as season
     from {{ source('raw', 'api_responses') }}
-    where source = 'espn'
-      and endpoint = 'transactions'
+    where
+        source = 'espn'
+        and endpoint = 'transactions'
 
 ),
 

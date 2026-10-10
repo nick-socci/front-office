@@ -92,7 +92,8 @@ decided_matchups as (
         matchup_period,
         playoff_tier = 'NONE' as is_regular_season
     from {{ ref('stg_espn__matchups') }}
-    where winner != 'UNDECIDED'
+    where
+        winner != 'UNDECIDED'
         and home_team_id is not null
         and away_team_id is not null
 
@@ -100,7 +101,13 @@ decided_matchups as (
 
 reported as (
 
-    select league_id, season, matchup_id, side, stat_id, score
+    select
+        league_id,
+        season,
+        matchup_id,
+        side,
+        stat_id,
+        score
     from {{ ref('stg_espn__matchup_category_results') }}
 
 ),
@@ -120,7 +127,11 @@ side_totals as (
         rate_categories.category_key is not null as is_rate,
         reported.score
     from decided_matchups as matchups
-    cross join (select 'home' as side union all select 'away' as side) as sides
+    cross join (
+        select 'home' as side
+        union all
+        select 'away' as side
+    ) as sides
     inner join {{ ref('int_fantasy__categories') }} as categories
         on categories.platform = 'espn'
         and categories.league_id = matchups.league_id
@@ -176,7 +187,8 @@ period_means as (
         category_key,
         avg(score) as mean_side_total
     from side_totals
-    where is_regular_season
+    where
+        is_regular_season
         and not is_rate
         and score is not null
     group by league_id, season, matchup_period, category_key
@@ -197,7 +209,10 @@ usual_means as (
 
 regular_periods as (
 
-    select distinct league_id, season, matchup_period
+    select distinct
+        league_id,
+        season,
+        matchup_period
     from decided_matchups
     where is_regular_season
 
@@ -268,7 +283,8 @@ margins as (
         and period_volumes.season = home.season
         and period_volumes.matchup_period = home.matchup_period
         and home.is_regular_season
-    where home.side = 'home'
+    where
+        home.side = 'home'
         and home.score is not null
         and away.score is not null
 
@@ -292,7 +308,7 @@ select
         else margin / sqrt(relative_volume)
     end as standard_margin,
     is_regular_season
-        and coalesce(relative_volume > 0, false)
-        and (not is_rate or coalesce(home_denominator > 0 and away_denominator > 0, false))
+    and coalesce(relative_volume > 0, false)
+    and (not is_rate or coalesce(home_denominator > 0 and away_denominator > 0, false))
         as is_measured
 from margins

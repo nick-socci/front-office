@@ -48,5 +48,6 @@ select
 from grain
 cross join inside
 cross join fact
-where fact.fact_started_days <> grain.grain_days
+where
+    fact.fact_started_days <> grain.grain_days
     or inside.inside_days + fact.outside_days <> grain.grain_days
