@@ -57,7 +57,7 @@ have to be told apart from the excused one by eye.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0046](../../adr/0046-an-order-dependent-aggregate-is-computed-in-a-stated-order.md) | A floating-point aggregate that depends on row order is computed in a stated order; exact aggregates are exempt | proposed |
+| [0046](../../adr/0046-an-order-dependent-aggregate-is-computed-in-a-stated-order.md) | A floating-point aggregate that depends on row order is computed in a stated order; exact aggregates are exempt | accepted |
 
 ## Detailed design
 

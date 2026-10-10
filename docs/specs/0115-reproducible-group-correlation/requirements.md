@@ -1,6 +1,6 @@
 # A group's correlation is the same on every build — requirements
 
-Issue: #115 · Tier: M · Status: draft
+Issue: #115 · Tier: M · Status: approved 2026-10-10
 
 ## Problem
 

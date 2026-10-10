@@ -1,6 +1,6 @@
 # 0046. A floating-point aggregate that depends on row order is computed in a stated order
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-10
 - Spec: [0115-reproducible-group-correlation](../specs/0115-reproducible-group-correlation/design.md) · Issue: #115
 
