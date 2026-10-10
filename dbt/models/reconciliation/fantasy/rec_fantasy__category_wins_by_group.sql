@@ -84,7 +84,10 @@ groups as (
             filter (where category_wins_added is not null),
             0
         ) as slope,
-        corr(category_wins_added, total_value) as correlation
+        -- In the same fixed order as the sums above: corr() is a floating-point aggregate
+        -- too, and its last digit follows the order of its rows (ADR 0046).
+        corr(category_wins_added, total_value order by platform_player_id, fantasy_team_id)
+            as correlation
     from pairs
     group by platform, league_id, season, replacement_group
 
