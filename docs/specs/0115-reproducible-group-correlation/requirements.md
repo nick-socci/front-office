@@ -39,8 +39,9 @@ the third aggregate to break the same way (`stddev_pop` in #55, `avg` in #58).
   defaults.
 - **No change to the thresholds** the view judges on (100 matchups, 100 pairs, 0.75,
   0.34 to 0.47): those are ADR 0009 and #94's.
-- **No change to any other model.** The other `avg()` and `median()` calls are named
-  below and left as they are.
+- **No other value changes.** The two remaining `avg()` calls gain a stated order (R4;
+  owner, 2026-10-10) and keep every value on 2026 to the digit. The `median()` calls are
+  left as they are. No model beyond the view and those two is touched.
 - **No BigQuery variant.** An ordered aggregate is DuckDB syntax, as the ordered sums of
   R4.13 already are; porting them is that sub-project's work.
 
@@ -98,6 +99,23 @@ the third aggregate to break the same way (`stddev_pop` in #55, `avg` in #58).
 - R3.3 The comment on `correlation` in the model SHALL say why the order is stated, in
   the terms the comment on `slope` uses.
 
+### R4. The two remaining averages are taken in a stated order
+
+Owner, 2026-10-10. Both are exact today only because their inputs happen to be whole
+numbers (largest 369 on 2026). That is a fact about one league's categories, not about
+the models: a league that scores a non-integer counting category would make the second
+one depend on row order. Ordered, neither needs the exemption.
+
+- R4.1 THE SYSTEM SHALL compute `side_denominator` in `int_fantasy__category_scales`
+  as an average over a group's rows taken in the order (`matchup_id`, `is_home`).
+- R4.2 THE SYSTEM SHALL compute `mean_side_total` in
+  `int_fantasy__reported_matchup_margins` as an average over a group's rows taken in
+  the order (`matchup_id`, `side`).
+- R4.3 IF either order does not identify one row within its group on the real season
+  THEN the build SHALL stop and say so: an order with ties leaves the fault in place.
+- R4.4 On the 2026 season every value of both models, and of every relation built on
+  them, SHALL be unchanged to the digit.
+
 ## Expected values
 
 Measured read-only on `data/warehouse.duckdb`, 2026-10-10, DuckDB 1.5.5. The `after`
@@ -117,5 +135,6 @@ adjusted to.
 | Reordered copy, after the change | 56 relations compared, 56 identical | R2.2 |
 | Reordered copy, before the change | 55 identical, `rec_fantasy__category_wins_by_group` differs | R2.3 |
 | Two builds of the commit | 56 identical, exact, `--strict-columns` | R2.1 |
-| Every other relation, before against after | identical, exact | `compare_warehouses.py` old against new: the one difference is this view's `correlation` |
-| CI | the view has 0 rows on the fixtures, as today; counts of the gate unchanged but for the one unit test added | `.agentic/gates` |
+| Every other relation, before against after | identical, exact, the two models of R4 and everything built on them included | `compare_warehouses.py` old against new: the one difference is this view's `correlation` |
+| The orders of R4 | each identifies one row within its group: no group of `side_denominator` holds two rows with the same (`matchup_id`, `is_home`), none of `mean_side_total` two with the same (`matchup_id`, `side`) | a query on the real season, task 1 (R4.3) |
+| CI | the view has 0 rows on the fixtures, as today; counts of the gate unchanged but for the unit tests added | `.agentic/gates` |

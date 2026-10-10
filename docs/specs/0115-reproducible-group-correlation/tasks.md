@@ -12,9 +12,13 @@ The first commit of the build accepts ADR 0046.
    - On the real season at the base commit: the view's three rows to full precision; a
      `before` copy of the warehouse kept aside; the reordered-copy check on it (design,
      *The reordered-copy check*), expected to report the view as differing.
-   - Read the rules behind `is_rate` and say whether stats 2, 41, 47 and 49 are exactly
-     the rate categories. If not, stop and ask the owner.
-   - Verify: the rows, the check's output and the answer posted on #115.
+   - Query the real season for a repeated (`matchup_id`, `is_home`) within a group of
+     `side_denominators`, and a repeated (`matchup_id`, `side`) within a group of
+     `period_means` (R4.3). If either has one, stop and ask the owner.
+   - Read the rules behind `denominator_parts` and say how many components a rate
+     category's denominator has and whether their weights are whole numbers (design,
+     *Open questions*). Report it to the owner; do not order that sum without a decision.
+   - Verify: the rows, the check's output and both answers posted on #115.
 2. The unit test, seen to fail — `impl` — R1.1, R1.2, R1.3
    - Add `category_wins_by_group_take_the_correlation_in_player_order` to
      `_rec_fantasy__models.yml`, with what it catches in its description; add
@@ -27,14 +31,21 @@ The first commit of the build accepts ADR 0046.
      the new test, on the last digit; the existing test may fail too if the unordered
      value differs from the pinned one, and passes after task 3. If no listing makes it fail on the unordered
      `corr`, stop and report: do not commit a test that cannot fail.
+   - One unit test for each average of R4, in the YAML of its model: non-integer inputs
+     listed in descending key order, the result pinned to the last digit of the
+     key-order average. The same rule: seen to fail on the unordered `avg()`, or not
+     committed and reported.
 3. The model and its description — `impl` — R1.1, R1.4, R3.3
    - The `order by` and its comment; the `correlation` description in the YAML.
    - Verify: the unit tests of the view pass; `sqlfluff lint` clean if #116 has merged.
-4. The rule in `AGENTS.md` — `impl` — R3.1, R3.2
-   - The entry in the design, under *dbt gotchas*. Skipped if the owner declined it in
-     the spec PR.
+4. The two averages — `impl` — R4.1, R4.2
+   - The `order by` and its comment in `int_fantasy__category_scales` and
+     `int_fantasy__reported_matchup_margins`, as the design writes them.
+   - Verify: both models' unit tests pass; `sqlfluff lint` clean if #116 has merged.
+5. The rule in `AGENTS.md` — `impl` — R3.1, R3.2
+   - The entry in the design, under *dbt gotchas* (accepted by the owner, 2026-10-10).
    - Verify: `git diff AGENTS.md` is that entry alone.
-5. (last) Verify on the real season — `judgment` — R2.1, R2.2, expected values
+6. (last) Verify on the real season — `judgment` — R2.1, R2.2, R4.4, expected values
    - `.agentic/gates`. Build the real season twice into new files; compare each with the
      other exactly (`--strict-columns`), and one with the `before` copy; run the
      reordered-copy check on one of them; query the view.

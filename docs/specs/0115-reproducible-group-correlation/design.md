@@ -4,7 +4,7 @@ Issue: #115 · Requirements: [requirements.md](requirements.md) · Tasks: [tasks
 
 ## Overview
 
-One expression changes. In the `groups` CTE of `rec_fantasy__category_wins_by_group`,
+Three expressions change, and one of them changes a value. In the `groups` CTE of `rec_fantasy__category_wins_by_group`,
 `corr(category_wins_added, total_value)` gains the `order by platform_player_id,
 fantasy_team_id` that the two sums of `slope` beside it already carry. An ordered
 aggregate (new dbt/DuckDB concept here only in that it is applied to `corr`: DuckDB lets
@@ -13,6 +13,9 @@ rows in that order) gives the same digits whatever order the table's rows are st
 A unit test pins the value, the rule goes into an ADR and `AGENTS.md`, and the real
 season is checked with a copy of the warehouse whose input rows are deliberately stored
 in another order.
+
+The two remaining `avg()` calls gain an order as well (R4; owner, 2026-10-10), which
+moves no value on 2026.
 
 No model's rows, grain or columns change. `correlation` moves once, by less than 1e-15.
 
@@ -86,7 +89,7 @@ corr(category_wins_added, total_value order by platform_player_id, fantasy_team_
 "Pearson correlation of wins added and total_value over the measured pairs, taken in
 player and team order so that it is the same on every build."
 
-### The other aggregates, and why they stay
+### The other aggregates
 
 Every statistical aggregate in `dbt/models`, `dbt/macros` and `dbt/tests` on `main`
 (`corr`, `avg`, `stddev*`, `var*`, `covar*`, `regr_*`, `median`, `quantile*`):
@@ -94,9 +97,26 @@ Every statistical aggregate in `dbt/models`, `dbt/macros` and `dbt/tests` on `ma
 | Where | Aggregate | Order-dependent? |
 |---|---|---|
 | `rec_fantasy__category_wins_by_group` | `corr(category_wins_added, total_value)` | yes: this change |
-| `int_fantasy__category_scales` | `avg(denominator)` | no while `denominator` is integer-valued and small: 0 of 1,144 non-null values on 2026 are non-integer, the largest is 369, and a sum of them is exact far below 2^53 |
-| `int_fantasy__reported_matchup_margins` | `avg(score)`, counting categories only | no while those scores are integer-valued and small (largest reported score on 2026: 369); see Open questions |
+| `int_fantasy__category_scales` | `avg(denominator)` | not on 2026 (0 of 1,144 non-null values are non-integer, the largest is 369), but only while that holds: ordered by this change (R4.1) |
+| `int_fantasy__reported_matchup_margins` | `avg(score)`, counting categories only | not on 2026 (largest reported score 369), but a league with a non-integer counting category would make it so: ordered by this change (R4.2) |
+| `int_fantasy__reported_matchup_margins` | `sum(parts.weight * reported.score)`, a rate category's denominator on one side | not read by the spec; found on 2026-10-10 while the owner's decisions were applied. A sum of two terms is the same either way round; of three or more non-integer terms it is not. How many components a denominator has, and whether their weights are whole numbers, was not checked: see Open questions |
 | `int_fantasy__reported_matchup_margins` | `median(...)`, twice | no: a median is chosen, not summed |
+
+The two averages become:
+
+```sql
+-- int_fantasy__category_scales, CTE side_denominators
+avg(denominator order by matchup_id, is_home) as side_denominator
+
+-- int_fantasy__reported_matchup_margins, CTE period_means
+avg(score order by matchup_id, side) as mean_side_total
+```
+
+each with a comment in the terms of the one on `margin_scale` in the first model.
+`scored_values` holds one row per matchup side and category, and `side_totals` one per
+decided matchup, side and category, so within a group (one category of one
+league-season; one category of one period) each order should identify one row. That is
+read from the CTEs, not measured: task 1 measures it (R4.3).
 
 Sums of doubles without an order were not swept by pattern (a `sum(` is not
 recognisable as floating-point from the SQL alone). The evidence that none is exposed is
@@ -138,6 +158,9 @@ This is a procedure recorded on the issue, not a committed script: it is needed 
 | R1.4 | the model's contract (names, order, types), and `compare_warehouses.py` before against after: this view differs in `correlation` only | a column, type or other value moved |
 | R2.2, R2.3 | the reordered-copy check, before and after | order dependence left in this view; a check that cannot fail |
 | R2.1 | two builds of the commit, compared exactly | order dependence anywhere else |
+| R4.1, R4.2 | one dbt unit test for each average, with non-integer inputs listed in descending key order and the result pinned to the last digit; committed only if seen to fail on the unordered `avg()` | the `order by` removed |
+| R4.3 | a query on the real season for a repeated key within a group | an order with ties |
+| R4.4 | `compare_warehouses.py` before against after, exact | a value moved by the order |
 | R3 | read by the owner in the PR | — |
 
 What the unit test cannot do is change the physical order of a table: dbt gives a unit
@@ -162,11 +185,13 @@ known; see Open questions.
 
 - Does a dbt unit test compare a `double` exactly, and does listing order reach `corr`
   through the joins? — task 2 answers both by seeing the test fail, and pass.
-- Are the non-rate categories of `int_fantasy__reported_matchup_margins` exactly the ones
-  with integer scores? On 2026 every non-integer reported score is in stat 2, 41, 47 or
-  49; that `is_rate` marks exactly those four was not checked. — task 1. If one is not
-  marked, that `avg(score)` is order-dependent and the owner decides whether it joins
-  this change.
+- Is `sum(parts.weight * reported.score)` in `int_fantasy__reported_matchup_margins`
+  order-dependent? It is if some rate category's denominator has three or more
+  components whose weighted scores are not all whole numbers. — task 1 reads the rules
+  and answers. If it is, the owner decides whether it joins this change; it is not
+  ordered without that decision.
+- Can a unit test of either average fail on the unordered `avg()`? The same question as
+  for `corr`, and the same rule: task 2 commits a test only if it is first seen to fail.
 - Is `data/warehouse.duckdb` built from current `main`? The stored correlations match
   the issue's to 15 digits, which suggests so. — task 1 rebuilds or confirms.
 
@@ -179,4 +204,12 @@ known; see Open questions.
 | design-review | F3 (P2): R1.4 said every other column is unchanged for any input, but `is_judged` and `problem` read the correlation | R1.4 now fixes the other columns' expressions, and their values on 2026, and names the boundary case |
 
 ## Amendments
+
+- 2026-10-10, owner, on spec PR #118, before approval. Decisions 1 to 3 taken as
+  proposed: the ordered `corr`, tier M with ADR 0046, and the entry in `AGENTS.md`.
+  Decision 4 changed: the two remaining `avg()` calls are ordered in this change
+  instead of being left as exempt (R4), because the exemption held for one league's
+  2026 categories and not for the models. The question about `is_rate` goes with it.
+  An unordered `sum` in `int_fantasy__reported_matchup_margins`, found while this was
+  applied, is an open question and not part of the change.
 

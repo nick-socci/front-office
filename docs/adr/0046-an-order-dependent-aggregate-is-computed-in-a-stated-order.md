@@ -66,9 +66,12 @@ README's claim false.
   (a pre-sorted array, or exact decimal arithmetic). That was already true of R4.13.
 - Bad / accepted cost: nothing in CI enforces the rule. A breach is caught when two real
   builds are compared, as #115 was.
-- Follow-ups: none now. The two remaining `avg()` calls (`int_fantasy__category_scales`,
-  `int_fantasy__reported_matchup_margins`) are over integer-valued inputs no larger than
-  369 on 2026, thousands of rows at most, and exempt; if either input ever takes a
-  non-integer value, it gains an order. They carry no comment claiming the exemption
-  today, and #115 changes no other model: the comments are left for the owner to ask
-  for.
+- The two remaining `avg()` calls (`int_fantasy__category_scales`,
+  `int_fantasy__reported_matchup_margins`) could have claimed the exemption on 2026,
+  where their inputs are whole numbers no larger than 369. They are ordered instead
+  (owner, 2026-10-10): the exemption held for one league's categories, and an order
+  costs nothing there. An exemption is for an aggregate that is exact by what it is,
+  not by what one season's data happens to hold.
+- Follow-ups: `sum(parts.weight * reported.score)` in
+  `int_fantasy__reported_matchup_margins` has no stated order. Whether it can depend on
+  one is read in the build of #115 and put to the owner.
