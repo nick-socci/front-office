@@ -15,6 +15,12 @@ real builds are compared, as #115 was.
 An aggregate that is exact whatever the order (integer-valued inputs whose magnitudes sum
 below 2^53) says so with ``order-exempt:`` and the bound, in a comment on its own line or
 the lines directly above it. The marker alone, or the marker in a string, exempts nothing.
+
+This reads SQL text; it does not parse SQL or render Jinja. It knows comments (``--``,
+``/* */``, ``{# #}``) and string literals, and it will not take an order from inside a
+``{% %}`` block, since a branch may render nothing. It does not follow a macro that builds an
+aggregate from pieces, nor a dollar-quoted string. It is a tripwire for the ordinary way of
+writing these calls, which is the way all of them here are written.
 """
 
 import re
@@ -24,9 +30,6 @@ import pytest
 
 DBT_ROOT = Path(__file__).resolve().parents[2] / "dbt"
 SCANNED_DIRS = ("models", "tests", "macros")
-
-# SQL line comments and Jinja comments, as in test_dbt_json_rule.py.
-_COMMENT = re.compile(r"\{#.*?#\}|--[^\n]*", re.DOTALL)
 
 # Aggregates whose result is a floating-point statistic of many rows. median and quantile
 # choose a value and min, max and count are exact, so they are not here.
@@ -41,21 +44,58 @@ _ORDER_BY = re.compile(r"\border\s+by\b", re.IGNORECASE)
 _EXEMPTION = re.compile(r"order-exempt:.*[A-Za-z0-9]")
 
 
-def _blank(match: re.Match[str]) -> str:
-    """Replace a comment by its newlines alone, so line numbers stay true."""
-    return "\n" * match.group().count("\n")
+_NOT_NEWLINE = re.compile(r"[^\n]")
+
+
+def _code(sql: str) -> str:
+    """`sql` with comments and string literals blanked, character for character.
+
+    One pass, so whichever opens first wins: a `--` inside a string is part of the string, and
+    an apostrophe inside a comment is part of the comment. Newlines are kept, so line numbers
+    stay true. A double-quoted span on one line (an identifier, or a string in Jinja) is kept
+    as it is, so that an apostrophe inside it does not open a string.
+    """
+    out: list[str] = []
+    at, end = 0, len(sql)
+
+    def blanked(stop: int) -> int:
+        out.append(_NOT_NEWLINE.sub(" ", sql[at:stop]))
+        return stop
+
+    def after(closer: str, start: int) -> int:
+        found = sql.find(closer, start)
+        return end if found < 0 else found + len(closer)
+
+    while at < end:
+        if sql.startswith("{#", at):
+            at = blanked(after("#}", at + 2))
+        elif sql.startswith("--", at):
+            newline = sql.find("\n", at)
+            at = blanked(end if newline < 0 else newline)
+        elif sql.startswith("/*", at):
+            at = blanked(after("*/", at + 2))
+        elif sql[at] == "'":
+            close = at + 1
+            while close < end and (sql[close] != "'" or sql.startswith("''", close)):
+                close += 2 if sql[close] == "'" else 1
+            at = blanked(min(close + 1, end))
+        elif sql[at] == '"' and '"' in sql[at + 1 : after("\n", at + 1)]:
+            close = sql.index('"', at + 1)
+            out.append(sql[at : close + 1])
+            at = close + 1
+        else:
+            out.append(sql[at])
+            at += 1
+    return "".join(out)
 
 
 def _arguments(code: str, start: int) -> str:
-    """The text between the parenthesis that opens at `start - 1` and the one closing it,
-    with nested parentheses and string literals emptied: what is left is the call's own."""
-    depth, own, quoted = 1, [], False
+    """The text between the parenthesis that opens at `start - 1` and the one closing it, with
+    nested parentheses emptied and everything from the first `{%` to the last `%}` left out:
+    what is left is the call's own, in every rendering."""
+    depth, own = 1, []
     for char in code[start:]:
-        if quoted:
-            quoted = char != "'"
-        elif char == "'":
-            quoted = True
-        elif char == "(":
+        if char == "(":
             depth += 1
         elif char == ")":
             depth -= 1
@@ -63,7 +103,9 @@ def _arguments(code: str, start: int) -> str:
                 break
         elif depth == 1:
             own.append(char)
-    return "".join(own)
+    text = "".join(own)
+    first, last = text.find("{%"), text.rfind("%}")
+    return text if first < 0 or last < first else text[:first] + " " + text[last + 2 :]
 
 
 def _line_comment(line: str) -> str | None:
@@ -101,7 +143,7 @@ def _is_exempt(lines: list[str], number: int) -> bool:
 
 def unordered_aggregates(sql: str) -> list[tuple[int, str]]:
     """(line number, aggregate) for each statistical aggregate with no order and no exemption."""
-    code = _COMMENT.sub(_blank, sql)
+    code = _code(sql)
     lines = sql.splitlines()
     found = []
     for match in _AGGREGATE.finditer(code):
@@ -120,7 +162,7 @@ def test_every_statistical_aggregate_in_dbt_states_its_order() -> None:
     """Catches an `order by` removed from avg, corr or the like, or a new one written
     without it: the regression the last-digit unit tests only catch in most runs."""
     assert _sql_files(), "found no .sql files: DBT_ROOT is wrong"
-    scanned = "\n".join(_COMMENT.sub(_blank, p.read_text()) for p in _sql_files())
+    scanned = "\n".join(_code(p.read_text()) for p in _sql_files())
     assert len(_AGGREGATE.findall(scanned)) >= 3, "the three aggregates of #115 were not found"
     problems = [
         f"{path.relative_to(DBT_ROOT.parent)}:{number}: {name}() has no order by"
@@ -218,6 +260,36 @@ def test_prose_about_an_aggregate_in_a_comment_is_not_flagged() -> None:
     """Catches a scanner that reads comments as SQL, as the header of the scales model would be."""
     sql = "-- sqrt(avg(margin^2)) does not; not avg(): see #28\n{# corr(y, x) #}\nselect 1\n"
     assert unordered_aggregates(sql) == []
+
+
+def test_a_string_literal_is_neither_a_comment_nor_a_call() -> None:
+    """Catches a `--` in a string hiding the rest of its line, and prose in a string read as
+    a call (PR #120, focused review F1)."""
+    assert unordered_aggregates("select '--' as marker, avg(score) from t") == [(1, "avg")]
+    assert unordered_aggregates("select 'it''s --' as s, avg(score) from t") == [(1, "avg")]
+    assert unordered_aggregates("select 'avg(score)' as example from t") == []
+    spanning = "select '{#' as a,\n avg(score),\n '#}' as b from t"
+    assert unordered_aggregates(spanning) == [(2, "avg")]
+
+
+def test_a_block_comment_is_not_code() -> None:
+    """Catches an order by, or a call, that is only in a /* */ comment (focused review F2)."""
+    assert unordered_aggregates("select avg(score /* order by game_id */) from t") == [(1, "avg")]
+    assert unordered_aggregates("select 1 /* avg(score) */ from t") == []
+    assert unordered_aggregates("/* one\n two */\nselect avg(score) from t") == [(3, "avg")]
+
+
+def test_an_order_that_only_a_jinja_branch_supplies_does_not_count() -> None:
+    """Catches an order by that some rendering leaves out: a conditional branch may render
+    nothing, so the order has to stand outside any {% %} block (focused review F3)."""
+    conditional = "select avg(score {% if false %} order by game_id {% endif %}) from t"
+    assert unordered_aggregates(conditional) == [(1, "avg")]
+    either_way = "select avg(score {% if x %} order by a {% else %} order by b {% endif %}) from t"
+    assert unordered_aggregates(either_way) == [(1, "avg")]
+    outside = "select avg({% if x %} a {% else %} b {% endif %} order by game_id) from t"
+    assert unordered_aggregates(outside) == []
+    expression = "select avg({{ column }} order by {{ key }}) from {{ ref('t') }}"
+    assert unordered_aggregates(expression) == []
 
 
 def test_names_that_only_contain_an_aggregates_name_are_not_flagged() -> None:
