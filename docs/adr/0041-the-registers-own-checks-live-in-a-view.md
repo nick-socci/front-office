@@ -1,6 +1,6 @@
 # 0041. The register's own checks live in a view, one row per register row
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0099-register-keyed-by-league-season](../specs/0099-register-keyed-by-league-season/design.md) · Issue: #99
 

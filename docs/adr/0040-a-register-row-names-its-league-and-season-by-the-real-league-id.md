@@ -1,6 +1,6 @@
 # 0040. A register row names its league and season, the league by its real ESPN id
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0099-register-keyed-by-league-season](../specs/0099-register-keyed-by-league-season/design.md) · Issue: #99
 
