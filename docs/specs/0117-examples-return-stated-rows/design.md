@@ -146,8 +146,8 @@ takes any directory.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0048](../../adr/0048-an-example-is-held-to-stated-counts-on-the-fixtures.md) | An example is held on the fixtures to a stated number of rows, and to stated counts of rows with a value | proposed |
-| [0049](../../adr/0049-an-examples-parameters-are-variables-with-defaults.md) | An example's parameters are DuckDB variables that default to the committed values | proposed |
+| [0048](../../adr/0048-an-example-is-held-to-stated-counts-on-the-fixtures.md) | An example is held on the fixtures to a stated number of rows, and to stated counts of rows with a value | accepted |
+| [0049](../../adr/0049-an-examples-parameters-are-variables-with-defaults.md) | An example's parameters are DuckDB variables that default to the committed values | accepted |
 
 ADR 0048 amends ADR 0045, whose accepted cost was "on the fixtures an example is only
 proved to run, not to return rows".
