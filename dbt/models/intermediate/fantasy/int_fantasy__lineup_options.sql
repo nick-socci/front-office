@@ -92,4 +92,5 @@ inner join {{ ref('int_fantasy__candidate_day_values') }} as day_values
     and day_values.scoring_date = candidates.scoring_date
     and day_values.fantasy_team_id = candidates.fantasy_team_id
     and day_values.platform_player_id = candidates.platform_player_id
-    and day_values.side = case lineup_slots.slot_role when 'hitter' then 'batting' when 'pitcher' then 'pitching' end
+    and day_values.side
+    = case lineup_slots.slot_role when 'hitter' then 'batting' when 'pitcher' then 'pitching' end

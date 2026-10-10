@@ -17,5 +17,6 @@ left join {{ ref('int_fantasy__teams') }} as teams
     and teams.league_id = transactions.league_id
     and teams.season = transactions.season
     and teams.fantasy_team_id = transactions.fantasy_team_id
-where transactions.fantasy_team_id is not null
-  and teams.fantasy_team_id is null
+where
+    transactions.fantasy_team_id is not null
+    and teams.fantasy_team_id is null

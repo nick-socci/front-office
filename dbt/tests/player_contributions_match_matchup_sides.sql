@@ -42,7 +42,8 @@ with player_components as (
         and sides.season = periods.season
         and sides.matchup_period = periods.matchup_period
         and sides.fantasy_team_id = days.fantasy_team_id
-    group by days.platform, days.league_id, days.season, periods.matchup_period, days.fantasy_team_id
+    group by
+        days.platform, days.league_id, days.season, periods.matchup_period, days.fantasy_team_id
     {{ 'union all' if not loop.last }}
     {%- endfor %}
 
@@ -83,5 +84,6 @@ full outer join side_components as sides
     and sides.matchup_period = players.matchup_period
     and sides.fantasy_team_id = players.fantasy_team_id
     and sides.component = players.component
-where sides.side_total is null
+where
+    sides.side_total is null
     or coalesce(players.player_total, 0) <> sides.side_total

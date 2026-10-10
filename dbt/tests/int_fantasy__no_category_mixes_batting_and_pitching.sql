@@ -9,12 +9,16 @@
 with component_sides as (
 
     {%- for column in fo_batting_columns() %}
-    select '{{ column }}' as component, 'batting' as side
+    select
+        '{{ column }}' as component,
+        'batting' as side
     union all
     {%- endfor %}
     {%- for column in fo_pitching_columns() %}
-    select '{{ column }}' as component, 'pitching' as side
-        {{- '\n    union all' if not loop.last }}
+    select
+        '{{ column }}' as component,
+        'pitching' as side
+    {{- '\n    union all' if not loop.last }}
     {%- endfor %}
 
 )
@@ -29,5 +33,6 @@ inner join {{ ref('int_fantasy__categories') }} as categories
 left join component_sides
     on component_sides.component = rules.component
 group by rules.platform, rules.stat_key
-having count(distinct component_sides.side) > 1
+having
+    count(distinct component_sides.side) > 1
     or count(*) filter (where component_sides.side is null) > 0

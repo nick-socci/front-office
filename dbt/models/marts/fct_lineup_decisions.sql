@@ -35,7 +35,12 @@
 with team_days as (
 
     select distinct
-        platform, league_id, season, scoring_date, scoring_period, fantasy_team_id
+        platform,
+        league_id,
+        season,
+        scoring_date,
+        scoring_period,
+        fantasy_team_id
     from {{ ref('int_fantasy__roster_days') }}
 
 ),
@@ -61,7 +66,11 @@ candidate_counts as (
 option_totals as (
 
     select
-        platform, league_id, season, scoring_date, fantasy_team_id,
+        platform,
+        league_id,
+        season,
+        scoring_date,
+        fantasy_team_id,
         count(*) filter (where is_actual) as played_starters,
         bool_or(option_value is null) as is_unvalued,
         bool_or(is_actual and option_value is null) as has_unvalued_actual,
@@ -104,7 +113,11 @@ optimal_options as (
 optimal_totals as (
 
     select
-        platform, league_id, season, scoring_date, fantasy_team_id,
+        platform,
+        league_id,
+        season,
+        scoring_date,
+        fantasy_team_id,
         count(*) as optimal_starters,
         sum(option_value order by platform_player_id) as optimal_sum,
         count(*) filter (where not is_started) as players_brought_in,
@@ -120,7 +133,10 @@ optimal_totals as (
 sat_totals as (
 
     select
-        actual.platform, actual.league_id, actual.season, actual.scoring_date,
+        actual.platform,
+        actual.league_id,
+        actual.season,
+        actual.scoring_date,
         actual.fantasy_team_id,
         count(*) as players_sat
     from {{ ref('int_fantasy__lineup_options') }} as actual
@@ -132,7 +148,12 @@ sat_totals as (
         and lineups.fantasy_team_id = actual.fantasy_team_id
         and lineups.platform_player_id = actual.platform_player_id
     where actual.is_actual and lineups.platform_player_id is null
-    group by actual.platform, actual.league_id, actual.season, actual.scoring_date, actual.fantasy_team_id
+    group by
+        actual.platform,
+        actual.league_id,
+        actual.season,
+        actual.scoring_date,
+        actual.fantasy_team_id
 
 ),
 
@@ -142,7 +163,7 @@ ranked_missed_starts as (
         *,
         row_number() over (
             partition by platform, league_id, season, scoring_date, fantasy_team_id
-            order by option_value desc, platform_player_id
+            order by option_value desc, platform_player_id asc
         ) as missed_start_rank
     from optimal_options
     where not is_started
@@ -151,14 +172,18 @@ ranked_missed_starts as (
 
 missed_starts as (
 
-    select * from ranked_missed_starts where missed_start_rank = 1
+    select * from ranked_missed_starts
+    where missed_start_rank = 1
 
 ),
 
 roster_fetches as (
 
     select
-        league_id, season, scoring_period, team_id,
+        league_id,
+        season,
+        scoring_period,
+        team_id,
         max(fetched_at) as eligibility_fetched_at
     from {{ ref('stg_espn__roster_entry_slots') }}
     group by league_id, season, scoring_period, team_id
@@ -177,28 +202,46 @@ select
 
     coalesce(candidate_counts.candidates, 0) as candidates,
     coalesce(option_totals.played_starters, 0) as played_starters,
-    case when coalesce(option_totals.is_unvalued, false) then null
-        else coalesce(optimal_totals.optimal_starters, 0) end as optimal_starters,
+    case
+        when coalesce(option_totals.is_unvalued, false) then null
+        else coalesce(optimal_totals.optimal_starters, 0)
+    end as optimal_starters,
 
-    case when coalesce(option_totals.has_unvalued_actual, false) then null
-        else coalesce(option_totals.actual_sum, 0) end as actual_value,
-    case when coalesce(option_totals.is_unvalued, false) then null
-        else coalesce(optimal_totals.optimal_sum, 0) end as optimal_value,
-    case when coalesce(option_totals.is_unvalued, false) then null
-        else coalesce(optimal_totals.optimal_sum, 0) end
-        - case when coalesce(option_totals.has_unvalued_actual, false) then null
-            else coalesce(option_totals.actual_sum, 0) end as value_gap,
+    case
+        when coalesce(option_totals.has_unvalued_actual, false) then null
+        else coalesce(option_totals.actual_sum, 0)
+    end as actual_value,
+    case
+        when coalesce(option_totals.is_unvalued, false) then null
+        else coalesce(optimal_totals.optimal_sum, 0)
+    end as optimal_value,
+    case
+        when coalesce(option_totals.is_unvalued, false) then null
+        else coalesce(optimal_totals.optimal_sum, 0)
+    end
+    - case
+        when coalesce(option_totals.has_unvalued_actual, false) then null
+        else coalesce(option_totals.actual_sum, 0)
+    end as value_gap,
 
-    case when coalesce(option_totals.is_unvalued, false) then null
-        else coalesce(optimal_totals.players_brought_in, 0) end as players_brought_in,
-    case when coalesce(option_totals.is_unvalued, false) then null
-        else coalesce(sat_totals.players_sat, 0) end as players_sat,
-    case when coalesce(option_totals.is_unvalued, false) then null
-        else coalesce(optimal_totals.players_moved, 0) end as players_moved,
+    case
+        when coalesce(option_totals.is_unvalued, false) then null
+        else coalesce(optimal_totals.players_brought_in, 0)
+    end as players_brought_in,
+    case
+        when coalesce(option_totals.is_unvalued, false) then null
+        else coalesce(sat_totals.players_sat, 0)
+    end as players_sat,
+    case
+        when coalesce(option_totals.is_unvalued, false) then null
+        else coalesce(optimal_totals.players_moved, 0)
+    end as players_moved,
 
     coalesce(option_totals.actual_pitcher_starts, 0) as actual_pitcher_starts,
-    case when coalesce(option_totals.is_unvalued, false) then null
-        else coalesce(optimal_totals.optimal_pitcher_starts, 0) end as optimal_pitcher_starts,
+    case
+        when coalesce(option_totals.is_unvalued, false) then null
+        else coalesce(optimal_totals.optimal_pitcher_starts, 0)
+    end as optimal_pitcher_starts,
 
     missed_starts.platform_player_id as missed_start_platform_player_id,
     league_seasons.mlbam_player_id as missed_start_mlbam_player_id,

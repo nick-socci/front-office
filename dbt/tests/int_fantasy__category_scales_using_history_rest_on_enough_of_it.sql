@@ -11,7 +11,9 @@
 
 with rate_categories as (
 
-    select distinct platform, stat_key as category_key
+    select distinct
+        platform,
+        stat_key as category_key
     from {{ ref('int_fantasy__stat_components') }}
     where part = 'denominator'
 
@@ -25,20 +27,25 @@ checked as (
         scales.season,
         scales.category_key,
         case
-            when scales.scale_source = 'prior_and_current_seasons'
+            when
+                scales.scale_source = 'prior_and_current_seasons'
                 and scales.prior_matchups_measured < {{ var('fantasy_scale_prior_matchups') }}
                 then 'uses history that is below the threshold'
-            when scales.scale_source = 'prior_and_current_seasons'
+            when
+                scales.scale_source = 'prior_and_current_seasons'
                 and (scales.margin_scale is null or scales.prior_margin_scale is null)
                 then 'uses history and has no scale'
-            when scales.scale_source = 'prior_and_current_seasons'
+            when
+                scales.scale_source = 'prior_and_current_seasons'
                 and rate_categories.category_key is not null
                 and scales.side_denominator is null
                 then 'a rate that uses history and has no denominator'
-            when scales.scale_source = 'current_season'
+            when
+                scales.scale_source = 'current_season'
                 and scales.prior_matchups_measured >= {{ var('fantasy_scale_prior_matchups') }}
                 then 'has enough history and does not use it'
-            when scales.scale_source = 'current_season'
+            when
+                scales.scale_source = 'current_season'
                 and scales.prior_margin_scale is not null
                 then 'does not use history and carries its scale'
         end as problem
@@ -49,4 +56,5 @@ checked as (
 
 )
 
-select * from checked where problem is not null
+select * from checked
+where problem is not null

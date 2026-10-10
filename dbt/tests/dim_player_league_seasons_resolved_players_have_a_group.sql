@@ -14,5 +14,6 @@ select
     mlbam_player_id,
     default_position
 from {{ ref('dim_player_league_seasons') }}
-where mlbam_player_id is not null
-  and replacement_group is null
+where
+    mlbam_player_id is not null
+    and replacement_group is null

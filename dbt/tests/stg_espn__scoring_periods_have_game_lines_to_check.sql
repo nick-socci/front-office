@@ -13,7 +13,9 @@
 -- real 2026 season.
 
 with rostered_league_seasons as (
-    select distinct league_id, season
+    select distinct
+        league_id,
+        season
     from {{ ref('stg_espn__roster_entries') }}
 ),
 
@@ -24,11 +26,18 @@ played_dates as (
 ),
 
 game_line_periods as (
-    select distinct league_id, season, scoring_period
+    select distinct
+        league_id,
+        season,
+        scoring_period
     from {{ ref('stg_espn__player_game_stats') }}
 )
 
-select periods.league_id, periods.season, periods.scoring_period, periods.scoring_date
+select
+    periods.league_id,
+    periods.season,
+    periods.scoring_period,
+    periods.scoring_date
 from {{ ref('stg_espn__scoring_periods') }} as periods
 inner join rostered_league_seasons
     using (league_id, season)

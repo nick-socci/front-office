@@ -58,7 +58,12 @@ header as (
 
 teams as (
 
-    select league_id, season, scoring_period, fetched_at, unnest(teams_list) as team
+    select
+        league_id,
+        season,
+        scoring_period,
+        fetched_at,
+        unnest(teams_list) as team
     from header
 
 ),
@@ -100,11 +105,12 @@ game_lines as (
         team_id,
         espn_player_id,
         line.externalId as espn_game_id,
-        line.stats as stats
+        line.stats
     from lines
-    where line.statSourceId = 0
-      and line.statSplitTypeId = 5
-      and line.scoringPeriodId = scoring_period
+    where
+        line.statSourceId = 0
+        and line.statSplitTypeId = 5
+        and line.scoringPeriodId = scoring_period
 
 ),
 

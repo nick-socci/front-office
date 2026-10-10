@@ -26,7 +26,11 @@
 with held as (
 
     {%- for model in value_models %}
-    select distinct '{{ model }}' as model, platform, league_id, season
+    select distinct
+        '{{ model }}' as model,
+        platform,
+        league_id,
+        season
     from {{ ref(model) }}
     {{ 'union all' if not loop.last }}
     {%- endfor %}
@@ -35,13 +39,20 @@ with held as (
 
 covered as (
 
-    select platform, league_id, season
+    select
+        platform,
+        league_id,
+        season
     from {{ ref('int_fantasy__league_seasons') }}
     where has_rosters
 
 )
 
-select held.model, held.platform, held.league_id, held.season
+select
+    held.model,
+    held.platform,
+    held.league_id,
+    held.season
 from held
 left join covered
     on covered.platform = held.platform

@@ -27,9 +27,14 @@
 
 with matchups as (
 
-    select platform, league_id, season, count(*) as matchups_rescored
+    select
+        platform,
+        league_id,
+        season,
+        count(*) as matchups_rescored
     from {{ ref('fct_matchup_results') }}
-    where winner is not null
+    where
+        winner is not null
         and not has_unverified_inputs
     group by platform, league_id, season
 
@@ -74,11 +79,11 @@ groups as (
         ) as pairs_unmeasured,
         -- In a fixed order, as every floating-point sum here is.
         sum(category_wins_added * total_value order by platform_player_id, fantasy_team_id)
-            / nullif(
-                sum(total_value * total_value order by platform_player_id, fantasy_team_id)
-                    filter (where category_wins_added is not null),
-                0
-            ) as slope,
+        / nullif(
+            sum(total_value * total_value order by platform_player_id, fantasy_team_id)
+            filter (where category_wins_added is not null),
+            0
+        ) as slope,
         corr(category_wins_added, total_value) as correlation
     from pairs
     group by platform, league_id, season, replacement_group
@@ -97,8 +102,8 @@ select
     groups.correlation,
     coalesce(
         matchups.matchups_rescored >= 100
-            and groups.pairs >= 100
-            and groups.correlation >= 0.75,
+        and groups.pairs >= 100
+        and groups.correlation >= 0.75,
         false
     ) as is_judged,
     -- What values_track_rescored_category_wins fails on, decided here so that unit tests
@@ -107,7 +112,8 @@ select
     case
         when groups.pairs >= 100 and groups.pairs_unmeasured > 0
             then 'not checkable: a pair has no value or no wins added'
-        when matchups.matchups_rescored >= 100
+        when
+            matchups.matchups_rescored >= 100
             and groups.pairs >= 100
             and groups.correlation >= 0.75
             and (groups.slope < 0.34 or groups.slope > 0.47)

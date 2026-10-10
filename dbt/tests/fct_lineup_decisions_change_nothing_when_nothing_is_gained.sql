@@ -8,8 +8,16 @@
 -- not tested.
 
 select
-    platform, league_id, season, scoring_date, fantasy_team_id,
-    value_gap, players_brought_in, players_sat, players_moved
+    platform,
+    league_id,
+    season,
+    scoring_date,
+    fantasy_team_id,
+    value_gap,
+    players_brought_in,
+    players_sat,
+    players_moved
 from {{ ref('fct_lineup_decisions') }}
-where value_gap < 5e-10
+where
+    value_gap < 5e-10
     and (players_brought_in > 0 or players_sat > 0 or players_moved > 0)

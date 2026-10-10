@@ -18,5 +18,6 @@ with bounds as (
 
 select *
 from bounds
-where periods != dates
-   or periods != span_days
+where
+    periods != dates
+    or periods != span_days

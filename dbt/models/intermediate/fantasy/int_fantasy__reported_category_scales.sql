@@ -39,7 +39,7 @@ with measured as (
         count(*) as matchups_measured,
         sqrt(sum(standard_margin * standard_margin order by matchup_id) / count(*)) as margin_scale,
         sum((home_denominator + away_denominator) / relative_volume order by matchup_id)
-            / (2 * count(*)) as side_denominator
+        / (2 * count(*)) as side_denominator
     from {{ ref('int_fantasy__reported_matchup_margins') }}
     where is_measured
     group by platform, league_id, season, category_key

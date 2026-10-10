@@ -1,6 +1,6 @@
 # 0045. An example query is an exposure the gates check, and the planned dashboard reads every mart
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0013-docs-lint-exposures](../specs/0013-docs-lint-exposures/design.md) · Issue: #13
 

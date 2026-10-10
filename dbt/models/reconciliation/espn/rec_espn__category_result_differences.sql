@@ -25,7 +25,9 @@
 
 with covered as (
 
-    select league_id, season
+    select
+        league_id,
+        season
     from {{ ref('int_fantasy__league_seasons') }}
     where platform = 'espn' and has_rosters
 
@@ -50,7 +52,14 @@ espn as (
 
 ours as (
 
-    select league_id, season, matchup_id, fantasy_team_id, opponent_team_id, category_key, result,
+    select
+        league_id,
+        season,
+        matchup_id,
+        fantasy_team_id,
+        opponent_team_id,
+        category_key,
+        result,
         has_unverified_inputs
     from {{ ref('fct_matchup_category_scores') }}
     where platform = 'espn'
@@ -59,7 +68,10 @@ ours as (
 
 accounted as (
 
-    select matchup_id, fantasy_team_id, stat_key
+    select
+        matchup_id,
+        fantasy_team_id,
+        stat_key
     from {{ ref('rec_espn__matchup_stat_differences') }}
     where status in ('registered', 'explained_by_component')
 
@@ -80,9 +92,10 @@ select
         when ours.result = espn.result then 'match'
         when exists (
             select 1 from accounted
-            where accounted.matchup_id = ours.matchup_id
-              and accounted.stat_key = ours.category_key
-              and accounted.fantasy_team_id in (ours.fantasy_team_id, ours.opponent_team_id)
+            where
+                accounted.matchup_id = ours.matchup_id
+                and accounted.stat_key = ours.category_key
+                and accounted.fantasy_team_id in (ours.fantasy_team_id, ours.opponent_team_id)
         ) then 'explained'
         else 'unexplained'
     end as status

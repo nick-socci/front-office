@@ -111,7 +111,8 @@ matchup_margins as (
         and away.season = home.season
         and away.matchup_id = home.matchup_id
         and away.category_key = home.category_key
-    where home.is_home
+    where
+        home.is_home
         and not away.is_home
         and home.stat_value is not null
         and away.stat_value is not null
@@ -153,7 +154,11 @@ side_denominators as (
 -- matchup ids across seasons.
 covered_categories as (
 
-    select categories.platform, categories.league_id, categories.season, categories.category_key
+    select
+        categories.platform,
+        categories.league_id,
+        categories.season,
+        categories.category_key
     from {{ ref('int_fantasy__categories') }} as categories
     inner join {{ ref('int_fantasy__league_seasons') }} as league_seasons
         on league_seasons.platform = categories.platform
@@ -163,7 +168,7 @@ covered_categories as (
 
 ),
 
-prior as (
+earlier_seasons as (
 
     select
         categories.platform,
@@ -172,10 +177,14 @@ prior as (
         categories.category_key,
         count(*) as prior_matchups,
         count(distinct margins.season) as prior_seasons,
-        sum(margins.standard_margin * margins.standard_margin
-            order by margins.season, margins.matchup_id) as prior_sum_of_squares,
-        sum((margins.home_denominator + margins.away_denominator) / margins.relative_volume
-            order by margins.season, margins.matchup_id) as prior_denominator_sum
+        sum(
+            margins.standard_margin * margins.standard_margin
+            order by margins.season, margins.matchup_id
+        ) as prior_sum_of_squares,
+        sum(
+            (margins.home_denominator + margins.away_denominator) / margins.relative_volume
+            order by margins.season, margins.matchup_id
+        ) as prior_denominator_sum
     from covered_categories as categories
     inner join {{ ref('int_fantasy__reported_matchup_margins') }} as margins
         on margins.platform = categories.platform
@@ -211,29 +220,31 @@ chosen as (
         categories.league_id,
         categories.season,
         categories.category_key,
-        coalesce(prior.prior_matchups, 0) >= {{ var('fantasy_scale_prior_matchups') }} as uses_history,
+        coalesce(earlier_seasons.prior_matchups, 0)
+        >= {{ var('fantasy_scale_prior_matchups') }} as uses_history,
         {{ var('fantasy_scale_prior_matchups') }} as history_weight,
-        coalesce(prior.prior_matchups, 0) as prior_matchups,
-        coalesce(prior.prior_seasons, 0) as prior_seasons,
-        prior.prior_sum_of_squares / prior.prior_matchups as prior_mean_square,
-        prior.prior_denominator_sum / (2 * prior.prior_matchups) as prior_side_denominator,
+        coalesce(earlier_seasons.prior_matchups, 0) as prior_matchups,
+        coalesce(earlier_seasons.prior_seasons, 0) as prior_seasons,
+        earlier_seasons.prior_sum_of_squares / earlier_seasons.prior_matchups as prior_mean_square,
+        earlier_seasons.prior_denominator_sum
+        / (2 * earlier_seasons.prior_matchups) as prior_side_denominator,
         coalesce(reported_own.own_matchups, 0) as own_matchups,
         coalesce(reported_own.own_sum_of_squares, 0) as own_sum_of_squares,
         -- Null for a count, whose denominators are null in every row; zero for a rate
         -- with no decided matchup yet.
         case
-            when prior.prior_denominator_sum is not null
+            when earlier_seasons.prior_denominator_sum is not null
                 then coalesce(reported_own.own_denominator_sum, 0)
         end as own_denominator_sum,
         coalesce(margin_scales.matchups_measured, 0) as season_matchups_measured,
         margin_scales.margin_scale as season_margin_scale,
         side_denominators.side_denominator as season_side_denominator
     from covered_categories as categories
-    left join prior
-        on prior.platform = categories.platform
-        and prior.league_id = categories.league_id
-        and prior.season = categories.season
-        and prior.category_key = categories.category_key
+    left join earlier_seasons
+        on earlier_seasons.platform = categories.platform
+        and earlier_seasons.league_id = categories.league_id
+        and earlier_seasons.season = categories.season
+        and earlier_seasons.category_key = categories.category_key
     left join reported_own
         on reported_own.platform = categories.platform
         and reported_own.league_id = categories.league_id
@@ -268,11 +279,13 @@ select
     end as margin_scale,
     case
         when uses_history
-            then (own_denominator_sum + 2 * history_weight * prior_side_denominator)
+            then
+                (own_denominator_sum + 2 * history_weight * prior_side_denominator)
                 / (2 * own_matchups + 2 * history_weight)
         else season_side_denominator
     end as side_denominator,
-    case when uses_history then 'prior_and_current_seasons' else 'current_season' end as scale_source,
+    case when uses_history then 'prior_and_current_seasons' else 'current_season' end
+        as scale_source,
     prior_matchups as prior_matchups_measured,
     prior_seasons as prior_seasons_measured,
     case when uses_history then sqrt(prior_mean_square) end as prior_margin_scale

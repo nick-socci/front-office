@@ -16,5 +16,6 @@ full outer join {{ ref('int_fantasy__reported_category_scales') }} as scales
     and scales.league_id = categories.league_id
     and scales.season = categories.season
     and scales.category_key = categories.category_key
-where categories.category_key is null
+where
+    categories.category_key is null
     or scales.category_key is null

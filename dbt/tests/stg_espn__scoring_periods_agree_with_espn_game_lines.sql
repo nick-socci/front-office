@@ -20,20 +20,28 @@
 -- no line to check.
 
 with espn_games as (
-    select league_id, season, scoring_period,
-           count(distinct espn_game_id) as espn_games
+    select
+        league_id,
+        season,
+        scoring_period,
+        count(distinct espn_game_id) as espn_games
     from {{ ref('stg_espn__player_game_stats') }}
     group by league_id, season, scoring_period
 ),
 
 mlb_games as (
-    select official_date, count(*) as mlb_games
+    select
+        official_date,
+        count(*) as mlb_games
     from {{ ref('stg_mlb__games') }}
     where game_type = 'R' and is_played
     group by official_date
 )
 
-select espn_games.*, periods.scoring_date, mlb_games.mlb_games
+select
+    espn_games.*,
+    periods.scoring_date,
+    mlb_games.mlb_games
 from espn_games
 inner join {{ ref('stg_espn__scoring_periods') }} as periods
     using (league_id, season, scoring_period)

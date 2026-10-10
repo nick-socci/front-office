@@ -49,9 +49,10 @@
 -- kind, of the pair's own league and season (#28). What each kind's pool is is that
 -- model's business; for a start it is every free-agent start by a pitcher who was a
 -- starter at the time (ADR 0029). That these values track real category wins, equally
--- for starters and hitters, is checked by values_track_rescored_category_wins. The arithmetic (contribution, value over replacement, scaled value) is in
--- the fo_category_value macros, shared with fct_transaction_impact so the two facts cannot
--- drift; see there for the rules and for what null means.
+-- for starters and hitters, is checked by values_track_rescored_category_wins. The arithmetic
+-- (contribution, value over replacement, scaled value) is in the fo_category_value macros,
+-- shared with fct_transaction_impact so the two facts cannot drift; see there for the rules
+-- and for what null means.
 --
 -- scaled_value (ADR 0010) is value_over_replacement in matchup margins: divided by the
 -- category's margin_scale from int_fantasy__category_scales, the usual gap between two
@@ -78,9 +79,9 @@
 with pairs as (
 
     select distinct
-        {%- for key in pair_keys %}
-        {{ key }}{{ ',' if not loop.last }}
-        {%- endfor %}
+    {%- for key in pair_keys %}
+        {{ key }}{% if not loop.last %},{% endif %}
+    {%- endfor %}
     from {{ ref('int_fantasy__started_player_days') }}
 
 ),
@@ -103,12 +104,16 @@ kinded_days as (
 component_sides as (
 
     {%- for column in batting_columns %}
-    select '{{ column }}' as component, 'batting' as side
+    select
+        '{{ column }}' as component,
+        'batting' as side
     union all
     {%- endfor %}
     {%- for column in pitching_columns %}
-    select '{{ column }}' as component, 'pitching' as side
-        {{- '\n    union all' if not loop.last }}
+    select
+        '{{ column }}' as component,
+        'pitching' as side
+    {{- '\n    union all' if not loop.last }}
     {%- endfor %}
 
 ),
@@ -122,7 +127,7 @@ kind_days as (
         day_kind,
         count(*) as played_days,
         {%- for column in batting_columns + pitching_columns %}
-        coalesce(sum({{ column }}), 0) as {{ column }}{{ ',' if not loop.last }}
+        coalesce(sum({{ column }}), 0) as {{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from kinded_days
     where day_kind is not null

@@ -27,7 +27,9 @@
 
 with rostered as (
 
-    select distinct league_id, season
+    select distinct
+        league_id,
+        season
     from {{ ref('stg_espn__roster_entries') }}
 
 )

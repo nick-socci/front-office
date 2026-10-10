@@ -18,8 +18,9 @@ with responses as (
         payload,
         fetched_at
     from {{ source('raw', 'api_responses') }}
-    where source = 'mlb'
-      and endpoint = 'schedule'
+    where
+        source = 'mlb'
+        and endpoint = 'schedule'
 
 ),
 

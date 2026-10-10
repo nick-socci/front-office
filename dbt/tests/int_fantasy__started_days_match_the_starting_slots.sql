@@ -29,5 +29,6 @@ select
 from expected
 cross join actual
 -- Zero started days would make the equality prove nothing, so it fails too.
-where expected.days != actual.days
-   or expected.days = 0
+where
+    expected.days != actual.days
+    or expected.days = 0

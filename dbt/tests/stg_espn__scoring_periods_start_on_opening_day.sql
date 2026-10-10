@@ -74,6 +74,7 @@ left join fantasy_first_game_day
     and fantasy_first_game_day.season = league_seasons.season
 left join mlb_opening_day
     on mlb_opening_day.season = league_seasons.season
-where fantasy_first_game_day.scoring_date is null
-   or mlb_opening_day.official_date is null
-   or fantasy_first_game_day.scoring_date != mlb_opening_day.official_date
+where
+    fantasy_first_game_day.scoring_date is null
+    or mlb_opening_day.official_date is null
+    or fantasy_first_game_day.scoring_date != mlb_opening_day.official_date

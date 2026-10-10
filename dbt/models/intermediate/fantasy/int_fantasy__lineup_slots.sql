@@ -31,5 +31,6 @@ select
 from {{ ref('stg_espn__lineup_slot_limits') }} as limits
 inner join {{ ref('espn_lineup_slots') }} as slots
     on slots.lineup_slot_id = limits.lineup_slot_id
-where limits.is_starting_slot
+where
+    limits.is_starting_slot
     and limits.slot_count > 0

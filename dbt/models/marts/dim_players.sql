@@ -54,10 +54,16 @@ game_names as (
         logs.game_pk,
         games.official_date
     from (
-        select mlbam_player_id, player_name, game_pk
+        select
+            mlbam_player_id,
+            player_name,
+            game_pk
         from {{ ref('stg_mlb__batting_game_logs') }}
         union all
-        select mlbam_player_id, player_name, game_pk
+        select
+            mlbam_player_id,
+            player_name,
+            game_pk
         from {{ ref('stg_mlb__pitching_game_logs') }}
     ) as logs
     inner join {{ ref('stg_mlb__games') }} as games
@@ -74,7 +80,7 @@ latest_game_names as (
     from game_names
     qualify row_number() over (
         partition by mlbam_player_id
-        order by official_date desc, game_pk desc, player_name
+        order by official_date desc, game_pk desc, player_name asc
     ) = 1
 
 ),
@@ -85,12 +91,14 @@ platform_names as (
         mlbam_player_id,
         player_name
     from {{ ref('dim_player_league_seasons') }}
-    where mlbam_player_id is not null
+    where
+        mlbam_player_id is not null
         and player_name is not null
     qualify row_number() over (
         partition by mlbam_player_id
-        order by season desc, last_rostered_date desc nulls last,
-            league_id, platform, platform_player_id
+        order by
+            season desc, last_rostered_date desc nulls last,
+            league_id asc, platform asc, platform_player_id asc
     ) = 1
 
 ),

@@ -27,5 +27,6 @@ inner join {{ ref('int_fantasy__roster_days') }} as rostered
     and rostered.season = drops.season
     and rostered.platform_player_id = drops.platform_player_id
     and rostered.scoring_date = drops.transaction_date - 1
-where drops.movement = 'drop'
-  and rostered.fantasy_team_id != drops.fantasy_team_id
+where
+    drops.movement = 'drop'
+    and rostered.fantasy_team_id != drops.fantasy_team_id

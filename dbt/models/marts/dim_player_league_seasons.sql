@@ -73,7 +73,7 @@ with roster_players as (
             ) as last_rostered_date,
             row_number() over (
                 partition by platform, league_id, season, platform_player_id
-                order by scoring_date desc, fantasy_team_id
+                order by scoring_date desc, fantasy_team_id asc
             ) as latest_rank
         from {{ ref('int_fantasy__roster_days') }}
     )
@@ -94,8 +94,9 @@ transaction_only_players as (
         and roster_players.league_id = transactions.league_id
         and roster_players.season = transactions.season
         and roster_players.platform_player_id = transactions.platform_player_id
-    where transactions.platform_player_id is not null
-      and roster_players.platform_player_id is null
+    where
+        transactions.platform_player_id is not null
+        and roster_players.platform_player_id is null
 
 ),
 

@@ -45,7 +45,8 @@ with rules as (
 
 rate_stats as (
 
-    select distinct stat_key from rules where part = 'denominator'
+    select distinct stat_key from rules
+    where part = 'denominator'
 
 ),
 
@@ -58,7 +59,9 @@ single_component_stats as (
 
 covered as (
 
-    select league_id, season
+    select
+        league_id,
+        season
     from {{ ref('int_fantasy__league_seasons') }}
     where platform = 'espn' and has_rosters
 
@@ -82,7 +85,11 @@ espn as (
 
 played_matchups as (
 
-    select league_id, season, matchup_id from {{ ref('stg_espn__matchups') }}
+    select
+        league_id,
+        season,
+        matchup_id
+    from {{ ref('stg_espn__matchups') }}
 
 ),
 
@@ -126,14 +133,21 @@ espn_formula as (
         rules.stat_key,
         sum(rules.weight * component_scores.espn_value) filter (where rules.part = 'numerator')
         / nullif(
-            sum(rules.weight * component_scores.espn_value) filter (where rules.part = 'denominator'),
+            sum(rules.weight * component_scores.espn_value) filter (
+                where rules.part = 'denominator'
+            ),
             0
         ) as espn_formula_value,
-        sum(rules.weight * (component_scores.espn_value + coalesce(register.expected_difference, 0)))
-            filter (where rules.part = 'numerator')
+        sum(
+            rules.weight * (component_scores.espn_value + coalesce(register.expected_difference, 0))
+        )
+        filter (where rules.part = 'numerator')
         / nullif(
-            sum(rules.weight * (component_scores.espn_value + coalesce(register.expected_difference, 0)))
-                filter (where rules.part = 'denominator'),
+            sum(
+                rules.weight
+                * (component_scores.espn_value + coalesce(register.expected_difference, 0))
+            )
+            filter (where rules.part = 'denominator'),
             0
         ) as implied_value
     from espn
@@ -239,11 +253,14 @@ select
             espn_formula_value is null
             or abs(espn_formula_value - espn_value) > tolerance
         ) then 'formula_mismatch'
-        when our_value is not null and abs(difference) <= tolerance
+        when
+            our_value is not null and abs(difference) <= tolerance
             and registered_difference is null then 'match'
-        when not is_rate and registered_difference is not null
+        when
+            not is_rate and registered_difference is not null
             and abs(difference - registered_difference) <= tolerance then 'registered'
-        when is_rate and our_value is not null and implied_value is not null
+        when
+            is_rate and our_value is not null and implied_value is not null
             and abs(our_value - implied_value) <= tolerance then 'explained_by_component'
         else 'unexplained'
     end as status

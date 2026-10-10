@@ -15,7 +15,8 @@ items as (
     select
         {{ fo_json_text('payload', '$.id') }} as league_id,
         {{ fo_json_int('payload', '$.seasonId') }} as season,
-        unnest({{ fo_json_array('payload', '$.settings.scoringSettings.scoringItems[*]') }}) as item,
+        unnest({{ fo_json_array('payload', '$.settings.scoringSettings.scoringItems[*]') }})
+            as item,
         fetched_at
     from latest
 

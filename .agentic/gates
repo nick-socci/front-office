@@ -14,13 +14,30 @@ step "tests (pytest)";       uv run pytest
 # CI starts from an empty warehouse; raw.api_responses is append-only, so a leftover
 # ci.duckdb would build on stale rows.
 rm -f dbt/ci.duckdb dbt/ci.duckdb.wal
+# The site builder refuses a non-empty output directory, and a leftover one would be stale.
+rm -rf site
 step "fixture warehouse";    uv run front-office load --raw-root fixtures/landing --db dbt/ci.duckdb
 (
   cd dbt
   export DBT_PROFILES_DIR=.
-  step "dbt deps";                       uv run dbt deps
+  step "dbt deps"; uv run dbt deps
+)
+# The dbt templater opens the `ci` target, whose path is relative; without the variable,
+# run from the root, it would create an empty ci.duckdb in the root instead of using the
+# fixture warehouse.
+step "lint SQL (sqlfluff)"; FO_CI_DUCKDB_PATH=dbt/ci.duckdb uv run sqlfluff lint dbt/models dbt/tests
+(
+  cd dbt
+  export DBT_PROFILES_DIR=.
   step "dbt build (fixtures, anonymised)"; uv run dbt build --target ci --vars '{anonymize: true}'
 )
+step "example queries match their exposures and run"; uv run python scripts/check_examples.py --db dbt/ci.duckdb
+(
+  cd dbt
+  export DBT_PROFILES_DIR=.
+  step "dbt docs generate"; uv run dbt docs generate --target ci --vars '{anonymize: true}'
+)
+step "docs site (assemble and check)"; uv run python scripts/build_docs_site.py --target-dir dbt/target --out site
 # Two leagues by two seasons, built together and each alone: every model must give a
 # league-season the same rows either way (spec 0028, ADR 0013).
 step "tenant isolation (4 league-seasons)"; uv run python scripts/check_tenant_isolation.py
