@@ -22,7 +22,8 @@
 --                          not reproduce ESPN's rate. The formula is wrong, whatever our
 --                          inputs say.
 --   match                  within tolerance: exact for counts, 1e-6 for rates.
---   registered             a count off by exactly the difference recorded in the
+--   registered             a count off by exactly the difference recorded for this
+--                          league-season, matchup, side and stat in the
 --                          espn_reconciliation_residuals seed, with its cause.
 --   explained_by_component a rate that differs from ESPN's but equals, within 1e-6, the
 --                          rate the register implies: our rules applied to ESPN's own
@@ -149,7 +150,9 @@ espn_formula as (
         and component_scores.fantasy_team_id = espn.fantasy_team_id
         and component_scores.stat_key = bridge.stat_key
     left join register
-        on register.matchup_id = espn.matchup_id
+        on register.league_id = espn.league_id
+        and register.season = espn.season
+        and register.matchup_id = espn.matchup_id
         and register.team_id = espn.fantasy_team_id
         and register.stat_id = bridge.stat_key
     group by espn.league_id, espn.season, espn.matchup_id, espn.fantasy_team_id, rules.stat_key
@@ -205,7 +208,9 @@ annotated as (
         and played_matchups.season = compared.season
         and played_matchups.matchup_id = compared.matchup_id
     left join register
-        on register.matchup_id = compared.matchup_id
+        on register.league_id = compared.league_id
+        and register.season = compared.season
+        and register.matchup_id = compared.matchup_id
         and register.team_id = compared.fantasy_team_id
         and register.stat_id = compared.stat_key
 

@@ -1,11 +1,10 @@
 -- Every player-day difference is accounted for by the register of known residuals.
 -- Returns each (matchup, side, stat) with a verified difference that the register does not
--- account for, with why: no register row, a register row of another size, or a register
--- that cannot say which season it is about.
+-- account for, with why: no register row, or a register row of another size.
 --
 -- Catches a scoring change nobody registered, including differences that cancel on a side
--- and so leave its total matching; a register row of the wrong size; and a second
--- league-season gaining differences while the register still names matchups alone (#99).
+-- and so leave its total matching; a register row of the wrong size; and a difference
+-- in one league-season excused by another league-season's register row.
 --
 -- In CI this judges nothing: no fixture row is a difference (every fixture started
 -- player-day is missing_boxscore, so every row is unverified). Its rule is exercised there
