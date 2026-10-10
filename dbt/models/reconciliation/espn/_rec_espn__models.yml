@@ -72,9 +72,8 @@ models:
       side and stat (null if none), and a problem column that is null when the key is
       accounted for. unverified rows are not counted. A view, so that the singular test
       rec_espn__player_day_differences_are_registered judges the table as it is now. The
-      register names a matchup and no season, so problem is ambiguous_register on every
-      key while difference rows exist in more than one league-season (#99 removes this).
-      See the model header.
+      register is looked up by league, season, matchup, side and stat, so a key is judged
+      only against its own league-season's row. See the model header.
     columns:
       - name: difference_sum
         data_tests: [not_null]
@@ -82,14 +81,14 @@ models:
         data_tests: [not_null]
       - name: problem
         description: >
-          ambiguous_register, unregistered, wrong_size, or null when the key is accounted
-          for, checked in that order.
+          unregistered, wrong_size, or null when the key is accounted for, checked in that
+          order.
         data_tests:
           # Null is allowed: accepted_values passes a null, which is a key that is
           # accounted for.
           - accepted_values:
               arguments:
-                values: [ambiguous_register, unregistered, wrong_size]
+                values: [unregistered, wrong_size]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:

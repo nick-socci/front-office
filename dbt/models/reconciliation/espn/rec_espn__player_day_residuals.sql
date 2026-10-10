@@ -1,6 +1,8 @@
 -- One row per (league-season, matchup, side, stat) that has a player-day difference: what
 -- those differences add up to, what the register of known residuals says they should, and
--- what is wrong if the two do not agree. The rule behind the singular test
+-- what is wrong if the two do not agree. The register (espn_reconciliation_residuals) is
+-- looked up by league, season, matchup, side and stat, so a key is judged only against its
+-- own league-season's row. The rule behind the singular test
 -- rec_espn__player_day_differences_are_registered, held here so that a unit test can reach
 -- it (dbt can unit-test a model and not a singular test; see rec_fantasy__category_wins_by_group).
 --
@@ -9,10 +11,6 @@
 -- register row nor make one wrong (ADR 0032).
 --
 -- problem is, in this order:
---   ambiguous_register  difference rows exist in more than one league-season. The register
---                       (espn_reconciliation_residuals) names a matchup and not a season,
---                       so it cannot say whose residual it is; every key fails until it
---                       can (#99). Today one league-season has rosters, so this is silent.
 --   unregistered        the key has no register row. This is the rule on the key and not on
 --                       the sum: differences that cancel, one player credited a hit ESPN
 --                       does not have and another the reverse, leave the side's total
@@ -57,13 +55,6 @@ keys as (
 
 ),
 
-league_seasons as (
-
-    select count(*) as league_seasons
-    from (select distinct league_id, season from keys) as distinct_league_seasons
-
-),
-
 register as (
 
     select * from {{ ref('espn_reconciliation_residuals') }}
@@ -80,13 +71,13 @@ select
     keys.difference_rows,
     register.expected_difference,
     case
-        when league_seasons.league_seasons > 1 then 'ambiguous_register'
         when register.expected_difference is null then 'unregistered'
         when abs(keys.difference_sum - register.expected_difference) > 1e-9 then 'wrong_size'
     end as problem
 from keys
-cross join league_seasons
 left join register
-    on register.matchup_id = keys.matchup_id
+    on register.league_id = keys.league_id
+    and register.season = keys.season
+    and register.matchup_id = keys.matchup_id
     and register.team_id = keys.fantasy_team_id
     and register.stat_id = keys.stat_id
