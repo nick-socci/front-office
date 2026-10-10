@@ -16,7 +16,7 @@ THREE = {"index.html", "manifest.json", "catalog.json"}
 
 def make_target(tmp_path: Path, manifest_extra: dict | None = None, database: str = "ci") -> Path:
     target = tmp_path / "target"
-    target.mkdir()
+    target.mkdir(parents=True)
     (target / "index.html").write_text("<html></html>")
     node = {"resource_type": "model", "description": "..."}
     node.update(manifest_extra or {})
@@ -119,3 +119,24 @@ def test_a_missing_catalog_fails_naming_it(tmp_path, capsys):
     assert site.assemble(target, out) == 1
     assert "catalog.json" in capsys.readouterr().out
     assert not out.exists()
+
+
+def test_dbts_own_id_in_a_description_still_fails(tmp_path):
+    """Catches an exemption by value: dbt's ids are allowed in two metadata fields only."""
+    target = make_target(tmp_path, {"description": f"copied from run {RUN_ID}"})
+    assert site.assemble(target, tmp_path / "site") == 1
+
+
+def test_a_guid_in_index_html_fails_even_if_it_is_dbts_own(tmp_path):
+    """Catches a GUID reaching the page itself, where no value is exempt."""
+    target = make_target(tmp_path)
+    (target / "index.html").write_text(f"<html>{RUN_ID}</html>")
+    assert site.assemble(target, tmp_path / "site") == 1
+
+
+def test_a_guid_in_a_list_or_a_key_fails(tmp_path):
+    """Catches a GUID that is not a dict's string value: an item of a list, or a key."""
+    in_list = make_target(tmp_path / "a", {"tags": [STRAY]})
+    assert site.assemble(in_list, tmp_path / "a" / "site") == 1
+    as_key = make_target(tmp_path / "b", {"meta": {STRAY: 1}})
+    assert site.assemble(as_key, tmp_path / "b" / "site") == 1

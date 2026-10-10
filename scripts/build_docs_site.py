@@ -9,8 +9,9 @@ compiled SQL), then checking the copies:
 - every catalog node and source says it came from the `ci` database (fixtures), not the
   real-season warehouse;
 - no JSON key in the manifest or catalog is one of privacy.FORBIDDEN_KEYS;
-- privacy.GUID matches nothing in the text of any of the three, once dbt's own ids
-  (`invocation_id`, `user_id`) are removed. A match is printed truncated, never whole.
+- privacy.GUID matches nothing in index.html, nor in any key or string of the two JSON
+  files other than `metadata.invocation_id` and `metadata.user_id`, dbt's own ids. The
+  exemption is by location, not by value. A match is printed truncated, never whole.
 
 On any problem all of them are printed, the copies are deleted and the output directory is
 removed if this run created it, so a failed run leaves nothing uploadable. Exit 1.
@@ -31,16 +32,26 @@ from front_office.privacy import FORBIDDEN_KEYS, GUID, walk
 FILES = ("index.html", "manifest.json", "catalog.json")
 
 
-def _dbt_ids(documents: list[Any]) -> set[str]:
-    ids: set[str] = set()
-    for document in documents:
-        metadata = document.get("metadata") if isinstance(document, dict) else None
-        if isinstance(metadata, dict):
-            for key in ("invocation_id", "user_id"):
-                value = metadata.get(key)
-                if isinstance(value, str) and value:
-                    ids.add(value)
-    return ids
+# The only places a GUID may stand: dbt's own ids for the run and the installation.
+DBT_ID_PATHS = frozenset({"$.metadata.invocation_id", "$.metadata.user_id"})
+
+
+def _guids(node: Any, path: str = "$") -> set[str]:
+    """Every GUID in a parsed document's keys and strings, outside DBT_ID_PATHS.
+
+    By location, not by value: dbt's run id repeated in a description is not exempt.
+    """
+    if isinstance(node, dict):
+        found: set[str] = set()
+        for key, value in node.items():
+            found.update(GUID.findall(str(key)))
+            found.update(_guids(value, f"{path}.{key}"))
+        return found
+    if isinstance(node, list):
+        return set().union(*(_guids(item, f"{path}[]") for item in node))
+    if isinstance(node, str) and path not in DBT_ID_PATHS:
+        return set(GUID.findall(node))
+    return set()
 
 
 def check_site(out_dir: Path) -> list[str]:
@@ -69,11 +80,11 @@ def check_site(out_dir: Path) -> list[str]:
             if key in FORBIDDEN_KEYS:
                 problems.append(f"{name}: forbidden key {key} at {path}")
 
-    ids = _dbt_ids(list(parsed.values()))
-    for name, text in texts.items():
-        for dbt_id in ids:
-            text = text.replace(dbt_id, "")
-        for match in sorted({m.group(0) for m in GUID.finditer(text)}):
+    # The page itself is text, and nothing in it is exempt.
+    found = {"index.html": set(GUID.findall(texts["index.html"]))}
+    found.update({name: _guids(document) for name, document in parsed.items()})
+    for name in FILES:
+        for match in sorted(found[name]):
             problems.append(f"{name}: GUID-shaped value {match.strip('{}')[:8]}…")
     return problems
 
