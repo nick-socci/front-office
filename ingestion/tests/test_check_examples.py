@@ -178,7 +178,9 @@ def test_examples_run_against_a_real_database(tmp_path, capsys):
     examples.mkdir()
     (examples / "good.sql").write_text(".mode box\nselect x from marts.fct_b;\n")
     (examples / "bad.sql").write_text("select nope from marts.fct_b;\n")
-    problems = ce.run_examples(db, sorted(examples.glob("*.sql")))
+    problems = ce.run_examples(
+        db, sorted(examples.glob("*.sql")), {"good": {"rows": 1}, "bad": {"rows": 1}}
+    )
     assert len(problems) == 1
     assert "bad.sql" in problems[0]
     assert "good.sql: ok, 1 rows" in capsys.readouterr().out
@@ -186,7 +188,7 @@ def test_examples_run_against_a_real_database(tmp_path, capsys):
 
 def test_a_missing_database_is_a_problem(tmp_path):
     """Catches a typo in --db passing silently."""
-    assert ce.run_examples(tmp_path / "none.duckdb", [])
+    assert ce.run_examples(tmp_path / "none.duckdb", [], {})
 
 
 # Row-count expectations (spec 0117): what an example returns on the fixture warehouse.
