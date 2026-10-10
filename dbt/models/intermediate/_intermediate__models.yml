@@ -757,6 +757,58 @@ models:
             config:
               where: "not played"
 
+  - name: int_fantasy__candidate_day_values
+    description: >
+      What each candidate's day was worth, on each side he played (#12, R1). A candidate is
+      a roster day in a starting slot, or in a bench slot that is not an injured-list slot.
+      One row per (team-day, player, side) on which he has an MLB appearance that date;
+      a candidate with no MLB id, or who did not play, has no row. day_value is the sum,
+      over the scored categories of that side and in category order, of the scaled value
+      over replacement of that one day's full line (not slot-credited: a bench player has
+      no credited line), against the replacement level of the day's kind. It is null when
+      any of those scaled values is unknown. Both sides of a two-way player's day are
+      valued; the slot decides which one counts, downstream. The values feed a hindsight
+      comparison of what a lineup could have been, not a measure of manager skill.
+    columns:
+      - name: platform
+        data_tests: [not_null]
+      - name: league_id
+        data_tests: [not_null]
+      - name: season
+        data_tests: [not_null]
+      - name: scoring_date
+        data_tests: [not_null]
+      - name: fantasy_team_id
+        data_tests: [not_null]
+      - name: platform_player_id
+        data_tests: [not_null]
+      - name: mlbam_player_id
+        data_tests: [not_null]
+      - name: side
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [batting, pitching]
+      - name: day_kind
+        description: >
+          batting for the batting side; start or relief for the pitching side, by
+          fo_pitching_day_kind.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [batting, start, relief]
+      - name: day_value
+        description: >
+          The sum of the day's scaled values over the side's scored categories, in
+          category order; null if any is null (an empty replacement pool).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              [platform, league_id, season, scoring_date, fantasy_team_id, platform_player_id, side]
+
   # ---------------------------------------------------------------------------
   # Matchup aggregation (#10): credited components per side, then stat values.
   # ---------------------------------------------------------------------------
@@ -2561,3 +2613,306 @@ unit_tests:
     expect:
       rows:
         - {category_key: 2, matchups_measured: 1, margin_scale: 4, side_denominator: 80, scale_source: current_season, prior_matchups_measured: 0, prior_seasons_measured: 0, prior_margin_scale: null}
+
+# -----------------------------------------------------------------------------
+# int_fantasy__candidate_day_values unit tests (#12, R1): the arithmetic of
+# fct_player_category_value at the grain of one day, and who is a candidate. The numbers
+# are exact in binary floating point, because a unit test compares exactly.
+# -----------------------------------------------------------------------------
+
+  - name: candidate_day_values_a_hitters_day_is_valued_against_the_batting_level
+    description: >
+      A hitter with no strikeouts, where a replacement strikes out 6 times (lower is better), is
+      +6; batter strikeouts' margin scale is 3, so the day is worth 2. A batting row has day_kind
+      batting and only the batting categories. Catches a day valued with the wrong sign, the
+      wrong scale, or a pitching category charged to a batting row.
+    model: int_fantasy__candidate_day_values
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, batter_strikeouts]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, roster_slot_id: 12, is_started: true, slot_role: hitter}
+      - input: ref('espn_lineup_slots')
+        rows:
+          - {lineup_slot_id: 12, is_injured_list_slot: false}
+          - {lineup_slot_id: 14, is_injured_list_slot: false}
+          - {lineup_slot_id: 16, is_injured_list_slot: false}
+          - {lineup_slot_id: 17, is_injured_list_slot: true}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910001, game_date: "2026-06-01", games_batted: 1, batter_strikeouts: 0}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, category_label: B_SO, is_lower_better: true}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, category_label: OUTS, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 27, part: numerator, component: batter_strikeouts, weight: 1}
+          - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
+          - {platform: espn, stat_key: 47, part: numerator, component: earned_runs, weight: 27}
+          - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: batter_strikeouts, level_per_played_day: 6}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 15}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 2.5}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 3}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 1}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 3, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 0.25, side_denominator: 108}
+    expect:
+      rows:
+        - {platform_player_id: 1, side: batting, day_kind: batting, day_value: 2}
+
+  - name: candidate_day_values_a_start_is_valued_against_the_start_level
+    description: >
+      A start of 18 outs and 1 earned run. Against the start level (15 outs, 2.5 earned runs) outs
+      are +3, scaled by 3 to 1; ERA is -(27 - (67.5 / 15) * 18) = +54, scaled by 108 and 0.25
+      to 2. The day is worth 1 + 2 = 3, summing two categories. Catches a category dropped from
+      the sum, a rate not converted by the side denominator and then the margin scale, and a
+      start measured against the relief level.
+    model: int_fantasy__candidate_day_values
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, batter_strikeouts]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, roster_slot_id: 14, is_started: true, slot_role: pitcher}
+      - input: ref('espn_lineup_slots')
+        rows:
+          - {lineup_slot_id: 12, is_injured_list_slot: false}
+          - {lineup_slot_id: 14, is_injured_list_slot: false}
+          - {lineup_slot_id: 16, is_injured_list_slot: false}
+          - {lineup_slot_id: 17, is_injured_list_slot: true}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910001, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 18, earned_runs: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, category_label: B_SO, is_lower_better: true}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, category_label: OUTS, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 27, part: numerator, component: batter_strikeouts, weight: 1}
+          - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
+          - {platform: espn, stat_key: 47, part: numerator, component: earned_runs, weight: 27}
+          - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 15}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 2.5}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 3}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 1}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 3, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 0.25, side_denominator: 108}
+    expect:
+      rows:
+        - {platform_player_id: 1, side: pitching, day_kind: start, day_value: 3}
+
+  - name: candidate_day_values_a_relief_day_is_valued_against_the_relief_level_not_the_starts
+    description: >
+      A relief day of 3 outs and no earned run. Against the relief level (3 outs, 1 earned run)
+      outs are 0 and ERA is -(0 - (27 / 3) * 3) = +27, scaled to 1: the day is worth 1.
+      Against the start level it would be -3.5. Catches a relief day measured against the
+      start's level, or a kind chosen by the player rather than the outing.
+    model: int_fantasy__candidate_day_values
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, batter_strikeouts]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, roster_slot_id: 14, is_started: true, slot_role: pitcher}
+      - input: ref('espn_lineup_slots')
+        rows:
+          - {lineup_slot_id: 12, is_injured_list_slot: false}
+          - {lineup_slot_id: 14, is_injured_list_slot: false}
+          - {lineup_slot_id: 16, is_injured_list_slot: false}
+          - {lineup_slot_id: 17, is_injured_list_slot: true}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910001, game_date: "2026-06-01", games_pitched: 1, games_started: 0, outs_recorded: 3, earned_runs: 0}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, category_label: B_SO, is_lower_better: true}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, category_label: OUTS, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 27, part: numerator, component: batter_strikeouts, weight: 1}
+          - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
+          - {platform: espn, stat_key: 47, part: numerator, component: earned_runs, weight: 27}
+          - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 15}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 2.5}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 3}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 1}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 3, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 0.25, side_denominator: 108}
+    expect:
+      rows:
+        - {platform_player_id: 1, side: pitching, day_kind: relief, day_value: 1}
+
+  - name: candidate_day_values_a_two_way_day_has_a_row_per_side
+    description: >
+      A hitter-slot player who also pitched a scoreless inning that date has two rows: batting
+      (2, as in the hitter test) and pitching, a relief day worth 1. Each side meets only its
+      own categories. Catches one side overwriting the other, a side missing, and a side's
+      categories leaking into the other's value.
+    model: int_fantasy__candidate_day_values
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, batter_strikeouts]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, roster_slot_id: 12, is_started: true, slot_role: hitter}
+      - input: ref('espn_lineup_slots')
+        rows:
+          - {lineup_slot_id: 12, is_injured_list_slot: false}
+          - {lineup_slot_id: 14, is_injured_list_slot: false}
+          - {lineup_slot_id: 16, is_injured_list_slot: false}
+          - {lineup_slot_id: 17, is_injured_list_slot: true}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910001, game_date: "2026-06-01", games_batted: 1, batter_strikeouts: 0, games_pitched: 1, games_started: 0, outs_recorded: 3, earned_runs: 0}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, category_label: B_SO, is_lower_better: true}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, category_label: OUTS, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 27, part: numerator, component: batter_strikeouts, weight: 1}
+          - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
+          - {platform: espn, stat_key: 47, part: numerator, component: earned_runs, weight: 27}
+          - {platform: espn, stat_key: 47, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: batter_strikeouts, level_per_played_day: 6}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 15}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: earned_runs, level_per_played_day: 2.5}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 3}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 1}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 3, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, margin_scale: 0.25, side_denominator: 108}
+    expect:
+      rows:
+        - {platform_player_id: 1, side: batting, day_kind: batting, day_value: 2}
+        - {platform_player_id: 1, side: pitching, day_kind: relief, day_value: 1}
+
+  - name: candidate_day_values_a_null_level_leaves_the_day_value_null
+    description: >
+      A relief day whose outs level is null (an empty relief pool) while the earned-run category
+      has a level and is worth +1. The day is null, not 1. Catches (R1.4) a plain sum skipping
+      the null and reporting a partial value as complete.
+    model: int_fantasy__candidate_day_values
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, batter_strikeouts]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, roster_slot_id: 14, is_started: true, slot_role: pitcher}
+      - input: ref('espn_lineup_slots')
+        rows:
+          - {lineup_slot_id: 12, is_injured_list_slot: false}
+          - {lineup_slot_id: 14, is_injured_list_slot: false}
+          - {lineup_slot_id: 16, is_injured_list_slot: false}
+          - {lineup_slot_id: 17, is_injured_list_slot: true}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910001, game_date: "2026-06-01", games_pitched: 1, games_started: 0, outs_recorded: 3, earned_runs: 0}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, category_label: OUTS, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 45, category_label: ER, is_lower_better: true}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
+          - {platform: espn, stat_key: 45, part: numerator, component: earned_runs, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: null}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: earned_runs, level_per_played_day: 1}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 34, margin_scale: 3, side_denominator: null}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 45, margin_scale: 1, side_denominator: null}
+    expect:
+      rows:
+        - {platform_player_id: 1, side: pitching, day_kind: relief, day_value: null}
+
+  - name: candidate_day_values_candidates_are_the_started_and_the_non_injured_bench_who_played
+    description: >
+      Five roster days, three of them with an MLB game line. Player 1 started and player 2 sat
+      on the bench: both played and have a row (player 2 batted 3 strikeouts against 6: +3,
+      scaled to 1). Player 3 is in the injured-list slot and played: no row. Player 4 is a
+      bench candidate who did not play: no row. Player 5 has no MLB id: no row. Catches (R1.1)
+      an injured-list player offered as an option, a bench player left out, or a row made for
+      a day nobody played or for a player no one can look up.
+    model: int_fantasy__candidate_day_values
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, batter_strikeouts]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, roster_slot_id: 12, is_started: true, slot_role: hitter}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 910002, roster_slot_id: 16, is_started: false, slot_role: bench}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 3, mlbam_player_id: 910003, roster_slot_id: 17, is_started: false, slot_role: bench}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 4, mlbam_player_id: 910004, roster_slot_id: 16, is_started: false, slot_role: bench}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 5, mlbam_player_id: null, roster_slot_id: 16, is_started: false, slot_role: bench}
+      - input: ref('espn_lineup_slots')
+        rows:
+          - {lineup_slot_id: 12, is_injured_list_slot: false}
+          - {lineup_slot_id: 14, is_injured_list_slot: false}
+          - {lineup_slot_id: 16, is_injured_list_slot: false}
+          - {lineup_slot_id: 17, is_injured_list_slot: true}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910001, game_date: "2026-06-01", games_batted: 1, batter_strikeouts: 0}
+          - {mlbam_player_id: 910002, game_date: "2026-06-01", games_batted: 1, batter_strikeouts: 3}
+          - {mlbam_player_id: 910003, game_date: "2026-06-01", games_batted: 1, batter_strikeouts: 0}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, category_label: B_SO, is_lower_better: true}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 27, part: numerator, component: batter_strikeouts, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: batter_strikeouts, level_per_played_day: 6}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 3, side_denominator: null}
+    expect:
+      rows:
+        - {platform_player_id: 1, side: batting, day_kind: batting, day_value: 2}
+        - {platform_player_id: 2, side: batting, day_kind: batting, day_value: 1}
