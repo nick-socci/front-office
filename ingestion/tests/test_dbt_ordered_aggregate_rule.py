@@ -36,11 +36,9 @@ _AGGREGATE = re.compile(
     re.IGNORECASE,
 )
 _ORDER_BY = re.compile(r"\border\s+by\b", re.IGNORECASE)
-# The exemption: a SQL comment carrying the marker and, after it, a reason. String literals
-# are blanked first, so neither the marker nor a "--" inside one is read as a comment, and
-# an empty quoted value is not read as a reason.
-_STRING = re.compile(r"'[^']*'")
-_EXEMPTION = re.compile(r"--.*order-exempt:[ \t]*\S")
+# The exemption: the marker in a SQL comment, followed by a reason with a letter or a digit
+# in it. An empty or quoted-empty reason, or punctuation, is not one.
+_EXEMPTION = re.compile(r"order-exempt:.*[A-Za-z0-9]")
 
 
 def _blank(match: re.Match[str]) -> str:
@@ -68,12 +66,28 @@ def _arguments(code: str, start: int) -> str:
     return "".join(own)
 
 
+def _line_comment(line: str) -> str | None:
+    """The text after the first `--` that is not inside a string literal, or None.
+
+    Quotes are tracked only up to that point: after it the line is prose, and an apostrophe
+    in it is not a string.
+    """
+    quoted = False
+    for at, char in enumerate(line):
+        if char == "'":
+            quoted = not quoted
+        elif not quoted and line.startswith("--", at):
+            return line[at + 2 :]
+    return None
+
+
 def _is_exempt(lines: list[str], number: int) -> bool:
     """True when a comment on the call's line, or the comment lines directly above it, claims
     the exemption and gives a reason."""
 
     def claims(line: str) -> bool:
-        return bool(_EXEMPTION.search(_STRING.sub(" ", line)))
+        comment = _line_comment(line)
+        return comment is not None and bool(_EXEMPTION.search(comment))
 
     if claims(lines[number - 1]):
         return True
@@ -192,6 +206,12 @@ def test_an_exemption_needs_a_reason_and_has_to_be_a_comment() -> None:
     assert unordered_aggregates("select avg(x) -- order-exempt: ''\nfrom t") == [(1, "avg")]
     assert unordered_aggregates("select avg(x) -- order-exempt: '  ' \nfrom t") == [(1, "avg")]
     assert unordered_aggregates("select avg(x) -- order-exempt: it's a count, 162 at most") == []
+    # apostrophes in the comment are prose, not strings, wherever they fall round the marker
+    straddling = "select avg(x) -- the league's games, order-exempt: whole, a side's total is 162"
+    assert unordered_aggregates(straddling) == []
+    # and punctuation alone is not a reason
+    assert unordered_aggregates("select avg(x) -- order-exempt: ...") == [(1, "avg")]
+    assert unordered_aggregates("select avg(x) -- order-exempt: '-'") == [(1, "avg")]
 
 
 def test_prose_about_an_aggregate_in_a_comment_is_not_flagged() -> None:
