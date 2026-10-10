@@ -14,7 +14,7 @@ real builds are compared, as #115 was.
 
 An aggregate that is exact whatever the order (integer-valued inputs whose magnitudes sum
 below 2^53) says so with ``order-exempt:`` and the bound, in a comment on its own line or
-the lines directly above it.
+the lines directly above it. The marker alone, or the marker in a string, exempts nothing.
 """
 
 import re
@@ -36,7 +36,10 @@ _AGGREGATE = re.compile(
     re.IGNORECASE,
 )
 _ORDER_BY = re.compile(r"\border\s+by\b", re.IGNORECASE)
-EXEMPT = "order-exempt:"
+# The exemption: a SQL comment carrying the marker and, after it, a reason. String literals
+# are set aside first, so neither the marker nor a "--" inside one is read as a comment.
+_STRING = re.compile(r"'[^']*'")
+_EXEMPTION = re.compile(r"--.*order-exempt:[ \t]*\S")
 
 
 def _blank(match: re.Match[str]) -> str:
@@ -65,12 +68,17 @@ def _arguments(code: str, start: int) -> str:
 
 
 def _is_exempt(lines: list[str], number: int) -> bool:
-    """True when the call's line, or the comment lines directly above it, claim the exemption."""
-    if EXEMPT in lines[number - 1]:
+    """True when a comment on the call's line, or the comment lines directly above it, claims
+    the exemption and gives a reason."""
+
+    def claims(line: str) -> bool:
+        return bool(_EXEMPTION.search(_STRING.sub("''", line)))
+
+    if claims(lines[number - 1]):
         return True
     above = number - 2
     while above >= 0 and lines[above].lstrip().startswith("--"):
-        if EXEMPT in lines[above]:
+        if claims(lines[above]):
             return True
         above -= 1
     return False
@@ -167,6 +175,18 @@ def test_an_exemption_is_claimed_in_a_comment_at_the_aggregate() -> None:
     assert unordered_aggregates(on_the_line) == []
     assert unordered_aggregates(above) == []
     assert unordered_aggregates(elsewhere) == [(3, "avg")]
+
+
+def test_an_exemption_needs_a_reason_and_has_to_be_a_comment() -> None:
+    """Catches an aggregate passed over on the marker alone, or on the marker in a string."""
+    no_reason = "select avg(games) -- order-exempt:\nfrom t"
+    blank_reason = "select\n    -- order-exempt:   \n    avg(games)\nfrom t"
+    in_a_string = "select avg(x) as mean_x, 'order-exempt: not a comment' as note from t"
+    dashes_in_a_string = "select avg(x), '-- order-exempt: still a string' as note from t"
+    assert unordered_aggregates(no_reason) == [(1, "avg")]
+    assert unordered_aggregates(blank_reason) == [(3, "avg")]
+    assert unordered_aggregates(in_a_string) == [(1, "avg")]
+    assert unordered_aggregates(dashes_in_a_string) == [(1, "avg")]
 
 
 def test_prose_about_an_aggregate_in_a_comment_is_not_flagged() -> None:
