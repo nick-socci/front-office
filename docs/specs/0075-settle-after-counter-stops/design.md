@@ -82,7 +82,7 @@ seven periods on every run for good, which is the defect.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0047](../../adr/0047-a-stopped-period-counter-is-extended-by-the-calendar.md) | A period counter that has stopped is extended by the calendar: one per whole day it was seen unchanged | proposed |
+| [0047](../../adr/0047-a-stopped-period-counter-is-extended-by-the-calendar.md) | A period counter that has stopped is extended by the calendar: one per whole day it was seen unchanged | accepted |
 
 ADR 0047 adds to [ADR 0018](../../adr/0018-a-closed-roster-period-is-rechecked-for-seven-periods.md);
 it does not supersede it. The number skips 0046, which spec PR #118 proposes.

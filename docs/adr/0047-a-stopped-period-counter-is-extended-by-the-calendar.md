@@ -1,6 +1,6 @@
 # 0047. A period counter that has stopped is extended by the calendar
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-10
 - Spec: [0075-settle-after-counter-stops](../specs/0075-settle-after-counter-stops/design.md) · Issue: #75
 
@@ -41,7 +41,7 @@ is known; the moment it stops has not been observed.
 
 ## Decision
 
-Chosen: **option 1** (proposed; the owner decides).
+Chosen: **option 1** (owner, 2026-10-10).
 
 Let `top` be the greatest counter any roster capture of the league-season carries. For
 a period whose captures carry `top`, with `top` greater than the period, the *extended
