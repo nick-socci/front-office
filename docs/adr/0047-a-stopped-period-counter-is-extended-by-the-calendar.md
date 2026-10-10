@@ -1,6 +1,6 @@
 # 0047. A period counter that has stopped is extended by the calendar
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-10
 - Spec: [0075-settle-after-counter-stops](../specs/0075-settle-after-counter-stops/design.md) · Issue: #75
 
@@ -41,7 +41,7 @@ is known; the moment it stops has not been observed.
 
 ## Decision
 
-Chosen: **option 1** (proposed; the owner decides).
+Chosen: **option 1** (owner, 2026-10-10).
 
 Let `top` be the greatest counter any roster capture of the league-season carries. For
 a period whose captures carry `top`, with `top` greater than the period, the *extended
@@ -83,5 +83,11 @@ seven requests on every run for good.
 - Bad / accepted cost: if every response of two runs a day apart carried the same
   lagging status, it would be extended as a stopped counter. Not observed; #66 is where
   it would show.
+- Bad / accepted cost: a period skipped as settled is not revisited within the run. If a
+  later fetch of the same run shows a higher counter, the earlier one was a lagging
+  status and is no longer extended, so the period is unsettled again and is fetched on
+  the next run, one run late. It needs every response to have read the same counter for
+  days and then to move: the case above. Nothing wrong is stored, and the audit's line
+  for it is true. A test pins it (owner, 2026-10-10, PR #121).
 - Follow-ups: if #83 is scheduled and its week of repeat fetches is unwelcome, option 3
   is the alternative to weigh then.
