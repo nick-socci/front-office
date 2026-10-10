@@ -236,7 +236,7 @@ Written with Claude Code, deliberately and openly. What that meant in practice:
 - **I corrected the model too.** Stat 34 was labelled OUTS from the upstream library; in
   my league ESPN displays it as IP. The seed now carries both.
 
-Local validation on 2026-10-10: 868 pytest tests passed. On the real 2026 season dbt
+Local validation on 2026-10-10: 888 pytest tests passed. On the real 2026 season dbt
 found 57 models, 437 data tests, 151 unit tests and 7 seeds, and of the 651 it ran, 650
 passed and one warned (the id crosswalk's coverage check, 9 rows). SQL is linted with
 sqlfluff: 118 files, no violation and no exemption comment. CI runs all of it on the
@@ -248,9 +248,7 @@ found defects that the checks passing at the time did not cover. Each became an 
 and all six are closed
 ([milestone](https://github.com/nick-socci/front-office/milestone/2?closed=1)). What is
 open now: one reconciliation view's correlation is not reproducible to its last digit
-([#115](https://github.com/nick-socci/front-office/issues/115)); a roster period at the
-very end of MLB's season cannot settle, because ESPN's counter stops
-([#75](https://github.com/nick-socci/front-office/issues/75)); two things can only be
+([#115](https://github.com/nick-socci/front-office/issues/115)); two things can only be
 checked while a season is being played
 ([#66](https://github.com/nick-socci/front-office/issues/66),
 [#69](https://github.com/nick-socci/front-office/issues/69)); and whether player value
