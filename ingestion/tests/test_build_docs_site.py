@@ -140,3 +140,22 @@ def test_a_guid_in_a_list_or_a_key_fails(tmp_path):
     assert site.assemble(in_list, tmp_path / "a" / "site") == 1
     as_key = make_target(tmp_path / "b", {"meta": {STRAY: 1}})
     assert site.assemble(as_key, tmp_path / "b" / "site") == 1
+
+
+def test_a_root_key_spelled_like_the_exempt_path_is_not_exempt(tmp_path):
+    """Catches a path compared as dotted text: one key named `metadata.invocation_id`."""
+    target = make_target(tmp_path)
+    manifest = json.loads((target / "manifest.json").read_text())
+    manifest["metadata.invocation_id"] = STRAY
+    (target / "manifest.json").write_text(json.dumps(manifest))
+    assert site.assemble(target, tmp_path / "site") == 1
+
+
+def test_a_duplicate_key_fails_naming_it(tmp_path, capsys):
+    """Catches a GUID in a repeated key's earlier value, which parsing silently drops."""
+    target = make_target(tmp_path)
+    text = (target / "manifest.json").read_text()
+    hidden = f'{{"description": "{STRAY}", "description": "...", '
+    (target / "manifest.json").write_text(hidden + text[1:])
+    assert site.assemble(target, tmp_path / "site") == 1
+    assert "duplicate key description" in capsys.readouterr().out

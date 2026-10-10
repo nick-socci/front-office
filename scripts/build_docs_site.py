@@ -11,7 +11,9 @@ compiled SQL), then checking the copies:
 - no JSON key in the manifest or catalog is one of privacy.FORBIDDEN_KEYS;
 - privacy.GUID matches nothing in index.html, nor in any key or string of the two JSON
   files other than `metadata.invocation_id` and `metadata.user_id`, dbt's own ids. The
-  exemption is by location, not by value. A match is printed truncated, never whole.
+  exemption is by location, not by value. A match is printed truncated, never whole;
+- no object in the two JSON files repeats a key: parsing keeps only the last value of a
+  repeated key, so an earlier one would be published unchecked.
 
 On any problem all of them are printed, the copies are deleted and the output directory is
 removed if this run created it, so a failed run leaves nothing uploadable. Exit 1.
@@ -33,10 +35,11 @@ FILES = ("index.html", "manifest.json", "catalog.json")
 
 
 # The only places a GUID may stand: dbt's own ids for the run and the installation.
-DBT_ID_PATHS = frozenset({"$.metadata.invocation_id", "$.metadata.user_id"})
+# Paths are tuples of keys, so a single key spelled `metadata.invocation_id` is not one.
+DBT_ID_PATHS = frozenset({("metadata", "invocation_id"), ("metadata", "user_id")})
 
 
-def _guids(node: Any, path: str = "$") -> set[str]:
+def _guids(node: Any, path: tuple[str, ...] = ()) -> set[str]:
     """Every GUID in a parsed document's keys and strings, outside DBT_ID_PATHS.
 
     By location, not by value: dbt's run id repeated in a description is not exempt.
@@ -45,13 +48,28 @@ def _guids(node: Any, path: str = "$") -> set[str]:
         found: set[str] = set()
         for key, value in node.items():
             found.update(GUID.findall(str(key)))
-            found.update(_guids(value, f"{path}.{key}"))
+            found.update(_guids(value, (*path, str(key))))
         return found
     if isinstance(node, list):
-        return set().union(*(_guids(item, f"{path}[]") for item in node))
+        return set().union(*(_guids(item, (*path, "[]")) for item in node))
     if isinstance(node, str) and path not in DBT_ID_PATHS:
         return set(GUID.findall(node))
     return set()
+
+
+def _load(text: str) -> tuple[Any, list[str]]:
+    """A parsed JSON document, and every key that some object in it repeats."""
+    repeated: list[str] = []
+
+    def pairs_to_dict(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        seen: set[str] = set()
+        for key, _ in pairs:
+            if key in seen:
+                repeated.append(key)
+            seen.add(key)
+        return dict(pairs)
+
+    return json.loads(text, object_pairs_hook=pairs_to_dict), repeated
 
 
 def check_site(out_dir: Path) -> list[str]:
@@ -66,7 +84,12 @@ def check_site(out_dir: Path) -> list[str]:
         return problems
 
     texts = {name: (out_dir / name).read_text() for name in FILES}
-    parsed = {name: json.loads(texts[name]) for name in ("manifest.json", "catalog.json")}
+    parsed: dict[str, Any] = {}
+    for name in ("manifest.json", "catalog.json"):
+        parsed[name], repeated = _load(texts[name])
+        for key in sorted(set(repeated)):
+            shown = GUID.sub("<GUID>", key)
+            problems.append(f"{name}: duplicate key {shown}, whose earlier value is unchecked")
 
     catalog = parsed["catalog.json"]
     for section in ("nodes", "sources"):
