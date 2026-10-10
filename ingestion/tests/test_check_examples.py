@@ -386,6 +386,15 @@ def test_a_boolean_count_never_passes_unreported(tmp_path):
     assert run_stated(tmp_path, {"q": sql}, expectations) == []
 
 
+def test_a_column_name_that_is_not_text_is_reported(tmp_path):
+    """Catches a non-text column name crashing the run's sort instead of being named."""
+    expectations = {"q": {"rows": 1, "rows_with_a_value": {1: 1, "vcol": 1}}}
+    problems = ce.check_expectations({"q": "select 1 as vcol"}, expectations)
+    assert any("q" in p and "rows_with_a_value" in p for p in problems)
+    # The run must not raise; the string column matches and the bad key is the pure check's.
+    assert run_stated(tmp_path, {"q": "select 1 as vcol"}, expectations) == []
+
+
 EXAMPLES_DIR = Path(__file__).resolve().parents[2] / "docs/examples"
 
 

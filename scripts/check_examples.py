@@ -173,6 +173,11 @@ def check_expectations(
                 problems.append(f"{stem}: rows_with_a_value must be a mapping of column to count")
             else:
                 for column, expected in sorted(counts.items(), key=str):
+                    if not isinstance(column, str):
+                        problems.append(
+                            f"{stem}: rows_with_a_value names column {column!r}, which is not text"
+                        )
+                        continue
                     if not _is_whole_number(expected) or expected < 0:
                         problems.append(
                             f"{stem}: rows_with_a_value for {column} must be a whole number "
@@ -219,7 +224,9 @@ def _run_stated(
     if _is_whole_number(stated) and len(rows) != stated:
         problems.append(f"{path.name}: states {stated} rows, returned {len(rows)}")
     counts = entry.get("rows_with_a_value")
-    for column, expected in sorted((counts if isinstance(counts, dict) else {}).items()):
+    for column, expected in sorted((counts if isinstance(counts, dict) else {}).items(), key=str):
+        if not isinstance(column, str):
+            continue  # check_expectations names it
         if column not in columns:
             problems.append(f"{path.name}: states a count for column {column}, which it lacks")
             continue
