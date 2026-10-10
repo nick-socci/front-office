@@ -23,6 +23,7 @@ dev = [
     "espn-api>=0.46.0",
     "pyyaml>=6.0.3",
     "types-pyyaml>=6.0.12.20260906",
+    "scipy>=1.18.1",
 ]
 
 [build-system]
@@ -34,7 +35,7 @@ packages = ["ingestion/src/front_office"]
 
 [tool.ruff]
 line-length = 100
-src = ["ingestion/src", "ingestion/tests", "scripts"]
+src = ["ingestion/src", "ingestion/tests", "scripts", "dbt/python_modules"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "PTH"]
@@ -50,5 +51,5 @@ disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["ingestion/tests"]
-pythonpath = ["ingestion/src", "scripts"]
+pythonpath = ["ingestion/src", "scripts", "dbt/python_modules"]
 addopts = "-q"
