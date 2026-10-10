@@ -213,3 +213,16 @@ known; see Open questions.
   An unordered `sum` in `int_fantasy__reported_matchup_margins`, found while this was
   applied, is an open question and not part of the change.
 
+- 2026-10-10, build, task 6. The expected values bound the movement of `correlation` at
+  1e-15 on each row; SP moved by 1.2e-15 (0.8428935642957381 to 0.8428935642957394). The
+  value after is the expected one to the digit. The value before is whatever an
+  unordered build happened to give, and the bound was taken from the two builds #115
+  compared, which is not a bound on a third. Nothing in the requirements depends on it:
+  R1.4's remark about a group within 1e-15 of 0.75 concerns `is_judged`, and the nearest
+  2026 group is 0.056 away.
+- 2026-10-10, build, task 2. Both open questions about unit tests are answered: dbt
+  compares a `double` exactly, and a listing order reaches the aggregate through the
+  joins, but not on every run. On the unordered aggregates each new test fails on the
+  last digit in most runs and passes in some (DuckDB's row order inside a unit test
+  varies), so a removed `order by` is caught often, not always. The reordered-copy
+  check on the real season is the one that cannot miss.
