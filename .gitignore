@@ -16,6 +16,8 @@ dbt/logs/
 dbt/dbt_packages/
 dbt/.user.yml
 dbt/ci.duckdb
+# the assembled docs site (scripts/build_docs_site.py)
+site/
 
 # Data / warehouse
 *.duckdb
