@@ -37,7 +37,8 @@ _AGGREGATE = re.compile(
 )
 _ORDER_BY = re.compile(r"\border\s+by\b", re.IGNORECASE)
 # The exemption: a SQL comment carrying the marker and, after it, a reason. String literals
-# are set aside first, so neither the marker nor a "--" inside one is read as a comment.
+# are blanked first, so neither the marker nor a "--" inside one is read as a comment, and
+# an empty quoted value is not read as a reason.
 _STRING = re.compile(r"'[^']*'")
 _EXEMPTION = re.compile(r"--.*order-exempt:[ \t]*\S")
 
@@ -72,7 +73,7 @@ def _is_exempt(lines: list[str], number: int) -> bool:
     the exemption and gives a reason."""
 
     def claims(line: str) -> bool:
-        return bool(_EXEMPTION.search(_STRING.sub("''", line)))
+        return bool(_EXEMPTION.search(_STRING.sub(" ", line)))
 
     if claims(lines[number - 1]):
         return True
@@ -187,6 +188,10 @@ def test_an_exemption_needs_a_reason_and_has_to_be_a_comment() -> None:
     assert unordered_aggregates(blank_reason) == [(3, "avg")]
     assert unordered_aggregates(in_a_string) == [(1, "avg")]
     assert unordered_aggregates(dashes_in_a_string) == [(1, "avg")]
+    # an empty quoted value is not a reason, and a reason that contains quotes still is one
+    assert unordered_aggregates("select avg(x) -- order-exempt: ''\nfrom t") == [(1, "avg")]
+    assert unordered_aggregates("select avg(x) -- order-exempt: '  ' \nfrom t") == [(1, "avg")]
+    assert unordered_aggregates("select avg(x) -- order-exempt: it's a count, 162 at most") == []
 
 
 def test_prose_about_an_aggregate_in_a_comment_is_not_flagged() -> None:
