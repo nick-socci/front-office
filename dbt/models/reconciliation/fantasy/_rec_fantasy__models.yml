@@ -82,6 +82,9 @@ models:
         description: sum(wins * value) / sum(value squared) over the measured pairs; theory gives 0.40.
         data_type: double
       - name: correlation
+        description: >
+          Pearson correlation of wins added and total_value over the measured pairs, taken
+          in player and team order so that it is the same on every build.
         data_type: double
       - name: is_judged
         description: >
@@ -335,9 +338,11 @@ unit_tests:
   - name: category_wins_by_group_measure_the_slope_over_measured_pairs
     description: >
       Hitters with wins added of 2, 4 and 1 on values of 4, 8 and 2: the slope through
-      the origin is (8 + 32 + 2) / (16 + 64 + 4) = 0.5 and the correlation 1. A fourth
+      the origin is (8 + 32 + 2) / (16 + 64 + 4) = 0.5 and the correlation 1, which in floating
+      point over those three pairs in player order is 1.0000000000000002. A fourth
       hitter has a value of 100 and no wins added: he is counted as unmeasured and is in
-      neither sum, where leaving his value in the denominator would give 0.004. Three
+      neither sum, where leaving his value in the denominator would give 0.004, and a
+      null pair entering the correlation would move it off that value. Three
       pairs and one matchup are far below what a group is judged on, so is_judged is
       false. Catches a slope taken over part of a group as if it were the whole, and a
       small group judged.
@@ -367,7 +372,45 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, platform_player_id: 4, fantasy_team_id: 1, total_value: 100}
     expect:
       rows:
-        - {replacement_group: hitter, matchups_rescored: 1, pairs: 4, pairs_unmeasured: 1, slope: 0.5, is_judged: false, problem: null}
+        - {replacement_group: hitter, matchups_rescored: 1, pairs: 4, pairs_unmeasured: 1, slope: 0.5, correlation: 1.0000000000000002, is_judged: false, problem: null}
+
+  - name: category_wins_by_group_take_the_correlation_in_player_order
+    description: >
+      Five hitters with values of 8.9, 2.0, 1.2, 1.2 and 7.5 and wins added of 3.4, 3.9,
+      2.7, 2.5 and 2.7, players 1 to 5, listed here from player 5 down to player 1. The
+      correlation is expected to the last digit of the sum taken in player order,
+      0.14953126241169692; taken in the order listed it is 0.14953126241169695. Catches
+      the order by removed from corr, or put on a column that does not order the rows
+      (ADR 0046).
+    model: rec_fantasy__category_wins_by_group
+    given:
+      - input: ref('fct_matchup_results')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, winner: HOME, has_unverified_inputs: false}
+      - input: ref('rec_fantasy__category_wins_added')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 5, fantasy_team_id: 1, category_wins_added: 2.7}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 4, fantasy_team_id: 1, category_wins_added: 2.5}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, fantasy_team_id: 1, category_wins_added: 2.7}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, fantasy_team_id: 1, category_wins_added: 3.9}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, category_wins_added: 3.4}
+      - input: ref('dim_player_league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 5, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 4, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, replacement_group: hitter}
+      - input: ref('fct_player_season_value')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 5, fantasy_team_id: 1, total_value: 7.5}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 4, fantasy_team_id: 1, total_value: 1.2}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, fantasy_team_id: 1, total_value: 1.2}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, fantasy_team_id: 1, total_value: 2.0}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, total_value: 8.9}
+    expect:
+      rows:
+        - {replacement_group: hitter, pairs: 5, pairs_unmeasured: 0, correlation: 0.14953126241169692}
 
   - name: category_wins_by_group_fail_a_large_group_with_an_unmeasured_pair_however_few_matchups
     description: >

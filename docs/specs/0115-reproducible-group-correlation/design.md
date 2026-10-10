@@ -17,7 +17,8 @@ in another order.
 The two remaining `avg()` calls gain an order as well (R4; owner, 2026-10-10), which
 moves no value on 2026.
 
-No model's rows, grain or columns change. `correlation` moves once, by less than 1e-15.
+No model's rows, grain or columns change. `correlation` moves once, in its last digits
+(up to 1.2e-15 from the build it was measured against).
 
 ## Alternatives considered
 
@@ -57,7 +58,7 @@ have to be told apart from the excused one by eye.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0046](../../adr/0046-an-order-dependent-aggregate-is-computed-in-a-stated-order.md) | A floating-point aggregate that depends on row order is computed in a stated order; exact aggregates are exempt | proposed |
+| [0046](../../adr/0046-an-order-dependent-aggregate-is-computed-in-a-stated-order.md) | A floating-point aggregate that depends on row order is computed in a stated order; exact aggregates are exempt | accepted |
 
 ## Detailed design
 
@@ -130,7 +131,7 @@ One entry under *dbt gotchas*:
 > the grain's key inside its parentheses: the last digit depends on row order, row order
 > changes between builds, and warehouses are compared exactly. Broken three times
 > (`stddev_pop`, `avg`, `corr`); see ADR 0046. Exempt only if exact: integer-valued
-> inputs summing below 2^53, said in a comment.
+> inputs whose magnitudes sum below 2^53, said in a comment starting `order-exempt:`.
 
 ### The reordered-copy check (R2.2, R2.3)
 
@@ -213,3 +214,44 @@ known; see Open questions.
   An unordered `sum` in `int_fantasy__reported_matchup_margins`, found while this was
   applied, is an open question and not part of the change.
 
+- 2026-10-10, build, task 6. The expected values bound the movement of `correlation` at
+  1e-15 on each row; SP moved by 1.2e-15 (0.8428935642957381 to 0.8428935642957394). The
+  value after is the expected one to the digit. The value before is whatever an
+  unordered build happened to give, and the bound was taken from the two builds #115
+  compared, which is not a bound on a third. Nothing in the requirements depends on it:
+  R1.4's remark about a group within 1e-15 of 0.75 concerns `is_judged`, and the nearest
+  2026 group is 0.056 away.
+- 2026-10-10, build, task 2. Both open questions about unit tests are answered: dbt
+  compares a `double` exactly, and a listing order reaches the aggregate through the
+  joins, but not on every run. On the unordered aggregates each new test fails on the
+  last digit in most runs and passes in some (DuckDB's row order inside a unit test
+  varies), so a removed `order by` is caught often, not always. The reordered-copy
+  check on the real season is the one that cannot miss.
+- 2026-10-10, owner, on PR #120 (review round 1 and one open question).
+  - F1: the expected movement of `correlation` is corrected to what was measured, and
+    said not to be a bound (requirements, *Expected values*; *Overview* above).
+  - F2: a check that cannot miss is added (R5): `test_dbt_ordered_aggregate_rule.py`
+    reads every model, singular test and macro, and fails on a statistical aggregate
+    with no `order by` inside its parentheses and no `order-exempt:` comment. It runs
+    in pytest, so in the gates and CI, as `test_dbt_json_rule.py` does for the JSON
+    rule. A check that stores inputs in two physical orders, as the reviewer
+    suggested, could not fail on the fixtures: the view's input is empty there and
+    the averages' inputs are whole numbers. `sum` is not checked (R5.3). This lifts
+    the first rabbit hole for the aggregates it names.
+  - F3: the exemption in the `AGENTS.md` entry is on the sum of the inputs'
+    magnitudes, as R3.1 and ADR 0046 have it, and names the comment the check reads.
+  - The open question: `sum(parts.weight * reported.score)` is ordered by `component`
+    (R4.5), with a unit test on a made-up rate of three components, seen to fail on
+    the unordered sum in 2 of 6 runs (0.6000000000000001 against 0.6) and to pass
+    in 4 of 4 with the order. `denominator_parts` carries `component` for it;
+    (`platform`, `stat_key`, `part`, `component`) is unique in
+    `int_fantasy__stat_components`, so the order has no ties.
+- 2026-10-10, owner, on PR #120, after five review rounds of the check of R5. Each round
+  found a narrower input the check misread, none of them written in this repository. The
+  check reads SQL text and is a tripwire for the ordinary way of writing an aggregate; a
+  rule that could not be fooled would read the SQL dbt compiles, parsed, and is not built
+  here. What it now knows: `--`, `/* */` and `{# #}` comments, string literals, and that
+  an order inside a Jinja block or expression may render nothing (R5.4). Two limits are
+  accepted because they fail safe, and are pinned by a test: an exemption in a `/* */`
+  comment is not read, and an order between two Jinja blocks of one call is flagged. No
+  further review round is run on it.

@@ -142,7 +142,10 @@ side_denominators as (
         league_id,
         season,
         category_key,
-        avg(denominator) as side_denominator
+        -- Averaged in matchup order: the last digit of a floating-point average depends on
+        -- the order of its terms, and row order changes from build to build (#28, R4.13;
+        -- ADR 0046).
+        avg(denominator order by matchup_id, is_home) as side_denominator
     from scored_values
     where stat_value is not null
     group by platform, league_id, season, category_key

@@ -68,6 +68,7 @@ denominator_parts as (
     -- exactly that component, or null if the host has none.
     select
         rules.stat_key as category_key,
+        rules.component,
         rules.weight,
         bridge.stat_key as reported_stat_key
     from rules
@@ -161,7 +162,11 @@ side_denominators as (
         side_totals.side,
         side_totals.category_key,
         case
-            when count(*) = count(reported.score) then sum(parts.weight * reported.score)
+            -- Summed in component order: with three components or more the last digit of
+            -- a floating-point sum depends on the order of its terms (ADR 0046). Every
+            -- denominator has one component today, so this fixes the order before it matters.
+            when count(*) = count(reported.score)
+                then sum(parts.weight * reported.score order by parts.component)
         end as denominator
     from side_totals
     inner join denominator_parts as parts
@@ -189,7 +194,10 @@ period_means as (
         season,
         matchup_period,
         category_key,
-        avg(score) as mean_side_total
+        -- Averaged in matchup and side order: the last digit of a floating-point average
+        -- depends on the order of its terms, and row order changes from build to build
+        -- (#28, R4.13; ADR 0046).
+        avg(score order by matchup_id, side) as mean_side_total
     from side_totals
     where
         is_regular_season

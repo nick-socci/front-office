@@ -1,6 +1,6 @@
 # A group's correlation is the same on every build — requirements
 
-Issue: #115 · Tier: M · Status: draft
+Issue: #115 · Tier: M · Status: approved 2026-10-10
 
 ## Problem
 
@@ -40,16 +40,19 @@ the third aggregate to break the same way (`stddev_pop` in #55, `avg` in #58).
 - **No change to the thresholds** the view judges on (100 matchups, 100 pairs, 0.75,
   0.34 to 0.47): those are ADR 0009 and #94's.
 - **No other value changes.** The two remaining `avg()` calls gain a stated order (R4;
-  owner, 2026-10-10) and keep every value on 2026 to the digit. The `median()` calls are
-  left as they are. No model beyond the view and those two is touched.
+  owner, 2026-10-10), and so does the sum of a rate's denominator (R4.5; owner,
+  2026-10-10, on PR #120), and all keep every value on 2026 to the digit. The
+  `median()` calls are left as they are. No model beyond the view and those two is
+  touched.
 - **No BigQuery variant.** An ordered aggregate is DuckDB syntax, as the ordered sums of
   R4.13 already are; porting them is that sub-project's work.
 
 ## Rabbit holes
 
 - A lint or test that finds every unordered floating-point aggregate in the project →
-  not built. The rule is written down (R3) and the real-season check (R2) catches a
-  breach in any relation, not only this one.
+  not built for `sum`, which cannot be told from a sum of whole counts by reading the
+  SQL. Built for the statistical aggregates, which can (R5; owner, 2026-10-10, on PR
+  #120). The real-season check (R2) is still what catches an unordered sum of doubles.
 - Making `rec_fantasy__category_wins_added` non-empty in CI so the view has rows there →
   not here; it is ADR 0030's follow-up. The view is tested through dbt unit tests, as
   today.
@@ -115,6 +118,31 @@ one depend on row order. Ordered, neither needs the exemption.
   THEN the build SHALL stop and say so: an order with ties leaves the fault in place.
 - R4.4 On the 2026 season every value of both models, and of every relation built on
   them, SHALL be unchanged to the digit.
+- R4.5 THE SYSTEM SHALL sum a rate category's denominator on one side, in
+  `int_fantasy__reported_matchup_margins`, over its components taken in the order of
+  `component`. (Owner, 2026-10-10, on PR #120. Every denominator has one component on
+  2026, so no value can move; the order is fixed before a rate with three or more
+  components exists.)
+
+### R5. A removed order is caught in CI
+
+Owner, 2026-10-10, on PR #120 (review finding F2). The unit tests that pin a last
+digit fail on an unordered aggregate in most runs, not in every one.
+
+- R5.1 IF a model, singular test or macro calls `avg`, `corr`, a standard deviation,
+  a variance, a covariance or a regression aggregate with no `order by` inside its
+  parentheses THEN pytest SHALL fail and name the file, the line and the aggregate.
+- R5.2 THE SYSTEM SHALL pass over such a call whose own line, or the comment lines
+  directly above it, carry `order-exempt:` followed by the reason it is exact in any
+  order.
+- R5.4 THE SYSTEM SHALL take an order only from plain SQL inside the call: not from a
+  Jinja block or expression, which may render nothing, and not from a comment or a
+  string. The exemption of R5.2 is read from a `--` comment and needs a reason with a
+  letter or a digit in it. (Owner, 2026-10-10, on PR #120: two limits are accepted
+  because they fail safe. An exemption in a `/* */` comment is not read, and an order
+  between two Jinja blocks of one call is flagged.)
+- R5.3 THE SYSTEM SHALL NOT check `sum`: whether a sum is floating-point cannot be
+  read from the SQL, and most sums here add whole counts.
 
 ## Expected values
 
@@ -130,11 +158,13 @@ adjusted to.
 | `pairs` / `pairs_unmeasured` | RP 107 / 0, SP 212 / 0, hitter 261 / 0; 580 in all, unchanged | query |
 | `slope` | RP 0.3253481364697923, SP 0.4264251626413973, hitter 0.40030259479853525, unchanged to the digit | query, before against after |
 | `correlation`, after | RP 0.6943751430614886, SP 0.8428935642957394, hitter 0.811007608129785 | query |
-| `correlation`, movement | at most 1e-15 on each row from the value before | query, before against after |
+| `correlation`, movement | in the last digits only: 4.4e-16 (RP), 1.2e-15 (SP) and 4.4e-16 (hitter) from the build of the base commit the change was measured against. Not a bound: the value before is whatever one unordered build gave (owner, 2026-10-10; it read "at most 1e-15" when approved) | query, before against after |
 | `is_judged` / `problem` | SP and hitter judged, RP not; `problem` null on all three, unchanged | query; `values_track_rescored_category_wins` passes |
 | Reordered copy, after the change | 56 relations compared, 56 identical | R2.2 |
 | Reordered copy, before the change | 55 identical, `rec_fantasy__category_wins_by_group` differs | R2.3 |
 | Two builds of the commit | 56 identical, exact, `--strict-columns` | R2.1 |
 | Every other relation, before against after | identical, exact, the two models of R4 and everything built on them included | `compare_warehouses.py` old against new: the one difference is this view's `correlation` |
+| The check of R5 | on the base commit's three models it reports `corr` at line 87, `avg` at line 145 and `avg` at line 192; on the built ones nothing | `unordered_aggregates` on `git show <base>:<model>` |
+| The sum of R4.5 | 9,296 sums on 2026, each of one term; every relation identical before against after it is ordered | task 1; `compare_warehouses.py`, exact |
 | The orders of R4 | each identifies one row within its group: no group of `side_denominator` holds two rows with the same (`matchup_id`, `is_home`), none of `mean_side_total` two with the same (`matchup_id`, `side`) | a query on the real season, task 1 (R4.3) |
 | CI | the view has 0 rows on the fixtures, as today; counts of the gate unchanged but for the unit tests added | `.agentic/gates` |
