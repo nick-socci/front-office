@@ -369,6 +369,87 @@ models:
           arguments:
             combination_of_columns: [platform, league_id, season, scoring_date, fantasy_team_id]
 
+  - name: fct_lineup_decision_categories
+    description: >
+      One row per (matchup, team, scored category): the team's actual total, its total had
+      it set the optimal lineup on every day of the matchup period, the opponent's actual
+      total, and the result of each against the opponent's (#12). THE FIGURES ARE HINDSIGHT
+      OPPORTUNITY, NOT MANAGER SKILL: they are known only after the games. The optimal
+      lineup follows one rule (ADR 0037): a starter who played is replaced only by another
+      player who played, and the lineup maximises the summed day value across all
+      categories, not this category and not the matchup, so a category can come out worse
+      under it than it did. Eligibility is ESPN's as fetched, not of the day (ADR 0038), so
+      a move that was not legal on the day can look legal. The league's limit on pitcher
+      starts is NOT applied. The opponent is held at what it actually did; two teams both
+      re-optimised is a different question and is not asked. Actual figures are those of
+      fct_matchup_category_scores, and results are worded and decided as it does (WIN, LOSS
+      or TIE, compared at 9 decimals, is_lower_better applied). Where any team-day of the
+      side's matchup period is unvalued, optimal_value and optimal_result are null.
+      A RESULT ON A ROW WITH has_unverified_inputs RESTS ON INCOMPLETE PRODUCTION: a missing
+      boxscore or an unresolved player, on either side's matchup or on a day of this side's
+      period.
+    columns:
+      - name: platform
+        data_tests: [not_null]
+      - name: league_id
+        data_tests: [not_null]
+      - name: season
+        data_tests: [not_null]
+      - name: matchup_id
+        data_tests: [not_null]
+      - name: fantasy_team_id
+        data_tests: [not_null]
+      - name: category_key
+        data_tests: [not_null]
+      - name: matchup_period
+        description: The matchup period of the side, from fct_matchup_category_scores.
+        data_tests: [not_null]
+      - name: opponent_team_id
+        description: The side's opponent in the matchup.
+        data_tests: [not_null]
+      - name: category_label
+        description: The category's label, for example HR or ERA.
+        data_tests: [not_null]
+      - name: is_lower_better
+        description: Whether a lower value wins the category.
+        data_tests: [not_null]
+      - name: actual_value
+        description: The team's actual total of the category, the team_value of fct_matchup_category_scores. Null for a rate over a zero denominator.
+      - name: opponent_value
+        description: The opponent's actual total of the category. It is not re-optimised; the opponent is held at what it did.
+      - name: actual_result
+        description: WIN, LOSS or TIE of the actual total against the opponent's, the result of fct_matchup_category_scores. Null where that fact's is.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [WIN, LOSS, TIE]
+      - name: optimal_value
+        description: >
+          The category total had the team set the optimal lineup on every day of the matchup
+          period, hindsight opportunity under the rule of ADR 0037. Null if any team-day of
+          the period is unvalued, and for a rate over a zero denominator. The lineup
+          maximises summed day value across categories, so this can be worse than
+          actual_value.
+      - name: optimal_result
+        description: >
+          WIN, LOSS or TIE of optimal_value against opponent_value, decided as the result of
+          fct_matchup_category_scores is: both rounded to 9 decimals, is_lower_better
+          applied. Null where optimal_value or opponent_value is.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [WIN, LOSS, TIE]
+      - name: has_unverified_inputs
+        description: >
+          Set when fct_matchup_category_scores has it set for the row, or when any team-day
+          of this side's matchup period has it set in fct_lineup_decisions. A result on such
+          a row rests on incomplete production and is reported, not corrected.
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, matchup_id, fantasy_team_id, category_key]
+
 # -----------------------------------------------------------------------------
 # Unit tests (#10). Each gives only the columns the model reads.
 # -----------------------------------------------------------------------------
@@ -2433,3 +2514,181 @@ unit_tests:
         - {fantasy_team_id: 10, scoring_date: "2026-06-02", candidates: 1, has_unverified_inputs: true}
         - {fantasy_team_id: 10, scoring_date: "2026-06-03", candidates: 1, has_unverified_inputs: false}
         - {fantasy_team_id: 11, scoring_date: "2026-06-01", candidates: 1, has_unverified_inputs: true}
+
+  - name: lineup_decision_categories_a_count_and_a_rate_can_change_result
+    description: >
+      Team 1 loses HR (a count, 8 against 10) and AVG (a rate, 0.250 against 0.300) as it played;
+      under the optimal lineup it has 12 HR and 0.350 AVG and wins both. actual_value, opponent_value
+      and actual_result are the fact's untouched. Catches the optimal total not read from the
+      optimal row (the actual row taken instead), an optimal result copied from the actual one,
+      and a comparison against the wrong opponent value.
+    model: fct_lineup_decision_categories
+    given:
+      - input: ref('fct_matchup_category_scores')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 5, category_label: HR, is_lower_better: false, team_value: 8, opponent_value: 10, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 2, category_label: AVG, is_lower_better: false, team_value: 0.25, opponent_value: 0.3, result: LOSS, has_unverified_inputs: false}
+      - input: ref('int_fantasy__lineup_category_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: actual, category_value: 8}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: optimal, category_value: 12}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 2, lineup: actual, category_value: 0.25}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 2, lineup: optimal, category_value: 0.35}
+      - input: ref('fct_lineup_decisions')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-01", has_unverified_inputs: false}
+    expect:
+      rows:
+        - {category_key: 5, actual_value: 8, opponent_value: 10, actual_result: LOSS, optimal_value: 12, optimal_result: WIN}
+        - {category_key: 2, actual_value: 0.25, opponent_value: 0.3, actual_result: LOSS, optimal_value: 0.35, optimal_result: WIN}
+
+  - name: lineup_decision_categories_a_lower_optimal_value_wins_a_lower_is_better_category
+    description: >
+      ERA is lower-is-better: team 1 loses it as played (4.5 against 3.25) and wins it with an optimal 3.0.
+      WHIP: the optimal lineup (1.5 against 1.2) turns a win (1.0) into a loss, which the lineup
+      may do because it maximises the sum over categories. Catches is_lower_better not applied to
+      optimal_result, and an optimal result forced to be no worse than the actual one.
+    model: fct_lineup_decision_categories
+    given:
+      - input: ref('fct_matchup_category_scores')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 47, category_label: ERA, is_lower_better: true, team_value: 4.5, opponent_value: 3.25, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 41, category_label: WHIP, is_lower_better: true, team_value: 1.0, opponent_value: 1.2, result: WIN, has_unverified_inputs: false}
+      - input: ref('int_fantasy__lineup_category_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 47, lineup: actual, category_value: 4.5}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 47, lineup: optimal, category_value: 3.0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 41, lineup: actual, category_value: 1.0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 41, lineup: optimal, category_value: 1.5}
+      - input: ref('fct_lineup_decisions')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-01", has_unverified_inputs: false}
+    expect:
+      rows:
+        - {category_key: 47, actual_result: LOSS, optimal_value: 3.0, optimal_result: WIN}
+        - {category_key: 41, actual_result: WIN, optimal_value: 1.5, optimal_result: LOSS}
+
+  - name: lineup_decision_categories_a_result_is_decided_with_the_rounding
+    description: >
+      Optimal OBP 0.30000000000000004 against the opponent's 0.3 differ only by float noise and
+      are a TIE; 0.10000001 against 0.1 differ at the eighth decimal and are not. A null opponent
+      value gives a null optimal result, as it does in fct_matchup_category_scores. Catches a
+      result decided without the rounding (the noise handed a win), a rounding too coarse, and a
+      null compared as if it were a value.
+    model: fct_lineup_decision_categories
+    given:
+      - input: ref('fct_matchup_category_scores')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 3, category_label: OBP, is_lower_better: false, team_value: 0.3, opponent_value: 0.3, result: TIE, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 9, category_label: SLG, is_lower_better: false, team_value: 0.1, opponent_value: 0.1, result: TIE, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 47, category_label: ERA, is_lower_better: true, team_value: 4.5, opponent_value: null, result: null, has_unverified_inputs: false}
+      - input: ref('int_fantasy__lineup_category_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 3, lineup: actual, category_value: 0.3}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 3, lineup: optimal, category_value: 0.30000000000000004}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 9, lineup: actual, category_value: 0.1}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 9, lineup: optimal, category_value: 0.10000001}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 47, lineup: actual, category_value: 4.5}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 47, lineup: optimal, category_value: 4.0}
+      - input: ref('fct_lineup_decisions')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-01", has_unverified_inputs: false}
+    expect:
+      rows:
+        - {category_key: 3, optimal_value: 0.30000000000000004, optimal_result: TIE}
+        - {category_key: 9, optimal_value: 0.10000001, optimal_result: WIN}
+        - {category_key: 47, optimal_value: 4.0, optimal_result: null}
+
+  - name: lineup_decision_categories_an_unvalued_period_nulls_the_optimal_figures_only
+    description: >
+      The optimal row of HR has no value, because a day of the period is unvalued; the actual
+      figures are present. Expected: optimal_value and optimal_result null, actual_value,
+      opponent_value and actual_result untouched. Catches a null optimal value reported as 0 or
+      as a loss, and the actual figures lost with it.
+    model: fct_lineup_decision_categories
+    given:
+      - input: ref('fct_matchup_category_scores')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 5, category_label: HR, is_lower_better: false, team_value: 8, opponent_value: 10, result: LOSS, has_unverified_inputs: false}
+      - input: ref('int_fantasy__lineup_category_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: actual, category_value: 8}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: optimal, category_value: null}
+      - input: ref('fct_lineup_decisions')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-01", has_unverified_inputs: false}
+    expect:
+      rows:
+        - {category_key: 5, actual_value: 8, opponent_value: 10, actual_result: LOSS, optimal_value: null, optimal_result: null}
+
+  - name: lineup_decision_categories_a_period_with_a_day_nobody_played_keeps_its_values
+    description: >
+      A period with a day on which nobody played (a fct_lineup_decisions row with both values 0,
+      not unvalued). The optimal HR total is 0, present and not null, and loses to 3; the
+      optimal AVG is 0.3, present. Catches an idle day nulling the period's optimal figures, and
+      a zero total read as missing.
+    model: fct_lineup_decision_categories
+    given:
+      - input: ref('fct_matchup_category_scores')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 5, category_label: HR, is_lower_better: false, team_value: 0, opponent_value: 3, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 2, category_label: AVG, is_lower_better: false, team_value: 0.3, opponent_value: 0.3, result: TIE, has_unverified_inputs: false}
+      - input: ref('int_fantasy__lineup_category_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: actual, category_value: 0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: optimal, category_value: 0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 2, lineup: actual, category_value: 0.3}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 2, lineup: optimal, category_value: 0.3}
+      - input: ref('fct_lineup_decisions')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-01", has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-02", has_unverified_inputs: false}
+    expect:
+      rows:
+        - {category_key: 5, optimal_value: 0, optimal_result: LOSS}
+        - {category_key: 2, optimal_value: 0.3, optimal_result: TIE}
+
+  - name: lineup_decision_categories_flag_an_unverified_day_of_the_sides_own_period
+    description: >
+      Matchup 7: team 1 has one team-day flagged in fct_lineup_decisions though the fact's own
+      flag is false, so its row is flagged; team 2, the other side of the same matchup with no
+      flagged day of its own, is not. Matchup 8: only the fact's flag is set, and both rows
+      are flagged. Matchup 9: neither is set and neither row is flagged. Catches an unverified
+      week reported as certain, a flag read from the fact only, and one side's day flagging
+      the other side.
+    model: fct_lineup_decision_categories
+    given:
+      - input: ref('fct_matchup_category_scores')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 5, category_label: HR, is_lower_better: false, team_value: 8, opponent_value: 10, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 2, opponent_team_id: 1, category_key: 5, category_label: HR, is_lower_better: false, team_value: 10, opponent_value: 8, result: WIN, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, matchup_period: 3, fantasy_team_id: 3, opponent_team_id: 4, category_key: 5, category_label: HR, is_lower_better: false, team_value: 8, opponent_value: 10, result: LOSS, has_unverified_inputs: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, matchup_period: 3, fantasy_team_id: 4, opponent_team_id: 3, category_key: 5, category_label: HR, is_lower_better: false, team_value: 10, opponent_value: 8, result: WIN, has_unverified_inputs: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, matchup_period: 3, fantasy_team_id: 5, opponent_team_id: 6, category_key: 5, category_label: HR, is_lower_better: false, team_value: 8, opponent_value: 10, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, matchup_period: 3, fantasy_team_id: 6, opponent_team_id: 5, category_key: 5, category_label: HR, is_lower_better: false, team_value: 10, opponent_value: 8, result: WIN, has_unverified_inputs: false}
+      - input: ref('int_fantasy__lineup_category_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: optimal, category_value: 9}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, category_key: 5, lineup: optimal, category_value: 9}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 3, category_key: 5, lineup: optimal, category_value: 9}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 4, category_key: 5, lineup: optimal, category_value: 9}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 5, category_key: 5, lineup: optimal, category_value: 9}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 6, category_key: 5, lineup: optimal, category_value: 9}
+      - input: ref('fct_lineup_decisions')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-01", has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-02", has_unverified_inputs: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, scoring_date: "2026-06-01", has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, scoring_date: "2026-06-02", has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 3, scoring_date: "2026-06-01", has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 4, scoring_date: "2026-06-01", has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 5, scoring_date: "2026-06-01", has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 6, scoring_date: "2026-06-01", has_unverified_inputs: false}
+    expect:
+      rows:
+        - {fantasy_team_id: 1, has_unverified_inputs: true}
+        - {fantasy_team_id: 2, has_unverified_inputs: false}
+        - {fantasy_team_id: 3, has_unverified_inputs: true}
+        - {fantasy_team_id: 4, has_unverified_inputs: true}
+        - {fantasy_team_id: 5, has_unverified_inputs: false}
+        - {fantasy_team_id: 6, has_unverified_inputs: false}
