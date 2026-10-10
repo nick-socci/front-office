@@ -4,6 +4,8 @@ The pure checks take strings and dicts, so they need no database; one end-to-end
 the examples against a real temporary DuckDB file.
 """
 
+from pathlib import Path
+
 import duckdb
 
 import check_examples as ce
@@ -342,3 +344,33 @@ def test_an_example_as_stated_has_no_problems(tmp_path):
     }
     assert ce.check_expectations({"q": sql}, expectations) == []
     assert run_stated(tmp_path, {"q": sql}, expectations) == []
+
+
+EXAMPLES_DIR = Path(__file__).resolve().parents[2] / "docs/examples"
+
+
+def test_the_committed_expectations_cover_the_examples():
+    """Catches the committed file drifting from the examples, and the roster entry no
+    longer holding a batting line and a pitching line."""
+    expectations = ce.load_expectations(EXAMPLES_DIR / "expected_on_fixtures.yml")
+    examples = {p.stem: p.read_text() for p in EXAMPLES_DIR.glob("*.sql")}
+    assert ce.check_expectations(examples, expectations) == []
+    held = expectations["roster_day_query"]["rows_with_a_value"]
+    for column in ("at_bats", "innings_pitched"):
+        assert isinstance(held[column], int) and held[column] > 0
+
+
+def test_the_roster_example_defaults_to_the_committed_values():
+    """Catches a default changed by accident.
+
+    This is the only check CI can make on the defaults, and it compares the file with a
+    copy of itself: CI holds no real league, so nothing runs the defaults against data.
+    """
+    text = (EXAMPLES_DIR / "roster_day_query.sql").read_text()
+    code = " ".join(ce._without_comments(text).split())
+    for expression in (
+        "coalesce(getvariable('league_id'), '73677')",
+        "coalesce(getvariable('team_id'), 6)",
+        "coalesce(getvariable('on_date'), date '2026-07-02')",
+    ):
+        assert expression in code
