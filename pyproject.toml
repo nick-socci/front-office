@@ -24,6 +24,8 @@ dev = [
     "pyyaml>=6.0.3",
     "types-pyyaml>=6.0.12.20260906",
     "scipy>=1.18.1",
+    "sqlfluff==4.4.0",
+    "sqlfluff-templater-dbt==4.4.0",
 ]
 
 [build-system]

@@ -398,3 +398,27 @@ not satisfy it.
 
 ## Amendments
 
+- **2026-10-10, during the build (task 1). The baseline is the one measured after #113.**
+  The expected values were measured at `263923d`. #113 merged before the build started
+  and added a model (`rec_espn__register_rows`), four data tests and two unit tests. The
+  counts the build is held to are therefore those recorded on #13 at `0df7e6e`: 57
+  models; fixtures PASS=648 WARN=3 of 651; real season PASS=650 WARN=1 of 651; 118 SQL
+  files to lint; reconciliation 7 relations. R2.5's rule is unchanged: the same counts
+  before and after. Nothing in scope moves.
+- **2026-10-10, during the build (task 1). The real season is built into copies.** §1 and
+  tasks 1 and 8 say to build `data/warehouse.duckdb` and copy it. The owner's file is
+  copied first instead, and the base commit is built into the copy (the *before* file);
+  the *after* file is a second copy built at the reformatted commit. Both start from the
+  same raw table and are compared as §1 says. The owner's warehouse is not written by
+  the build. The proof is the same; only which file holds each side changes.
+- **2026-10-10, during the build (task 3). No file is skipped for its size.** §1's
+  `.sqlfluff` left sqlfluff's `large_file_skip_byte_limit` at its default of 20,000
+  bytes, under which `fct_transaction_impact.sql` (26,074 bytes) is skipped with a
+  warning and a zero exit. R2.1 says every file. The setting is `0` in `.sqlfluff`, with
+  its reason. The spec's own measurements were made with the limit off, so they stand.
+- **2026-10-10, during the build (task 3). The lint command names the fixture
+  warehouse.** §1 left open whether the dbt templater opens the warehouse. It does: run
+  from the repository root, where the profile's `ci.duckdb` is a relative path, it
+  creates an empty `ci.duckdb` in the root. The command in the gates, CI and `AGENTS.md`
+  is therefore `FO_CI_DUCKDB_PATH=dbt/ci.duckdb uv run sqlfluff lint dbt/models
+  dbt/tests`, which points it at the fixture warehouse the earlier step built.
