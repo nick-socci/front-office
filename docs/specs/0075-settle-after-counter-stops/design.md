@@ -246,3 +246,9 @@ dicts and the fake transport already used there.
   within a run, and its test is a guard on that, not a proof of the defect.
 - 2026-10-10, build, task 4. The design gave the audit clause with a leading ellipsis.
   It is placed after the sample of periods, so the line up to the sample is today's.
+- 2026-10-10, owner, on PR #121 (review round 1, F1). A period the run skipped as
+  settled can be unsettled by a later fetch of the same run that raises the greatest
+  counter; the loop does not go back for it, and it is fetched on the next run. Accepted
+  and recorded in ADR 0047's consequences, with a test that pins the one-run delay. The
+  alternative, a second pass within the run, was not taken: the case needs a counter that
+  stood for days and then moved, which has not been observed.

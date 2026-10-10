@@ -236,7 +236,7 @@ Written with Claude Code, deliberately and openly. What that meant in practice:
 - **I corrected the model too.** Stat 34 was labelled OUTS from the upstream library; in
   my league ESPN displays it as IP. The seed now carries both.
 
-Local validation on 2026-10-10: 888 pytest tests passed. On the real 2026 season dbt
+Local validation on 2026-10-10: 889 pytest tests passed. On the real 2026 season dbt
 found 57 models, 437 data tests, 151 unit tests and 7 seeds, and of the 651 it ran, 650
 passed and one warned (the id crosswalk's coverage check, 9 rows). SQL is linted with
 sqlfluff: 118 files, no violation and no exemption comment. CI runs all of it on the

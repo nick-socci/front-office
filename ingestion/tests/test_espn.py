@@ -876,6 +876,26 @@ def test_backfill_espn_exits_non_zero_and_names_the_unproven_periods(tmp_path, m
     assert "unproven scoring periods: [1, 2]" in result.output
 
 
+def test_a_period_unsettled_by_a_later_fetch_of_the_same_run_is_fetched_on_the_next(zone):
+    """Pins an accepted cost (ADR 0047; PR #121 review, F1): a period skipped as settled is not
+    revisited when a later fetch of the same run shows the counter had not stopped.
+
+    Period 1 reads counter 2 on days 0 and 7, so the calendar settles it. On day 8 the counter
+    reads 10: the run skips period 1, then period 2's capture makes 2 a lagging status, which
+    is never extended. Period 1 is fetched one run late, not never. Catches that delay growing
+    past one run, and a change that revisits skipped periods going unnoticed in the ADR.
+    """
+    _run_at(zone, final=2, counter=2, at=dt.timedelta(0))
+    _run_at(zone, final=2, counter=2, at=dt.timedelta(days=7))
+    assert espn_rosters.needs_fetch(1, evidence=evidence_of(zone)) is False
+    _, requested = _run_at(zone, final=2, counter=10, at=dt.timedelta(days=8))
+    assert requested == [2]
+    assert espn_rosters.needs_fetch(1, evidence=evidence_of(zone)) is True
+    _, requested = _run_at(zone, final=2, counter=10, at=dt.timedelta(days=9))
+    assert requested == [1]
+    assert espn_rosters.needs_fetch(1, evidence=evidence_of(zone)) is False
+
+
 def test_backfill_espn_exits_zero_when_only_closed_periods_are_in_the_window(tmp_path, monkeypatch):
     """Catches the re-check window treated as a failure (R6.2)."""
     result = _drive_backfill_espn(tmp_path, monkeypatch, settings_latest=3, roster_latest=3)
