@@ -1,6 +1,6 @@
 # 0037. The optimal lineup replaces a played starter only with a player who played
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0012-lineup-decisions](../specs/0012-lineup-decisions/design.md) · Issue: #12
 

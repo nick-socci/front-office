@@ -1,6 +1,6 @@
 # 0039. The optimal lineup is solved in a dbt Python model, with SciPy
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0012-lineup-decisions](../specs/0012-lineup-decisions/design.md) · Issue: #12
 

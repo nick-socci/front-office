@@ -499,3 +499,20 @@ pytest, `ingestion/tests/test_lineup_solver.py`: the cases of R6.1.
 | owner, 2026-10-09 | #60's build (PR #106) merged before this spec was approved | Changed: the risk that it would not be is removed; the spec is rebased onto it |
 
 ## Amendments
+
+- **2026-10-09, during the build (task 11). The 2026 eligibility is not all of one date.**
+  ADR 0038 and this spec say that for 2026 the eligibility is that of 2026-09-26.
+  Measured on the built options: scoring periods 1 to 178 (56,193 options) carry a fetch
+  time of 2026-09-26, and periods 179 and 180 (2026-09-19 and 2026-09-20, 766 options)
+  one of 2026-10-07, because their rosters were captured again once settled. Every
+  team-day has exactly one fetch time. The decision is unchanged, and is what makes this
+  visible: eligibility is ESPN's as fetched and `eligibility_fetched_at` is carried on
+  every row. Only the sentence of fact moves, so no ADR is superseded; the headers of
+  `int_fantasy__lineup_options` and `fct_lineup_decisions` state both dates, and the
+  mart's description names no date, since it is read for any league. The expected values
+  were measured on these same captures and do not move.
+- **2026-10-09, during the build (tasks 6 and 9). Two checks are stricter than written.**
+  `solve_team_day` also raises on a duplicate (player, slot) option, which R2.4 and the
+  options' grain already rule out upstream. R5.3's test is a full comparison: it also
+  fails on an `actual` row that `fct_matchup_category_scores` lacks. Neither changes a
+  requirement or a number.

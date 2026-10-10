@@ -8,6 +8,8 @@ front_office:
       type: duckdb
       path: "{{ env_var('FO_DUCKDB_PATH', '../data/warehouse.duckdb') }}"
       threads: 4
+      # Python models import the solver from here; resolved against the working directory, so run dbt from dbt/.
+      module_paths: ["python_modules"]
 
     # CI: a throwaway database built from the committed fixture landing zone.
     # Same SQL, tiny anonymised data, no credentials.
@@ -15,3 +17,5 @@ front_office:
       type: duckdb
       path: "{{ env_var('FO_CI_DUCKDB_PATH', 'ci.duckdb') }}"
       threads: 4
+      # Python models import the solver from here; resolved against the working directory, so run dbt from dbt/.
+      module_paths: ["python_modules"]
