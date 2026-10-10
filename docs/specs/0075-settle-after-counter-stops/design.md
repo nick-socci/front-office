@@ -97,9 +97,9 @@ All in `ingestion/src/front_office/espn/rosters.py` and `audit.py`.
 ```python
 @dataclass(frozen=True)
 class PeriodEvidence:
-    latest: int                    # greatest counter any capture of the period carries
-    extended: int                  # R1.1; equals `latest` unless a counter was seen unchanged
-    unchanged: int | None = None   # the counter behind `extended` when extended > latest
+    latest: int  # greatest counter any capture of the period carries
+    extended: int  # R1.1; equals `latest` unless a counter was seen unchanged
+    unchanged: int | None = None  # the counter behind `extended` when extended > latest
 ```
 
 It is built from *sightings*, one per capture with a usable counter:
