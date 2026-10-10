@@ -1005,6 +1005,65 @@ def test_no_recheck_line_when_every_closed_period_is_settled(zone):
     assert "re-check window" not in details(audit(zone), Severity.INFO)
 
 
+def a_season_whose_counter_stopped(tmp_path, *, last_seen, final_twice=False):
+    """The 2022 shape: final 182, the counter resting at 183, rosters landed by runs a day apart.
+
+    Periods 1-175 are settled by one capture. Periods 176-181 were captured on the first
+    day the counter read 183 and again `last_seen` days later; period 182 only on the later
+    day, unless `final_twice`.
+    """
+    zone = LandingZone(root=tmp_path / "raw")
+    first, later = "20221004T100000Z", f"202210{4 + last_seen:02d}T100000Z"
+    land_settings(zone, latest=183, final=182, fetched_at=later)
+    for period in range(1, 176):
+        land_roster(zone, period, fetched_at=first, source_status=status_of(183, 182))
+    for period in range(176, 182):
+        land_roster(zone, period, fetched_at=first, source_status=status_of(183, 182))
+        land_roster(zone, period, fetched_at=later, source_status=status_of(183, 182))
+    if final_twice:
+        land_roster(zone, 182, fetched_at=first, source_status=status_of(183, 182))
+    land_roster(zone, 182, fetched_at=later, source_status=status_of(183, 182))
+    _, captures = check_landing(zone)
+    return details(check_espn(captures, season=SEASON, opening_day=None), Severity.INFO)
+
+
+def test_the_recheck_line_says_which_periods_wait_on_the_calendar_and_for_what_counter(tmp_path):
+    """Catches a re-check line that cannot say why a period is still fetched (R2.2).
+
+    Three days after the counter first read 183 the extended counter is 186: 176-178 are
+    settled, 179-181 wait on the calendar, and 182, seen on one day only, is listed but not
+    counted among them.
+    """
+    info = a_season_whose_counter_stopped(tmp_path, last_seen=3)
+    assert (
+        "4 closed roster period(s) inside the 7-period re-check window; "
+        "the next run fetches them again; e.g. 179, 180, 181 and 1 more; "
+        "3 of them wait on the calendar: ESPN's counter has read 183 "
+        "across captures a day or more apart"
+    ) in info
+
+
+def test_no_recheck_line_once_the_calendar_has_settled_the_last_periods(tmp_path):
+    """Catches a re-check line outliving the week the calendar was waited for (R2.3)."""
+    info = a_season_whose_counter_stopped(tmp_path, last_seen=7, final_twice=True)
+    assert "re-check window" not in info
+
+
+def test_a_season_with_only_ordinary_rechecks_keeps_todays_line_exactly(tmp_path):
+    """Catches the new clause leaking into a season whose counter kept moving (R2.2)."""
+    zone = LandingZone(root=tmp_path / "raw")
+    land_settings(zone, latest=186, final=180)
+    land_settings(zone, latest=188, final=180, fetched_at="20260928T160000Z")
+    for period in range(1, 181):
+        land_roster(zone, period)
+    _, captures = check_landing(zone)
+    info = [f.detail for f in check_espn(captures, season=SEASON, opening_day=None)]
+    assert (
+        "2 closed roster period(s) inside the 7-period re-check window; "
+        "the next run fetches them again; e.g. 179, 180"
+    ) in info
+
+
 def test_a_finished_season_warns_of_a_roster_never_captured_after_the_final_period(zone):
     """Catches a finished season left without its closing refresh unnoticed (R6.4)."""
     # Period 1 is closed by a capture that records latest 2, which is not past the final period 2.

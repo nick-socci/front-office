@@ -4,6 +4,7 @@ No test here touches the network or reads a real .env. The credential tests asse
 failure message, because an expired-cookie failure is the one a human has to act on.
 """
 
+import datetime as dt
 import json
 from pathlib import Path
 
@@ -379,7 +380,8 @@ def test_a_newer_capture_with_a_null_status_does_not_unprove_the_period():
 def test_the_highest_evidence_across_captures_and_periods_is_kept_per_period():
     """Catches evidence mixed up between periods, or the last capture winning over the best."""
     metas = [_meta(100, **_own(105)), _meta(100, **_own(103)), _meta(101, **_own(102))]
-    assert espn_rosters.settled_through(metas, {}) == {100: 105, 101: 102}
+    evidence = espn_rosters.settled_through(metas, {})
+    assert {period: found.latest for period, found in evidence.items()} == {100: 105, 101: 102}
 
 
 @pytest.mark.parametrize(
@@ -438,6 +440,117 @@ def test_a_period_with_no_captures_is_neither_closed_nor_settled():
     """Catches 'never landed' needing a separate branch from 'no evidence'."""
     assert not espn_rosters.is_closed(7, {})
     assert not espn_rosters.is_settled(7, {})
+
+
+# -- the evidence: a counter that stopped is extended by the calendar (ADR 0047) ----------
+
+BASE = dt.datetime(2026, 10, 1, 6, 0, 0, tzinfo=dt.UTC)
+
+
+def _stamp(offset):
+    """The run stamp of a run `offset` after BASE, in the form the sidecars carry."""
+    return (BASE + offset).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _seen(period, counter, offset):
+    """An own-status sidecar of `period` whose counter read `counter`, `offset` after BASE."""
+    return _meta(period, stamp=_stamp(offset), **_own(counter))
+
+
+def test_two_captures_of_one_counter_less_than_a_day_apart_extend_nothing():
+    """Catches a span rounded up: 23h59m is not a day, so the answer stays ADR 0018's (R1.3)."""
+    metas = [
+        _seen(100, 105, dt.timedelta(0)),
+        _seen(100, 105, dt.timedelta(hours=23, minutes=59)),
+    ]
+    evidence = espn_rosters.settled_through(metas, {})[100]
+    assert evidence == espn_rosters.PeriodEvidence(latest=105, extended=105)
+    assert evidence.unchanged is None
+
+
+def test_a_counter_seen_unchanged_extends_by_whole_days_and_names_the_counter():
+    """Catches a span rounded down to nothing, or `unchanged` left unset when it applies (R1.1)."""
+    metas = [
+        _seen(100, 105, dt.timedelta(0)),
+        _seen(100, 105, dt.timedelta(hours=24)),
+        _seen(100, 105, dt.timedelta(hours=72, minutes=1)),
+    ]
+    evidence = espn_rosters.settled_through(metas, {})[100]
+    assert evidence == espn_rosters.PeriodEvidence(latest=105, extended=108, unchanged=105)
+
+
+def test_a_counter_that_does_not_close_the_period_is_never_extended():
+    """Catches extension leaking into the closure of a period still open (R1.4, R1.5)."""
+    metas = [_seen(100, 100, dt.timedelta(0)), _seen(100, 100, dt.timedelta(days=30))]
+    evidence = espn_rosters.settled_through(metas, {})
+    assert evidence[100] == espn_rosters.PeriodEvidence(latest=100, extended=100)
+    assert not espn_rosters.is_closed(100, evidence)
+    assert not espn_rosters.is_settled(100, evidence)
+
+
+def test_a_counter_that_closes_the_period_and_stood_for_a_month_settles_it():
+    """Catches a stopped counter that closes a period never settling it (R1.4, R1.5)."""
+    metas = [_seen(100, 101, dt.timedelta(0)), _seen(100, 101, dt.timedelta(days=30))]
+    evidence = espn_rosters.settled_through(metas, {})
+    assert espn_rosters.is_closed(100, evidence)
+    assert espn_rosters.is_settled(100, evidence)
+
+
+def test_closure_is_judged_by_the_greatest_counter_and_never_by_the_extended_one():
+    """Catches `is_closed` reading `extended`: here extended passes 100 and latest does not."""
+    evidence = {100: espn_rosters.PeriodEvidence(latest=100, extended=140, unchanged=100)}
+    assert not espn_rosters.is_closed(100, evidence)
+
+
+def test_a_legacy_and_an_own_status_capture_of_one_counter_a_week_apart_extend_it():
+    """Catches the legacy path left out of the sightings (R1.6)."""
+    legacy_stamp = _stamp(dt.timedelta(0))
+    metas = [_meta(100, stamp=legacy_stamp), _seen(100, 103, dt.timedelta(days=7))]
+    evidence = espn_rosters.settled_through(metas, {legacy_stamp: 103})
+    assert evidence[100] == espn_rosters.PeriodEvidence(latest=103, extended=110, unchanged=103)
+    assert espn_rosters.is_settled(100, evidence)
+
+
+def test_a_capture_with_no_usable_counter_counts_for_nothing():
+    """Catches a null counter taking part in a span, or in `top` (R1.6)."""
+    metas = [
+        _seen(100, 103, dt.timedelta(0)),
+        _meta(
+            100,
+            stamp=_stamp(dt.timedelta(days=30)),
+            source_status={"latest_scoring_period": None},
+        ),
+    ]
+    evidence = espn_rosters.settled_through(metas, {})
+    assert evidence[100] == espn_rosters.PeriodEvidence(latest=103, extended=103)
+
+
+def test_a_counter_with_an_unreadable_stamp_still_closes_and_settles_and_warns(caplog):
+    """Catches a bad stamp discarding a usable counter, or passing without a word (R1.6)."""
+    metas = [_meta(100, stamp="not-a-stamp", **_own(108))]
+    with caplog.at_level("WARNING"):
+        evidence = espn_rosters.settled_through(metas, {})
+    assert espn_rosters.is_closed(100, evidence)
+    assert espn_rosters.is_settled(100, evidence)
+    assert any("period 100" in record.getMessage() for record in caplog.records)
+
+
+def test_an_unreadable_stamp_is_left_out_of_the_span_and_not_counted_as_a_day():
+    """Catches an unparsed stamp being treated as the epoch, which would span years (R1.6)."""
+    metas = [_seen(100, 105, dt.timedelta(0)), _meta(100, stamp="garbage", **_own(105))]
+    evidence = espn_rosters.settled_through(metas, {})
+    assert evidence[100] == espn_rosters.PeriodEvidence(latest=105, extended=105)
+
+
+def test_a_counter_another_response_has_exceeded_is_a_lagging_status_and_not_extended():
+    """Catches a lagging status taken for a stopped counter (R1.9)."""
+    lagging = [_seen(100, 107, dt.timedelta(0)), _seen(100, 107, dt.timedelta(hours=48))]
+    other = _seen(101, 109, dt.timedelta(hours=48))
+    with_top = espn_rosters.settled_through([*lagging, other], {})
+    assert with_top[100] == espn_rosters.PeriodEvidence(latest=107, extended=107)
+    assert not espn_rosters.is_settled(100, with_top)
+    alone = espn_rosters.settled_through(lagging, {})
+    assert espn_rosters.is_settled(100, alone)
 
 
 # -- the fetch path: transitions, outages, recovery ----------------------------------------
@@ -599,7 +712,7 @@ def test_only_a_settings_payload_with_a_legacy_roster_stamp_is_read(zone, monkey
         monkeypatch.setattr(Path, name, guard(getattr(Path, name)))
     evidence = evidence_of(zone)
     assert reads, "the legacy run's settings payload is the one that is read"
-    assert evidence == {100: 300, 101: 300}
+    assert {period: found.latest for period, found in evidence.items()} == {100: 300, 101: 300}
 
 
 def test_a_newer_capture_with_a_null_status_leaves_a_settled_period_skipped(zone):
@@ -636,6 +749,96 @@ def test_a_finished_season_with_every_period_settled_fetches_and_reports_nothing
     summary, requested = Season(zone).run(188)
     assert requested == []
     assert (summary.skipped, summary.unproven) == (180, [])
+
+
+# -- the fetch path: a counter that stops (ADR 0047) ---------------------------------------
+
+
+def _run_at(zone, *, final, counter, at):
+    """One backfill run stamped `at` after BASE whose responses all say `counter`."""
+    requested = []
+
+    def handler(request):
+        requested.append(int(request.url.params["scoringPeriodId"]))
+        status = {"finalScoringPeriod": final, "latestScoringPeriod": counter}
+        return httpx.Response(200, json={"teams": [], "status": status})
+
+    summary = espn_rosters.backfill_rosters(
+        zone=zone,
+        client=make_client(handler),
+        season=SEASON,
+        league_id=LEAGUE_ID,
+        status={"latestScoringPeriod": counter, "finalScoringPeriod": final},
+        fetched_at=_stamp(at),
+    )
+    return summary, requested
+
+
+# Seasons of this league whose final period was MLB's last day: the counter rests at final + 1.
+STOPPED_SHAPES = [(182, 183), (186, 187), (195, 196)]
+
+
+@pytest.mark.parametrize(("final", "rest"), STOPPED_SHAPES, ids=["2022", "2020", "2024"])
+def test_the_last_periods_settle_a_week_after_the_counter_stops_run_by_run(zone, final, rest):
+    """Catches the defect: under ADR 0018 alone the last seven periods are fetched on every run.
+
+    One run a day from the day after period `rest - 7`; the counter moves a day at a time
+    until `rest`, first read on run `T` (day 0), and stays there. A period `p` from
+    `rest - 8` is fetched through run `T + max(0, p + 8 - rest)` days and skipped after.
+    """
+    fetched_on = {}  # day relative to T -> periods requested
+    for day in range(-6, 14):
+        counter = min(rest + day, rest)
+        _, requested = _run_at(zone, final=final, counter=counter, at=dt.timedelta(days=day))
+        fetched_on[day] = set(requested)
+    for period in range(rest - 8, final + 1):
+        last_day = max(0, period + 8 - rest)
+        fetched_days = [day for day in range(0, 14) if period in fetched_on[day]]
+        assert fetched_days == list(range(0, last_day + 1)), period
+    # the design's worked cases: the first of the last seven on T+1d, the final period on T+7d
+    assert max(day for day in range(14) if rest - 7 in fetched_on[day]) == 1
+    assert max(day for day in range(14) if final in fetched_on[day]) == 7
+    # the final period: day -1 (counter 182 for the 2022 shape, still current) and T..T+7d
+    assert [day for day in range(-6, 14) if final in fetched_on[day]] == [-1, *range(8)]
+
+
+@pytest.mark.parametrize(("final", "rest"), STOPPED_SHAPES, ids=["2022", "2020", "2024"])
+def test_a_finished_season_landed_in_one_run_settles_its_last_periods_within_a_week(
+    zone, final, rest
+):
+    """Catches an off-by-one in the span or the comparison, and a past season settling too soon.
+
+    Periods below `rest - 7` settle at once; period `p` of the last seven settles on the first
+    run at least `p + 8 - rest` days after the landing.
+    """
+    summary, requested = _run_at(zone, final=final, counter=rest, at=dt.timedelta(0))
+    assert requested == list(range(1, final + 1))
+    assert summary.unproven == []
+    last_seven = list(range(rest - 7, final + 1))
+    _, requested = _run_at(zone, final=final, counter=rest, at=dt.timedelta(hours=6))
+    assert requested == last_seven
+    _, requested = _run_at(zone, final=final, counter=rest, at=dt.timedelta(days=6))
+    assert requested == last_seven
+    _, requested = _run_at(zone, final=final, counter=rest, at=dt.timedelta(days=7))
+    assert requested == [final]
+    _, requested = _run_at(zone, final=final, counter=rest, at=dt.timedelta(days=8))
+    assert requested == []
+
+
+def test_a_period_that_a_run_completes_the_week_of_is_proven_and_skipped_next_time(zone):
+    """Catches in-run evidence not rebuilt: the period would be reported unproven (R1.7)."""
+    land_roster(zone, period=100, source_status={"latest_scoring_period": None})
+    summary, requested = _run_at(zone, final=100, counter=101, at=dt.timedelta(0))
+    assert 100 in requested
+    assert 100 not in summary.unproven
+    for day in range(1, 7):
+        _, requested = _run_at(zone, final=100, counter=101, at=dt.timedelta(days=day))
+        assert 100 in requested
+    summary, requested = _run_at(zone, final=100, counter=101, at=dt.timedelta(days=7))
+    assert 100 in requested  # this capture completes the week: 101 seen on days 0 and 7
+    assert 100 not in summary.unproven
+    _, requested = _run_at(zone, final=100, counter=101, at=dt.timedelta(days=8))
+    assert 100 not in requested
 
 
 # -- the command ---------------------------------------------------------------------------
