@@ -64,14 +64,19 @@ README's claim false.
 - Bad / accepted cost: `order by` inside `sum` or `corr` is DuckDB syntax. BigQuery has
   no equivalent for these aggregates, so the port needs another way to fix the order
   (a pre-sorted array, or exact decimal arithmetic). That was already true of R4.13.
-- Bad / accepted cost: nothing in CI enforces the rule. A breach is caught when two real
-  builds are compared, as #115 was.
+- Good: a test reads the SQL and fails on `avg`, `corr`, a standard deviation, a variance, a
+  covariance or a regression aggregate with no `order by` and no `order-exempt:`
+  comment (spec 0115, R5).
+- Bad / accepted cost: nothing in CI enforces the rule for `sum`, which cannot be told
+  from a sum of whole counts by reading the SQL. An unordered sum of doubles is caught
+  when two real builds are compared, as #115 was.
 - The two remaining `avg()` calls (`int_fantasy__category_scales`,
   `int_fantasy__reported_matchup_margins`) could have claimed the exemption on 2026,
   where their inputs are whole numbers no larger than 369. They are ordered instead
   (owner, 2026-10-10): the exemption held for one league's categories, and an order
   costs nothing there. An exemption is for an aggregate that is exact by what it is,
   not by what one season's data happens to hold.
-- Follow-ups: `sum(parts.weight * reported.score)` in
-  `int_fantasy__reported_matchup_margins` has no stated order. Whether it can depend on
-  one is read in the build of #115 and put to the owner.
+- `sum(parts.weight * reported.score)` in `int_fantasy__reported_matchup_margins` had no
+  stated order and one term in every sum on 2026. It is ordered by component too (owner,
+  2026-10-10), for the same reason as the averages.
+- Follow-ups: none.

@@ -77,7 +77,7 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
   grain's key inside its parentheses: the last digit depends on row order, row order
   changes between builds, and warehouses are compared exactly. Broken three times
   (`stddev_pop`, `avg`, `corr`); see ADR 0046. Exempt only if exact: integer-valued inputs
-  summing below 2^53, said in a comment.
+  whose magnitudes sum below 2^53, said in a comment starting `order-exempt:`.
 
 ## How work is done here
 
