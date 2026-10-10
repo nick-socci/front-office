@@ -17,10 +17,17 @@ below 2^53) says so with ``order-exempt:`` and the bound, in a comment on its ow
 the lines directly above it. The marker alone, or the marker in a string, exempts nothing.
 
 This reads SQL text; it does not parse SQL or render Jinja. It knows comments (``--``,
-``/* */``, ``{# #}``) and string literals, and it will not take an order from inside a
-``{% %}`` block, since a branch may render nothing. It does not follow a macro that builds an
-aggregate from pieces, nor a dollar-quoted string. It is a tripwire for the ordinary way of
-writing these calls, which is the way all of them here are written.
+``/* */``, ``{# #}``) and string literals. It takes an order only from plain SQL: not from
+inside a ``{% %}`` block or a ``{{ }}`` expression, either of which may render nothing. It
+does not follow a macro that builds an aggregate from pieces, nor a dollar-quoted string. It
+is a tripwire for the ordinary way of writing these calls, which is the way all of them here
+are written.
+
+Two limits are accepted because they fail safe, flagging SQL that is fine and never passing
+SQL that is not (owner, 2026-10-10): the exemption is read from a ``--`` comment, not from a
+``/* */`` one; and an order has to stand outside all of a call's Jinja blocks, so one written
+between two blocks, or once in each branch of an ``if``, is flagged. A rule that could not be
+fooled would read the SQL dbt compiles, parsed; this one does not try to be that.
 """
 
 import re
@@ -45,6 +52,7 @@ _EXEMPTION = re.compile(r"order-exempt:.*[A-Za-z0-9]")
 
 
 _NOT_NEWLINE = re.compile(r"[^\n]")
+_JINJA_EXPRESSION = re.compile(r"\{\{.*?\}\}", re.DOTALL)
 
 
 def _code(sql: str) -> str:
@@ -91,8 +99,8 @@ def _code(sql: str) -> str:
 
 def _arguments(code: str, start: int) -> str:
     """The text between the parenthesis that opens at `start - 1` and the one closing it, with
-    nested parentheses emptied and everything from the first `{%` to the last `%}` left out:
-    what is left is the call's own, in every rendering."""
+    nested parentheses emptied, everything from the first `{%` to the last `%}` left out, and
+    every `{{ }}` expression too: what is left is the call's own, in every rendering."""
     depth, own = 1, []
     for char in code[start:]:
         if char == "(":
@@ -105,7 +113,10 @@ def _arguments(code: str, start: int) -> str:
             own.append(char)
     text = "".join(own)
     first, last = text.find("{%"), text.rfind("%}")
-    return text if first < 0 or last < first else text[:first] + " " + text[last + 2 :]
+    if 0 <= first < last:
+        text = text[:first] + " " + text[last + 2 :]
+    # What a {{ }} expression renders is not known here either: an order has to be SQL.
+    return _JINJA_EXPRESSION.sub(" ", text)
 
 
 def _line_comment(line: str) -> str | None:
@@ -290,6 +301,27 @@ def test_an_order_that_only_a_jinja_branch_supplies_does_not_count() -> None:
     assert unordered_aggregates(outside) == []
     expression = "select avg({{ column }} order by {{ key }}) from {{ ref('t') }}"
     assert unordered_aggregates(expression) == []
+    # nor from inside a {{ }} expression, which can render empty just as well
+    inline = 'select avg(score {{ "order by game_id" if false else "" }}) from t'
+    assert unordered_aggregates(inline) == [(1, "avg")]
+
+
+def test_the_limits_that_fail_safe_are_the_ones_accepted() -> None:
+    """Pins two accepted limits (owner, 2026-10-10, PR #120): each flags SQL that is in fact
+    ordered or exempt, so the author rewrites it; neither lets an unordered call through.
+    Catches either one changing unnoticed.
+
+    An exemption is read from a `--` comment only, not a block comment. An order between two
+    separate Jinja blocks is left out with them: it has to stand outside all of the call's
+    Jinja blocks.
+    """
+    in_a_block_comment = "select avg(x) /* order-exempt: whole numbers below 2^53 */ from t"
+    assert unordered_aggregates(in_a_block_comment) == [(1, "avg")]
+    between_blocks = (
+        "select avg({% if a %} x {% else %} y {% endif %} order by k"
+        " {% if b %}, j {% endif %}) from t"
+    )
+    assert unordered_aggregates(between_blocks) == [(1, "avg")]
 
 
 def test_names_that_only_contain_an_aggregates_name_are_not_flagged() -> None:

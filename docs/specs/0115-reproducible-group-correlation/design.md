@@ -246,3 +246,12 @@ known; see Open questions.
     in 4 of 4 with the order. `denominator_parts` carries `component` for it;
     (`platform`, `stat_key`, `part`, `component`) is unique in
     `int_fantasy__stat_components`, so the order has no ties.
+- 2026-10-10, owner, on PR #120, after five review rounds of the check of R5. Each round
+  found a narrower input the check misread, none of them written in this repository. The
+  check reads SQL text and is a tripwire for the ordinary way of writing an aggregate; a
+  rule that could not be fooled would read the SQL dbt compiles, parsed, and is not built
+  here. What it now knows: `--`, `/* */` and `{# #}` comments, string literals, and that
+  an order inside a Jinja block or expression may render nothing (R5.4). Two limits are
+  accepted because they fail safe, and are pinned by a test: an exemption in a `/* */`
+  comment is not read, and an order between two Jinja blocks of one call is flagged. No
+  further review round is run on it.

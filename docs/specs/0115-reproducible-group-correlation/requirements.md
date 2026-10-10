@@ -135,6 +135,12 @@ digit fail on an unordered aggregate in most runs, not in every one.
 - R5.2 THE SYSTEM SHALL pass over such a call whose own line, or the comment lines
   directly above it, carry `order-exempt:` followed by the reason it is exact in any
   order.
+- R5.4 THE SYSTEM SHALL take an order only from plain SQL inside the call: not from a
+  Jinja block or expression, which may render nothing, and not from a comment or a
+  string. The exemption of R5.2 is read from a `--` comment and needs a reason with a
+  letter or a digit in it. (Owner, 2026-10-10, on PR #120: two limits are accepted
+  because they fail safe. An exemption in a `/* */` comment is not read, and an order
+  between two Jinja blocks of one call is flagged.)
 - R5.3 THE SYSTEM SHALL NOT check `sum`: whether a sum is floating-point cannot be
   read from the SQL, and most sums here add whole counts.
 
