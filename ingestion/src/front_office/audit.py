@@ -802,7 +802,9 @@ def _check_league(
         if is_closed(period, evidence) and not is_settled(period, evidence)
     ]
     # Every required period, a missing roster included: the closing refresh must cover them all.
-    unclosed_season = [period for period in required if evidence.get(period, 0) <= final]
+    unclosed_season = [
+        period for period in required if period not in evidence or evidence[period].latest <= final
+    ]
     findings.append(
         Finding(
             Severity.INFO,
@@ -833,6 +835,16 @@ def _check_league(
             )
         )
     if rechecking:
+        # Periods whose counter was seen unchanged across days wait on the calendar (ADR 0047).
+        stopped = [
+            counter for period in rechecking if (counter := evidence[period].unchanged) is not None
+        ]
+        calendar = (
+            f"; {len(stopped)} of them wait on the calendar: ESPN's counter has read "
+            f"{max(stopped)} across captures a day or more apart"
+            if stopped
+            else ""
+        )
         findings.append(
             Finding(
                 Severity.INFO,
@@ -840,7 +852,7 @@ def _check_league(
                 subject,
                 f"{len(rechecking)} closed roster period(s) inside the {RECHECK_PERIODS}-period "
                 f"re-check window; the next run fetches them again; "
-                f"{_sample(map(str, rechecking))}",
+                f"{_sample(map(str, rechecking))}{calendar}",
             )
         )
     if season_over and unclosed_season:

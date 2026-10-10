@@ -1,6 +1,6 @@
 # A roster period settles after ESPN's counter stops — requirements
 
-Issue: #75 · Tier: M · Status: draft
+Issue: #75 · Tier: M · Status: approved 2026-10-10
 
 ## Problem
 

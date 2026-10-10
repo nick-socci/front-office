@@ -82,7 +82,7 @@ seven periods on every run for good, which is the defect.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0047](../../adr/0047-a-stopped-period-counter-is-extended-by-the-calendar.md) | A period counter that has stopped is extended by the calendar: one per whole day it was seen unchanged | proposed |
+| [0047](../../adr/0047-a-stopped-period-counter-is-extended-by-the-calendar.md) | A period counter that has stopped is extended by the calendar: one per whole day it was seen unchanged | accepted |
 
 ADR 0047 adds to [ADR 0018](../../adr/0018-a-closed-roster-period-is-rechecked-for-seven-periods.md);
 it does not supersede it. The number skips 0046, which spec PR #118 proposes.
@@ -231,3 +231,24 @@ dicts and the fake transport already used there.
 
 ## Amendments
 
+- 2026-10-10, build, task 2. `settled_through` returns `PeriodEvidence` in place of an
+  integer, and two existing tests compared its result with a dictionary of integers:
+  `test_the_highest_evidence_across_captures_and_periods_is_kept_per_period` and
+  `test_only_a_settings_payload_with_a_legacy_roster_stamp_is_read`. The design named
+  the tests that must pass unmodified (the boundary tests, the nine daily runs, the
+  payload-read guards) and was silent on these. Each assertion now compares `.latest`
+  with the same numbers, which is what it tested; nothing else in either test changed,
+  and the second test's payload-read assertion is untouched.
+- 2026-10-10, build, task 3. The day-by-day replay does not fail between tasks 2 and 3,
+  as tasks.md expected: every run reads the sidecars again, so the evidence of task 2
+  alone settles the periods. It fails on the code before this change (period 176 of the
+  2022 shape fetched on every run). The `backfill_rosters` change of task 3 matters only
+  within a run, and its test is a guard on that, not a proof of the defect.
+- 2026-10-10, build, task 4. The design gave the audit clause with a leading ellipsis.
+  It is placed after the sample of periods, so the line up to the sample is today's.
+- 2026-10-10, owner, on PR #121 (review round 1, F1). A period the run skipped as
+  settled can be unsettled by a later fetch of the same run that raises the greatest
+  counter; the loop does not go back for it, and it is fetched on the next run. Accepted
+  and recorded in ADR 0047's consequences, with a test that pins the one-run delay. The
+  alternative, a second pass within the run, was not taken: the case needs a counter that
+  stood for days and then moved, which has not been observed.
