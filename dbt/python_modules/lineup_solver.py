@@ -50,14 +50,19 @@ class Slot(NamedTuple):
     count: int
 
 
-def solve_team_day(options: list[Option], slots: list[Slot]) -> list[tuple[int, int]]:
-    """Return the optimal lineup as sorted (player_id, slot_id) pairs, real players only."""
+def check_value_bound(options: list[Option]) -> None:
+    """Raise ValueError naming the first option whose value is beyond VALUE_BOUND (R3.7)."""
     for o in options:
         if abs(o.value) > VALUE_BOUND:
             raise ValueError(
                 f"option value out of bound (|value| > {VALUE_BOUND:g}): "
                 f"player {o.player_id}, slot {o.slot_id}, value {o.value}"
             )
+
+
+def solve_team_day(options: list[Option], slots: list[Slot]) -> list[tuple[int, int]]:
+    """Return the optimal lineup as sorted (player_id, slot_id) pairs, real players only."""
+    check_value_bound(options)
     if not options:
         return []
 

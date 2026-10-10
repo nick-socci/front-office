@@ -9,7 +9,7 @@ import random
 
 import pytest
 
-from lineup_solver import Option, Slot, solve_team_day
+from lineup_solver import Option, Slot, check_value_bound, solve_team_day
 
 H, P = "hitter", "pitcher"
 TIE_BONUS = 1e-9
@@ -274,3 +274,19 @@ def test_random_cases_are_within_the_bound_of_the_brute_force_maximum():
             kept_actual += 1
             assert result == actual_lineup(options), (options, slots, result)
     assert kept_actual > 20  # the R3.4 branch is exercised, not vacuous
+
+
+# --- the value bound, as the model calls it before skipping an unvalued team-day (R3.7) ----
+
+
+def test_check_value_bound_passes_values_in_bound_including_exactly_the_bound():
+    """Catches a bound that rejects the boundary itself or a value well inside it."""
+    check_value_bound([opt(1, 1, 0.0), opt(2, 1, 1000.0), opt(3, 1, -1000.0), opt(4, 1, 12.5)])
+
+
+def test_check_value_bound_raises_naming_player_slot_and_value():
+    """Catches a bound that fails without saying which option breached it."""
+    with pytest.raises(ValueError, match=r"player 7, slot 2, value 1000\.5"):
+        check_value_bound([opt(1, 1, 3.0), opt(7, 2, 1000.5)])
+    with pytest.raises(ValueError, match="out of bound"):
+        check_value_bound([opt(8, 1, -1001.0)])

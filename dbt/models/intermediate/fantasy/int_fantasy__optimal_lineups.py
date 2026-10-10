@@ -12,7 +12,8 @@ limit on pitcher starts is not applied: each team-day is solved alone (ADR 0037)
 
 Unvalued team-days (R3.5): a team-day with any option whose value is null has no rows. A
 team-day with no options never reaches this model (no option rows), so it has none either.
-A value beyond the solver's bound fails the build, naming the team-day (R3.7).
+A value beyond the solver's bound fails the build, naming the team-day (R3.7), even on an
+unvalued team-day: the bound is checked on its non-null options before the skip.
 
 Running it: the solver is imported through `module_paths: ["python_modules"]` in
 profiles.yml, which dbt-duckdb appends to sys.path as written. It resolves against the
@@ -27,7 +28,7 @@ as the table. With dbt-duckdb, `session` is a DuckDB connection.
 
 from itertools import groupby
 
-from lineup_solver import Option, Slot, solve_team_day
+from lineup_solver import Option, Slot, check_value_bound, solve_team_day
 
 TEAM_DAY = ("platform", "league_id", "season", "scoring_date", "fantasy_team_id")
 OPTION_COLUMNS = (
@@ -60,10 +61,14 @@ def model(dbt, session):
     option_rows = options.project(", ".join(OPTION_COLUMNS)).fetchall()
     for team_day, day_rows in groupby(option_rows, key=lambda r: r[: len(TEAM_DAY)]):
         day_rows = list(day_rows)
-        if any(r[-2] is None for r in day_rows):
-            continue  # unvalued (R3.5)
-        day_options = [Option(r[5], r[6], r[7], float(r[8]), r[9]) for r in day_rows]
+        unvalued = any(r[-2] is None for r in day_rows)
+        day_options = [
+            Option(r[5], r[6], r[7], float(r[8]), r[9]) for r in day_rows if r[-2] is not None
+        ]
         try:
+            check_value_bound(day_options)
+            if unvalued:
+                continue  # unvalued (R3.5)
             assigned = solve_team_day(day_options, slots_of.get(team_day[:3], []))
         except ValueError as error:
             raise ValueError(

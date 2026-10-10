@@ -766,7 +766,9 @@ models:
       over the scored categories of that side and in category order, of the scaled value
       over replacement of that one day's full line (not slot-credited: a bench player has
       no credited line), against the replacement level of the day's kind. It is null when
-      any of those scaled values is unknown. Both sides of a two-way player's day are
+      any of those scaled values is unknown. A side on which the league-season scores no
+      category is worth 0 (an empty sum) and keeps its row, since he played: he is an option
+      and counts toward the played-starter floor of R3.1. Both sides of a two-way player's day are
       valued; the slot decides which one counts, downstream. The values feed a hindsight
       comparison of what a lineup could have been, not a measure of manager skill.
     columns:
@@ -3048,6 +3050,54 @@ unit_tests:
     expect:
       rows:
         - {platform_player_id: 1, side: pitching, day_kind: relief, day_value: null}
+
+  - name: candidate_day_values_a_side_with_no_scored_category_is_worth_zero_not_dropped
+    description: >
+      The league scores only a batting category (batter strikeouts). A hitter with no strikeouts
+      is still worth 2, as in the hitter test. A pitcher who pitched the same day scores nothing
+      on his side, but he played, so he keeps a pitching row with his day kind (relief) and a
+      day_value of 0: a sum over no categories. Zero is not the null of a side that has scored
+      categories and an unknown level, which the null-level test above holds. Catches (R1.2,
+      R1.3) a played side with no scored category disappearing, so that he is neither an option
+      nor part of the played-starter floor, and an empty sum reported as unknown.
+    model: int_fantasy__candidate_day_values
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, batter_strikeouts]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, earned_runs]
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, roster_slot_id: 12, is_started: true, slot_role: hitter}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 910002, roster_slot_id: 14, is_started: true, slot_role: pitcher}
+      - input: ref('espn_lineup_slots')
+        rows:
+          - {lineup_slot_id: 12, is_injured_list_slot: false}
+          - {lineup_slot_id: 14, is_injured_list_slot: false}
+          - {lineup_slot_id: 16, is_injured_list_slot: false}
+          - {lineup_slot_id: 17, is_injured_list_slot: true}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910001, game_date: "2026-06-01", games_batted: 1, batter_strikeouts: 0}
+          - {mlbam_player_id: 910002, game_date: "2026-06-01", games_pitched: 1, games_started: 0, outs_recorded: 3, earned_runs: 0}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, category_label: B_SO, is_lower_better: true}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 27, part: numerator, component: batter_strikeouts, weight: 1}
+          - {platform: espn, stat_key: 34, part: numerator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: batter_strikeouts, level_per_played_day: 6}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: relief, component: outs_recorded, level_per_played_day: 3}
+      - input: ref('int_fantasy__category_scales')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 27, margin_scale: 3, side_denominator: null}
+    expect:
+      rows:
+        - {platform_player_id: 1, side: batting, day_kind: batting, day_value: 2}
+        - {platform_player_id: 2, side: pitching, day_kind: relief, day_value: 0}
 
   - name: candidate_day_values_candidates_are_the_started_and_the_non_injured_bench_who_played
     description: >

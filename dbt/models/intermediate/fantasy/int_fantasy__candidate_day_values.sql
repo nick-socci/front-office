@@ -27,7 +27,11 @@
 -- as in the season fact, so a missing, null or zero scale is worth 0 by the macro's rules
 -- instead of dropping a category. Every scored category of the side contributes, even one in
 -- which the day's components are all zero: it still charges the replacement level, exactly
--- as the season fact does for a played day.
+-- as the season fact does for a played day. A side on which the league-season scores no
+-- category (a league with pitcher slots but no pitching categories) is worth 0, an empty
+-- sum, and still has its row: he played, so he is an option and counts toward the
+-- played-starter floor of R3.1. That 0 is not the NULL below, which is a side WITH scored
+-- categories and an unknown level.
 --
 -- day_value is the scaled values summed in category order (a sum of doubles is only
 -- reproducible in a fixed order, #28), and NULL if any is null (R1.4): a null replacement
@@ -238,9 +242,11 @@ select
     {%- endfor %}
     played_sides.mlbam_player_id,
     played_sides.day_kind,
-    day_values.day_value
+    -- No day_values row means the league-season scores no category on this side: an empty
+    -- sum, worth 0. A row with a null day_value is a different thing (R1.4) and stays null.
+    case when day_values.side is null then 0 else day_values.day_value end as day_value
 from played_sides
-inner join day_values
+left join day_values
     on day_values.platform = played_sides.platform
     and day_values.league_id = played_sides.league_id
     and day_values.season = played_sides.season
