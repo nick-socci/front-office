@@ -9,16 +9,31 @@
 
 with fact_players as (
 
-    select distinct 'fct_player_category_value' as fact,
-        platform, league_id, season, platform_player_id, mlbam_player_id
+    select distinct
+        'fct_player_category_value' as fact,
+        platform,
+        league_id,
+        season,
+        platform_player_id,
+        mlbam_player_id
     from {{ ref('fct_player_category_value') }}
     union all
-    select distinct 'fct_player_season_value' as fact,
-        platform, league_id, season, platform_player_id, mlbam_player_id
+    select distinct
+        'fct_player_season_value' as fact,
+        platform,
+        league_id,
+        season,
+        platform_player_id,
+        mlbam_player_id
     from {{ ref('fct_player_season_value') }}
     union all
-    select distinct 'fct_transaction_impact' as fact,
-        platform, league_id, season, platform_player_id, mlbam_player_id
+    select distinct
+        'fct_transaction_impact' as fact,
+        platform,
+        league_id,
+        season,
+        platform_player_id,
+        mlbam_player_id
     from {{ ref('fct_transaction_impact') }}
 
 )
@@ -37,5 +52,6 @@ left join {{ ref('dim_player_league_seasons') }} as league_seasons
     and league_seasons.league_id = fact_players.league_id
     and league_seasons.season = fact_players.season
     and league_seasons.platform_player_id = fact_players.platform_player_id
-where league_seasons.platform_player_id is null
+where
+    league_seasons.platform_player_id is null
     or fact_players.mlbam_player_id is distinct from league_seasons.mlbam_player_id

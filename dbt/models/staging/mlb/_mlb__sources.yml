@@ -11,8 +11,16 @@ sources:
     tables:
       - name: api_responses
         description: Append-only landing-zone mirror; payload holds the untouched JSON.
-        # Freshness is configured but deliberately not enforced in CI: fixtures are
-        # stale by design. It becomes meaningful when daily runs start in 2027.
+        # Source freshness: `dbt source freshness` compares the newest loaded_at_field
+        # with now, and warns or errors past these thresholds. Here it is defined and
+        # dormant:
+        #   - Nothing runs it. No gate and no CI job may: the fixtures' newest capture
+        #     is months old by design, so it errors there every time.
+        #   - It wakes with the 2027 daily schedule, when a missed day is a real fault.
+        #   - It works. On the 2026 season it reads the newest capture's age to the
+        #     second (#13). fetched_at is a UTC stamp and is parsed as one.
+        #   - Its known limit: one age for a table holding three sources, so a stalled
+        #     feed can hide behind a live one (#114).
         loaded_at_field: "strptime(fetched_at, '%Y%m%dT%H%M%SZ')"
         freshness:
           warn_after: {count: 36, period: hour}

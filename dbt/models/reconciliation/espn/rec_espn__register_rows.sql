@@ -35,7 +35,9 @@ with register as (
 
 league_seasons as (
 
-    select league_id, season
+    select
+        league_id,
+        season
     from {{ ref('int_fantasy__league_seasons') }}
     where platform = 'espn'
 
@@ -43,7 +45,10 @@ league_seasons as (
 
 espn_matchups as (
 
-    select distinct league_id, season, matchup_id
+    select distinct
+        league_id,
+        season,
+        matchup_id
     from {{ ref('stg_espn__matchup_category_results') }}
 
 ),
@@ -72,7 +77,8 @@ select
     differences.status as reconciliation_status,
     case
         when espn_matchups.matchup_id is null then 'matchup_absent'
-        when differences.status is null
+        when
+            differences.status is null
             or differences.status not in ('registered', 'unverified') then 'explains_nothing'
     end as problem
 from register

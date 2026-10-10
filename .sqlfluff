@@ -1,0 +1,39 @@
+[sqlfluff]
+dialect = duckdb
+templater = dbt
+max_line_length = 100
+# sqlfluff skips, with a warning and exit 0, any file over 20,000 bytes. Every file is
+# linted here (spec 0013, R2.1); 0 turns the limit off.
+large_file_skip_byte_limit = 0
+# Rules turned off, each for a reason (ADR 0043: fix, or turn off with a reason; never
+# change a relation):
+#   ST06  reorders a model's output columns, which changes the relation.
+#   RF04  objects to column names that are keywords; obeying it means renaming columns.
+#   RF01  reads DuckDB struct access (entry.playerId) as a reference to a missing table.
+#   CP02  lowercases identifiers, and with them ESPN's own field names in struct access
+#         (entry.playerId would become entry.playerid). The keys are the source's.
+#   ST07  forbids `using`. Its fix rewrites a three-column `using` into one `on` line of
+#         140 characters; `using` is what those joins mean.
+#   RF03  wants references in a single-table select all qualified or all not. It takes
+#         struct access (team.id) and a table function's column for qualified
+#         references, so it fired only in five ESPN staging models, and its fix wrote
+#         league_seasons.generate_series, a column that does not exist.
+exclude_rules = ST06, RF04, RF01, CP02, ST07, RF03
+
+[sqlfluff:templater:dbt]
+project_dir = dbt
+profiles_dir = dbt
+target = ci
+
+[sqlfluff:indentation]
+# `on a = b` / `and c = d` are written at one indent throughout.
+indented_on_contents = False
+# The body of a Jinja block sits at the indent of its tag throughout:
+#     {%- for column in columns %}
+#     sum({{ column }}) as {{ column }},
+#     {%- endfor %}
+template_blocks_indent = False
+
+[sqlfluff:rules:structure.join_condition_order]
+# The joined table is written first throughout: `on joined.x = earlier.x`.
+preferred_first_table_in_join_clause = later

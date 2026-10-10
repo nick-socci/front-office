@@ -14,5 +14,6 @@ select
     platform_player_id,
     player_name
 from {{ ref('dim_player_league_seasons') }}
-where not is_transaction_only
-  and player_resolution = 'unresolved'
+where
+    not is_transaction_only
+    and player_resolution = 'unresolved'

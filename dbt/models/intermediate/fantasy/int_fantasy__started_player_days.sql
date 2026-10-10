@@ -69,12 +69,13 @@ select
     days.slot_role,
 
     {%- for column in fo_batting_columns() %}
-    case when days.slot_role = 'hitter' then coalesce(stats.{{ column }}, 0) else 0 end as {{ column }},
+    case when days.slot_role = 'hitter' then coalesce(stats.{{ column }}, 0) else 0 end
+        as {{ column }},
     {%- endfor %}
-    {%- for column in fo_pitching_columns() %}
-    case when days.slot_role = 'pitcher' then coalesce(stats.{{ column }}, 0) else 0 end as {{ column }}
-        {{- ',' if not loop.last }}
-    {%- endfor %}
+{%- for column in fo_pitching_columns() %}
+case when days.slot_role = 'pitcher' then coalesce(stats.{{ column }}, 0) else 0 end as {{ column }}
+{{- ',' if not loop.last }}
+{%- endfor %}
 from {{ ref('int_fantasy__roster_days') }} as days
 left join {{ ref('int_mlb__player_game_days') }} as stats
     on stats.mlbam_player_id = days.mlbam_player_id

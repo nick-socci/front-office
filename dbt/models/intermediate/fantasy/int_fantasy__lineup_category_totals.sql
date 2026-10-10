@@ -97,12 +97,18 @@ credited_days as (
         player_days.scoring_date,
         player_days.fantasy_team_id,
         {%- for column in fo_batting_columns() %}
-        case when player_days.slot_role = 'hitter' then coalesce(stats.{{ column }}, 0) else 0 end as {{ column }},
+        case
+            when player_days.slot_role = 'hitter' then coalesce(stats.{{ column }}, 0) else 0
+        end
+            as {{ column }},
         {%- endfor %}
-        {%- for column in fo_pitching_columns() %}
-        case when player_days.slot_role = 'pitcher' then coalesce(stats.{{ column }}, 0) else 0 end as {{ column }}
-            {{- ',' if not loop.last }}
-        {%- endfor %}
+    {%- for column in fo_pitching_columns() %}
+    case
+        when player_days.slot_role = 'pitcher' then coalesce(stats.{{ column }}, 0) else 0
+    end
+        as {{ column }}
+    {{- ',' if not loop.last }}
+    {%- endfor %}
     from lineup_player_days as player_days
     inner join {{ ref('int_mlb__player_game_days') }} as stats
         on stats.mlbam_player_id = player_days.mlbam_player_id
@@ -125,7 +131,7 @@ side_totals as (
         {%- endfor %}
         lineups.lineup,
         {%- for column in stat_columns %}
-        coalesce(sum(credited.{{ column }}), 0) as {{ column }}{{ ',' if not loop.last }}
+        coalesce(sum(credited.{{ column }}), 0) as {{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from sides
     cross join (values ('actual'), ('optimal')) as lineups (lineup)
@@ -244,12 +250,21 @@ select
     categories.category_key,
     stat_values.lineup,
     -- The one statement that names a lineup: an unvalued week has no optimal total (R5.4).
-    case when stat_values.lineup = 'optimal' and unvalued_sides.matchup_id is not null
-        then null else stat_values.numerator end as numerator,
-    case when stat_values.lineup = 'optimal' and unvalued_sides.matchup_id is not null
-        then null else stat_values.denominator end as denominator,
-    case when stat_values.lineup = 'optimal' and unvalued_sides.matchup_id is not null
-        then null else stat_values.stat_value end as category_value
+    case
+        when stat_values.lineup = 'optimal' and unvalued_sides.matchup_id is not null
+            then null
+        else stat_values.numerator
+    end as numerator,
+    case
+        when stat_values.lineup = 'optimal' and unvalued_sides.matchup_id is not null
+            then null
+        else stat_values.denominator
+    end as denominator,
+    case
+        when stat_values.lineup = 'optimal' and unvalued_sides.matchup_id is not null
+            then null
+        else stat_values.stat_value
+    end as category_value
 from stat_values
 inner join {{ ref('int_fantasy__categories') }} as categories
     on categories.platform = stat_values.platform

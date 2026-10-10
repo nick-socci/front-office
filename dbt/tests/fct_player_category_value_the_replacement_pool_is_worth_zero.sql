@@ -16,12 +16,16 @@
 with component_sides as (
 
     {%- for column in fo_batting_columns() %}
-    select '{{ column }}' as component, 'batting' as side
+    select
+        '{{ column }}' as component,
+        'batting' as side
     union all
     {%- endfor %}
     {%- for column in fo_pitching_columns() %}
-    select '{{ column }}' as component, 'pitching' as side
-        {{- '\n    union all' if not loop.last }}
+    select
+        '{{ column }}' as component,
+        'pitching' as side
+    {{- '\n    union all' if not loop.last }}
     {%- endfor %}
 
 ),
@@ -46,8 +50,15 @@ pool_parts as (
         on rules.component = levels.component
     inner join component_sides
         on component_sides.component = levels.component
-        and component_sides.side = case levels.day_kind when 'batting' then 'batting' else 'pitching' end
-    group by levels.platform, levels.league_id, levels.season, levels.day_kind, rules.stat_key, rules.part
+        and component_sides.side
+        = case levels.day_kind when 'batting' then 'batting' else 'pitching' end
+    group by
+        levels.platform,
+        levels.league_id,
+        levels.season,
+        levels.day_kind,
+        rules.stat_key,
+        rules.part
 
 ),
 
@@ -91,6 +102,12 @@ valued as (
 
 )
 
-select platform, league_id, season, day_kind, category_key, value_over_replacement
+select
+    platform,
+    league_id,
+    season,
+    day_kind,
+    category_key,
+    value_over_replacement
 from valued
 where abs(value_over_replacement) > 1e-9

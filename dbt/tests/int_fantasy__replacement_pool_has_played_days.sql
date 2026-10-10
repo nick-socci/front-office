@@ -1,9 +1,9 @@
 {{ config(severity='warn') }}
 
--- A day kind (of a league-season) whose pool has no played days has a null replacement level, and every day
--- of that kind will be valued against nothing. Expected on tiny fixtures, never on the
--- real season, so it warns rather than fails: the number is an input to every
--- value-over-replacement, and an empty pool should be seen, not discovered later.
+-- A day kind (of a league-season) whose pool has no played days has a null replacement
+-- level, and every day of that kind will be valued against nothing. Expected on tiny
+-- fixtures, never on the real season, so it warns rather than fails: the number is an input
+-- to every value-over-replacement, and an empty pool should be seen, not discovered later.
 select
     platform,
     league_id,

@@ -52,7 +52,10 @@ header as (
 
 teams as (
 
-    select season, fetched_at, unnest(teams_list) as team
+    select
+        season,
+        fetched_at,
+        unnest(teams_list) as team
     from header
 
 ),
@@ -69,7 +72,10 @@ game_lists as (
 
 listed_games as (
 
-    select season, fetched_at, unnest(games) as game
+    select
+        season,
+        fetched_at,
+        unnest(games) as game
     from game_lists
 
 )

@@ -42,7 +42,8 @@ select
     {{ fo_json_int('player', '$.stats.batting.sacFlies') }} as sacrifice_flies,
     {{ fo_json_int('player', '$.stats.batting.sacBunts') }} as sacrifice_bunts,
     {{ fo_json_int('player', '$.stats.batting.totalBases') }} as total_bases,
-    {{ fo_json_int('player', '$.stats.batting.groundIntoDoublePlay') }} as grounded_into_double_play,
+    {{ fo_json_int('player', '$.stats.batting.groundIntoDoublePlay') }}
+        as grounded_into_double_play,
     {{ fo_json_int('player', '$.stats.batting.catchersInterference') }} as catchers_interference,
 
     {{ fo_parse_fetched_at() }} as fetched_at

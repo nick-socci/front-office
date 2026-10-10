@@ -32,5 +32,6 @@ from played
 left join {{ ref('stg_espn__pro_games') }} as pro_games
     on pro_games.season = played.season
     and pro_games.espn_game_id = played.espn_game_id
-where pro_games.espn_game_id is null
-   or pro_games.scoring_period != played.scoring_period
+where
+    pro_games.espn_game_id is null
+    or pro_games.scoring_period != played.scoring_period

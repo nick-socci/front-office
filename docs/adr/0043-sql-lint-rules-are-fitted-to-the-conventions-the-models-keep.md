@@ -1,6 +1,6 @@
 # 0043. SQL lint rules are fitted to the conventions the models already keep, and no rule may change a relation
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0013-docs-lint-exposures](../specs/0013-docs-lint-exposures/design.md) · Issue: #13
 

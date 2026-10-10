@@ -230,7 +230,9 @@ its exposure is the gate's.
 
 `roster_day_query.sql` changes in one place (R3.9): its `params` CTE carries a
 `team_id` in place of a team name, the join to `params` is on `team_id`, and the
-header comment's wording follows. It still prints `team_name` in its output, which is
+header comment's wording follows. `params` also names the `league_id`, because a
+`team_id` is unique only within a league (owner, 2026-10-10, PR #116 review F2); the
+date already fixes the season. It still prints `team_name` in its output, which is
 the real name on a local warehouse and an alias on the fixtures. The models it reads
 do not change, so its exposure is as sketched above.
 
@@ -398,3 +400,47 @@ not satisfy it.
 
 ## Amendments
 
+- **2026-10-10, during the build (task 1). The baseline is the one measured after #113.**
+  The expected values were measured at `263923d`. #113 merged before the build started
+  and added a model (`rec_espn__register_rows`), four data tests and two unit tests. The
+  counts the build is held to are therefore those recorded on #13 at `0df7e6e`: 57
+  models; fixtures PASS=648 WARN=3 of 651; real season PASS=650 WARN=1 of 651; 118 SQL
+  files to lint; reconciliation 7 relations. R2.5's rule is unchanged: the same counts
+  before and after. Nothing in scope moves.
+- **2026-10-10, during the build (task 1). The real season is built into copies.** §1 and
+  tasks 1 and 8 say to build `data/warehouse.duckdb` and copy it. The owner's file is
+  copied first instead, and the base commit is built into the copy (the *before* file);
+  the *after* file is a second copy built at the reformatted commit. Both start from the
+  same raw table and are compared as §1 says. The owner's warehouse is not written by
+  the build. The proof is the same; only which file holds each side changes.
+- **2026-10-10, during the build (task 3). No file is skipped for its size.** §1's
+  `.sqlfluff` left sqlfluff's `large_file_skip_byte_limit` at its default of 20,000
+  bytes, under which `fct_transaction_impact.sql` (26,074 bytes) is skipped with a
+  warning and a zero exit. R2.1 says every file. The setting is `0` in `.sqlfluff`, with
+  its reason. The spec's own measurements were made with the limit off, so they stand.
+- **2026-10-10, during the build (task 3). The lint command names the fixture
+  warehouse.** §1 left open whether the dbt templater opens the warehouse. It does: run
+  from the repository root, where the profile's `ci.duckdb` is a relative path, it
+  creates an empty `ci.duckdb` in the root. The command in the gates, CI and `AGENTS.md`
+  is therefore `FO_CI_DUCKDB_PATH=dbt/ci.duckdb uv run sqlfluff lint dbt/models
+  dbt/tests`, which points it at the fixture warehouse the earlier step built.
+- **2026-10-10, during the build (task 5). Three more rules are off, and one setting is
+  added.** Within ADR 0043's rule (fix, or turn off with a reason; never change a
+  relation), and with the owner's approval of each group of more than ten hand edits:
+  `CP02` is off (it lowercased ESPN's field names in struct access); `ST07` is off (its
+  fix rewrote `using` joins into 141-character `on` lines); `RF03` is off (it takes
+  struct access and a table function's column for qualified references, and its fix
+  wrote a column that does not exist, which the fixture build caught before any
+  commit); `template_blocks_indent = False`, because a Jinja block's body sits at its
+  tag's indent throughout. §1 expected `RF02`/`RF03` and `CP02` to need thought; this is
+  the outcome. Loop commas are written literally (`{% if not loop.last %},{% endif %}`),
+  14 lines, before the reformat: sqlfluff's fix broke every loop whose comma was emitted
+  by an expression. The full list with counts is on #13.
+- **2026-10-10, during the build (task 8). One view does not reproduce to the last digit,
+  with or without the reformat.** R2.4's comparison reports one difference of 56
+  relations: `rec_fantasy__category_wins_by_group.correlation`, by 1e-16 to 8e-16 on its
+  three rows. Two builds of the base commit differ in the same relation and rows, so the
+  edits did not cause it; with doubles rounded to 12 places the comparison exits 0, and
+  the column query is identical. It was reported to the owner and is #115. R2.4 is read
+  as met for the reformat. The view is not changed here: no relation changes in this
+  work.

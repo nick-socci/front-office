@@ -45,10 +45,10 @@
 --      level_per_played_day = pool_total / pool_played_days. This mirrors slot-role
 --      crediting in int_fantasy__started_player_days: a day is credited on one side only.
 --   5. Every kind gets its rows. The output starts from a spine of the league-seasons crossed
---      with the three kinds and their components and left-joins the pools, so an empty pool yields rows with
---      pool_players = 0, pool_played_days = 0 and a NULL level, not no rows (which an
---      inner join downstream would turn into players vanishing) and not 0 (which would say
---      replacement produces nothing).
+--      with the three kinds and their components and left-joins the pools, so an empty pool
+--      yields rows with pool_players = 0, pool_played_days = 0 and a NULL level, not no rows
+--      (which an inner join downstream would turn into players vanishing) and not 0 (which
+--      would say replacement produces nothing).
 -- Components only, never rates: AVG or ERA is computed from these totals downstream.
 --
 -- WHY THE START POOL IS DIFFERENT. Ranked like the others, by appearances while unrostered,
@@ -60,9 +60,9 @@
 -- among. And none is needed: a free-agent starter's quality does not depend on how much
 -- he has pitched (ERA 4.87 to 4.93 whether 3, 5 or 10 earlier starts are asked for, under
 -- the rule of ADR 0029; 4.89 and 4.89 in the two halves of the season), only the length
--- of his outing does, which the role filter takes care of. For relievers and hitters the unranked pool is not the
--- players doing the job (long men and call-ups at 3.58 outs; bench players with one
--- at-bat), so their pools stay ranked.
+-- of his outing does, which the role filter takes care of. For relievers and hitters the
+-- unranked pool is not the players doing the job (long men and call-ups at 3.58 outs; bench
+-- players with one at-bat), so their pools stay ranked.
 --
 -- BIAS. Two, pulling opposite ways, in the batting and relief pools.
 --   * The pool is players nobody rostered that date; a free agent who got added leaves
@@ -196,7 +196,7 @@ batting_pool as (
         and league_seasons.season = hitter_totals.season
     qualify row_number() over (
         partition by hitter_totals.platform, hitter_totals.league_id, hitter_totals.season
-        order by hitter_totals.plate_appearances desc, hitter_totals.mlbam_player_id
+        order by hitter_totals.plate_appearances desc, hitter_totals.mlbam_player_id asc
     ) <= league_seasons.team_count
 
 ),
@@ -253,7 +253,7 @@ pitching_pool as (
         order by
             pitching_candidates.kind_days desc,
             pitching_candidates.kind_outs desc,
-            pitching_candidates.mlbam_player_id
+            pitching_candidates.mlbam_player_id asc
     ) <= league_seasons.team_count
 
 ),
@@ -335,7 +335,11 @@ start_pool_days as (
         on pitching_days_to_date.mlbam_player_id = free_agent_days.mlbam_player_id
         and pitching_days_to_date.season = free_agent_days.season
         and pitching_days_to_date.game_date = free_agent_days.game_date
-    where {{ fo_pitching_day_kind('free_agent_days.games_pitched', 'free_agent_days.games_started') }} = 'start'
+    where
+        {{ fo_pitching_day_kind(
+            'free_agent_days.games_pitched',
+            'free_agent_days.games_started'
+        ) }} = 'start'
         and {{ fo_is_starter_at_the_time(
             'pitching_days_to_date.earlier_pitching_days',
             'roles_to_date.role_to_date',
@@ -358,10 +362,14 @@ pool_played_days as (
         and pool.league_id = free_agent_days.league_id
         and pool.season = free_agent_days.season
         and pool.mlbam_player_id = free_agent_days.mlbam_player_id
-    where case pool.day_kind
-        when 'batting' then free_agent_days.games_batted > 0
-        else {{ fo_pitching_day_kind('free_agent_days.games_pitched', 'free_agent_days.games_started') }} = pool.day_kind
-    end
+    where
+        case pool.day_kind
+            when 'batting' then free_agent_days.games_batted > 0
+            else {{ fo_pitching_day_kind(
+                'free_agent_days.games_pitched',
+                'free_agent_days.games_started'
+            ) }} = pool.day_kind
+        end
 
     union all
 
@@ -369,23 +377,31 @@ pool_played_days as (
 
 ),
 
+kind_components as (
+
+    {%- for column in fo_batting_columns() %}
+    select 'batting' as day_kind, '{{ column }}' as component
+    union all
+    {%- endfor %}
+    {%- for column in fo_pitching_columns() %}
+    select 'start' as day_kind, '{{ column }}' as component
+    union all
+    select 'relief' as day_kind, '{{ column }}' as component
+    {{- '\n    union all' if not loop.last }}
+    {%- endfor %}
+
+),
+
 spine as (
 
-    select league_seasons.platform, league_seasons.league_id, league_seasons.season,
-        kinds.day_kind, kinds.component
+    select
+        league_seasons.platform,
+        league_seasons.league_id,
+        league_seasons.season,
+        kinds.day_kind,
+        kinds.component
     from league_seasons
-    cross join (
-        {%- for column in fo_batting_columns() %}
-        select 'batting' as day_kind, '{{ column }}' as component
-        union all
-        {%- endfor %}
-        {%- for column in fo_pitching_columns() %}
-        select 'start' as day_kind, '{{ column }}' as component
-        union all
-        select 'relief' as day_kind, '{{ column }}' as component
-            {{- '\n        union all' if not loop.last }}
-        {%- endfor %}
-    ) as kinds
+    cross join kind_components as kinds
 
 ),
 
@@ -432,7 +448,12 @@ played_day_counts as (
 pool_totals as (
 
     {%- for column in fo_batting_columns() %}
-    select platform, league_id, season, day_kind, '{{ column }}' as component,
+    select
+        platform,
+        league_id,
+        season,
+        day_kind,
+        '{{ column }}' as component,
         sum(coalesce({{ column }}, 0)) as pool_total
     from pool_played_days
     where day_kind = 'batting'
@@ -440,12 +461,17 @@ pool_totals as (
     union all
     {%- endfor %}
     {%- for column in fo_pitching_columns() %}
-    select platform, league_id, season, day_kind, '{{ column }}' as component,
+    select
+        platform,
+        league_id,
+        season,
+        day_kind,
+        '{{ column }}' as component,
         sum(coalesce({{ column }}, 0)) as pool_total
     from pool_played_days
     where day_kind in ('start', 'relief')
     group by platform, league_id, season, day_kind
-        {{- '\n    union all' if not loop.last }}
+    {{- '\n    union all' if not loop.last }}
     {%- endfor %}
 
 )

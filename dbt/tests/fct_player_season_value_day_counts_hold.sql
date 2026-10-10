@@ -29,15 +29,41 @@ with recomputed as (
         platform_player_id,
         fantasy_team_id,
         count(*) as started_days,
-        count(*) filter (where input_status not in ('played', 'verified_off')) as unverified_started_days,
+        count(*) filter (where input_status not in ('played', 'verified_off'))
+            as unverified_started_days,
         count(*) filter (where slot_role = 'hitter' and games_batted > 0) as hitter_played_days,
         count(*) filter (where slot_role = 'pitcher' and games_pitched > 0) as pitcher_played_days
     from {{ ref('int_fantasy__started_player_days') }}
     group by platform, league_id, season, platform_player_id, fantasy_team_id
 
+),
+
+category_sides as (
+
+    select
+        platform,
+        stat_key as category_key,
+        max(
+            case
+                when
+                    component in (
+                        {%- for column in fo_batting_columns() %}
+                        '{{ column }}'{% if not loop.last %},{% endif %}
+                        {%- endfor %}
+                    )
+                    then 'batting'
+                else 'pitching'
+            end
+        )
+            as side
+    from {{ ref('int_fantasy__stat_components') }}
+    group by platform, stat_key
+
 )
 
-select fact.platform_player_id, fact.fantasy_team_id
+select
+    fact.platform_player_id,
+    fact.fantasy_team_id
 from {{ ref('fct_player_season_value') }} as fact
 left join recomputed
     on recomputed.platform = fact.platform
@@ -45,30 +71,25 @@ left join recomputed
     and recomputed.season = fact.season
     and recomputed.platform_player_id = fact.platform_player_id
     and recomputed.fantasy_team_id = fact.fantasy_team_id
-where fact.played_started_days > fact.started_days
+where
+    fact.played_started_days > fact.started_days
     or fact.started_days_outside_matchups > fact.started_days
     or fact.first_started_date > fact.last_started_date
     or fact.started_days is distinct from recomputed.started_days
     or fact.unverified_started_days is distinct from recomputed.unverified_started_days
     or fact.played_started_days
-        is distinct from recomputed.hitter_played_days + recomputed.pitcher_played_days
+    is distinct from recomputed.hitter_played_days + recomputed.pitcher_played_days
 
 union
 
 -- A category's side comes from its components in int_fantasy__stat_components and the
 -- fo_*_columns lists, NOT from the fact row being checked: a row whose side and played
 -- days were both wrong would otherwise agree with itself.
-select categories.platform_player_id, categories.fantasy_team_id
+select
+    categories.platform_player_id,
+    categories.fantasy_team_id
 from {{ ref('fct_player_category_value') }} as categories
-inner join (
-    select
-        platform,
-        stat_key as category_key,
-        max(case when component in ('{{ fo_batting_columns() | join("', '") }}') then 'batting' else 'pitching' end)
-            as side
-    from {{ ref('int_fantasy__stat_components') }}
-    group by platform, stat_key
-) as category_sides
+inner join category_sides
     on category_sides.platform = categories.platform
     and category_sides.category_key = categories.category_key
 left join recomputed
@@ -77,8 +98,9 @@ left join recomputed
     and recomputed.season = categories.season
     and recomputed.platform_player_id = categories.platform_player_id
     and recomputed.fantasy_team_id = categories.fantasy_team_id
-where categories.played_days is distinct from
-        case category_sides.side
-            when 'batting' then recomputed.hitter_played_days
-            else recomputed.pitcher_played_days
-        end
+where
+    categories.played_days is distinct from
+    case category_sides.side
+        when 'batting' then recomputed.hitter_played_days
+        else recomputed.pitcher_played_days
+    end

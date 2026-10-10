@@ -18,7 +18,8 @@
 -- one definition of "that season's MLB data" that the player crosswalk and the
 -- per-league-season player dimension share (#28). It is part of the grouping, so a
 -- date split across two seasons could not collapse silently into one row: it would make
--- two rows and fail the unique test on (mlbam_player_id, game_date). It carries no league: MLB has none.
+-- two rows and fail the unique test on (mlbam_player_id, game_date). It carries no league:
+-- MLB has none.
 --
 -- Materialized as a table: it is the join target for every roster-day above it, and
 -- 71,044 rows is nothing.

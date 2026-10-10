@@ -9,14 +9,18 @@
 
 with rostered as (
 
-    select distinct league_id, season
+    select distinct
+        league_id,
+        season
     from {{ ref('stg_espn__roster_entries') }}
 
 ),
 
 with_matchups as (
 
-    select distinct league_id, season
+    select distinct
+        league_id,
+        season
     from {{ ref('stg_espn__matchups') }}
 
 )
@@ -34,5 +38,6 @@ left join {{ ref('int_fantasy__league_seasons') }} as league_seasons
 left join with_matchups
     on with_matchups.league_id = rostered.league_id
     and with_matchups.season = rostered.season
-where league_seasons.league_id is null
+where
+    league_seasons.league_id is null
     or with_matchups.league_id is null

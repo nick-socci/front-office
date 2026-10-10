@@ -9,8 +9,9 @@ with latest as (
         payload,
         fetched_at
     from {{ source('raw', 'api_responses') }}
-    where source = 'idmap'
-      and endpoint = 'player_id_map'
+    where
+        source = 'idmap'
+        and endpoint = 'player_id_map'
     qualify row_number() over (order by fetched_at desc) = 1
 
 ),
@@ -42,6 +43,7 @@ select
     {{ fo_json_int('row_json', '$.IDFANGRAPHS') }} as fangraphs_id,
     {{ fo_parse_fetched_at() }} as fetched_at
 from mapped
-where {{ fo_json_int('row_json', '$.ESPNID') }} is not null
-  and {{ fo_json_int('row_json', '$.MLBID') }} is not null
+where
+    {{ fo_json_int('row_json', '$.ESPNID') }} is not null
+    and {{ fo_json_int('row_json', '$.MLBID') }} is not null
 {{ fo_latest_by_entity([fo_json_string('row_json', '$.ESPNID') | trim]) }}

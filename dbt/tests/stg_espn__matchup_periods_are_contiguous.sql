@@ -21,5 +21,6 @@ with spans as (
 
 select *
 from spans
-where days != distinct_days
-   or days != span
+where
+    days != distinct_days
+    or days != span

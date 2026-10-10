@@ -86,7 +86,8 @@ select
         else 'LOSS'
     end as result,
     -- A category is only as certain as both sides' inputs.
-    (team_totals.verified_player_days < team_totals.started_player_days
+    (
+        team_totals.verified_player_days < team_totals.started_player_days
         or opponent_totals.verified_player_days < opponent_totals.started_player_days)
         as has_unverified_inputs
 from compared

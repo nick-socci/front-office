@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# The default token is read-only by declaration; only the deploy job gets more.
+permissions:
+  contents: read
+
 jobs:
   quality:
     name: lint, types, tests
@@ -41,6 +45,13 @@ jobs:
         env:
           DBT_PROFILES_DIR: .
 
+      - name: Lint SQL (sqlfluff)
+        # The dbt templater opens the relative `ci` target; without the variable, run
+        # from the root, it would create an empty ci.duckdb instead of using the fixtures.
+        run: uv run sqlfluff lint dbt/models dbt/tests
+        env:
+          FO_CI_DUCKDB_PATH: dbt/ci.duckdb
+
       - name: dbt build (fixtures, anonymised)
         # Quoted: the colon inside --vars '{anonymize: true}' makes YAML try to
         # parse a nested mapping, which stops the workflow from starting at all.
@@ -49,7 +60,46 @@ jobs:
         env:
           DBT_PROFILES_DIR: .
 
+      - name: Example queries match their exposures and run
+        run: uv run python scripts/check_examples.py --db dbt/ci.duckdb
+
+      - name: dbt docs generate
+        # Quoted for the same reason as dbt build above.
+        run: "uv run dbt docs generate --target ci --vars '{anonymize: true}'"
+        working-directory: dbt
+        env:
+          DBT_PROFILES_DIR: .
+
+      - name: Docs site (assemble and check)
+        # Only three named files are copied out of dbt's target, and they are checked
+        # before anything can be uploaded (spec 0013, ADR 0042).
+        run: uv run python scripts/build_docs_site.py --target-dir dbt/target --out site
+
+      - name: Upload the docs site
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
       - name: Tenant isolation (two leagues by two seasons)
         # Builds fixtures/landing_multi together and each league-season alone, and fails
         # if any model gives a league-season different rows (spec 0028, ADR 0013).
         run: uv run python scripts/check_tenant_isolation.py
+
+  deploy-docs:
+    name: publish the docs site
+    # Only for main, and only when every step of quality passed: the site never shows a
+    # commit that failed its gates (ADR 0042).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: quality
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

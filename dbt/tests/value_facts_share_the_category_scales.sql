@@ -22,7 +22,8 @@ inner join {{ ref('int_fantasy__category_scales') }} as scales
     and scales.league_id = facts.league_id
     and scales.season = facts.season
     and scales.category_key = facts.category_key
-where facts.played_days > 0
+where
+    facts.played_days > 0
     and facts.value_over_replacement is not null
     and coalesce(scales.margin_scale, 0) <> 0
     and (facts.denominator is null or coalesce(scales.side_denominator, 0) <> 0)
