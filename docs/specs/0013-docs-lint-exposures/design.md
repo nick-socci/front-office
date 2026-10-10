@@ -434,3 +434,11 @@ not satisfy it.
   the outcome. Loop commas are written literally (`{% if not loop.last %},{% endif %}`),
   14 lines, before the reformat: sqlfluff's fix broke every loop whose comma was emitted
   by an expression. The full list with counts is on #13.
+- **2026-10-10, during the build (task 8). One view does not reproduce to the last digit,
+  with or without the reformat.** R2.4's comparison reports one difference of 56
+  relations: `rec_fantasy__category_wins_by_group.correlation`, by 1e-16 to 8e-16 on its
+  three rows. Two builds of the base commit differ in the same relation and rows, so the
+  edits did not cause it; with doubles rounded to 12 places the comparison exits 0, and
+  the column query is identical. It was reported to the owner and is #115. R2.4 is read
+  as met for the reformat. The view is not changed here: no relation changes in this
+  work.
