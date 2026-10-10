@@ -422,3 +422,15 @@ not satisfy it.
   creates an empty `ci.duckdb` in the root. The command in the gates, CI and `AGENTS.md`
   is therefore `FO_CI_DUCKDB_PATH=dbt/ci.duckdb uv run sqlfluff lint dbt/models
   dbt/tests`, which points it at the fixture warehouse the earlier step built.
+- **2026-10-10, during the build (task 5). Three more rules are off, and one setting is
+  added.** Within ADR 0043's rule (fix, or turn off with a reason; never change a
+  relation), and with the owner's approval of each group of more than ten hand edits:
+  `CP02` is off (it lowercased ESPN's field names in struct access); `ST07` is off (its
+  fix rewrote `using` joins into 141-character `on` lines); `RF03` is off (it takes
+  struct access and a table function's column for qualified references, and its fix
+  wrote a column that does not exist, which the fixture build caught before any
+  commit); `template_blocks_indent = False`, because a Jinja block's body sits at its
+  tag's indent throughout. §1 expected `RF02`/`RF03` and `CP02` to need thought; this is
+  the outcome. Loop commas are written literally (`{% if not loop.last %},{% endif %}`),
+  14 lines, before the reformat: sqlfluff's fix broke every loop whose comma was emitted
+  by an expression. The full list with counts is on #13.

@@ -20,7 +20,7 @@ with roster_teams as (
         league_id,
         season,
         team_id,
-        'stg_espn__roster_entry_slots'
+        'stg_espn__roster_entry_slots' as model
     from {{ ref('stg_espn__roster_entry_slots') }}
 
 )

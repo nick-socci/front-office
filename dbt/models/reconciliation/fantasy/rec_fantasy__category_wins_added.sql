@@ -52,7 +52,14 @@
 {%- set draws = 20 %}
 {%- set batting_columns = fo_batting_columns() %}
 {%- set pitching_columns = fo_pitching_columns() %}
-{%- set pair_keys = ['platform', 'league_id', 'season', 'matchup_id', 'fantasy_team_id', 'platform_player_id'] %}
+{%- set pair_keys = [
+    'platform',
+    'league_id',
+    'season',
+    'matchup_id',
+    'fantasy_team_id',
+    'platform_player_id'
+] %}
 
 with rescorable_sides as (
 

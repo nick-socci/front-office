@@ -21,9 +21,9 @@
 --
 -- total_value is the matchup margins the pair added over a free agent, summed across every
 -- scored category: the sum of its scaled values (ADR 0010; the sum itself, with no mean
--- subtracted, is ADR 0003; which matchups a margin is measured from, ADR 0027). It is NULL if any category's scaled value is NULL, which
--- happens only when a played side faces an empty replacement pool: a partial total would
--- look complete.
+-- subtracted, is ADR 0003; which matchups a margin is measured from, ADR 0027). It is NULL if
+-- any category's scaled value is NULL, which happens only when a played side faces an empty
+-- replacement pool: a partial total would look complete.
 --
 -- mlbam_player_id, the last column, is the MLB id of the row's own league-season in
 -- dim_player_league_seasons (#60, ADR 0034), null for an unresolved player.

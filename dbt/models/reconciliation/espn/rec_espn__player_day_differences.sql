@@ -47,8 +47,12 @@ credited as (
 
     -- Each slot role's side of the day, one row per component.
     {%- set credited_columns = [] %}
-    {%- for column in fo_batting_columns() %}{% do credited_columns.append(('hitter', column)) %}{% endfor %}
-    {%- for column in fo_pitching_columns() %}{% do credited_columns.append(('pitcher', column)) %}{% endfor %}
+    {%- for column in fo_batting_columns() %}
+    {%- do credited_columns.append(('hitter', column)) %}
+    {%- endfor %}
+    {%- for column in fo_pitching_columns() %}
+    {%- do credited_columns.append(('pitcher', column)) %}
+    {%- endfor %}
     {%- for role, column in credited_columns %}
     select
         league_id,

@@ -112,6 +112,14 @@ reported as (
 
 ),
 
+side_labels as (
+
+    select 'home' as side
+    union all
+    select 'away' as side
+
+),
+
 side_totals as (
 
     -- One row per (decided matchup, side, scored category), reported or not.
@@ -127,11 +135,7 @@ side_totals as (
         rate_categories.category_key is not null as is_rate,
         reported.score
     from decided_matchups as matchups
-    cross join (
-        select 'home' as side
-        union all
-        select 'away' as side
-    ) as sides
+    cross join side_labels as sides
     inner join {{ ref('int_fantasy__categories') }} as categories
         on categories.platform = 'espn'
         and categories.league_id = matchups.league_id

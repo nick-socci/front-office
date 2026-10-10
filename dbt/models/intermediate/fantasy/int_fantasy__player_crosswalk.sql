@@ -55,7 +55,7 @@ with mlb_players as (
     union
 
     select
-        strip_accents(logs.player_name),
+        strip_accents(logs.player_name) as match_name,
         logs.mlbam_player_id,
         games.season
     from {{ ref('stg_mlb__pitching_game_logs') }} as logs

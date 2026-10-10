@@ -48,7 +48,7 @@ summed as (
         sum(runs) as runs,
         sum(at_bats) as at_bats
     from {{ ref('stg_mlb__batting_game_logs') }}
-    group by game_pk, side
+    group by 1, 2
 
 )
 

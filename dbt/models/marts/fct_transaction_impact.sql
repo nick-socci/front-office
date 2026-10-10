@@ -27,13 +27,13 @@
 -- Measures. An add counts, over the window: rostered_days (roster days of that player on
 -- that team), started_days, played_started_days (the credited-side appearance, as in
 -- fct_player_season_value) and the credited components of int_fantasy__started_player_days.
--- A drop counts MLB days from int_mlb__player_game_days for his dim_player_league_seasons.mlbam_player_id,
--- on the side his replacement_group is credited for only (hitter: batting columns and
--- played_days = days with games_batted > 0; SP and RP: pitching columns and days with
--- games_pitched > 0); the other side is 0. rostered_days, started_days and
--- played_started_days are null on a drop, played_days is null on an add. A dropped player
--- with no MLBAM id or group is unresolved: zeroes, and a NULL total_value, because 0
--- would read as replacement level.
+-- A drop counts MLB days from int_mlb__player_game_days for his
+-- dim_player_league_seasons.mlbam_player_id, on the side his replacement_group is credited
+-- for only (hitter: batting columns and played_days = days with games_batted > 0; SP and RP:
+-- pitching columns and days with games_pitched > 0); the other side is 0. rostered_days,
+-- started_days and played_started_days are null on a drop, played_days is null on an add. A
+-- dropped player with no MLBAM id or group is unresolved: zeroes, and a NULL total_value,
+-- because 0 would read as replacement level.
 --
 -- mlbam_player_id, the last column, is the MLB id of the transaction's own league-season
 -- row (#60, ADR 0034), already carried here from dim_player_league_seasons; null when
@@ -54,9 +54,9 @@
 -- compared with what a free agent produced in a start, a relief day with what one produced
 -- in relief. On an add the days are the window's started days of that player for that team,
 -- the side of each being its slot's; on a drop they are his MLB days, the side being the
--- one his dim_player_league_seasons.replacement_group credits (hitter, or pitcher for SP and RP). That
--- group now only tells a hitter from a pitcher: SP versus RP chooses nothing, the outing
--- does. A day that is not a played day on its side belongs to no kind and adds nothing.
+-- one his dim_player_league_seasons.replacement_group credits (hitter, or pitcher for SP and
+-- RP). That group now only tells a hitter from a pitcher: SP versus RP chooses nothing, the
+-- outing does. A day that is not a played day on its side belongs to no kind and adds nothing.
 --
 -- Per (transaction, category) the values of the kinds on the category's side are summed:
 -- NULL if ANY kind with played days has a null value (a null level, an empty pool), because
@@ -259,7 +259,7 @@ next_adds as (
             and adds.movement = 'add'
             and adds.transacted_at > drops.transacted_at
         where drops.movement = 'drop'
-    )
+    ) as ranked_adds
     where add_rank = 1
 
 ),

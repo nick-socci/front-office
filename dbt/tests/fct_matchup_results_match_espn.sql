@@ -1,9 +1,10 @@
 -- Every category result and every matchup winner equals ESPN's (#10).
 --
 -- A category result may differ only where the values differ by an accounted-for
--- residual on either side ('explained'), and a category scored at one end only fails. A winner may not differ at all: no 2026
--- residual flips one, and if a future one does, that is worth a person's attention
--- rather than an automatic pass. Sides with unverified inputs are skipped.
+-- residual on either side ('explained'), and a category scored at one end only fails. A
+-- winner may not differ at all: no 2026 residual flips one, and if a future one does, that
+-- is worth a person's attention rather than an automatic pass. Sides with unverified inputs
+-- are skipped.
 --
 -- ESPN's matchups are those of league-seasons with rosters (ADR 0026), as the
 -- reconciliation's are: a season loaded for its matchup totals alone has ESPN's winners

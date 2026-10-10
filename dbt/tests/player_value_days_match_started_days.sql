@@ -2,9 +2,11 @@
 -- int_fantasy__started_player_days, and inside-matchup days plus outside-matchup days must
 -- equal the same total (ADR 0006). Returns one row if either differs.
 --
--- Inside is counted here straight from the grain joined to int_fantasy__matchup_periods and then to the team's side in that period (a team with no side that period, a bye, is outside);
--- outside is the fact's own started_days_outside_matchups. So a day lost between the grain
--- and the fact, a day counted in both or neither, or a date in two matchup periods, shows.
+-- Inside is counted here straight from the grain joined to int_fantasy__matchup_periods
+-- and then to the team's side in that period (a team with no side that period, a bye, is
+-- outside); outside is the fact's own started_days_outside_matchups. So a day lost between
+-- the grain and the fact, a day counted in both or neither, or a date in two matchup
+-- periods, shows.
 
 with grain as (
 

@@ -36,8 +36,8 @@ actual as (
 )
 
 select
-    expected_rows,
-    actual_rows
+    expected.expected_rows,
+    actual.actual_rows
 from expected
 cross join actual
-where expected_rows <> actual_rows
+where expected.expected_rows <> actual.actual_rows

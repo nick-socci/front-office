@@ -49,9 +49,10 @@
 -- kind, of the pair's own league and season (#28). What each kind's pool is is that
 -- model's business; for a start it is every free-agent start by a pitcher who was a
 -- starter at the time (ADR 0029). That these values track real category wins, equally
--- for starters and hitters, is checked by values_track_rescored_category_wins. The arithmetic (contribution, value over replacement, scaled value) is in
--- the fo_category_value macros, shared with fct_transaction_impact so the two facts cannot
--- drift; see there for the rules and for what null means.
+-- for starters and hitters, is checked by values_track_rescored_category_wins. The arithmetic
+-- (contribution, value over replacement, scaled value) is in the fo_category_value macros,
+-- shared with fct_transaction_impact so the two facts cannot drift; see there for the rules
+-- and for what null means.
 --
 -- scaled_value (ADR 0010) is value_over_replacement in matchup margins: divided by the
 -- category's margin_scale from int_fantasy__category_scales, the usual gap between two

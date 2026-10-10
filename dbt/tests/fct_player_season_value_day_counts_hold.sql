@@ -36,6 +36,29 @@ with recomputed as (
     from {{ ref('int_fantasy__started_player_days') }}
     group by platform, league_id, season, platform_player_id, fantasy_team_id
 
+),
+
+category_sides as (
+
+    select
+        platform,
+        stat_key as category_key,
+        max(
+            case
+                when
+                    component in (
+                        {%- for column in fo_batting_columns() %}
+                        '{{ column }}'{% if not loop.last %},{% endif %}
+                        {%- endfor %}
+                    )
+                    then 'batting'
+                else 'pitching'
+            end
+        )
+            as side
+    from {{ ref('int_fantasy__stat_components') }}
+    group by platform, stat_key
+
 )
 
 select
@@ -66,24 +89,7 @@ select
     categories.platform_player_id,
     categories.fantasy_team_id
 from {{ ref('fct_player_category_value') }} as categories
-inner join (
-    select
-        platform,
-        stat_key as category_key,
-        max(
-            case
-                when
-                    component in (
-                        '{{ fo_batting_columns() | join("', '") }}'
-                    )
-                    then 'batting'
-                else 'pitching'
-            end
-        )
-            as side
-    from {{ ref('int_fantasy__stat_components') }}
-    group by platform, stat_key
-) as category_sides
+inner join category_sides
     on category_sides.platform = categories.platform
     and category_sides.category_key = categories.category_key
 left join recomputed

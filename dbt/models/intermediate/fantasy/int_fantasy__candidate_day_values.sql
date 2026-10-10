@@ -50,7 +50,15 @@
 
 {%- set batting_columns = fo_batting_columns() %}
 {%- set pitching_columns = fo_pitching_columns() %}
-{%- set day_keys = ['platform', 'league_id', 'season', 'scoring_date', 'fantasy_team_id', 'platform_player_id', 'side'] %}
+{%- set day_keys = [
+    'platform',
+    'league_id',
+    'season',
+    'scoring_date',
+    'fantasy_team_id',
+    'platform_player_id',
+    'side'
+] %}
 
 with candidates as (
 

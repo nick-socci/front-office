@@ -6,14 +6,8 @@
 -- For the batting and relief pools. The start pool is not a set of N players: it is every
 -- free-agent start by a pitcher who was a starter at the time, however many pitchers
 -- that is (ADR 0029).
-select
-    levels.platform,
-    levels.league_id,
-    levels.season,
-    levels.day_kind,
-    max(levels.pool_players) as pool_players
-from {{ ref('int_fantasy__replacement_levels') }} as levels
-inner join (
+with league_season_sizes as (
+
     select
         platform,
         league_id,
@@ -21,7 +15,17 @@ inner join (
         count(*) as team_count
     from {{ ref('int_fantasy__teams') }}
     group by platform, league_id, season
-) as sizes
+
+)
+
+select
+    levels.platform,
+    levels.league_id,
+    levels.season,
+    levels.day_kind,
+    max(levels.pool_players) as pool_players
+from {{ ref('int_fantasy__replacement_levels') }} as levels
+inner join league_season_sizes as sizes
     on sizes.platform = levels.platform
     and sizes.league_id = levels.league_id
     and sizes.season = levels.season
