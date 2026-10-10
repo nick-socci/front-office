@@ -50,3 +50,4 @@ Decisions made before 2026-10 are in [docs/design/](../design/).
 | [0043](0043-sql-lint-rules-are-fitted-to-the-conventions-the-models-keep.md) | SQL lint rules are fitted to the conventions the models already keep, and no rule may change a relation | proposed | 2026-10-09 | [0013](../specs/0013-docs-lint-exposures/design.md) |
 | [0044](0044-sql-is-linted-as-dbt-compiles-it.md) | SQL is linted as dbt compiles it | proposed | 2026-10-09 | [0013](../specs/0013-docs-lint-exposures/design.md) |
 | [0045](0045-an-example-query-is-an-exposure-and-the-dashboard-reads-every-mart.md) | An example query is an exposure the gates check, and the planned dashboard reads every mart | proposed | 2026-10-09 | [0013](../specs/0013-docs-lint-exposures/design.md) |
+| [0047](0047-a-stopped-period-counter-is-extended-by-the-calendar.md) | A period counter that has stopped is extended by the calendar | proposed | 2026-10-10 | [0075](../specs/0075-settle-after-counter-stops/design.md) |
