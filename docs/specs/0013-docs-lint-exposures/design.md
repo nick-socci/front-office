@@ -230,7 +230,9 @@ its exposure is the gate's.
 
 `roster_day_query.sql` changes in one place (R3.9): its `params` CTE carries a
 `team_id` in place of a team name, the join to `params` is on `team_id`, and the
-header comment's wording follows. It still prints `team_name` in its output, which is
+header comment's wording follows. `params` also names the `league_id`, because a
+`team_id` is unique only within a league (owner, 2026-10-10, PR #116 review F2); the
+date already fixes the season. It still prints `team_name` in its output, which is
 the real name on a local warehouse and an alias on the fixtures. The models it reads
 do not change, so its exposure is as sketched above.
 
