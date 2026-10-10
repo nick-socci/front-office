@@ -648,11 +648,15 @@ seeds:
       started player's game ESPN credits (#10): batting from hitter slots only, pitching
       from P/SP/RP only. Measured, not assumed: summing everything a started player did
       leaves up to 18 of 286 matchup sides off ESPN per stat, crediting by role leaves
-      only official-scoring differences.
+      only official-scoring differences. is_injured_list_slot is true for the IL slot
+      only: a player cannot be started from it without a roster move, so lineup
+      decisions (#12) do not treat it as a candidate (bench stays usable).
     columns:
       - name: lineup_slot_id
         data_tests: [not_null, unique]
       - name: is_starting_slot
+        data_tests: [not_null]
+      - name: is_injured_list_slot
         data_tests: [not_null]
       - name: slot_role
         data_tests:

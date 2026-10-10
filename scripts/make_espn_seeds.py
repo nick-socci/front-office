@@ -42,6 +42,10 @@ NON_STARTING_SLOTS = {"BE", "IL"}
 # Every slot not named here is a hitter slot (C, 1B ... UTIL, IF).
 PITCHER_SLOTS = {"P", "SP", "RP"}
 
+# An injured-list slot is a bench slot a player cannot be started from without a roster
+# move, so lineup decisions (#12) do not treat it as a candidate. Bench (BE) stays usable.
+INJURED_LIST_SLOT = "IL"
+
 # Message types espn-api's ACTIVITY_MAP does not name. 188 is the lineup move the
 # unfiltered activity log also carries (#26); the name is the one the seed already holds.
 EXTRA_ACTIVITIES = {188: "LINEUP MOVED"}
@@ -101,9 +105,21 @@ def main() -> None:
     slots = numeric_only(POSITION_MAP)
     write_seed(
         "espn_lineup_slots",
-        ("lineup_slot_id", "slot_abbrev", "is_starting_slot", "slot_role"),
+        (
+            "lineup_slot_id",
+            "slot_abbrev",
+            "is_starting_slot",
+            "slot_role",
+            "is_injured_list_slot",
+        ),
         [
-            (key, slots[key], slots[key] not in NON_STARTING_SLOTS, slot_role(slots[key]))
+            (
+                key,
+                slots[key],
+                slots[key] not in NON_STARTING_SLOTS,
+                slot_role(slots[key]),
+                slots[key] == INJURED_LIST_SLOT,
+            )
             for key in sorted(slots)
         ],
     )
