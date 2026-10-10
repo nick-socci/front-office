@@ -9,7 +9,9 @@
 
 with staged as (
 
-    select scoring_period, count(*) as entries
+    select
+        scoring_period,
+        count(*) as entries
     from {{ ref('stg_espn__roster_entries') }}
     group by scoring_period
 
@@ -17,7 +19,9 @@ with staged as (
 
 neutral as (
 
-    select scoring_period, count(*) as entries
+    select
+        scoring_period,
+        count(*) as entries
     from {{ ref('int_fantasy__roster_days') }}
     group by scoring_period
 

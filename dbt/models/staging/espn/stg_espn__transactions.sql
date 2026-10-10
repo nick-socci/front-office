@@ -32,8 +32,9 @@ with responses as (
         {{ fo_json_text('partitions', '$.league_id') }} as league_id,
         {{ fo_json_int('partitions', '$.season') }}::integer as season
     from {{ source('raw', 'api_responses') }}
-    where source = 'espn'
-      and endpoint = 'transactions'
+    where
+        source = 'espn'
+        and endpoint = 'transactions'
 
 ),
 
@@ -103,12 +104,14 @@ messages as (
 )
 
 select
-    league_id,
-    season,
-    topic_id,
+    messages.league_id,
+    messages.season,
+    messages.topic_id,
     {{ fo_json_text('message', '$.id') }} as transaction_id,
     to_timestamp({{ fo_json_int('message', '$.date') }} / 1000) as transacted_at,
-    {{ fo_eastern_date('to_timestamp(' ~ fo_json_int('message', '$.date') | trim ~ ' / 1000)::timestamp') }}
+    {{ fo_eastern_date(
+        'to_timestamp(' ~ fo_json_int('message', '$.date') | trim ~ ' / 1000)::timestamp'
+    ) }}
         as transaction_date,
     {{ fo_json_int('message', '$.messageTypeId') }} as message_type_id,
     activities.activity,

@@ -7,12 +7,20 @@
 
 with roster_teams as (
 
-    select distinct league_id, season, team_id, 'stg_espn__roster_entries' as model
+    select distinct
+        league_id,
+        season,
+        team_id,
+        'stg_espn__roster_entries' as model
     from {{ ref('stg_espn__roster_entries') }}
 
     union all
 
-    select distinct league_id, season, team_id, 'stg_espn__roster_entry_slots'
+    select distinct
+        league_id,
+        season,
+        team_id,
+        'stg_espn__roster_entry_slots' as model
     from {{ ref('stg_espn__roster_entry_slots') }}
 
 )

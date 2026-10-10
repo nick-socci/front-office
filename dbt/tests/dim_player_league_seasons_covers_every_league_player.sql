@@ -13,10 +13,18 @@ select
     league_players.season,
     league_players.platform_player_id
 from (
-    select platform, league_id, season, platform_player_id
+    select
+        platform,
+        league_id,
+        season,
+        platform_player_id
     from {{ ref('int_fantasy__roster_days') }}
     union
-    select platform, league_id, season, platform_player_id
+    select
+        platform,
+        league_id,
+        season,
+        platform_player_id
     from {{ ref('int_fantasy__transactions') }}
     where platform_player_id is not null
 ) as league_players

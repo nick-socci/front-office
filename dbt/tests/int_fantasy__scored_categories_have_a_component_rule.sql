@@ -24,6 +24,7 @@ inner join {{ ref('int_fantasy__league_seasons') }} as league_seasons
 where not exists (
     select 1
     from {{ ref('int_fantasy__stat_components') }} as rules
-    where rules.platform = categories.platform
+    where
+        rules.platform = categories.platform
         and rules.stat_key = categories.category_key
 )

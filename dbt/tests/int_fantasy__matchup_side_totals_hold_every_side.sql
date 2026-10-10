@@ -39,5 +39,6 @@ full outer join {{ ref('int_fantasy__matchup_side_totals') }} as totals
     and totals.season = covered_sides.season
     and totals.matchup_id = covered_sides.matchup_id
     and totals.fantasy_team_id = covered_sides.fantasy_team_id
-where covered_sides.matchup_id is null
+where
+    covered_sides.matchup_id is null
     or totals.matchup_id is null

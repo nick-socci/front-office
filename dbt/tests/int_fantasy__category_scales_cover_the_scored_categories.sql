@@ -11,7 +11,11 @@
 
 with categories as (
 
-    select categories.platform, categories.league_id, categories.season, categories.category_key
+    select
+        categories.platform,
+        categories.league_id,
+        categories.season,
+        categories.category_key
     from {{ ref('int_fantasy__categories') }} as categories
     inner join {{ ref('int_fantasy__league_seasons') }} as league_seasons
         on league_seasons.platform = categories.platform
@@ -21,13 +25,13 @@ with categories as (
 
 )
 
-select
-    coalesce(categories.category_key, scales.category_key) as category_key
+select coalesce(categories.category_key, scales.category_key) as category_key
 from categories
 full outer join {{ ref('int_fantasy__category_scales') }} as scales
     on scales.platform = categories.platform
     and scales.league_id = categories.league_id
     and scales.season = categories.season
     and scales.category_key = categories.category_key
-where categories.category_key is null
+where
+    categories.category_key is null
     or scales.category_key is null

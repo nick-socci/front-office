@@ -50,7 +50,15 @@
 
 {%- set batting_columns = fo_batting_columns() %}
 {%- set pitching_columns = fo_pitching_columns() %}
-{%- set day_keys = ['platform', 'league_id', 'season', 'scoring_date', 'fantasy_team_id', 'platform_player_id', 'side'] %}
+{%- set day_keys = [
+    'platform',
+    'league_id',
+    'season',
+    'scoring_date',
+    'fantasy_team_id',
+    'platform_player_id',
+    'side'
+] %}
 
 with candidates as (
 
@@ -65,7 +73,8 @@ with candidates as (
     from {{ ref('int_fantasy__roster_days') }} as days
     inner join {{ ref('espn_lineup_slots') }} as slots
         on slots.lineup_slot_id = days.roster_slot_id
-    where days.mlbam_player_id is not null
+    where
+        days.mlbam_player_id is not null
         and (days.is_started or (days.slot_role = 'bench' and not slots.is_injured_list_slot))
 
 ),
@@ -78,7 +87,7 @@ played_sides as (
         'batting' as side,
         'batting' as day_kind,
         {%- for column in batting_columns + pitching_columns %}
-        stats.{{ column }}{{ ',' if not loop.last }}
+        stats.{{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from candidates
     inner join {{ ref('int_mlb__player_game_days') }} as stats
@@ -93,7 +102,7 @@ played_sides as (
         'pitching' as side,
         {{ fo_pitching_day_kind('stats.games_pitched', 'stats.games_started') }} as day_kind,
         {%- for column in batting_columns + pitching_columns %}
-        stats.{{ column }}{{ ',' if not loop.last }}
+        stats.{{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from candidates
     inner join {{ ref('int_mlb__player_game_days') }} as stats
@@ -129,7 +138,7 @@ day_components as (
         cast(coalesce({{ column }}, 0) as double) as component_total
     from played_sides
     where side = 'pitching'
-        {{- '\n    union all' if not loop.last }}
+    {{- '\n    union all' if not loop.last }}
     {%- endfor %}
 
 ),
@@ -230,9 +239,9 @@ day_values as (
         end as day_value
     from day_category_values
     group by
-        {%- for key in day_keys %}
-        {{ key }}{{ ',' if not loop.last }}
-        {%- endfor %}
+    {%- for key in day_keys %}
+        {{ key }}{% if not loop.last %},{% endif %}
+    {%- endfor %}
 
 )
 

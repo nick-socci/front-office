@@ -1,0 +1,94 @@
+version: 2
+
+# An exposure declares something outside dbt that reads these models. dbt builds nothing
+# for it: it adds a node at the end of the lineage, and makes
+# `dbt build --select +exposure:<name>` mean "everything this needs".
+#
+# dbt checks only that the models named here exist. That each example query reads
+# exactly the models its exposure names, and still runs, is checked by
+# scripts/check_examples.py in the gates (ADR 0045). An owner carries a name and no
+# email address: the generated site is public.
+
+exposures:
+  - name: front_office_dashboard
+    label: Front Office dashboard (planned)
+    type: dashboard
+    maturity: low
+    owner:
+      name: Nick Socci
+    description: >
+      Planned for sub-project 3 and not built. Declared so that the lineage ends where
+      the marts are meant to be read, and so that everything the dashboard will need can
+      be selected in one expression. It names every mart, which records that the marts
+      are the dashboard's interface and not what any page reads; when the dashboard
+      exists this list is rewritten from what it queries (ADR 0045).
+    depends_on:
+      - ref('dim_player_league_seasons')
+      - ref('dim_players')
+      - ref('fct_lineup_decision_categories')
+      - ref('fct_lineup_decisions')
+      - ref('fct_matchup_category_scores')
+      - ref('fct_matchup_results')
+      - ref('fct_player_category_value')
+      - ref('fct_player_season_value')
+      - ref('fct_transaction_impact')
+
+  - name: roster_day_query
+    label: "Example: a team's roster on one day"
+    type: analysis
+    maturity: medium
+    owner:
+      name: Nick Socci
+    url: https://github.com/nick-socci/front-office/blob/main/docs/examples/roster_day_query.sql
+    description: >
+      Sub-project 1's definition of done: who was on a team's roster on a date, and what
+      each of them did in MLB that day. Reads staging directly, because it was written
+      before the layers above it existed.
+    depends_on:
+      - ref('stg_espn__roster_entries')
+      - ref('stg_espn__scoring_periods')
+      - ref('stg_espn__teams')
+      - ref('stg_idmap__players')
+      - ref('stg_mlb__batting_game_logs')
+      - ref('stg_mlb__games')
+      - ref('stg_mlb__pitching_game_logs')
+
+  - name: matchup_results_query
+    label: "Example: regular-season standings"
+    type: analysis
+    maturity: medium
+    owner:
+      name: Nick Socci
+    url: https://github.com/nick-socci/front-office/blob/main/docs/examples/matchup_results_query.sql
+    description: >
+      Each team's regular-season matchups won, lost and tied, and the categories that
+      decided them, from one mart.
+    depends_on:
+      - ref('fct_matchup_results')
+
+  - name: player_value_query
+    label: "Example: the most valuable player-seasons"
+    type: analysis
+    maturity: medium
+    owner:
+      name: Nick Socci
+    url: https://github.com/nick-socci/front-office/blob/main/docs/examples/player_value_query.sql
+    description: >
+      The fifteen players worth the most to the team that started them, with the name
+      joined in from the player dimension.
+    depends_on:
+      - ref('dim_players')
+      - ref('fct_player_season_value')
+
+  - name: lineup_decisions_query
+    label: "Example: value left on the bench"
+    type: analysis
+    maturity: medium
+    owner:
+      name: Nick Socci
+    url: https://github.com/nick-socci/front-office/blob/main/docs/examples/lineup_decisions_query.sql
+    description: >
+      For each team, the gap over the season between the lineups it set and the best it
+      could have set from the players it held. Hindsight opportunity, not skill.
+    depends_on:
+      - ref('fct_lineup_decisions')

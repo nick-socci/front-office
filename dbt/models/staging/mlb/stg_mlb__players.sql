@@ -24,8 +24,9 @@ with responses as (
         request_key,
         fetched_at
     from {{ source('raw', 'api_responses') }}
-    where source = 'mlb'
-      and endpoint = 'players'
+    where
+        source = 'mlb'
+        and endpoint = 'players'
 
 ),
 

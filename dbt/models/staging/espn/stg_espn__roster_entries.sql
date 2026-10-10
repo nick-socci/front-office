@@ -84,10 +84,10 @@ entries as (
 )
 
 select
-    league_id,
-    season,
-    scoring_period,
-    team_id,
+    entries.league_id,
+    entries.season,
+    entries.scoring_period,
+    entries.team_id,
     entry.playerId as espn_player_id,
     entry.playerPoolEntry.player.fullName as player_name,
     entry.lineupSlotId as lineup_slot_id,

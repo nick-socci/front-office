@@ -12,14 +12,22 @@
 
 with in_fact as (
 
-    select distinct platform, league_id, season, category_key
+    select distinct
+        platform,
+        league_id,
+        season,
+        category_key
     from {{ ref('fct_player_category_value') }}
 
 ),
 
 in_categories as (
 
-    select categories.platform, categories.league_id, categories.season, categories.category_key
+    select
+        categories.platform,
+        categories.league_id,
+        categories.season,
+        categories.category_key
     from {{ ref('int_fantasy__categories') }} as categories
     inner join {{ ref('int_fantasy__league_seasons') }} as league_seasons
         on league_seasons.platform = categories.platform
@@ -31,7 +39,9 @@ in_categories as (
 
 select
     coalesce(in_fact.category_key, in_categories.category_key) as category_key,
-    case when in_fact.category_key is null then 'missing from the fact' else 'not a scored category' end
+    case
+        when in_fact.category_key is null then 'missing from the fact' else 'not a scored category'
+    end
         as problem
 from in_fact
 full outer join in_categories
@@ -39,5 +49,6 @@ full outer join in_categories
     and in_categories.league_id = in_fact.league_id
     and in_categories.season = in_fact.season
     and in_categories.category_key = in_fact.category_key
-where in_fact.category_key is null
+where
+    in_fact.category_key is null
     or in_categories.category_key is null

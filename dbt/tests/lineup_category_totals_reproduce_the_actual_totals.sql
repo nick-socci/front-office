@@ -11,14 +11,28 @@
 
 with fact as (
 
-    select platform, league_id, season, matchup_id, fantasy_team_id, category_key, team_value
+    select
+        platform,
+        league_id,
+        season,
+        matchup_id,
+        fantasy_team_id,
+        category_key,
+        team_value
     from {{ ref('fct_matchup_category_scores') }}
 
 ),
 
 actual as (
 
-    select platform, league_id, season, matchup_id, fantasy_team_id, category_key, category_value
+    select
+        platform,
+        league_id,
+        season,
+        matchup_id,
+        fantasy_team_id,
+        category_key,
+        category_value
     from {{ ref('int_fantasy__lineup_category_totals') }}
     where lineup = 'actual'
 
@@ -43,6 +57,7 @@ full outer join actual
     and actual.matchup_id = fact.matchup_id
     and actual.fantasy_team_id = fact.fantasy_team_id
     and actual.category_key = fact.category_key
-where fact.category_key is null
+where
+    fact.category_key is null
     or actual.category_key is null
     or actual.category_value is distinct from fact.team_value

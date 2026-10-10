@@ -52,7 +52,14 @@
 {%- set draws = 20 %}
 {%- set batting_columns = fo_batting_columns() %}
 {%- set pitching_columns = fo_pitching_columns() %}
-{%- set pair_keys = ['platform', 'league_id', 'season', 'matchup_id', 'fantasy_team_id', 'platform_player_id'] %}
+{%- set pair_keys = [
+    'platform',
+    'league_id',
+    'season',
+    'matchup_id',
+    'fantasy_team_id',
+    'platform_player_id'
+] %}
 
 with rescorable_sides as (
 
@@ -70,7 +77,8 @@ with rescorable_sides as (
         and results.league_id = sides.league_id
         and results.season = sides.season
         and results.matchup_id = sides.matchup_id
-    where results.winner is not null
+    where
+        results.winner is not null
         and not results.has_unverified_inputs
 
 ),
@@ -91,14 +99,14 @@ pair_matchups as (
         ) as batting_days,
         count(*) filter (
             where days.slot_role = 'pitcher'
-                and {{ fo_pitching_day_kind('days.games_pitched', 'days.games_started') }} = 'start'
+            and {{ fo_pitching_day_kind('days.games_pitched', 'days.games_started') }} = 'start'
         ) as start_days,
         count(*) filter (
             where days.slot_role = 'pitcher'
-                and {{ fo_pitching_day_kind('days.games_pitched', 'days.games_started') }} = 'relief'
+            and {{ fo_pitching_day_kind('days.games_pitched', 'days.games_started') }} = 'relief'
         ) as relief_days,
         {%- for column in batting_columns + pitching_columns %}
-        sum(coalesce(days.{{ column }}, 0)) as {{ column }}{{ ',' if not loop.last }}
+        sum(coalesce(days.{{ column }}, 0)) as {{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from {{ ref('int_fantasy__started_player_days') }} as days
     inner join {{ ref('int_fantasy__matchup_periods') }} as periods
@@ -125,7 +133,13 @@ pair_matchups as (
 
 levels as (
 
-    select platform, league_id, season, day_kind, component, level_per_played_day
+    select
+        platform,
+        league_id,
+        season,
+        day_kind,
+        component,
+        level_per_played_day
     from {{ ref('int_fantasy__replacement_levels') }}
 
 ),
@@ -191,7 +205,12 @@ pair_components as (
 -- A pair is all or nothing: one unknown level leaves the whole pair unmeasured.
 unmeasured_pairs as (
 
-    select distinct platform, league_id, season, fantasy_team_id, platform_player_id
+    select distinct
+        platform,
+        league_id,
+        season,
+        fantasy_team_id,
+        platform_player_id
     from pair_components
     where replacement_expected is null
 
@@ -200,8 +219,14 @@ unmeasured_pairs as (
 side_components as (
 
     {%- for column in batting_columns + pitching_columns %}
-    select platform, league_id, season, matchup_id, fantasy_team_id,
-        '{{ column }}' as component, {{ column }}::double as side_total
+    select
+        platform,
+        league_id,
+        season,
+        matchup_id,
+        fantasy_team_id,
+        '{{ column }}' as component,
+        {{ column }}::double as side_total
     from {{ ref('int_fantasy__matchup_side_totals') }}
     {{ 'union all' if not loop.last }}
     {%- endfor %}
@@ -224,26 +249,26 @@ swapped_components as (
         draw_numbers.draw,
         pair_components.component,
         side_components.side_total
-            - pair_components.pair_total
-            + floor(pair_components.replacement_expected)
-            + case
-                when (
-                    '0x' || substr(md5(concat_ws(
-                        '|',
-                        pair_components.platform,
-                        pair_components.league_id,
-                        pair_components.season::varchar,
-                        pair_components.matchup_id::varchar,
-                        pair_components.fantasy_team_id::varchar,
-                        pair_components.platform_player_id::varchar,
-                        pair_components.component,
-                        draw_numbers.draw::varchar
-                    )), 1, 8)
-                )::bigint / 4294967296.0
-                    < pair_components.replacement_expected - floor(pair_components.replacement_expected)
-                    then 1
-                else 0
-            end as swapped_total
+        - pair_components.pair_total
+        + floor(pair_components.replacement_expected)
+        + case
+            when (
+                '0x' || substr(md5(concat_ws(
+                    '|',
+                    pair_components.platform,
+                    pair_components.league_id,
+                    pair_components.season::varchar,
+                    pair_components.matchup_id::varchar,
+                    pair_components.fantasy_team_id::varchar,
+                    pair_components.platform_player_id::varchar,
+                    pair_components.component,
+                    draw_numbers.draw::varchar
+                )), 1, 8)
+            )::bigint / 4294967296.0
+            < pair_components.replacement_expected - floor(pair_components.replacement_expected)
+                then 1
+            else 0
+        end as swapped_total
     from pair_components
     cross join draw_numbers
     inner join side_components
@@ -294,14 +319,15 @@ swapped_values as (
         scored_rules.is_lower_better,
         case
             when count(*) filter (where scored_rules.part = 'denominator') = 0
-                then sum(scored_rules.weight * swapped.swapped_total)
+                then
+                    sum(scored_rules.weight * swapped.swapped_total)
                     filter (where scored_rules.part = 'numerator')
             else
                 sum(scored_rules.weight * swapped.swapped_total)
-                    filter (where scored_rules.part = 'numerator')
+                filter (where scored_rules.part = 'numerator')
                 / nullif(
                     sum(scored_rules.weight * swapped.swapped_total)
-                        filter (where scored_rules.part = 'denominator'),
+                    filter (where scored_rules.part = 'denominator'),
                     0
                 )
         end as swapped_value
@@ -323,8 +349,15 @@ swapped_values as (
 
 actual_values as (
 
-    select platform, league_id, season, matchup_id, fantasy_team_id, opponent_team_id,
-        stat_key as category_key, round(stat_value, 9) as stat_value
+    select
+        platform,
+        league_id,
+        season,
+        matchup_id,
+        fantasy_team_id,
+        opponent_team_id,
+        stat_key as category_key,
+        round(stat_value, 9) as stat_value
     from {{ ref('int_fantasy__matchup_stat_values') }}
 
 ),
@@ -345,7 +378,9 @@ category_results as (
         end as actual_result,
         case
             when round(swapped.swapped_value, 9) = opponent.stat_value then 'TIE'
-            when (round(swapped.swapped_value, 9) < opponent.stat_value) = swapped.is_lower_better then 'WIN'
+            when
+                (round(swapped.swapped_value, 9) < opponent.stat_value) = swapped.is_lower_better
+                then 'WIN'
             else 'LOSS'
         end as swapped_result
     from swapped_values as swapped
@@ -364,7 +399,8 @@ category_results as (
         and opponent.fantasy_team_id = team.opponent_team_id
         and opponent.category_key = team.category_key
     -- Undefined on any of the three sides: left out of this draw.
-    where swapped.swapped_value is not null
+    where
+        swapped.swapped_value is not null
         and team.stat_value is not null
         and opponent.stat_value is not null
 
@@ -378,19 +414,23 @@ matchup_draws as (
         {%- endfor %}
         draw,
         sum(case actual_result when 'WIN' then 1.0 when 'TIE' then 0.5 else 0 end)
-            - sum(case swapped_result when 'WIN' then 1.0 when 'TIE' then 0.5 else 0 end)
+        - sum(case swapped_result when 'WIN' then 1.0 when 'TIE' then 0.5 else 0 end)
             as category_wins_added,
         case
-            when count(*) filter (where actual_result = 'WIN')
+            when
+                count(*) filter (where actual_result = 'WIN')
                 > count(*) filter (where actual_result = 'LOSS') then 1.0
-            when count(*) filter (where actual_result = 'WIN')
+            when
+                count(*) filter (where actual_result = 'WIN')
                 = count(*) filter (where actual_result = 'LOSS') then 0.5
             else 0
         end
         - case
-            when count(*) filter (where swapped_result = 'WIN')
+            when
+                count(*) filter (where swapped_result = 'WIN')
                 > count(*) filter (where swapped_result = 'LOSS') then 1.0
-            when count(*) filter (where swapped_result = 'WIN')
+            when
+                count(*) filter (where swapped_result = 'WIN')
                 = count(*) filter (where swapped_result = 'LOSS') then 0.5
             else 0
         end as matchup_wins_added

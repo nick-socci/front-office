@@ -1,6 +1,6 @@
 # 0042. The docs site is built in CI from the fixtures, and deployed by the Pages actions
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 - Spec: [0013-docs-lint-exposures](../specs/0013-docs-lint-exposures/design.md) · Issue: #13
 

@@ -36,9 +36,10 @@ with single_component_stats as (
     from {{ ref('int_fantasy__stat_components') }}
     where platform = 'espn'
     group by stat_key
-    having count(*) = 1
-       and max(part) = 'numerator'
-       and max(weight) = 1
+    having
+        count(*) = 1
+        and max(part) = 'numerator'
+        and max(weight) = 1
 
 ),
 
@@ -46,8 +47,12 @@ credited as (
 
     -- Each slot role's side of the day, one row per component.
     {%- set credited_columns = [] %}
-    {%- for column in fo_batting_columns() %}{% do credited_columns.append(('hitter', column)) %}{% endfor %}
-    {%- for column in fo_pitching_columns() %}{% do credited_columns.append(('pitcher', column)) %}{% endfor %}
+    {%- for column in fo_batting_columns() %}
+    {%- do credited_columns.append(('hitter', column)) %}
+    {%- endfor %}
+    {%- for column in fo_pitching_columns() %}
+    {%- do credited_columns.append(('pitcher', column)) %}
+    {%- endfor %}
     {%- for role, column in credited_columns %}
     select
         league_id,
@@ -62,8 +67,9 @@ credited as (
         '{{ column }}' as component,
         cast({{ column }} as double) as our_value
     from {{ ref('int_fantasy__started_player_days') }}
-    where platform = 'espn'
-      and slot_role = '{{ role }}'
+    where
+        platform = 'espn'
+        and slot_role = '{{ role }}'
     {{ 'union all' if not loop.last }}
     {%- endfor %}
 

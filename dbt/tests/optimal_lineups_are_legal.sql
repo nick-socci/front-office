@@ -20,7 +20,11 @@ player_twice as (
 
     select
         'player_twice' as broken_rule,
-        platform, league_id, season, scoring_date, fantasy_team_id,
+        platform,
+        league_id,
+        season,
+        scoring_date,
+        fantasy_team_id,
         platform_player_id,
         cast(null as bigint) as lineup_slot_id,
         count(*) as row_count
@@ -34,7 +38,10 @@ slot_over_count as (
 
     select
         'slot_over_count' as broken_rule,
-        lineups.platform, lineups.league_id, lineups.season, lineups.scoring_date,
+        lineups.platform,
+        lineups.league_id,
+        lineups.season,
+        lineups.scoring_date,
         lineups.fantasy_team_id,
         cast(null as bigint) as platform_player_id,
         lineups.lineup_slot_id,
@@ -56,8 +63,13 @@ not_an_option as (
 
     select
         'not_an_option' as broken_rule,
-        lineups.platform, lineups.league_id, lineups.season, lineups.scoring_date,
-        lineups.fantasy_team_id, lineups.platform_player_id, lineups.lineup_slot_id,
+        lineups.platform,
+        lineups.league_id,
+        lineups.season,
+        lineups.scoring_date,
+        lineups.fantasy_team_id,
+        lineups.platform_player_id,
+        lineups.lineup_slot_id,
         1 as row_count
     from lineups
     left join {{ ref('int_fantasy__lineup_options') }} as options
@@ -74,7 +86,12 @@ not_an_option as (
 
 unvalued_team_days as (
 
-    select distinct platform, league_id, season, scoring_date, fantasy_team_id
+    select distinct
+        platform,
+        league_id,
+        season,
+        scoring_date,
+        fantasy_team_id
     from {{ ref('int_fantasy__lineup_options') }}
     where option_value is null
 
@@ -84,8 +101,13 @@ unvalued_team_day as (
 
     select
         'unvalued_team_day' as broken_rule,
-        lineups.platform, lineups.league_id, lineups.season, lineups.scoring_date,
-        lineups.fantasy_team_id, lineups.platform_player_id, lineups.lineup_slot_id,
+        lineups.platform,
+        lineups.league_id,
+        lineups.season,
+        lineups.scoring_date,
+        lineups.fantasy_team_id,
+        lineups.platform_player_id,
+        lineups.lineup_slot_id,
         1 as row_count
     from lineups
     inner join unvalued_team_days

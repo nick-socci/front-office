@@ -28,5 +28,5 @@ select
     period_one.period_one_date + (games.scoring_period - 1)::integer as expected_date
 from {{ ref('stg_espn__pro_games') }} as games
 inner join period_one
-    on games.season = period_one.season
+    on period_one.season = games.season
 where games.game_date != period_one.period_one_date + (games.scoring_period - 1)::integer
