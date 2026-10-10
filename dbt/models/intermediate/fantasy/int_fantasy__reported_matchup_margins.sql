@@ -189,7 +189,10 @@ period_means as (
         season,
         matchup_period,
         category_key,
-        avg(score) as mean_side_total
+        -- Averaged in matchup and side order: the last digit of a floating-point average
+        -- depends on the order of its terms, and row order changes from build to build
+        -- (#28, R4.13; ADR 0046).
+        avg(score order by matchup_id, side) as mean_side_total
     from side_totals
     where
         is_regular_season
