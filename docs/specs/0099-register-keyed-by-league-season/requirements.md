@@ -1,6 +1,6 @@
 # The register of known differences names its league and season — requirements
 
-Issue: #99 · Tier: M · Status: draft
+Issue: #99 · Tier: M · Status: approved 2026-10-09
 
 ## Problem
 

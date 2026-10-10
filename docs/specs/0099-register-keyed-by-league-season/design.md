@@ -69,8 +69,8 @@ a status such as `stale_register`. It changes that table's grain and vocabulary,
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0040](../../adr/0040-a-register-row-names-its-league-and-season-by-the-real-league-id.md) | A register row names its league and season, the league by its real ESPN id | proposed |
-| [0041](../../adr/0041-the-registers-own-checks-live-in-a-view.md) | The register's own checks live in a view, one row per register row | proposed |
+| [0040](../../adr/0040-a-register-row-names-its-league-and-season-by-the-real-league-id.md) | A register row names its league and season, the league by its real ESPN id | accepted |
+| [0041](../../adr/0041-the-registers-own-checks-live-in-a-view.md) | The register's own checks live in a view, one row per register row | accepted |
 
 ## Detailed design
 
