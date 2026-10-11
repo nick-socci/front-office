@@ -483,3 +483,17 @@ is a behaviour shown to be the same on inputs chosen to be awkward.
 
 ## Amendments
 
+
+### 2026-10-11: the selector names one test (build, task 2)
+
+The selector as written above selects 203 data tests, not the 204 of *Expected values*.
+dbt applies `indirect_selection: cautious` to each member of a union alone, so
+`fct_matchup_results_match_espn`, whose parents lie in two members, is in neither,
+although every model it reads is in the slice. The selector gains a fourth member naming
+that test, and `test_bigquery_slice.py` fails if the selector's tests ever differ from
+`dbt ls --select "+a +b +c" --indirect-selection cautious`, which applies the rule to the
+union as a whole. No scope moves: the count is the spec's.
+
+Also settled in task 2: `env_var('FO_BQ_PROJECT')` with no default is evaluated only when
+the `bq` target is used. `dev` and `ci` parse with the variable unset, and with
+`dbt-bigquery` not installed; `bq` fails naming the variable (R2.5).

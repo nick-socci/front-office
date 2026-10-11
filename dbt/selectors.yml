@@ -1,0 +1,23 @@
+# Named selections, used as `dbt build --selector <name>`.
+selectors:
+  - name: bigquery_slice
+    description: The models ported to BigQuery by the spike (spec 0130).
+    definition:
+      union:
+        - method: fqn
+          value: fct_matchup_results
+          parents: true
+          indirect_selection: cautious
+        - method: fqn
+          value: rec_espn__category_result_differences
+          parents: true
+          indirect_selection: cautious
+        - method: fqn
+          value: int_fantasy__category_scales
+          parents: true
+          indirect_selection: cautious
+        # `cautious` is applied to each member of a union on its own, so a test whose
+        # parents lie in two members is in neither. This is the one such test; a pytest
+        # (test_bigquery_slice.py) fails if another appears.
+        - method: fqn
+          value: fct_matchup_results_match_espn
