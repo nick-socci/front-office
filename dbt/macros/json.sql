@@ -185,7 +185,7 @@
 {% macro bigquery__fo_json_array(column, path) %}
     {%- set parts = path.split('[*]') -%}
     {%- if '.*' in path or parts | length > 3 or parts[-1] != '' -%}
-        {{ exceptions.raise_compiler_error(
+        {{ bigquery__fo_json_refuse(
             "fo_json_array on BigQuery takes one [*] at the end of a path, or two: " ~ path
         ) }}
     {%- elif parts | length == 2 %}
@@ -198,11 +198,23 @@
         order by _outer_at, _inner_at
     )
     {%- else -%}
-        {{ exceptions.raise_compiler_error(
+        {{ bigquery__fo_json_refuse(
             "fo_json_array on BigQuery needs a [*] in its path: " ~ path
         ) }}
     {%- endif -%}
 {%- endmacro %}
+
+{#
+  Refuse something the BigQuery forms cannot write, when the model that asks for it is
+  compiled. Not while the project is parsed: dbt renders every model then, selected or
+  not, and a model outside the BigQuery slice (spec 0130) may still ask for what only
+  DuckDB has. Raising there would stop the `bq` target from parsing at all.
+#}
+{% macro bigquery__fo_json_refuse(message) %}
+    {%- if execute -%}
+        {{ exceptions.raise_compiler_error(message) }}
+    {%- endif -%}
+{% endmacro %}
 
 {% macro bigquery__fo_json_parse(column, path, schema) %}
     {{ bigquery__fo_json_parse_value(
@@ -233,7 +245,7 @@
         {%- elif schema in leaves -%}
             {{ leaves[schema] }}({{ value }})
         {%- else -%}
-            {{ exceptions.raise_compiler_error(
+            {{ bigquery__fo_json_refuse(
                 "fo_json_parse on BigQuery has no form for the type " ~ schema
             ) }}
         {%- endif -%}
@@ -245,7 +257,7 @@
             order by {{ element }}_at
         )
     {%- else -%}
-        {{ exceptions.raise_compiler_error(
+        {{ bigquery__fo_json_refuse(
             "fo_json_parse on BigQuery cannot read this part of a schema: " ~ schema
         ) }}
     {%- endif -%}

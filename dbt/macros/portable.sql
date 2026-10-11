@@ -155,3 +155,21 @@
 {% macro bigquery__fo_timestamp_from_millis(milliseconds) -%}
     timestamp_millis({{ milliseconds }})
 {%- endmacro %}
+
+
+{#
+  Text with its accents removed, for matching one source's spelling of a name with
+  another's ("Jose" for "José"). BigQuery has no function for it: the text is decomposed
+  (NFD), which splits each accented letter into the letter and its marks, and the marks
+  are removed. Whether the two agree on every name the season holds is checked by
+  comparing the builds (spec 0130, R5.2), not assumed.
+#}
+{% macro fo_strip_accents(expression) %}
+    {{- return(adapter.dispatch('fo_strip_accents')(expression)) -}}
+{% endmacro %}
+{% macro duckdb__fo_strip_accents(expression) -%}
+    strip_accents({{ expression }})
+{%- endmacro %}
+{% macro bigquery__fo_strip_accents(expression) -%}
+    regexp_replace(normalize({{ expression }}, NFD), r'\pM', '')
+{%- endmacro %}

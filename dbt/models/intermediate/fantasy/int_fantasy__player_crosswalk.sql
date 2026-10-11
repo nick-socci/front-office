@@ -45,17 +45,17 @@
 with mlb_players as (
 
     select
-        strip_accents(logs.player_name) as match_name,
+        {{ fo_strip_accents('logs.player_name') }} as match_name,
         logs.mlbam_player_id,
         games.season
     from {{ ref('stg_mlb__batting_game_logs') }} as logs
     inner join {{ ref('stg_mlb__games') }} as games
         on games.game_pk = logs.game_pk
 
-    union
+    union distinct
 
     select
-        strip_accents(logs.player_name) as match_name,
+        {{ fo_strip_accents('logs.player_name') }} as match_name,
         logs.mlbam_player_id,
         games.season
     from {{ ref('stg_mlb__pitching_game_logs') }} as logs
@@ -108,5 +108,5 @@ from entries
 left join {{ ref('stg_idmap__players') }} as crosswalk
     on crosswalk.espn_player_id = entries.espn_player_id
 left join unambiguous_names
-    on unambiguous_names.match_name = strip_accents(entries.player_name)
+    on unambiguous_names.match_name = {{ fo_strip_accents('entries.player_name') }}
     and unambiguous_names.season = entries.season

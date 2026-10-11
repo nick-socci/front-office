@@ -66,6 +66,8 @@ _REFUSED = (
     ("from_json", re.compile(r"\bfrom_json\b", re.IGNORECASE)),
     ("-> / ->> operator", re.compile(r"->")),
     ("at time zone", re.compile(r"\bat\s+time\s+zone\b", re.IGNORECASE)),
+    ("strip_accents", re.compile(r"\bstrip_accents\s*\(", re.IGNORECASE)),
+    ("union without all or distinct", re.compile(r"\bunion\b(?!\s+(all|distinct)\b)", re.I)),
     ("type varchar", re.compile(r"(?<!\")\bvarchar\b(?!\")", re.IGNORECASE)),
     ("type double", re.compile(r"(?<!\")\bdouble\b(?!\")", re.IGNORECASE)),
     ("type timestamptz", re.compile(r"(?<!\")\btimestamptz\b(?!\")", re.IGNORECASE)),
@@ -230,6 +232,8 @@ def test_the_slice_and_the_macros_it_reaches_hold_no_sql_bigquery_refuses(
         ("select from_json(j, s) from t", "from_json"),
         ("select j ->> k from t", "-> / ->> operator"),
         ("select ts at time zone z from t", "at time zone"),
+        ("select strip_accents(s) from t", "strip_accents"),
+        ("select 1 union select 2", "union without all or distinct"),
         ("select cast(x as varchar) from t", "type varchar"),
         ("select cast(x as DOUBLE) from t", "type double"),
         ("select cast(x as timestamptz) from t", "type timestamptz"),
@@ -254,6 +258,7 @@ def test_the_shared_spellings_and_the_macro_calls_pass() -> None:
         "    sum(x) over (order by k) as running, x_range, filtered\n"
         "from t {{ fo_unnest('t.xs', 'x') }}\n"
         "where d between a and b order by 1\n"
+        "union all select 1 union distinct select 2 UNION  ALL select 3\n"
     )
     assert refused_constructs(sql) == []
 

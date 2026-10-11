@@ -528,3 +528,37 @@ sqlfluff's RF02 fires on the DuckDB form of `fo_unnest_pair`, a joined subquery,
 `stg_espn__matchup_category_results`. The table's columns are qualified; the two unnested
 names cannot be, since what they would be qualified with differs by warehouse, and carry
 `-- noqa: RF02` with that reason (ADR 0043).
+
+### 2026-10-11: found by rendering the slice for BigQuery with no network (build, before task 10)
+
+No BigQuery job has been run: R2.7 waits for the owner. To see the BigQuery forms before
+then, the slice was compiled for the `bq` target inside a network namespace with no
+network (`unshare -rn dbt compile --target bq --selector bigquery_slice --no-introspect`,
+a placeholder project id), and the 234 rendered files (30 models, 204 data tests) parsed
+with sqlfluff's BigQuery dialect. A parser is not BigQuery, so R4.7 still stands. It found:
+
+- **dbt parses every model on every target, selected or not.** `fo_json_parse`'s refusal
+  of a type it has no BigQuery form for stopped the `bq` target from parsing at all, on
+  `stg_espn__player_game_stats`, which is outside the slice and passes a `MAP`. The
+  BigQuery forms now refuse only when a model is compiled (`execute`), which a model
+  outside the selector never is. A ported model still fails with the type named.
+- **`union` alone.** BigQuery wants `union all` or `union distinct`. Both accept
+  `union distinct`, so it is plain SQL: one place in the slice
+  (`int_fantasy__player_crosswalk`), five in files outside it. Added to the rule test.
+- **`strip_accents`**, in the same model, has no BigQuery function. New dispatched macro
+  `fo_strip_accents`: `strip_accents(x)` / `regexp_replace(normalize(x, NFD), r'\pM', '')`.
+  Whether the two agree on every name is for R5.2 to show. Added to the rule test.
+
+After these the real `dev` build is again identical to the baseline, 56 of 56 relations.
+
+**Open, and the owner's:** `median(x)` as an aggregate, twice in
+`int_fantasy__reported_matchup_margins`. BigQuery has no aggregate median that is exact:
+`percentile_cont` is a window function there, and `approx_quantiles` is approximate. It
+is not in the design's table, it is not a respelling, and the model's shape would change
+on both warehouses, as `stg_espn__pro_games`' did. It is left as it is, is not yet in the
+rule test, and will fail the `--empty` build of task 12 unless decided first.
+
+**Expected to fail in task 12 as well:** the contracts. 20 of the slice's models declare
+`data_type: varchar`, `bigint` or `double` per column in YAML, and dbt writes those names
+into the `create table` it sends. `double` and `varchar` are not BigQuery types. This is
+YAML, which the rule test does not read.
