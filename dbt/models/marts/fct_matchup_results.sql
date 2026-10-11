@@ -25,11 +25,11 @@ with tallies as (
         opponent_team_id,
         is_home,
         count(*) as scored_categories,
-        count(*) filter (where result = 'WIN') as category_wins,
-        count(*) filter (where result = 'LOSS') as category_losses,
-        count(*) filter (where result = 'TIE') as category_ties,
-        count(*) filter (where result is null) as categories_undecided,
-        bool_or(has_unverified_inputs) as has_unverified_inputs
+        count(case when result = 'WIN' then 1 end) as category_wins,
+        count(case when result = 'LOSS' then 1 end) as category_losses,
+        count(case when result = 'TIE' then 1 end) as category_ties,
+        count(case when result is null then 1 end) as categories_undecided,
+        {{ fo_any_true('has_unverified_inputs') }} as has_unverified_inputs
     from {{ ref('fct_matchup_category_scores') }}
     group by
         platform,
