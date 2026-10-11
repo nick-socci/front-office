@@ -44,7 +44,14 @@ endpoint" to this migration.
 
 ## Decision
 
-Recommended, for the owner to decide: **option 1**, for the spike only.
+Chosen by the owner on 2026-10-11, going through the spec's decisions: **option 1**, for
+the spike only, **and option 3 measured once** for `mlb/boxscore`, so that sub-project 4
+starts from a number (spec 0130, R6.6).
+
+The owner also chose that day to link a billing account before the spike runs. The
+sandbox limits in the context are what was seen when this was drafted; with billing,
+options 3 and 5 are no longer refused, and option 1 is still chosen: it puts the same
+rows in front of both builds without designing the production loader.
 
 The rows come from the local warehouse's `raw.api_responses`, so the two builds read the
 same rows by construction. Clustering is BigQuery's way of sorting a table's storage by
@@ -53,8 +60,8 @@ filters on `endpoint`.
 
 Option 2 has no way to write `fo_json_values` without parsing every payload in every
 query, and is measured once for one model to know what it would cost (spec 0130, R6.4).
-Option 3 needs a billing account, and is the likely production answer once Cloud Run
-writes captures to a bucket. Option 4 changes `source('raw', 'api_responses')` in every
+Option 3 is the likely production answer once Cloud Run writes captures to a bucket; it
+is measured, not built on. Option 4 changes `source('raw', 'api_responses')` in every
 staging model on one warehouse only. Option 5 is DML or streaming, both refused.
 
 ## Consequences

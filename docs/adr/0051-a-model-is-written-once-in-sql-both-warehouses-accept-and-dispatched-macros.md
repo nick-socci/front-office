@@ -43,7 +43,7 @@ Their DuckDB output is not what the models write today in every case:
 
 ## Decision
 
-Recommended, for the owner to decide: **option 1**.
+Chosen by the owner on 2026-10-11, going through the spec's decisions: **option 1**.
 
 A model contains none of the constructs BigQuery refuses. Where both accept a spelling,
 the model uses it as plain SQL. Otherwise it calls a macro in `dbt/macros/portable.sql`

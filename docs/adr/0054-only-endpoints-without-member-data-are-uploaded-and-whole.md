@@ -43,7 +43,7 @@ endpoints and neither `teams` nor `transactions`.
 
 ## Decision
 
-Recommended, for the owner to decide: **option 1**.
+Chosen by the owner on 2026-10-11, going through the spec's decisions: **option 1**.
 
 The spike's loader holds an allowlist of seven `(source, endpoint)` pairs. Before
 writing a file it walks every row: a GUID anywhere in an ESPN row, or a forbidden key

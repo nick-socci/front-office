@@ -38,7 +38,7 @@ flowchart LR
         DEV["dbt target dev<br/>57 models"]
         CMP["scripts/compare_bigquery_slice.py"]
     end
-    subgraph gcp["BigQuery project (sandbox, private)"]
+    subgraph gcp["BigQuery project (private, billing linked)"]
         BQRAW["raw.api_responses<br/>JSON payload, clustered"]
         BQ["dbt target bq<br/>30 models, 6 seeds"]
     end
@@ -97,8 +97,17 @@ means and what may be uploaded each have their own alternatives, in the ADRs bel
 | [0053](../../adr/0053-a-bigquery-build-is-held-to-duckdbs-exactly-except-floats-to-a-tolerance.md) | A BigQuery build is held to DuckDB's exactly, except floating-point columns, which are held to a tolerance | proposed |
 | [0054](../../adr/0054-only-endpoints-without-member-data-are-uploaded-and-whole.md) | Only endpoints without league members' data are uploaded, and their captures whole | proposed |
 
-Not an ADR, and the owner's to confirm: the spike runs in the sandbox (no billing
-account), and the lineup solver is left out and gets its own issue.
+Settled by the owner on 2026-10-11, going through the spec's decisions one at a time:
+
+- Tier L; the spike is a port to merge (A); the slice is the 30 models and 6 seeds below.
+- ADRs 0051, 0053 and 0054: option 1 of each.
+- **A billing account is linked before the spike runs**, not the sandbox this spec was
+  drafted for. The owner links it and sets a budget with an alert (R2.7); the per-query
+  cap of R2.4 stays. Nothing in the design comes to depend on billing.
+- ADR 0052: option 1, and option 3 (a bucket and an external table) measured once for
+  `mlb/boxscore` (R6.6).
+- The lineup solver is left out and gets its own issue at the end of the spike.
+- `stg_espn__pro_games` is rewritten on DuckDB too, held to its 20,760 rows.
 
 ## Detailed design
 
@@ -334,7 +343,7 @@ uv run --group bigquery python scripts/spike_load_bigquery.py \
 
 It takes its rows from the local warehouse and not from the landing zone so that both
 builds read the same rows by construction, already checked by `load.py` (keys,
-collisions, valid JSON). A load job is not DML, so the sandbox allows it. `fetched_at`
+collisions, valid JSON). A load job is not DML, and worked in the sandbox the spec was drafted in. `fetched_at`
 stays text, as in DuckDB; `fo_parse_fetched_at` turns it into a timestamp on both.
 
 ### The comparison
@@ -368,7 +377,10 @@ billed per model, per test and in total from `run_results.json`
 the same model built against a copy of the boxscore rows with `payload` loaded as
 `STRING` and read through `parse_json`); every changed file by construct, and the count
 of each construct in the 27 unported models, from the regular expressions of the new
-rule test; and anything the sandbox refused.
+rule test; the external-table measurement (R6.6: `mlb/boxscore` exported to a private
+bucket, an external table over it, one boxscore model built against that table, bytes
+billed and time beside the native table's, then bucket and table deleted); and anything
+BigQuery refused.
 
 ## Test strategy
 
@@ -429,8 +441,11 @@ is a behaviour shown to be the same on inputs chosen to be awkward.
 - **Bytes billed are far above the estimate.** The worst case, every raw-reading model
   scanning all 1.45 GB, is about 20 GB a build, against 1 TB a month free. Capped per
   query by R2.4.
-- **Sandbox tables expire after 60 days.** Accepted: the spike is over long before, and
-  the loader rebuilds the raw table in minutes.
+- **A billed project can cost money.** Low: the worst case above is a fiftieth of the
+  free monthly terabyte, and the bucket of R6.6 holds under 1 GB for under a day. Bounded
+  by R2.4's cap per query and the owner's budget alert (R2.7).
+- **A bucket is a second place raw data lives.** Only public MLB boxscores go there, the
+  bucket is private, and it is deleted when measured (R6.6).
 - **League and team names reach BigQuery** (the `settings` payload has the league's name,
   and the build runs with `anonymize: false` to compare like with like). The project is
   private to the owner's account. Accepted if the owner accepts ADR 0054.

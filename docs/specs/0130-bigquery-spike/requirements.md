@@ -21,7 +21,7 @@ of the 21 are written in models, not in macros:
 | types `varchar`, `double`, `timestamptz` | 6, 16 and 1 files | type not found |
 | `at time zone` | `fo_eastern_date` | syntax error |
 | `->>`, `from_json` | `dbt/macros/json.sql` only | refused |
-| `insert` (any DML) | nowhere in dbt; `load.py` | refused: the project is in the sandbox |
+| `insert` (any DML) | nowhere in dbt; `load.py` | refused: the project was in the sandbox when asked. The owner chose on 2026-10-11 to link a billing account first, which lifts this |
 
 Three behaviours differ as well, seen by running constant-only queries (0 bytes billed):
 BigQuery's JSON type returns an object's keys sorted, not in document order; it has no
@@ -61,7 +61,9 @@ Explicitly out of scope. Work that drifts here is escalated, not done.
 - A production loader: Cloud Storage, an incremental or append-only load, the key
   collision check of ADR 0011 on BigQuery. The spike reloads its table whole.
 - BigQuery in CI or in `.agentic/gates`. Both stay DuckDB-only and unchanged.
-- Linking a billing account. The spike runs in the sandbox.
+- Any billed service other than BigQuery jobs and the one bucket of R6.6. The owner
+  chose on 2026-10-11 to link a billing account before the spike runs; the spike still
+  loads by a load job and builds nothing on what billing newly allows.
 - Linting the BigQuery SQL with sqlfluff.
 - Rewriting the freshness filters of `_raw_feeds__sources.yml` (ADR 0050). Nothing runs
   `dbt source freshness`.
@@ -119,6 +121,12 @@ What is ported, fixed in one place.
   token is committed, and no file of the repository names a service account. The project
   id is configuration, not a secret, and is still read from the environment and not
   written into `profiles.yml`.
+
+- R2.7 THE SYSTEM SHALL run no BigQuery job until the owner has linked a billing
+  account to the project and created a Cloud Billing budget for it with an alert, at an
+  amount the owner sets, and has said so on #130. Both are the owner's to do. The build
+  SHALL confirm that billing is enabled on the project before its first job, and SHALL
+  NOT create, change or remove a billing account or a budget.
 
 ### R3. The raw rows on BigQuery
 
@@ -194,10 +202,17 @@ What is ported, fixed in one place.
 - R6.2 THE SYSTEM SHALL report every file changed, grouped by the construct that forced
   the change, with the count of each across the 27 models not ported.
 - R6.3 THE SYSTEM SHALL report whether anything in the build needed DML or was otherwise
-  refused by the sandbox.
+  refused.
 - R6.4 THE SYSTEM SHALL report, for one boxscore model, bytes billed with `payload` as
   `JSON` and as `STRING`.
-- R6.5 THE SYSTEM SHALL post R5.2 to R6.4 as one comment on #130, and file the remaining
+- R6.6 THE SYSTEM SHALL measure, once, the likely production shape (ADR 0052, option
+  3): the `mlb/boxscore` rows written to a private Cloud Storage bucket in `US` and read
+  through an external table, with one boxscore model built against it; and SHALL report
+  its bytes billed and time beside the native table's. Only `mlb/boxscore` goes to the
+  bucket: it is on the allowlist of R3.2 and is public MLB data. The bucket has uniform
+  access and no public access, and is deleted, with the external table, when the figures
+  are recorded. The slice is not built on it.
+- R6.5 THE SYSTEM SHALL post R5.2 to R6.4 and R6.6 as one comment on #130, and file the remaining
   issues of the milestone, each citing the finding it comes from.
 
 ## Expected values

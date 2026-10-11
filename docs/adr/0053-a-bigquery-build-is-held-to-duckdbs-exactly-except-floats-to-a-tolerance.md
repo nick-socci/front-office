@@ -40,7 +40,7 @@ stores (rule 4: at-bats and hits, never AVG) are integers.
 
 ## Decision
 
-Recommended, for the owner to decide: **option 1**.
+Chosen by the owner on 2026-10-11, going through the spec's decisions: **option 1**.
 
 Non-float columns are compared as multisets, both ways. A float column is compared pair
 by pair on the relation's unique key: equal within a relative difference of 1e-9, or an
