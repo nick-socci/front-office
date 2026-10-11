@@ -214,7 +214,7 @@ whatever runs the command, which does not exist yet.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0050](../../adr/0050-freshness-is-declared-once-per-feed-over-the-same-relation.md) | Freshness is declared once per feed over the same relation, and is the age of the feed's run marker in its latest season | proposed |
+| [0050](../../adr/0050-freshness-is-declared-once-per-feed-over-the-same-relation.md) | Freshness is declared once per feed over the same relation, and is the age of the feed's run marker in its latest season | accepted |
 
 ## Detailed design
 

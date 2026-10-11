@@ -1,6 +1,6 @@
 # 0050. Freshness is declared once per feed over the same relation, and is the age of the feed's run marker in its latest season
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-10
 - Spec: [0114-freshness-per-feed](../specs/0114-freshness-per-feed/design.md) · Issue: #114
 
