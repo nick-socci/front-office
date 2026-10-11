@@ -141,8 +141,8 @@ is a season of fixture work for no path A leaves untested.
 | ADR | Decision | Status |
 |---|---|---|
 | [0055](../../adr/0055-a-scoring-periods-matchup-period-is-the-one-espn-attaches-its-rosters-to.md) | A scoring period's matchup period is the one ESPN attaches that day's rosters to, where the matchup does not list its days | proposed |
-| [0056](../../adr/0056-a-covered-league-season-says-whether-it-has-a-transaction-log.md) | A covered league-season says whether it has a transaction log | proposed |
-| [0057](../../adr/0057-complete-games-is-mlbs-count.md) | Complete games is MLB's count, credited like every pitching component | proposed |
+| [0056](../../adr/0056-a-covered-league-season-says-whether-it-has-a-transaction-log.md) | A covered league-season says whether it has a transaction log | accepted |
+| [0057](../../adr/0057-complete-games-is-mlbs-count.md) | Complete games is MLB's count, credited like every pitching component | accepted |
 
 Settled by the owner on 2026-10-11, going through the decisions one at a time: tier M;
 all seven played seasons; the three ADRs above, option 1 of each; CI coverage by unit

@@ -1,6 +1,6 @@
 # 0056. A covered league-season says whether it has a transaction log
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-11
 - Spec: [0083-past-season-rosters](../specs/0083-past-season-rosters/design.md) · Issue: #83
 - Amends: [0026](0026-a-league-season-is-covered-when-it-has-rosters.md)
