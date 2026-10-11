@@ -1,0 +1,150 @@
+{#
+  SQL that DuckDB and BigQuery spell differently, in one place (ADR 0051).
+
+  A model is written once. Where both warehouses accept a spelling it is plain SQL in the
+  model: cast(x as integer), count(case when c then 1 end). Everything else is a macro
+  here, or a JSON accessor in json.sql. Each has a form per warehouse and dbt picks one by
+  the target: adapter.dispatch('fo_x') calls duckdb__fo_x or bigquery__fo_x. There is no
+  default__ form, so an unknown warehouse fails when the project is compiled instead of
+  being handed DuckDB's SQL.
+
+  The DuckDB form of each emits the SQL the models had before the macro existed, so the
+  DuckDB warehouse does not move. ingestion/tests/test_dbt_portable_sql_rule.py fails when
+  a ported model, or a macro it reaches, holds one of these constructs outside a duckdb__
+  form.
+#}
+
+
+{# The 64-bit floating-point type. Not dbt.type_float(): that is `float`, 32-bit on DuckDB. #}
+{% macro fo_type_float() %}{{ return(adapter.dispatch('fo_type_float')()) }}{% endmacro %}
+{% macro duckdb__fo_type_float() %}double{% endmacro %}
+{% macro bigquery__fo_type_float() %}float64{% endmacro %}
+
+
+{# The text type. #}
+{% macro fo_type_text() %}{{ return(adapter.dispatch('fo_type_text')()) }}{% endmacro %}
+{% macro duckdb__fo_type_text() %}varchar{% endmacro %}
+{% macro bigquery__fo_type_text() %}string{% endmacro %}
+
+
+{#
+  A cast that gives null where the value cannot be read as the type. `type` is a type name
+  both warehouses accept (bigint, integer, date, boolean) or one of the fo_type_* macros.
+#}
+{% macro fo_safe_cast(expression, type) %}
+    {{- return(adapter.dispatch('fo_safe_cast')(expression, type)) -}}
+{% endmacro %}
+{% macro duckdb__fo_safe_cast(expression, type) -%}
+    try_cast({{ expression }} as {{ type }})
+{%- endmacro %}
+{% macro bigquery__fo_safe_cast(expression, type) -%}
+    safe_cast({{ expression }} as {{ type }})
+{%- endmacro %}
+
+
+{#
+  One row per element of a list, written in the FROM clause after the relation that holds
+  the list:
+
+      select header.league_id, team from header {{ fo_unnest('header.teams_list', 'team') }}
+
+  A null or empty list gives no rows, on both. BigQuery has no unnest in a SELECT list, so
+  this is the only way a model unnests. The relation's other columns are repeated once per
+  element, as with any unnest: project a large payload away first (AGENTS.md rule 1).
+#}
+{% macro fo_unnest(list, alias) %}
+    {{- return(adapter.dispatch('fo_unnest')(list, alias)) -}}
+{% endmacro %}
+{% macro duckdb__fo_unnest(list, alias) -%}
+    cross join unnest({{ list }}) as _u_{{ alias }}({{ alias }})
+{%- endmacro %}
+{% macro bigquery__fo_unnest(list, alias) -%}
+    cross join unnest({{ list }}) as {{ alias }}
+{%- endmacro %}
+
+
+{#
+  Two lists of the same length unnested side by side, element i of one beside element i of
+  the other: the keys of a JSON object beside its values (fo_json_keys, fo_json_values).
+#}
+{% macro fo_unnest_pair(first_list, first_alias, second_list, second_alias) %}
+    {{- return(adapter.dispatch('fo_unnest_pair')(
+        first_list, first_alias, second_list, second_alias
+    )) -}}
+{% endmacro %}
+{% macro duckdb__fo_unnest_pair(first_list, first_alias, second_list, second_alias) -%}
+    cross join (
+        select
+            unnest({{ first_list }}) as {{ first_alias }},
+            unnest({{ second_list }}) as {{ second_alias }}
+    ) as _u_{{ first_alias }}
+{%- endmacro %}
+{% macro bigquery__fo_unnest_pair(first_list, first_alias, second_list, second_alias) -%}
+    cross join unnest({{ first_list }}) as {{ first_alias }} with offset as _o_{{ first_alias }}
+    inner join unnest({{ second_list }}) as {{ second_alias }} with offset as _o_{{ second_alias }}
+        on _o_{{ first_alias }} = _o_{{ second_alias }}
+{%- endmacro %}
+
+
+{# The whole numbers from `first` to `last`, both included, as a list: unnest it with fo_unnest. #}
+{% macro fo_int_series(first, last) %}
+    {{- return(adapter.dispatch('fo_int_series')(first, last)) -}}
+{% endmacro %}
+{% macro duckdb__fo_int_series(first, last) -%}
+    generate_series({{ first }}, {{ last }})
+{%- endmacro %}
+{% macro bigquery__fo_int_series(first, last) -%}
+    generate_array({{ first }}, {{ last }})
+{%- endmacro %}
+
+
+{#
+  A floating-point sum or mean, in a stated order (ADR 0046). The last digit of a float
+  aggregate depends on the order of its rows, so DuckDB is given the order and two DuckDB
+  builds agree exactly. BigQuery has no way to state it, and its form leaves it out: a
+  BigQuery build is held to a tolerance on float columns, not to equality (ADR 0053).
+  `order_by` is what follows `order by`, on the grain's key.
+#}
+{% macro fo_sum_in_order(expression, order_by) %}
+    {{- return(adapter.dispatch('fo_sum_in_order')(expression, order_by)) -}}
+{% endmacro %}
+{% macro duckdb__fo_sum_in_order(expression, order_by) -%}
+    sum({{ expression }} order by {{ order_by }})
+{%- endmacro %}
+{% macro bigquery__fo_sum_in_order(expression, order_by) -%}
+    sum({{ expression }})
+{%- endmacro %}
+
+{% macro fo_avg_in_order(expression, order_by) %}
+    {{- return(adapter.dispatch('fo_avg_in_order')(expression, order_by)) -}}
+{% endmacro %}
+{% macro duckdb__fo_avg_in_order(expression, order_by) -%}
+    avg({{ expression }} order by {{ order_by }})
+{%- endmacro %}
+{% macro bigquery__fo_avg_in_order(expression, order_by) -%}
+    avg({{ expression }})
+{%- endmacro %}
+
+
+{# True if the condition is true for any row; null over no non-null input, on both. #}
+{% macro fo_any_true(condition) %}
+    {{- return(adapter.dispatch('fo_any_true')(condition)) -}}
+{% endmacro %}
+{% macro duckdb__fo_any_true(condition) -%}
+    bool_or({{ condition }})
+{%- endmacro %}
+{% macro bigquery__fo_any_true(condition) -%}
+    logical_or({{ condition }})
+{%- endmacro %}
+
+
+{# The instant a count of milliseconds since 1970-01-01 UTC names. #}
+{% macro fo_timestamp_from_millis(milliseconds) %}
+    {{- return(adapter.dispatch('fo_timestamp_from_millis')(milliseconds)) -}}
+{% endmacro %}
+{% macro duckdb__fo_timestamp_from_millis(milliseconds) -%}
+    epoch_ms({{ milliseconds }})
+{%- endmacro %}
+{% macro bigquery__fo_timestamp_from_millis(milliseconds) -%}
+    timestamp_millis({{ milliseconds }})
+{%- endmacro %}

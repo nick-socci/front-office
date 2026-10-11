@@ -8,5 +8,14 @@
 #}
 
 {% macro fo_eastern_date(timestamp_column) %}
+    {{- return(adapter.dispatch('fo_eastern_date')(timestamp_column)) -}}
+{% endmacro %}
+
+{% macro duckdb__fo_eastern_date(timestamp_column) %}
     (({{ timestamp_column }} at time zone 'UTC') at time zone 'America/New_York')::date
+{%- endmacro %}
+
+{# A BigQuery TIMESTAMP is an instant, so there is no step that reads it as UTC first. #}
+{% macro bigquery__fo_eastern_date(timestamp_column) %}
+    date({{ timestamp_column }}, 'America/New_York')
 {%- endmacro %}
