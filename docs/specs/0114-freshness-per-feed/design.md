@@ -214,7 +214,7 @@ whatever runs the command, which does not exist yet.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0050](../../adr/0050-freshness-is-declared-once-per-feed-over-the-same-relation.md) | Freshness is declared once per feed over the same relation, and is the age of the feed's run marker in its latest season | proposed |
+| [0050](../../adr/0050-freshness-is-declared-once-per-feed-over-the-same-relation.md) | Freshness is declared once per feed over the same relation, and is the age of the feed's run marker in its latest season | accepted |
 
 ## Detailed design
 
@@ -434,3 +434,19 @@ and against a deliberately wrong copy for the others.
 
 ## Amendments
 
+- **2026-10-11, build, task 3: a macro cannot be called in `freshness.filter`.** Tried
+  once, as the open question asked: a filter written with `fo_json_string` fails to
+  parse, `'fo_json_string' is undefined`. dbt 1.12.5 renders the filter as Jinja, but the
+  project's macros are not in scope there. The filter is committed as designed, with
+  DuckDB's `json_extract_string`. The open question is closed: for BigQuery the clause is
+  rewritten by hand, not through the macros.
+- **2026-10-11, build, task 5: freshness on the real season was run on a copy.** Task 5
+  asks for `dbt source freshness` on `data/warehouse.duckdb` with the owner's go-ahead,
+  because dbt opens the file for writing. It was run on a byte-for-byte scratch copy of
+  that file instead, which answers the same question and leaves the real warehouse
+  unopened; the copy was deleted afterwards. No expected value changes.
+- **2026-10-11, PR #127 review, F1: the exception is named in AGENTS.md.** The season
+  clause reads JSON with DuckDB's function in a YAML filter, and AGENTS.md said all JSON
+  access goes through `fo_json_*`. The macros cannot be called there (the entry above).
+  The owner chose to name the exception in the rule, not to change the design
+  (2026-10-11): AGENTS.md, *Project shape*, now says so.

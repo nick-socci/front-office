@@ -195,13 +195,21 @@ are stored as `outs_recorded`, because "6.1 innings" means 6⅓ and treating it 
 decimal silently corrupts every rate built on it.
 
 **Source freshness is defined, and dormant.** Source freshness is dbt's check of how
-old a source's newest row is. `raw.api_responses` warns when its newest capture is more
-than 36 hours old and errors at 7 days (`dbt source freshness`; on the season as it
-stands it reads the newest capture's age to the second). Nothing runs it yet: there is
-no schedule to be late, and the CI fixtures are months old by design, so it would fail
-there every time. It wakes with the 2027 daily schedule. Its known limit is that it
-gives one age for a table holding three sources, so a stalled feed can hide behind a
-live one ([#114](https://github.com/nick-socci/front-office/issues/114)).
+old a source's newest row is. `raw.api_responses` holds three feeds, so it is declared
+once per feed and `dbt source freshness` gives three ages: a stalled feed shows whatever
+the others are doing. A feed's age is the age of its last run, read from one capture
+that marks a run. For `mlb` it is the schedule, which every full run lands first and a
+run of the player list or the boxscores alone does not. For `espn` it is the league
+settings, the first call that needs the login, so an expired login shows as stale even
+though the public pro schedule still lands. For the id map it is `player_id_map`, the
+only thing that feed fetches. The first two count only in the latest season that has
+one, because fetching a past season again lands them too. `mlb` and `espn` warn at 36 hours and
+error at 7 days; the id map, which is not fetched daily, warns at 14 days and never
+errors. Nothing runs it yet: there is no schedule to be late, and the CI fixtures are
+months old by design, so it would fail there every time. It wakes with the 2027 daily
+schedule. Its remaining limits: a run that lands its marker and then fails still shows
+as fresh; `espn` has one age however many leagues are fetched; and next season's
+schedule, fetched early, would move the season that counts.
 
 **Other people's data stays out.** League members never agreed to appear in a public
 repo, so staging never selects member names or account GUIDs, `var('anonymize')` aliases

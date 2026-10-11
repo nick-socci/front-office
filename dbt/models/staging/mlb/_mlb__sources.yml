@@ -11,20 +11,8 @@ sources:
     tables:
       - name: api_responses
         description: Append-only landing-zone mirror; payload holds the untouched JSON.
-        # Source freshness: `dbt source freshness` compares the newest loaded_at_field
-        # with now, and warns or errors past these thresholds. Here it is defined and
-        # dormant:
-        #   - Nothing runs it. No gate and no CI job may: the fixtures' newest capture
-        #     is months old by design, so it errors there every time.
-        #   - It wakes with the 2027 daily schedule, when a missed day is a real fault.
-        #   - It works. On the 2026 season it reads the newest capture's age to the
-        #     second (#13). fetched_at is a UTC stamp and is parsed as one.
-        #   - Its known limit: one age for a table holding three sources, so a stalled
-        #     feed can hide behind a live one (#114).
-        loaded_at_field: "strptime(fetched_at, '%Y%m%dT%H%M%SZ')"
-        freshness:
-          warn_after: {count: 36, period: hour}
-          error_after: {count: 7, period: day}
+        # Source freshness is declared per feed in _raw_feeds__sources.yml, not here: one
+        # age for this table would be the age of whichever feed ran last (spec 0114, ADR 0050).
         columns:
           - name: source
             description: mlb / espn / idmap.
