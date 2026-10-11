@@ -20,7 +20,9 @@ permissions:
 jobs:
   remind:
     name: comment on issues due today
-    runs-on: ubuntu-latest
+    # A named image, as in ci.yml, so that moving to a newer Ubuntu is a change someone
+    # makes (#122, #128).
+    runs-on: ubuntu-24.04
     steps:
       - name: Comment on issues due today
         env:
