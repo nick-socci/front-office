@@ -22,9 +22,10 @@ Three consequences, all accepted:
 * ``unnest(`` is allowed in a ``bigquery__`` form, where it is in a FROM clause, and nowhere
   else: in a model it has to be ``fo_unnest``. A hand-written ``cross join unnest(...)`` in a
   model is flagged although BigQuery accepts it.
-* a type name inside a single-quoted string is not seen, so that the schema text given to
-  ``fo_json_parse`` (``"BIGINT"``, ``"VARCHAR"``) passes. A refused type handed to a macro as
-  a string, ``fo_safe_cast('x', 'double')``, is caught by its own pattern on the raw text.
+* a type name inside a single-quoted string, or itself in double quotes, is not seen, so
+  that the schema text given to ``fo_json_parse`` (``"BIGINT"``, ``"VARCHAR"``) passes
+  whether it is a string or a ``{% set %}`` block. A refused type handed to a macro as a
+  string, ``fo_safe_cast('x', 'double')``, is caught by its own pattern on the raw text.
 * a ``bigquery__`` form is scanned too, except for ``unnest(``: BigQuery SQL has no reason to
   hold DuckDB's spelling.
 """
@@ -65,9 +66,9 @@ _REFUSED = (
     ("from_json", re.compile(r"\bfrom_json\b", re.IGNORECASE)),
     ("-> / ->> operator", re.compile(r"->")),
     ("at time zone", re.compile(r"\bat\s+time\s+zone\b", re.IGNORECASE)),
-    ("type varchar", re.compile(r"\bvarchar\b", re.IGNORECASE)),
-    ("type double", re.compile(r"\bdouble\b", re.IGNORECASE)),
-    ("type timestamptz", re.compile(r"\btimestamptz\b", re.IGNORECASE)),
+    ("type varchar", re.compile(r"(?<!\")\bvarchar\b(?!\")", re.IGNORECASE)),
+    ("type double", re.compile(r"(?<!\")\bdouble\b(?!\")", re.IGNORECASE)),
+    ("type timestamptz", re.compile(r"(?<!\")\btimestamptz\b(?!\")", re.IGNORECASE)),
 )
 # BigQuery's own SQL may unnest, in a FROM clause; regexp_extract with two arguments is its
 # spelling too.
@@ -131,6 +132,11 @@ def reached_macros(macros: dict[str, dict[str, object]], start: set[str]) -> set
             continue
         seen.add(name)
         queue.extend(macros[name]["depends_on"]["macros"])  # type: ignore[index]
+        # The manifest is of a DuckDB target, so a dispatched macro depends on its duckdb__
+        # form alone. Its BigQuery form is reached by name.
+        prefix, _, short = name.rpartition(".")
+        if short.startswith("duckdb__"):
+            queue.append(f"{prefix}.bigquery__{short.removeprefix('duckdb__')}")
     return seen
 
 
@@ -261,8 +267,13 @@ def test_comments_and_schema_strings_are_not_flagged() -> None:
         "/* list(x) */\n"
         '{% set schema = \'[{"id": "BIGINT", "name": "VARCHAR", "v": "DOUBLE"}]\' %}\n'
         "select {{ fo_json_parse('payload', '$.a', schema) }} from t\n"
+        '{% set block %}\n[{"name": "VARCHAR", "v": "DOUBLE"}]\n{% endset %}\n'
     )
     assert refused_constructs(sql) == []
+    # outside quotes it is a type, also when a schema names it inside a larger type
+    assert refused_constructs('{% set s %}[{"m": "MAP(VARCHAR, BIGINT)"}]{% endset %}') == [
+        (1, "type varchar")
+    ]
 
 
 def test_a_refused_type_handed_to_a_macro_as_a_string_is_caught() -> None:
@@ -317,4 +328,29 @@ def test_macros_are_followed_through_other_macros() -> None:
     assert reached_macros(macros, {"macro.front_office.a", "macro.dbt.missing"}) == {
         "macro.front_office.a",
         "macro.front_office.b",
+    }
+
+
+def test_the_bigquery_form_of_a_dispatched_macro_is_reached_with_what_it_calls() -> None:
+    """Catches the BigQuery forms going unscanned: dbt records, for a DuckDB target, only
+    the duckdb__ form a dispatcher resolved to."""
+    macros: dict[str, dict[str, object]] = {
+        f"macro.front_office.{name}": {"package_name": "front_office", "depends_on": {"macros": d}}
+        for name, d in (
+            ("fo_x", ["macro.front_office.duckdb__fo_x"]),
+            ("duckdb__fo_x", []),
+            ("bigquery__fo_x", ["macro.front_office.bigquery__helper"]),
+            ("bigquery__helper", []),
+            ("bigquery__fo_unreached", []),
+            ("duckdb__fo_only", []),
+        )
+    }
+    assert reached_macros(
+        macros, {"macro.front_office.fo_x", "macro.front_office.duckdb__fo_only"}
+    ) == {
+        "macro.front_office.fo_x",
+        "macro.front_office.duckdb__fo_x",
+        "macro.front_office.bigquery__fo_x",
+        "macro.front_office.bigquery__helper",
+        "macro.front_office.duckdb__fo_only",
     }

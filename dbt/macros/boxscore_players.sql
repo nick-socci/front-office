@@ -44,8 +44,9 @@ select
     {{ fo_request_param('request_key', 'gamePk') }} as game_pk,
     side,
     team_id,
-    unnest(players) as player,
+    player,
     fetched_at
 from sides
+{{ fo_unnest('sides.players', 'player') }}
 
 {%- endmacro %}

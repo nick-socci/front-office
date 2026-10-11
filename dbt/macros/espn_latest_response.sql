@@ -27,7 +27,7 @@
         request_key,
         fetched_at,
         {{ fo_json_text('partitions', '$.league_id') }} as league_id,
-        {{ fo_json_int('partitions', '$.season') }}::integer as season
+        cast({{ fo_json_int('partitions', '$.season') }} as integer) as season
     from {{ source('raw', 'api_responses') }}
     where source = 'espn'
       and endpoint = '{{ endpoint }}'
