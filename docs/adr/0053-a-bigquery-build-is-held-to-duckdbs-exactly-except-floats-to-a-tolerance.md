@@ -1,6 +1,6 @@
 # 0053. A BigQuery build is held to DuckDB's exactly, except floating-point columns, which are held to a tolerance
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-11
 - Spec: [0130-bigquery-spike](../specs/0130-bigquery-spike/design.md) · Issue: #130
 

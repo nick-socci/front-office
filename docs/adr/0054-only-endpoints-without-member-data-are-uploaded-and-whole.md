@@ -1,6 +1,6 @@
 # 0054. Only endpoints without league members' data are uploaded, and their captures whole
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-11
 - Spec: [0130-bigquery-spike](../specs/0130-bigquery-spike/design.md) · Issue: #130
 

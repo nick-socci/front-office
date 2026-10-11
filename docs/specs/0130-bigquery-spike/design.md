@@ -92,10 +92,10 @@ means and what may be uploaded each have their own alternatives, in the ADRs bel
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0051](../../adr/0051-a-model-is-written-once-in-sql-both-warehouses-accept-and-dispatched-macros.md) | A model is written once: SQL both warehouses accept, and a dispatched `fo_*` macro for the rest | proposed |
-| [0052](../../adr/0052-the-spike-loads-raw-rows-into-a-native-bigquery-table-with-a-json-payload.md) | The spike loads raw rows into a native BigQuery table with a `JSON` payload, clustered by source and endpoint | proposed |
-| [0053](../../adr/0053-a-bigquery-build-is-held-to-duckdbs-exactly-except-floats-to-a-tolerance.md) | A BigQuery build is held to DuckDB's exactly, except floating-point columns, which are held to a tolerance | proposed |
-| [0054](../../adr/0054-only-endpoints-without-member-data-are-uploaded-and-whole.md) | Only endpoints without league members' data are uploaded, and their captures whole | proposed |
+| [0051](../../adr/0051-a-model-is-written-once-in-sql-both-warehouses-accept-and-dispatched-macros.md) | A model is written once: SQL both warehouses accept, and a dispatched `fo_*` macro for the rest | accepted |
+| [0052](../../adr/0052-the-spike-loads-raw-rows-into-a-native-bigquery-table-with-a-json-payload.md) | The spike loads raw rows into a native BigQuery table with a `JSON` payload, clustered by source and endpoint | accepted |
+| [0053](../../adr/0053-a-bigquery-build-is-held-to-duckdbs-exactly-except-floats-to-a-tolerance.md) | A BigQuery build is held to DuckDB's exactly, except floating-point columns, which are held to a tolerance | accepted |
+| [0054](../../adr/0054-only-endpoints-without-member-data-are-uploaded-and-whole.md) | Only endpoints without league members' data are uploaded, and their captures whole | accepted |
 
 Settled by the owner on 2026-10-11, going through the spec's decisions one at a time:
 
