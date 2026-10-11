@@ -244,7 +244,10 @@ models:
       is measured over the days the adding team started him until that team's next drop of
       him; a drop over the rest of the season, whoever had him. Components are summed over
       the window on the credited side. total_value is null for a dropped player with no
-      MLBAM id, and where a replacement pool is empty.
+      MLBAM id, and where a replacement pool is empty. A league-season whose
+      has_transaction_log (in int_fantasy__league_seasons) is false has no log landed, as
+      ESPN serves the log of the current season only; that is not the same as a landed log
+      with no transaction in it.
     columns:
       - name: platform
         data_tests: [not_null]

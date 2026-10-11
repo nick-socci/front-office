@@ -72,6 +72,13 @@ models:
           the data, never declared.
         data_type: boolean
         constraints: [{type: not_null}]
+      - name: has_transaction_log
+        description: >
+          True when at least one transactions response is loaded for the league-season,
+          including a log with no transaction in it. False means no log landed (ESPN serves
+          the log of the current season only), not an empty one (ADR 0056).
+        data_type: boolean
+        constraints: [{type: not_null}]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -1136,6 +1143,8 @@ unit_tests:
         rows:
           - {league_id: "1", season: 2026, scoring_period: 1}
           - {league_id: "1", season: 2026, scoring_period: 2}
+      - input: ref('stg_espn__transaction_logs')
+        rows: []
     expect:
       rows:
         - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
@@ -1160,12 +1169,66 @@ unit_tests:
           - {league_id: "1", season: 2026, scoring_period: 1}
           - {league_id: "1", season: 2026, scoring_period: 2}
           - {league_id: "2", season: 2025, scoring_period: 1}
+      - input: ref('stg_espn__transaction_logs')
+        rows: []
     expect:
       rows:
         - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
         - {platform: espn, league_id: "1", season: 2025, has_rosters: false}
         - {platform: espn, league_id: "2", season: 2026, has_rosters: false}
         - {platform: espn, league_id: "2", season: 2025, has_rosters: true}
+
+  - name: league_seasons_say_whether_a_transaction_log_is_landed
+    description: >
+      R4.1, R5.5. League 1, 2026 has rosters and a log; 2025 has rosters and no log (ESPN
+      serves the log of the current season only); league 2, 2026 has settings only. Catches
+      has_transaction_log tied to has_rosters, and a log taken as the absence of rows.
+    model: int_fantasy__league_seasons
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026}
+          - {league_id: "1", season: 2025}
+          - {league_id: "2", season: 2026}
+      - input: ref('stg_espn__roster_entries')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 1}
+          - {league_id: "1", season: 2025, scoring_period: 1}
+      - input: ref('stg_espn__transaction_logs')
+        rows:
+          - {league_id: "1", season: 2026}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, has_rosters: true, has_transaction_log: true}
+        - {platform: espn, league_id: "1", season: 2025, has_rosters: true, has_transaction_log: false}
+        - {platform: espn, league_id: "2", season: 2026, has_rosters: false, has_transaction_log: false}
+
+  - name: league_season_transaction_log_does_not_leak_between_leagues_or_seasons
+    description: >
+      R4.1. Logs are landed for league 1 in 2026 and league 2 in 2025 only. Each of the
+      four league-seasons is one row, with a log only if its own is landed. Catches a join
+      on the league alone or the season alone.
+    model: int_fantasy__league_seasons
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026}
+          - {league_id: "1", season: 2025}
+          - {league_id: "2", season: 2026}
+          - {league_id: "2", season: 2025}
+      - input: ref('stg_espn__roster_entries')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 1}
+      - input: ref('stg_espn__transaction_logs')
+        rows:
+          - {league_id: "1", season: 2026}
+          - {league_id: "2", season: 2025}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, has_rosters: true, has_transaction_log: true}
+        - {platform: espn, league_id: "1", season: 2025, has_rosters: false, has_transaction_log: false}
+        - {platform: espn, league_id: "2", season: 2026, has_rosters: false, has_transaction_log: false}
+        - {platform: espn, league_id: "2", season: 2025, has_rosters: false, has_transaction_log: true}
 
   - name: crosswalk_one_row_per_id_named_by_the_latest_snapshot
     description: >

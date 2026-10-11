@@ -255,6 +255,24 @@ models:
           arguments:
             combination_of_columns: [league_id, season, scoring_period, espn_player_id, espn_game_id, stat_id]
 
+  - name: stg_espn__transaction_logs
+    description: >
+      One row per league and season with at least one transactions response loaded, and
+      the newest capture's time. Present for a landed log with no transaction in it, so
+      "no log landed" can be told apart from "a log with nothing in it" (ADR 0056). Reads
+      identifiers only, never the topics.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season]
+    columns:
+      - name: league_id
+        data_tests: [not_null]
+      - name: season
+        data_tests: [not_null]
+      - name: fetched_at
+        data_tests: [not_null]
+
   - name: stg_espn__transactions
     description: >
       One row per player movement (add, drop, waiver claim, trade), from every page of
@@ -451,6 +469,57 @@ unit_tests:
     expect:
       rows:
         - {league_id: "A", season: 2026, transaction_id: "m1", espn_player_id: 2}
+
+  - name: transaction_logs_one_row_per_league_season_at_its_newest_capture
+    description: >
+      R4.1. League A, 2026 has two pages of one run (09-01, offsets 0 and 2000) and an
+      older run (08-01). Catches a row per page or per run, which would give three, and
+      a fetched_at taken from the older run.
+    model: stg_espn__transaction_logs
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: "limit=2000&offset=0&view=x", fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2026, "league_id": "A"}', payload: '{"topics": []}'}
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: "limit=2000&offset=2000&view=x", fetched_at: "20260901T000000Z", file_path: a2, partitions: '{"season": 2026, "league_id": "A", "offset": 2000}', payload: '{"topics": []}'}
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: "limit=2000&offset=0&view=x", fetched_at: "20260801T000000Z", file_path: a0, partitions: '{"season": 2026, "league_id": "A"}', payload: '{"topics": []}'}
+    expect:
+      rows:
+        - {league_id: "A", season: 2026, fetched_at: "2026-09-01 00:00:00"}
+
+  - name: transaction_logs_an_empty_landed_log_still_has_its_row
+    description: >
+      R4.2. The log ESPN answered for league A, 2026 has an empty list of topics. Catches
+      a model that unnests topics and so loses the league-season, which would read as "no
+      log landed".
+    model: stg_espn__transaction_logs
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: "limit=2000&offset=0&view=x", fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2026, "league_id": "A"}', payload: '{"topics": []}'}
+    expect:
+      rows:
+        - {league_id: "A", season: 2026, fetched_at: "2026-09-01 00:00:00"}
+
+  - name: transaction_logs_leagues_and_seasons_stay_apart
+    description: >
+      Two leagues and two seasons, each with its own capture time. Catches a grouping on
+      the league alone or the season alone, which would merge them, and a global newest
+      run.
+    model: stg_espn__transaction_logs
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: x, fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2026, "league_id": "A"}', payload: '{"topics": []}'}
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: x, fetched_at: "20260902T000000Z", file_path: a2, partitions: '{"season": 2025, "league_id": "A"}', payload: '{"topics": []}'}
+          - {source: espn, endpoint: transactions, request_path: /b, request_key: x, fetched_at: "20260903T000000Z", file_path: b1, partitions: '{"season": 2026, "league_id": "B"}', payload: '{"topics": []}'}
+    expect:
+      rows:
+        - {league_id: "A", season: 2026, fetched_at: "2026-09-01 00:00:00"}
+        - {league_id: "A", season: 2025, fetched_at: "2026-09-02 00:00:00"}
+        - {league_id: "B", season: 2026, fetched_at: "2026-09-03 00:00:00"}
 
   - name: scoring_periods_run_to_each_leagues_own_final_period
     description: >
