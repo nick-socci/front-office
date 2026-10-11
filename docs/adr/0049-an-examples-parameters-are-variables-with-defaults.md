@@ -1,6 +1,6 @@
 # 0049. An example's parameters are DuckDB variables that default to the committed values
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-10
 - Spec: [0117-examples-return-stated-rows](../specs/0117-examples-return-stated-rows/design.md) · Issue: #117
 

@@ -31,9 +31,10 @@ removed, 54. Today both would pass.
   spec 0013 do not move.
 - No change to what any example selects on the real season: `roster_day_query.sql` keeps
   league `73677`, team 6 and 2026-07-02 as what it returns when run as committed.
-- No check of the committed default parameters in CI. CI holds no real league, so nothing
-  there can say whether team 6 on 2026-07-02 is still what the file asks for (see *Rabbit
-  holes*).
+- No check in CI of what the committed default parameters return. CI holds no real
+  league, so nothing there can run league `73677`, team 6 on 2026-07-02 against data (see
+  *Rabbit holes*). The one check CI does make on the defaults is R2.1's: a test that reads
+  the file's text and holds the three values to the committed ones.
 - No comparison of an example's rows with a stored copy of its output.
 - No check of the values in a stat line. The gate counts the rows that have a batting
   line and the rows that have a pitching line; a line with wrong numbers in it passes.

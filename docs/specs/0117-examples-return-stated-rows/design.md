@@ -146,8 +146,8 @@ takes any directory.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0048](../../adr/0048-an-example-is-held-to-stated-counts-on-the-fixtures.md) | An example is held on the fixtures to a stated number of rows, and to stated counts of rows with a value | proposed |
-| [0049](../../adr/0049-an-examples-parameters-are-variables-with-defaults.md) | An example's parameters are DuckDB variables that default to the committed values | proposed |
+| [0048](../../adr/0048-an-example-is-held-to-stated-counts-on-the-fixtures.md) | An example is held on the fixtures to a stated number of rows, and to stated counts of rows with a value | accepted |
+| [0049](../../adr/0049-an-examples-parameters-are-variables-with-defaults.md) | An example's parameters are DuckDB variables that default to the committed values | accepted |
 
 ADR 0048 amends ADR 0045, whose accepted cost was "on the fixtures an example is only
 proved to run, not to return rows".
@@ -316,3 +316,13 @@ The gate itself is the test of the four stated numbers: `.agentic/gates` and CI.
 
 ## Amendments
 
+- **2026-10-10, PR #126 review, F2.** The no-go "No check of the committed default
+  parameters in CI" contradicted the test strategy's text test of R2.1, which the owner
+  kept on 2026-10-10 (PR #124, *Settled by the owner*). The no-go is reworded to what was
+  meant: CI does not check what the defaults *return*; it does hold the three values in
+  the file's text. No requirement and no test changes.
+- **2026-10-10, PR #126 review, F1.** `check_expectations` also refuses a
+  `rows_with_a_value` that is not a mapping of column to a whole number of at least 0
+  (a boolean is not a whole number here). The design listed the checks on `rows`, on the
+  keys and on `variables`, and was silent on this one; without it a malformed block held
+  the example to no counts, and `true` compared equal to 1. Zero stays allowed.

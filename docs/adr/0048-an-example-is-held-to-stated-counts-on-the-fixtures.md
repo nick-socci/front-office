@@ -1,6 +1,6 @@
 # 0048. An example is held on the fixtures to a stated number of rows, and to stated counts of rows with a value
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-10
 - Spec: [0117-examples-return-stated-rows](../specs/0117-examples-return-stated-rows/design.md) · Issue: #117
 - Amends: [0045](0045-an-example-query-is-an-exposure-and-the-dashboard-reads-every-mart.md)

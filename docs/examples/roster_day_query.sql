@@ -7,6 +7,12 @@
 -- Run with:
 --   duckdb data/warehouse.duckdb < docs/examples/roster_day_query.sql
 --
+-- As it is, it asks about one team on one day (see `params` below). To ask about another,
+-- set a DuckDB variable first; the file does not need editing (DuckDB 1.1 or later):
+--   duckdb data/warehouse.duckdb -cmd "set variable team_id = 3" \
+--     < docs/examples/roster_day_query.sql
+-- The variables are league_id, team_id and on_date.
+--
 -- Players are resolved in two steps, in this order:
 --
 --   1. the ESPN <-> MLBAM crosswalk (stg_idmap__players), which resolves 99.41% of
@@ -25,10 +31,13 @@ with params as (
     -- shows team_name: the real one on your own warehouse, an alias in CI.
     -- A team_id is unique only within a league, so the league is named too; the date
     -- already fixes the season.
+    -- Each value is read from a DuckDB variable of the same name and falls back to the
+    -- one written here, so the file runs as it is and can be asked about another team.
+    -- The gates ask it about a team and a day the fixtures hold (ADR 0049).
     select
-        '73677' as league_id,
-        6 as team_id,
-        date '2026-07-02' as on_date
+        coalesce(getvariable('league_id'), '73677') as league_id,
+        coalesce(getvariable('team_id'), 6) as team_id,
+        coalesce(getvariable('on_date'), date '2026-07-02') as on_date
 ),
 
 unambiguous_names as (

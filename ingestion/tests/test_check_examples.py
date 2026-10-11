@@ -4,6 +4,8 @@ The pure checks take strings and dicts, so they need no database; one end-to-end
 the examples against a real temporary DuckDB file.
 """
 
+from pathlib import Path
+
 import duckdb
 
 import check_examples as ce
@@ -178,7 +180,9 @@ def test_examples_run_against_a_real_database(tmp_path, capsys):
     examples.mkdir()
     (examples / "good.sql").write_text(".mode box\nselect x from marts.fct_b;\n")
     (examples / "bad.sql").write_text("select nope from marts.fct_b;\n")
-    problems = ce.run_examples(db, sorted(examples.glob("*.sql")))
+    problems = ce.run_examples(
+        db, sorted(examples.glob("*.sql")), {"good": {"rows": 1}, "bad": {"rows": 1}}
+    )
     assert len(problems) == 1
     assert "bad.sql" in problems[0]
     assert "good.sql: ok, 1 rows" in capsys.readouterr().out
@@ -186,4 +190,236 @@ def test_examples_run_against_a_real_database(tmp_path, capsys):
 
 def test_a_missing_database_is_a_problem(tmp_path):
     """Catches a typo in --db passing silently."""
-    assert ce.run_examples(tmp_path / "none.duckdb", [])
+    assert ce.run_examples(tmp_path / "none.duckdb", [], {})
+
+
+# Row-count expectations (spec 0117): what an example returns on the fixture warehouse.
+
+
+def run_stated(tmp_path, examples, expectations):
+    """Write each example (stem -> SQL) and run them in name order against an empty database."""
+    db = tmp_path / "t.duckdb"
+    duckdb.connect(str(db)).close()
+    folder = tmp_path / "examples"
+    folder.mkdir()
+    for stem, sql in examples.items():
+        (folder / f"{stem}.sql").write_text(sql)
+    return ce.run_examples(db, sorted(folder.glob("*.sql")), expectations)
+
+
+def test_an_example_returning_more_rows_than_stated_is_reported(tmp_path):
+    """Catches the gate passing a filter that stopped filtering."""
+    problems = run_stated(tmp_path, {"q": "select * from range(7)"}, {"q": {"rows": 5}})
+    assert len(problems) == 1
+    assert "q.sql" in problems[0]
+    assert "5" in problems[0] and "7" in problems[0]
+
+
+def test_an_example_returning_no_rows_is_reported(tmp_path):
+    """Catches no rows passing as success, which is the finding behind the spec."""
+    problems = run_stated(tmp_path, {"q": "select * from range(0)"}, {"q": {"rows": 1}})
+    assert len(problems) == 1
+    assert "q.sql" in problems[0]
+    assert "1" in problems[0] and "0" in problems[0]
+
+
+def test_an_example_without_an_expectation_is_reported():
+    """Catches a new example added without saying what it returns."""
+    problems = ce.check_expectations({"q": "select 1"}, {})
+    assert any("q" in p for p in problems)
+
+
+def test_an_expectation_without_an_example_is_reported():
+    """Catches a stale entry left behind after its example was deleted."""
+    problems = ce.check_expectations({}, {"gone": {"rows": 1}})
+    assert any("gone" in p for p in problems)
+
+
+def test_rows_of_zero_is_reported():
+    """Catches an expectation that holds the example to returning nothing."""
+    assert ce.check_expectations({"q": "select 1"}, {"q": {"rows": 0}})
+
+
+def test_rows_missing_is_reported():
+    """Catches an entry that states variables or columns but no row count."""
+    assert ce.check_expectations({"q": "select 1"}, {"q": {"variables": {}}})
+
+
+def test_rows_that_is_not_a_whole_number_is_reported():
+    """Catches a quoted or text count that would never compare equal."""
+    assert ce.check_expectations({"q": "select 1"}, {"q": {"rows": "many"}})
+
+
+def test_an_unknown_key_is_reported():
+    """Catches a misspelt key (such as `colums`) silently holding the example to nothing."""
+    problems = ce.check_expectations({"q": "select 1"}, {"q": {"rows": 1, "colums": {}}})
+    assert any("colums" in p for p in problems)
+
+
+def test_a_failing_query_is_reported_once_with_no_count_problem(tmp_path):
+    """Catches counts being compared, or the error lost, after a query fails."""
+    problems = run_stated(tmp_path, {"q": "select nope from range(2)"}, {"q": {"rows": 1}})
+    assert len(problems) == 1
+    assert "q.sql" in problems[0]
+    assert "nope" in problems[0]
+
+
+def test_a_variable_does_not_leak_into_the_next_example(tmp_path):
+    """Catches a variable set for one example still in force for the next."""
+    reads_n = "select * from range(coalesce(getvariable('n'), 1))"
+    problems = run_stated(
+        tmp_path,
+        {"a_first": reads_n, "b_second": reads_n},
+        {"a_first": {"rows": 3, "variables": {"n": 3}}, "b_second": {"rows": 1}},
+    )
+    assert problems == []
+
+
+def test_a_variable_does_not_leak_after_a_failed_query(tmp_path):
+    """Catches variables left set when the example fails, on the failure path."""
+    problems = run_stated(
+        tmp_path,
+        {
+            "a_first": "select cast('x' as integer) from range(coalesce(getvariable('n'), 1))",
+            "b_second": "select * from range(coalesce(getvariable('n'), 1))",
+        },
+        {"a_first": {"rows": 3, "variables": {"n": 3}}, "b_second": {"rows": 1}},
+    )
+    assert len(problems) == 1
+    assert "a_first.sql" in problems[0]
+
+
+def test_a_variable_the_file_does_not_read_is_reported():
+    """Catches a misspelt variable silently leaving the default in force."""
+    problems = ce.check_expectations(
+        {"q": "select coalesce(getvariable('n'), 1)"},
+        {"q": {"rows": 1, "variables": {"zzz": 2}}},
+    )
+    assert any("zzz" in p for p in problems)
+
+
+def test_a_variable_read_only_in_a_comment_is_reported():
+    """Catches a commented-out getvariable counting as the example reading it."""
+    problems = ce.check_expectations(
+        {"q": "select 1 -- getvariable('zzz')\n"},
+        {"q": {"rows": 1, "variables": {"zzz": 2}}},
+    )
+    assert any("zzz" in p for p in problems)
+
+
+def test_a_column_with_more_values_than_stated_is_reported(tmp_path):
+    """Catches a join that stopped matching or over-matching with the row count unchanged."""
+    sql = "select * from (values (1, 'a'), (2, null), (3, 'b')) t(id, vcol)"
+    problems = run_stated(
+        tmp_path, {"q": sql}, {"q": {"rows": 3, "rows_with_a_value": {"vcol": 1}}}
+    )
+    assert len(problems) == 1
+    assert "q.sql" in problems[0]
+    assert "vcol" in problems[0] and "1" in problems[0] and "2" in problems[0]
+
+
+def test_a_column_the_example_does_not_return_is_reported(tmp_path):
+    """Catches a renamed output column leaving its count unchecked."""
+    problems = run_stated(
+        tmp_path,
+        {"q": "select 1 as id"},
+        {"q": {"rows": 1, "rows_with_a_value": {"nope": 1}}},
+    )
+    assert len(problems) == 1
+    assert "nope" in problems[0]
+
+
+def test_an_example_as_stated_has_no_problems(tmp_path):
+    """Catches a false positive on variables, rows and value counts that are all right."""
+    sql = (
+        "select range as at_bats, case when range = 0 then 1 end as innings_pitched "
+        "from range(coalesce(getvariable('n'), 1))"
+    )
+    expectations = {
+        "q": {
+            "rows": 2,
+            "variables": {"n": 2},
+            "rows_with_a_value": {"at_bats": 2, "innings_pitched": 1},
+        }
+    }
+    assert ce.check_expectations({"q": sql}, expectations) == []
+    assert run_stated(tmp_path, {"q": sql}, expectations) == []
+
+
+def test_rows_with_a_value_that_is_not_a_mapping_is_reported():
+    """Catches a malformed block (a list) silently holding the example to no counts."""
+    problems = ce.check_expectations({"q": "select 1"}, {"q": {"rows": 1, "rows_with_a_value": []}})
+    assert any("q" in p and "rows_with_a_value" in p for p in problems)
+
+
+def test_a_boolean_count_is_reported():
+    """Catches a boolean count comparing equal to 1, because Python has True == 1."""
+    problems = ce.check_expectations(
+        {"q": "select 1"}, {"q": {"rows": 1, "rows_with_a_value": {"vcol": True}}}
+    )
+    assert any("vcol" in p for p in problems)
+
+
+def test_a_negative_or_text_count_is_reported():
+    """Catches a count that no result could ever match passing the pure check."""
+    for bad in (-1, "two"):
+        problems = ce.check_expectations(
+            {"q": "select 1"}, {"q": {"rows": 1, "rows_with_a_value": {"vcol": bad}}}
+        )
+        assert any("vcol" in p for p in problems), bad
+
+
+def test_a_count_of_zero_is_allowed():
+    """Catches the validation refusing a column legitimately stated as having no values."""
+    problems = ce.check_expectations(
+        {"q": "select 1"}, {"q": {"rows": 1, "rows_with_a_value": {"vcol": 0}}}
+    )
+    assert problems == []
+
+
+def test_a_boolean_count_never_passes_unreported(tmp_path):
+    """Catches `True` passing as a count of 1 in the run, with the pure check also silent."""
+    sql = "select 'a' as vcol"
+    expectations = {"q": {"rows": 1, "rows_with_a_value": {"vcol": True}}}
+    assert ce.check_expectations({"q": sql}, expectations)
+    # The run must not raise; the problem is the pure check's to report.
+    assert run_stated(tmp_path, {"q": sql}, expectations) == []
+
+
+def test_a_column_name_that_is_not_text_is_reported(tmp_path):
+    """Catches a non-text column name crashing the run's sort instead of being named."""
+    expectations = {"q": {"rows": 1, "rows_with_a_value": {1: 1, "vcol": 1}}}
+    problems = ce.check_expectations({"q": "select 1 as vcol"}, expectations)
+    assert any("q" in p and "rows_with_a_value" in p for p in problems)
+    # The run must not raise; the string column matches and the bad key is the pure check's.
+    assert run_stated(tmp_path, {"q": "select 1 as vcol"}, expectations) == []
+
+
+EXAMPLES_DIR = Path(__file__).resolve().parents[2] / "docs/examples"
+
+
+def test_the_committed_expectations_cover_the_examples():
+    """Catches the committed file drifting from the examples, and the roster entry no
+    longer holding a batting line and a pitching line."""
+    expectations = ce.load_expectations(EXAMPLES_DIR / "expected_on_fixtures.yml")
+    examples = {p.stem: p.read_text() for p in EXAMPLES_DIR.glob("*.sql")}
+    assert ce.check_expectations(examples, expectations) == []
+    held = expectations["roster_day_query"]["rows_with_a_value"]
+    for column in ("at_bats", "innings_pitched"):
+        assert isinstance(held[column], int) and held[column] > 0
+
+
+def test_the_roster_example_defaults_to_the_committed_values():
+    """Catches a default changed by accident.
+
+    This is the only check CI can make on the defaults, and it compares the file with a
+    copy of itself: CI holds no real league, so nothing runs the defaults against data.
+    """
+    text = (EXAMPLES_DIR / "roster_day_query.sql").read_text()
+    code = " ".join(ce._without_comments(text).split())
+    for expression in (
+        "coalesce(getvariable('league_id'), '73677')",
+        "coalesce(getvariable('team_id'), 6)",
+        "coalesce(getvariable('on_date'), date '2026-07-02')",
+    ):
+        assert expression in code

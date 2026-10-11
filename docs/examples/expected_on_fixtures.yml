@@ -1,0 +1,31 @@
+# What each example returns on the fixture warehouse (dbt/ci.duckdb), which is what
+# scripts/check_examples.py holds it to in the gates (spec 0117, ADR 0048).
+#
+# These numbers describe the fixtures, not the real season. Change one only together
+# with the fixtures or the example it describes, and read the new number from the gate's
+# own output: it prints what each example returned.
+#
+# variables:          DuckDB variables set before the example runs (ADR 0049)
+# rows:               rows returned; never 0
+# rows_with_a_value:  for a named output column, the rows in which it is not null
+
+lineup_decisions_query:
+  rows: 12
+
+matchup_results_query:
+  rows: 4
+
+player_value_query:
+  rows: 15
+
+roster_day_query:
+  # Team 11 on 2026-04-29 is a team-day of the fixtures with a batter and a pitcher who
+  # played, so both halves of the example's output are held.
+  variables:
+    league_id: "111111"
+    team_id: 11
+    on_date: 2026-04-29
+  rows: 18
+  rows_with_a_value:
+    at_bats: 2
+    innings_pitched: 1
