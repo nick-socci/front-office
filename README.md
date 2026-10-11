@@ -126,6 +126,12 @@ D, and what did each of them do in MLB that day?*
 ESPN league data requires `ESPN_S2`, `SWID` and `LEAGUE_ID` in a gitignored `.env`
 (copy the cookies from a logged-in browser session). MLB's API needs no credentials.
 
+The BigQuery target (`dbt build --target bq`, the slice of spec 0130) reads its project
+id from the environment variable `FO_BQ_PROJECT`, set in your shell and written nowhere
+in the repository, and signs in with `gcloud auth application-default login`. It needs
+`uv sync --group bigquery`. The default build, CI and the gates use DuckDB and need
+neither.
+
 ### More than one league or season
 
 Every capture is filed by the request it answers (its URL path, which is where ESPN puts
