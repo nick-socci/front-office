@@ -35,4 +35,4 @@ left join component_sides
 group by rules.platform, rules.stat_key
 having
     count(distinct component_sides.side) > 1
-    or count(*) filter (where component_sides.side is null) > 0
+    or count(case when component_sides.side is null then 1 end) > 0

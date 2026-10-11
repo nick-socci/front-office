@@ -129,7 +129,7 @@ margin_scales as (
         count(*) as matchups_measured,
         -- Summed in matchup order, not avg(): the last digit of a floating-point sum depends
         -- on the order of its terms, and row order changes from build to build (#28, R4.13).
-        sqrt(sum(margin * margin order by matchup_id) / count(*)) as margin_scale
+        sqrt({{ fo_sum_in_order('margin * margin', 'matchup_id') }} / count(*)) as margin_scale
     from matchup_margins
     group by platform, league_id, season, category_key
 
@@ -145,7 +145,7 @@ side_denominators as (
         -- Averaged in matchup order: the last digit of a floating-point average depends on
         -- the order of its terms, and row order changes from build to build (#28, R4.13;
         -- ADR 0046).
-        avg(denominator order by matchup_id, is_home) as side_denominator
+        {{ fo_avg_in_order('denominator', 'matchup_id, is_home') }} as side_denominator
     from scored_values
     where stat_value is not null
     group by platform, league_id, season, category_key
@@ -180,14 +180,14 @@ earlier_seasons as (
         categories.category_key,
         count(*) as prior_matchups,
         count(distinct margins.season) as prior_seasons,
-        sum(
-            margins.standard_margin * margins.standard_margin
-            order by margins.season, margins.matchup_id
-        ) as prior_sum_of_squares,
-        sum(
-            (margins.home_denominator + margins.away_denominator) / margins.relative_volume
-            order by margins.season, margins.matchup_id
-        ) as prior_denominator_sum
+        {{ fo_sum_in_order(
+            'margins.standard_margin * margins.standard_margin',
+            'margins.season, margins.matchup_id'
+        ) }} as prior_sum_of_squares,
+        {{ fo_sum_in_order(
+            '(margins.home_denominator + margins.away_denominator) / margins.relative_volume',
+            'margins.season, margins.matchup_id'
+        ) }} as prior_denominator_sum
     from covered_categories as categories
     inner join {{ ref('int_fantasy__reported_matchup_margins') }} as margins
         on margins.platform = categories.platform
@@ -207,9 +207,11 @@ reported_own as (
         season,
         category_key,
         count(*) as own_matchups,
-        sum(standard_margin * standard_margin order by matchup_id) as own_sum_of_squares,
-        sum((home_denominator + away_denominator) / relative_volume order by matchup_id)
-            as own_denominator_sum
+        {{ fo_sum_in_order('standard_margin * standard_margin', 'matchup_id') }}
+            as own_sum_of_squares,
+        {{ fo_sum_in_order(
+            '(home_denominator + away_denominator) / relative_volume', 'matchup_id'
+        ) }} as own_denominator_sum
     from {{ ref('int_fantasy__reported_matchup_margins') }}
     where is_measured
     group by platform, league_id, season, category_key

@@ -29,7 +29,7 @@ with player_components as (
         periods.matchup_period,
         days.fantasy_team_id,
         '{{ column }}' as component,
-        cast(sum(days.{{ column }}) as double) as player_total
+        cast(sum(days.{{ column }}) as {{ fo_type_float() }}) as player_total
     from {{ ref('int_fantasy__started_player_days') }} as days
     inner join {{ ref('int_fantasy__matchup_periods') }} as periods
         on periods.platform = days.platform
@@ -60,7 +60,7 @@ side_components as (
         fantasy_team_id,
         matchup_id,
         '{{ column }}' as component,
-        cast({{ column }} as double) as side_total
+        cast({{ column }} as {{ fo_type_float() }}) as side_total
     from {{ ref('int_fantasy__matchup_side_totals') }}
     {{ 'union all' if not loop.last }}
     {%- endfor %}
