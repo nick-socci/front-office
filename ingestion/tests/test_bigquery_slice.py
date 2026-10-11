@@ -273,3 +273,56 @@ def test_no_tracked_file_holds_a_service_account_key() -> None:
         except UnicodeDecodeError:
             continue
         assert '"private_key"' not in text, name
+
+
+# -- the schema suffix of a second BigQuery build (R5.5) ---------------------------------
+
+
+def schema_name(target_type: str, custom: str | None, variables: dict[str, str]) -> str:
+    """generate_schema_name rendered by Jinja alone, with dbt's `target` and `var` stood in."""
+    import jinja2
+
+    source = (DBT_ROOT / "macros" / "generate_schema_name.sql").read_text()
+    template = jinja2.Environment(autoescape=False).from_string(source)
+    module = template.make_module(
+        {
+            "target": {"type": target_type, "schema": "main"},
+            "var": lambda name, default=None: variables.get(name, default),
+        }
+    )
+    return str(module.generate_schema_name(custom, None)).strip()
+
+
+@pytest.mark.parametrize(
+    ("target_type", "custom", "variables", "expected"),
+    [
+        ("duckdb", "staging", {}, "staging"),
+        ("duckdb", None, {}, "main"),
+        ("duckdb", "staging", {"fo_schema_suffix": "_b"}, "staging"),
+        ("duckdb", None, {"fo_schema_suffix": "_b"}, "main"),
+        ("bigquery", "staging", {}, "staging"),
+        ("bigquery", None, {}, "main"),
+        ("bigquery", "marts", {"fo_schema_suffix": "_b"}, "marts_b"),
+        ("bigquery", None, {"fo_schema_suffix": "_b"}, "main_b"),
+    ],
+)
+def test_the_schema_suffix_applies_on_bigquery_only(
+    target_type: str, custom: str | None, variables: dict[str, str], expected: str
+) -> None:
+    """Catches the suffix moving a DuckDB schema, or a second BigQuery build landing on
+    top of the first, seeds included."""
+    assert schema_name(target_type, custom, variables) == expected
+
+
+def test_the_suffix_variable_leaves_every_ci_schema_where_it_was(target_path: Path) -> None:
+    """Catches the variable reaching DuckDB through dbt itself, not only through the macro."""
+
+    def schemas(*extra: str) -> set[tuple[str, str]]:
+        rows = listed(
+            run_dbt(
+                target_path, "ls", "--output", "json", "--output-keys", "name schema", "-q", *extra
+            )
+        )
+        return {(str(r["name"]), str(r.get("schema"))) for r in rows}
+
+    assert schemas("--vars", "{fo_schema_suffix: _b}") == schemas()
