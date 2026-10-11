@@ -366,8 +366,7 @@ def seed_column_types(seeds: set[str]) -> list[tuple[str, str, str]]:
 
 
 def test_the_slices_contracts_name_only_types_both_warehouses_accept() -> None:
-    typed = contract_types(SLICE_MODELS) + seed_column_types(SLICE_SEEDS)
-    assert seed_column_types(SLICE_SEEDS), "no seed column type found: the scan is broken"
+    typed = contract_types(SLICE_MODELS)
     assert typed, "no contract found on the slice: the scan is broken"
     refused = [
         row
@@ -375,3 +374,18 @@ def test_the_slices_contracts_name_only_types_both_warehouses_accept() -> None:
         if row[2] not in SHARED_CONTRACT_TYPES and row[2] != FLOAT_CONTRACT_TYPE
     ]
     assert not refused, f"contract types BigQuery or DuckDB would refuse: {refused}"
+
+
+# A seed is loaded by a load job, whose schema takes fewer names than a `create table`
+# does: BigQuery's load API refuses `bigint` ("BIGINT is not a valid value"), which its
+# DDL accepts. `int64` is read by both (DuckDB as BIGINT).
+SHARED_SEED_TYPES = {"int64", "string", "boolean"}
+
+
+def test_the_slices_seeds_name_only_types_both_warehouses_load() -> None:
+    typed = seed_column_types(SLICE_SEEDS)
+    assert typed, "no seed column type found: the scan is broken"
+    refused = [
+        row for row in typed if row[2] not in SHARED_SEED_TYPES and row[2] != FLOAT_CONTRACT_TYPE
+    ]
+    assert not refused, f"seed column types BigQuery or DuckDB would refuse: {refused}"
