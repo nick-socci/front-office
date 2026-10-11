@@ -22,6 +22,10 @@ jobs:
         # An exact tag: setup-uv publishes no `v8`-style major tags from v8 on.
         uses: astral-sh/setup-uv@v10.2.0
         with:
+          # Named, or the action installs whatever uv is latest and every `uv` step below
+          # changes with a uv release. Pinned here and not in pyproject.toml, so that a
+          # contributor's own uv is not refused locally (#128).
+          version: "0.13.0"
           enable-cache: true
 
       - name: Install dependencies
