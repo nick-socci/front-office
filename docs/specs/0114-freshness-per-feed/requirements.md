@@ -143,6 +143,10 @@ spec settles its shape before then; it does not wake it.
   (`schema: raw`, `identifier: api_responses`), or its `loaded_at_field` is not the
   expression that parses `fetched_at` as the UTC stamp it is, THEN THE SYSTEM SHALL fail
   the test suite.
+- R3.5 IF a committed capture of a season-scoped run marker in `fixtures/landing/` (an
+  `mlb` schedule or an `espn` settings capture) does not carry a four-digit `season` in
+  its partitions, THEN THE SYSTEM SHALL fail the test suite, naming the capture: the
+  season clause would drop it without a word.
 
   (A feed added with no fixtures is not caught: nothing lists the feeds the loader
   accepts, which takes each capture's feed from its sidecar. Such a feed would have no

@@ -23,8 +23,8 @@ The first commit of the build accepts ADR 0050.
      differ from the expected values, say so and carry on with the counts found: they
      are the "before" of R4.1.
 2. The tests of the declarations, seen to fail — `impl` — R1.1, R1.3, R2.1, R2.2, R3.1,
-   R3.2, R3.3, R3.4
-   - `ingestion/tests/test_source_freshness.py`, with the seven pytest rows of the
+   R3.2, R3.3, R3.4, R3.5
+   - `ingestion/tests/test_source_freshness.py`, with the eight pytest rows of the
      design's test strategy, each with what it catches in its docstring. The tests read
      the YAML under `dbt/models/staging/`, and the fixtures only through
      `LandingZone.committed`.
@@ -34,10 +34,10 @@ The first commit of the build accepts ADR 0050.
    - `dbt/models/staging/_raw_feeds__sources.yml` as the design writes it; `freshness`
      and `loaded_at_field` removed from `api_responses` in `_mlb__sources.yml`, and its
      comment replaced as the design says.
-   - Try once whether the season clause can call the models' JSON macro inside
-     `freshness.filter` (design, *Open questions*). If dbt renders it and the fixture
-     results of task 4 are the same, use the macro and say so in an *Amendments* entry;
-     if not, keep the filter as the design writes it. Do not spend more than the one try.
+   - Try once, on a scratch copy of the YAML, whether the season clause can call the
+     models' JSON macro inside `freshness.filter` (design, *Open questions*), and record
+     the answer on #114. The committed filter is the design's either way. Do not spend
+     more than the one try.
    - Verify: the tests of task 2 pass; `cd dbt && DBT_PROFILES_DIR=. uv run dbt parse
      --target ci` reports 4 sources and no warning.
 4. Freshness on the fixtures, by hand — `judgment` — R1.2, R1.4, R1.5, R1.6, R1.7,

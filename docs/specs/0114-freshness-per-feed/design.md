@@ -350,6 +350,7 @@ Freshness itself cannot be a gate. What can be held in CI is the declarations.
 | R3.2 | pytest: each declaration's endpoint is one its feed has a committed capture of in the fixtures | a run marker misspelt or renamed, whose filter would then match no row |
 | R3.3 | pytest: each `raw_feeds` filter, with its whitespace collapsed, is exactly the text built from its one feed and one endpoint: `source = '<feed>' and endpoint = '<endpoint>'`, followed for `mlb` and `espn` by the season clause whose subquery repeats the same feed and endpoint; no feed twice | a copy-pasted declaration, or a season clause, still naming the feed it was copied from, which would report that feed's age, or scope to that feed's season, under another's name |
 | R3.4 | pytest: the `raw_feeds` source has `schema: raw`; each table has `identifier: api_responses` and the exact `loaded_at_field` expression `strptime(fetched_at, '%Y%m%dT%H%M%SZ')` | a declaration that reads another relation, or parses the stamp differently, and still passes the filter checks |
+| R3.5 | pytest: every committed `mlb` schedule and `espn` settings capture in the fixtures, read through `LandingZone.committed`, has a `season` partition that is a four-digit year | a marker landed without a season, which the season clause would silently leave out: the landing zone requires `partitions` to be a mapping and nothing more |
 | R1.1 | pytest: the three run markers are schedule, settings and player_id_map | a marker changed without the spec |
 | R1.3 | pytest: `raw.api_responses` has neither `freshness` nor `loaded_at_field` | the whole-table age coming back beside the three |
 | R2.1, R2.2 | pytest: the three declarations' thresholds are the ones in *Thresholds* | a threshold changed without the spec |
@@ -391,9 +392,10 @@ and against a deliberately wrong copy for the others.
 - **`dbt source freshness` on the real warehouse** was not run for this spec (it opens
   the file for writing). Task 5 runs it.
 - **Whether `freshness.filter` can call a macro.** If dbt renders the filter as Jinja,
-  the season clause can read `partitions` through `fo_json_*` like the models do. Not
-  tried. Task 3 tries it once; if it works the macro is used, and if not the DuckDB
-  function stays, as the design writes it. Either way the expected values are the same.
+  the season clause could read `partitions` through `fo_json_*` like the models do. Not
+  tried. Task 3 tries it once and records the answer on #114. The filter is built as
+  the design writes it either way: R3.3 holds its exact text, and switching to the macro
+  is a change to that text and its test, to be made with the BigQuery work it serves.
 
 ## Settled by the owner (2026-10-10, PR #125)
 
@@ -426,6 +428,8 @@ and against a deliberately wrong copy for the others.
 | second round, lead agent | G1 (semantics): the markers are not scoped to a season. On the real warehouse the newest `mlb` schedule and `espn` settings are the 2018 season's, fetched for #57, and the spec reported them as each feed's last run | Put to the owner, who chose the latest season that has a marker (2026-10-10). R1.1, R1.6, the filters, a second spike, the expected real-season values (now the 2026 season's, a day older), the ADR and tasks 1, 4 and 5 changed |
 | second round, lead agent | G2 (accuracy): a marker was defined as a capture "that nothing less than such a run lands", but `backfill mlb --only schedule` lands a schedule alone and `backfill espn --only matchups` lands settings without rosters | The definition now says what is true: the first league or season call of a run, so a run limited to that call counts. R1.1 names `--only schedule` |
 | design-review, round 2 | F1 (P2, test-gap): the declaration test did not check `schema: raw` or the exact timestamp expression | Fixed: R3.4 and its test |
+| design-review, round 3 | F1 (P2, test-gap): nothing requires a marker capture to carry a season, and one without it is silently left out by the season clause | Fixed: R3.5 and its test on the committed fixtures. Task 1 already checks the real warehouse's markers |
+| design-review, round 3 | F2 (P2, consistency): task 3 would switch to a JSON macro if its trial worked, while the test of R3.3 holds the filter's exact text | Fixed by narrowing task 3: the trial is recorded, and the filter is built as designed either way |
 | design-review, round 2 | F2 (P2, testability): the no-row scratch run had no expected result | Fixed: R1.7 and an expected value, from a spike: `max_loaded_at` in year 1, `warn` for the warn-only id map, `error` where there is an error threshold |
 
 ## Amendments
