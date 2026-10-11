@@ -558,7 +558,9 @@ is not in the design's table, it is not a respelling, and the model's shape woul
 on both warehouses, as `stg_espn__pro_games`' did. It is left as it is, is not yet in the
 rule test, and will fail the `--empty` build of task 12 unless decided first.
 
-**Expected to fail in task 12 as well:** the contracts. 20 of the slice's models declare
-`data_type: varchar`, `bigint` or `double` per column in YAML, and dbt writes those names
-into the `create table` it sends. `double` and `varchar` are not BigQuery types. This is
-YAML, which the rule test does not read.
+**Expected to fail in task 12 as well:** the contracts. A model with an enforced contract
+declares each column's `data_type` in YAML, and dbt writes those names into the
+`create table` it sends. `varchar` and `double` are not BigQuery types, and the project's
+YAML declares them 66 times in three files (`grep -c "data_type: \(varchar\|double\)"`;
+how many of those are on the slice's models was not counted). This is YAML, which the
+rule test does not read.
