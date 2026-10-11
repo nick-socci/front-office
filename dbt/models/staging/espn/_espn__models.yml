@@ -164,6 +164,29 @@ models:
           arguments:
             combination_of_columns: [league_id, season, matchup_period, scoring_period]
 
+  - name: stg_espn__matchup_days
+    description: >
+      One row per (scoring period, matchup period): the matchup period ESPN marked, with
+      rosterForCurrentScoringPeriod on its matchup sides, in the response it gave for that
+      scoring period. The mapping for a past season, whose matchups carry no
+      pointsByScoringPeriod (ADR 0055). Empty where no matchup_days response is loaded,
+      which includes CI. scoring_period is the one asked for, not read from the payload.
+    columns:
+      - name: league_id
+        data_tests: [not_null]
+      - name: season
+        data_tests: [not_null]
+      - name: scoring_period
+        data_tests: [not_null]
+      - name: matchup_period
+        data_tests: [not_null]
+      - name: fetched_at
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, scoring_period, matchup_period]
+
   - name: stg_espn__lineup_slot_limits
     description: >
       One row per lineup slot with how many a team fills each day -- the shape of a legal
@@ -332,6 +355,59 @@ models:
             combination_of_columns: [season, espn_game_id]
 
 unit_tests:
+  - name: matchup_days_one_marked_period_gives_one_row
+    description: >
+      R5.2. Scoring period 5 is answered with three matchup periods; only period 4 carries
+      rosterForCurrentScoringPeriod. Period 4 has two matchups marked on both sides, and a
+      third marked on its home side only (its away is an empty bye object). Catches a row
+      per marked side or matchup (the distinct), the marker read from the wrong key, and
+      an unmarked period (3, 5) being returned.
+    model: stg_espn__matchup_days
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=5&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2018, "league_id": "1", "scoring_period": 5}', payload: '{"id": 1, "seasonId": 2018, "scoringPeriodId": 5, "schedule": [{"matchupPeriodId": 3, "home": {"teamId": 1}, "away": {"teamId": 2}}, {"matchupPeriodId": 4, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2, "rosterForCurrentScoringPeriod": {"entries": []}}}, {"matchupPeriodId": 4, "home": {"teamId": 3, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 4, "rosterForCurrentScoringPeriod": {"entries": []}}}, {"matchupPeriodId": 4, "home": {"teamId": 5, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {}}, {"matchupPeriodId": 5, "home": {"teamId": 1}, "away": {"teamId": 2}}]}'}
+    expect:
+      rows:
+        - {league_id: "1", season: 2018, scoring_period: 5, matchup_period: 4, fetched_at: "2026-09-01 00:00:00"}
+
+  - name: matchup_days_the_newer_capture_of_a_scoring_period_wins
+    description: >
+      R5.2. Two captures of scoring period 5: the older (09-01) marks matchup period 4, the
+      newer (09-15) marks 6, and the newer is listed first. Catches a model that keeps both
+      (two rows) or the older one.
+    model: stg_espn__matchup_days
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=5&view=mMatchupScore,mScoreboard", fetched_at: "20260915T000000Z", file_path: a2, partitions: '{"season": 2018, "league_id": "1", "scoring_period": 5}', payload: '{"id": 1, "seasonId": 2018, "scoringPeriodId": 5, "schedule": [{"matchupPeriodId": 4, "home": {"teamId": 1}, "away": {"teamId": 2}}, {"matchupPeriodId": 6, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}]}'}
+          - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=5&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2018, "league_id": "1", "scoring_period": 5}', payload: '{"id": 1, "seasonId": 2018, "scoringPeriodId": 5, "schedule": [{"matchupPeriodId": 4, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}, {"matchupPeriodId": 6, "home": {"teamId": 1}, "away": {"teamId": 2}}]}'}
+    expect:
+      rows:
+        - {league_id: "1", season: 2018, scoring_period: 5, matchup_period: 6, fetched_at: "2026-09-15 00:00:00"}
+
+  - name: matchup_days_leagues_and_seasons_stay_apart
+    description: >
+      R5.2. The same scoring period 5 is captured for league 1 in 2018 and 2019 and for
+      league 2 in 2018, each marking a different matchup period. Catches a dedupe keyed on
+      scoring period alone (two of the three rows lost) and league or season read from the
+      wrong place.
+    model: stg_espn__matchup_days
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=5&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2018, "league_id": "1", "scoring_period": 5}', payload: '{"id": 1, "seasonId": 2018, "scoringPeriodId": 5, "schedule": [{"matchupPeriodId": 4, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}]}'}
+          - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=5&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", file_path: a2, partitions: '{"season": 2019, "league_id": "1", "scoring_period": 5}', payload: '{"id": 1, "seasonId": 2019, "scoringPeriodId": 5, "schedule": [{"matchupPeriodId": 6, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}]}'}
+          - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=5&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", file_path: b1, partitions: '{"season": 2018, "league_id": "2", "scoring_period": 5}', payload: '{"id": 2, "seasonId": 2018, "scoringPeriodId": 5, "schedule": [{"matchupPeriodId": 7, "home": {"teamId": 1}, "away": {"teamId": 2, "rosterForCurrentScoringPeriod": {"entries": []}}}]}'}
+    expect:
+      rows:
+        - {league_id: "1", season: 2018, scoring_period: 5, matchup_period: 4, fetched_at: "2026-09-01 00:00:00"}
+        - {league_id: "1", season: 2019, scoring_period: 5, matchup_period: 6, fetched_at: "2026-09-01 00:00:00"}
+        - {league_id: "2", season: 2018, scoring_period: 5, matchup_period: 7, fetched_at: "2026-09-01 00:00:00"}
+
   - name: transactions_keep_each_league_seasons_newest_run
     description: >
       Catches a global newest run. League A's newest run (fetched 09-01) is older than

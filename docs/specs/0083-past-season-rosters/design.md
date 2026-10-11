@@ -333,3 +333,14 @@ freshness declarations.
 
 ## Amendments
 
+### 2026-10-11: the own-scoring-periods test reads the two sources
+
+*Detailed design* repoints three tests at `int_fantasy__matchup_periods`. For
+`…matchup_periods_use_their_own_scoring_periods` that would have emptied the test: the
+model inner-joins `stg_espn__scoring_periods` for its dates, so a mapped period with no
+scoring period of its own league-season is dropped before the test could see it. Found
+by the implementer in task 4. The test is renamed as designed and reads the union of
+`stg_espn__matchup_periods` and `stg_espn__matchup_days` instead, which is the combined
+mapping before the date join. It is as strong as before for the existing source and
+now covers the marker too (R2.7). The other two tests are repointed as designed. No
+requirement changes.

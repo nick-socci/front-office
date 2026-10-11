@@ -302,7 +302,11 @@ models:
   - name: int_fantasy__matchup_periods
     description: >
       One row per (matchup period, calendar date). Periods are not a uniform length --
-      12, 14 and 7 days all occur -- so consumers take the span from here.
+      12, 14 and 7 days all occur -- so consumers take the span from here. A scoring period
+      is mapped from each matchup side's pointsByScoringPeriod where ESPN publishes it,
+      and otherwise from the matchup period ESPN marked in its answer for that day; the
+      first source wins per scoring period, so no row of a season that has it changes and a
+      running season never depends on a marker. mapping_source says which gave the row.
     config:
       contract:
         enforced: true
@@ -325,6 +329,14 @@ models:
       - name: scoring_date
         data_type: date
         constraints: [{type: not_null}]
+      - name: mapping_source
+        description: Which source mapped this scoring period to its matchup period.
+        data_type: varchar
+        constraints: [{type: not_null}]
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [points_by_scoring_period, matchup_day_marker]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -1043,6 +1055,71 @@ models:
 # -----------------------------------------------------------------------------
 
 unit_tests:
+  - name: matchup_periods_the_marker_fills_a_scoring_period_the_points_source_lacks
+    description: >
+      R5.3 (i). Scoring period 5 exists only in stg_espn__matchup_days (a past season).
+      Catches the marker source not being read, and a wrong mapping_source.
+    model: int_fantasy__matchup_periods
+    given:
+      - input: ref('stg_espn__matchup_periods')
+        rows: []
+      - input: ref('stg_espn__matchup_days')
+        rows:
+          - {league_id: "1", season: 2018, scoring_period: 5, matchup_period: 4}
+      - input: ref('stg_espn__scoring_periods')
+        rows:
+          - {league_id: "1", season: 2018, scoring_period: 5, scoring_date: "2018-04-05"}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2018, matchup_period: 4, scoring_period: 5, scoring_date: "2018-04-05", mapping_source: matchup_day_marker}
+
+  - name: matchup_periods_the_points_source_wins_a_scoring_period_both_know
+    description: >
+      R5.3 (ii). Scoring period 5 is in both sources, mapped to matchup period 4 by the
+      points source and to 9 by the marker. Catches the marker overriding the existing
+      source, and a scoring period mapped twice.
+    model: int_fantasy__matchup_periods
+    given:
+      - input: ref('stg_espn__matchup_periods')
+        rows:
+          - {league_id: "1", season: 2026, matchup_period: 4, scoring_period: 5}
+      - input: ref('stg_espn__matchup_days')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 5, matchup_period: 9}
+      - input: ref('stg_espn__scoring_periods')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 5, scoring_date: "2026-04-05"}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, matchup_period: 4, scoring_period: 5, scoring_date: "2026-04-05", mapping_source: points_by_scoring_period}
+
+  - name: matchup_periods_each_scoring_period_takes_its_own_source_in_one_league_season
+    description: >
+      R5.3 (iii). One league-season: scoring period 5 is in both sources (points says
+      matchup period 4, marker says 9), period 6 only in the points source, period 7 only
+      in the marker. Catches the fallback being decided per league-season instead of per
+      scoring period, in either direction.
+    model: int_fantasy__matchup_periods
+    given:
+      - input: ref('stg_espn__matchup_periods')
+        rows:
+          - {league_id: "1", season: 2026, matchup_period: 4, scoring_period: 5}
+          - {league_id: "1", season: 2026, matchup_period: 4, scoring_period: 6}
+      - input: ref('stg_espn__matchup_days')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 5, matchup_period: 9}
+          - {league_id: "1", season: 2026, scoring_period: 7, matchup_period: 5}
+      - input: ref('stg_espn__scoring_periods')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 5, scoring_date: "2026-04-05"}
+          - {league_id: "1", season: 2026, scoring_period: 6, scoring_date: "2026-04-06"}
+          - {league_id: "1", season: 2026, scoring_period: 7, scoring_date: "2026-04-07"}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, matchup_period: 4, scoring_period: 5, scoring_date: "2026-04-05", mapping_source: points_by_scoring_period}
+        - {platform: espn, league_id: "1", season: 2026, matchup_period: 4, scoring_period: 6, scoring_date: "2026-04-06", mapping_source: points_by_scoring_period}
+        - {platform: espn, league_id: "1", season: 2026, matchup_period: 5, scoring_period: 7, scoring_date: "2026-04-07", mapping_source: matchup_day_marker}
+
   - name: league_seasons_are_covered_only_where_rosters_are_loaded
     description: >
       Season 2026 has settings and roster entries; season 2025 has settings only, as a

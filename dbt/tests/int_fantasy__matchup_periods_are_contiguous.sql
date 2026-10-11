@@ -14,7 +14,7 @@ with spans as (
         count(*) as days,
         count(distinct scoring_period) as distinct_days,
         (max(scoring_period) - min(scoring_period)) + 1 as span
-    from {{ ref('stg_espn__matchup_periods') }}
+    from {{ ref('int_fantasy__matchup_periods') }}
     group by league_id, season, matchup_period
 
 )
