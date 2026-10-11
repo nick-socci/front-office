@@ -5,8 +5,8 @@
 -- category through its rule, by inner join. This was a relationships test on
 -- int_fantasy__categories.category_key and makes the same check, for covered
 -- league-seasons only (ADR 0026): a past season loaded for its matchup totals may score a
--- category this project has no rule for (complete games, in 2018 and 2021), and needs
--- none while no value is computed for it. The day such a season's rosters are loaded it
+-- category this project has no rule for (complete games was one, until spec 0083), and
+-- needs none while no value is computed for it. The day such a season's rosters are loaded it
 -- is covered, and this fails until the rule exists.
 
 select

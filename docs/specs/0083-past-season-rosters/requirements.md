@@ -125,6 +125,12 @@ The owner chose on 2026-10-11 to land all seven played seasons: 2018, 2019 and 2
   `int_fantasy__matchup_side_totals`).
 - R3.2 THE SYSTEM SHALL compute ESPN stat 62 as the sum of `complete_games`, credited to
   a team by the rule every pitching component follows.
+- R3.4 THE SYSTEM SHALL compute a stat's value for a matchup side only where the host
+  reports that stat for at least one side of that league-season. A stat with a rule that
+  the host reports nowhere in the league-season has no row in
+  `int_fantasy__matchup_stat_values`, and so none in the reconciliation. `missing_espn`
+  keeps its meaning: the host reports the stat in the league-season and not for this
+  side. *Added 2026-10-11 by the owner's decision (design.md, Amendments).*
 - R3.3 THE SYSTEM SHALL keep `int_fantasy__scored_categories_have_a_component_rule`
   unchanged, and it SHALL return no rows with every played season covered.
 
@@ -183,9 +189,12 @@ The owner chose on 2026-10-11 to land all seven played seasons: 2018, 2019 and 2
 - R6.6 THE SYSTEM SHALL record, on the issue: requests made per command; bytes landed
   per endpoint; the real build's wall time and peak memory before and after. IF the real
   build cannot complete on the owner's machine THEN the build SHALL stop for the owner.
-- R6.7 THE SYSTEM SHALL NOT change a row of any model for the 2026 league-season: over
-  the columns each model had before, its 2026 rows are identical. The columns R2.6, R3.1
-  and R4.2 add are left out of that comparison and checked on their own.
+- R6.7 THE SYSTEM SHALL NOT change or remove a row of any model for the 2026
+  league-season: over the columns each model had before, every 2026 row it had is still
+  there, unchanged. The columns R2.6, R3.1 and R4.2 add are left out of that comparison
+  and checked on their own. Rows may be added for 2026 only where a model holds one row
+  per component and the row's component is `complete_games`; the build lists them.
+  *Amended 2026-10-11 by the owner's decision (design.md, Amendments).*
 - R6.8 THE SYSTEM SHALL record `front-office audit --season <year>` for each past
   season. The findings expected are the missing transaction log and, until the second
   pass, boxscores not yet settled; any other is R6.4.
@@ -204,7 +213,7 @@ Where a value is not known the build records what it finds.
 
 | Check | Expected | How to verify |
 |---|---|---|
-| Every row of every model, 2026 league-season, existing columns | identical before and after | `EXCEPT ALL` both ways against a copy, `season = 2026` |
+| Every row of every model, 2026 league-season, existing columns | every earlier row still there, unchanged; rows added only for the component `complete_games` (`int_fantasy__replacement_levels`: 48 to 50; `int_fantasy__stat_components`, which has no season: 30 to 31) | `EXCEPT ALL` both ways against a copy, `season = 2026` |
 | `int_fantasy__league_seasons` | 9 rows; `has_rosters` true for all but 2020; `has_transaction_log` true for 2026 only | query |
 | Marker against `pointsByScoringPeriod` | equal for 188 periods of 2025 and 180 of 2026 | R6.1's query; R2.4's test |
 | Marker against 2018's 24 period starts | each start's marker is that matchup period, and the day before it the one before | query |

@@ -344,3 +344,27 @@ by the implementer in task 4. The test is renamed as designed and reads the unio
 mapping before the date join. It is as strong as before for the existing source and
 now covers the marker too (R2.7). The other two tests are repointed as designed. No
 requirement changes.
+
+### 2026-10-11: a stat the host does not report is not computed, and a new component adds rows
+
+Found in task 6, in CI, and settled by the owner the same day.
+
+`int_fantasy__matchup_stat_values` computed every stat that has a rule, for every
+league-season, and the reconciliation fails on a stat we hold and ESPN lacks
+(`missing_espn`). With a rule for stat 62 the 2026 fixture season failed
+`fct_matchup_scores_match_espn` on 4 rows, ours 0.0 and ESPN's absent. The same would
+have happened without complete games as soon as a past season was covered: ESPN reports
+18 distinct stats in 2018, 23 in 2019, 22 in 2021 and 24 from 2022 on, and of the stats
+with a rule it does not report 0, 33, 37, 39, 45, 60 and 83 in 2018, nor 33, 60 and 83
+in 2021 (real warehouse, 2026-10-11). The spec's ledger did not look at this.
+
+The owner chose: **a stat's value is computed only where the host reports that stat
+somewhere in the league-season** (R3.4). The alternative, computing every stat and
+giving the reconciliation a status for "not reported", would have added 286 rows of
+stat 62 to 2026. Scored categories are always reported, so nothing scored is lost; the
+components stay in the side totals whatever is reported. Accepted cost: a league-season
+whose host has not yet reported any side has no stat values until it does.
+
+`int_fantasy__replacement_levels` holds one row per (league-season, day kind,
+component), so the new component adds two rows per league-season: 48 to 50 in CI and
+for 2026. No existing row changes. The owner accepted these and R6.7 now says so.

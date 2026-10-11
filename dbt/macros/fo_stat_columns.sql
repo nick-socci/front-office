@@ -46,5 +46,6 @@
         'saves',
         'holds',
         'blown_saves',
+        'complete_games',
     ]) }}
 {% endmacro %}

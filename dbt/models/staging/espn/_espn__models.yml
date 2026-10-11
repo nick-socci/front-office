@@ -781,7 +781,7 @@ seeds:
           - not_null
           - accepted_values:
               arguments:
-                values: [games_batted, plate_appearances, at_bats, hits, doubles, triples, home_runs, runs, runs_batted_in, batter_walks, batter_strikeouts, stolen_bases, caught_stealing, hit_by_pitch, sacrifice_flies, total_bases, games_pitched, games_started, outs_recorded, batters_faced, hits_allowed, runs_allowed, earned_runs, home_runs_allowed, pitcher_walks, pitcher_strikeouts, hit_batsmen, wins, losses, saves, holds, blown_saves]
+                values: [games_batted, plate_appearances, at_bats, hits, doubles, triples, home_runs, runs, runs_batted_in, batter_walks, batter_strikeouts, stolen_bases, caught_stealing, hit_by_pitch, sacrifice_flies, total_bases, games_pitched, games_started, outs_recorded, batters_faced, hits_allowed, runs_allowed, earned_runs, home_runs_allowed, pitcher_walks, pitcher_strikeouts, hit_batsmen, wins, losses, saves, holds, blown_saves, complete_games]
       - name: weight
         data_tests: [not_null]
     data_tests:
