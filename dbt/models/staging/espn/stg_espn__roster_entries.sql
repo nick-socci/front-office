@@ -65,8 +65,9 @@ teams as (
         season,
         scoring_period,
         fetched_at,
-        unnest(teams_list) as team
+        team
     from header
+    {{ fo_unnest('header.teams_list', 'team') }}
 
 ),
 
@@ -78,8 +79,9 @@ entries as (
         scoring_period,
         fetched_at,
         team.id as team_id,
-        unnest(team.roster.entries) as entry
+        entry
     from teams
+    {{ fo_unnest('teams.team.roster.entries', 'entry') }}
 
 )
 

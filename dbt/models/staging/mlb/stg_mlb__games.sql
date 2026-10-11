@@ -28,8 +28,9 @@ games as (
 
     select
         fetched_at,
-        unnest({{ fo_json_array('payload', '$.dates[*].games[*]') }}) as game
+        game
     from responses
+    {{ fo_unnest(fo_json_array('responses.payload', '$.dates[*].games[*]'), 'game') }}
 
 )
 

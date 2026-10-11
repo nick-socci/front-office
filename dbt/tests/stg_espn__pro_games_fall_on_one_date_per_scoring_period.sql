@@ -14,7 +14,7 @@ with period_one as (
 
     select
         season,
-        min(game_date - (scoring_period - 1)::integer) as period_one_date
+        min(game_date - cast(scoring_period - 1 as integer)) as period_one_date
     from {{ ref('stg_espn__pro_games') }}
     group by season
 
@@ -25,8 +25,8 @@ select
     games.espn_game_id,
     games.scoring_period,
     games.game_date,
-    period_one.period_one_date + (games.scoring_period - 1)::integer as expected_date
+    period_one.period_one_date + cast(games.scoring_period - 1 as integer) as expected_date
 from {{ ref('stg_espn__pro_games') }} as games
 inner join period_one
     on period_one.season = games.season
-where games.game_date != period_one.period_one_date + (games.scoring_period - 1)::integer
+where games.game_date != period_one.period_one_date + cast(games.scoring_period - 1 as integer)

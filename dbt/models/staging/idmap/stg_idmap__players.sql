@@ -29,8 +29,9 @@ mapped as (
 
     select
         fetched_at,
-        unnest(rows_json) as row_json
+        row_json
     from header
+    {{ fo_unnest('header.rows_json', 'row_json') }}
 
 )
 

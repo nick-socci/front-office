@@ -5,9 +5,9 @@
 
 with source_games as (
 
-    select
-        unnest({{ fo_json_array('payload', '$.dates[*].games[*]') }}) as game
-    from {{ source('raw', 'api_responses') }}
+    select game
+    from {{ source('raw', 'api_responses') }} as responses
+    {{ fo_unnest(fo_json_array('responses.payload', '$.dates[*].games[*]'), 'game') }}
     where
         source = 'mlb'
         and endpoint = 'schedule'

@@ -23,14 +23,26 @@
 --
 -- Same memory rules as stg_espn__roster_entries: the payload is ~850 KB, parsed once with
 -- an explicit schema into narrow columns, and dropped before any unnest (AGENTS.md rule
--- 1). The per-period object becomes a MAP, unnested to its lists of games.
+-- 1). The per-period object is left as JSON by that parse: its values, the lists of
+-- games, are taken with fo_json_values and each list parsed with its own schema. It was a
+-- DuckDB MAP until the BigQuery slice (spec 0130); BigQuery has no map type.
 
 {{ config(materialized='table') }}
 
 {% set pro_teams_schema %}
 [{
   "id": "BIGINT",
-  "proGamesByScoringPeriod": "MAP(VARCHAR, STRUCT(id BIGINT, date BIGINT, scoringPeriodId BIGINT, homeProTeamId BIGINT, awayProTeamId BIGINT)[])"
+  "proGamesByScoringPeriod": "JSON"
+}]
+{% endset %}
+
+{% set games_schema %}
+[{
+  "id": "BIGINT",
+  "date": "BIGINT",
+  "scoringPeriodId": "BIGINT",
+  "homeProTeamId": "BIGINT",
+  "awayProTeamId": "BIGINT"
 }]
 {% endset %}
 
@@ -55,8 +67,9 @@ teams as (
     select
         season,
         fetched_at,
-        unnest(teams_list) as team
+        team
     from header
+    {{ fo_unnest('header.teams_list', 'team') }}
 
 ),
 
@@ -65,8 +78,9 @@ game_lists as (
     select
         season,
         fetched_at,
-        unnest(map_values(team.proGamesByScoringPeriod)) as games
+        games
     from teams
+    {{ fo_unnest(fo_json_values('teams.team.proGamesByScoringPeriod', '$'), 'games') }}
 
 ),
 
@@ -75,17 +89,18 @@ listed_games as (
     select
         season,
         fetched_at,
-        unnest(games) as game
+        game
     from game_lists
+    {{ fo_unnest(fo_json_parse('game_lists.games', '$', games_schema), 'game') }}
 
 )
 
 select distinct
     season,
-    cast(game.id as varchar) as espn_game_id,
+    cast(game.id as {{ fo_type_text() }}) as espn_game_id,
     game.scoringPeriodId as scoring_period,
-    epoch_ms(game.date) as game_start_at_utc,
-    {{ fo_eastern_date('epoch_ms(game.date)') }} as game_date,
+    {{ fo_timestamp_from_millis('game.date') }} as game_start_at_utc,
+    {{ fo_eastern_date(fo_timestamp_from_millis('game.date')) }} as game_date,
     game.homeProTeamId as home_pro_team_id,
     game.awayProTeamId as away_pro_team_id,
     {{ fo_parse_fetched_at() }} as fetched_at

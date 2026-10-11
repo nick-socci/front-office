@@ -39,7 +39,7 @@ period_one as (
     -- every game implies a date for period 1; a test holds them to one
     select
         season,
-        min(game_date - ((scoring_period - 1)::integer)) as period_one_date
+        min(game_date - cast(scoring_period - 1 as integer)) as period_one_date
     from {{ ref('stg_espn__pro_games') }}
     group by season
 
@@ -50,10 +50,12 @@ periods as (
     select
         league_seasons.league_id,
         league_seasons.season,
-        generate_series as scoring_period
-    from league_seasons,
-        -- lateral: each league-season runs to its own final period, not to the longest
-        generate_series(1, league_seasons.final_scoring_period)
+        scoring_period
+    from league_seasons
+    -- each league-season runs to its own final period, not to the longest
+    {{ fo_unnest(
+        fo_int_series('1', 'league_seasons.final_scoring_period'), 'scoring_period'
+    ) }}
 
 )
 
@@ -64,7 +66,7 @@ select
     periods.season,
     periods.scoring_period,
     -- cast: DuckDB defines date +/- INTEGER, not date +/- BIGINT
-    period_one.period_one_date + ((periods.scoring_period - 1)::integer) as scoring_date
+    period_one.period_one_date + cast(periods.scoring_period - 1 as integer) as scoring_date
 from periods
 left join period_one
     on period_one.season = periods.season

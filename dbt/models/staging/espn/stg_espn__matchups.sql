@@ -26,8 +26,9 @@ matchups as (
         league_id,
         season,
         fetched_at,
-        unnest(schedule) as matchup
+        matchup
     from header
+    {{ fo_unnest('header.schedule', 'matchup') }}
 
 )
 
