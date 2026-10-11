@@ -445,3 +445,8 @@ and against a deliberately wrong copy for the others.
   because dbt opens the file for writing. It was run on a byte-for-byte scratch copy of
   that file instead, which answers the same question and leaves the real warehouse
   unopened; the copy was deleted afterwards. No expected value changes.
+- **2026-10-11, PR #127 review, F1: the exception is named in AGENTS.md.** The season
+  clause reads JSON with DuckDB's function in a YAML filter, and AGENTS.md said all JSON
+  access goes through `fo_json_*`. The macros cannot be called there (the entry above).
+  The owner chose to name the exception in the rule, not to change the design
+  (2026-10-11): AGENTS.md, *Project shape*, now says so.

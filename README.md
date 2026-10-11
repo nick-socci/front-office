@@ -198,10 +198,12 @@ decimal silently corrupts every rate built on it.
 old a source's newest row is. `raw.api_responses` holds three feeds, so it is declared
 once per feed and `dbt source freshness` gives three ages: a stalled feed shows whatever
 the others are doing. A feed's age is the age of its last run, read from one capture
-that marks a run: the schedule for `mlb`, and for `espn` the league settings, the first
-call that needs the login, so an expired login shows as stale even though the public
-pro schedule still lands. Both count only in the latest season that has one, because
-fetching a past season again lands them too. `mlb` and `espn` warn at 36 hours and
+that marks a run. For `mlb` it is the schedule, which every full run lands first and a
+run of the player list or the boxscores alone does not. For `espn` it is the league
+settings, the first call that needs the login, so an expired login shows as stale even
+though the public pro schedule still lands. For the id map it is `player_id_map`, the
+only thing that feed fetches. The first two count only in the latest season that has
+one, because fetching a past season again lands them too. `mlb` and `espn` warn at 36 hours and
 error at 7 days; the id map, which is not fetched daily, warns at 14 days and never
 errors. Nothing runs it yet: there is no schedule to be late, and the CI fixtures are
 months old by design, so it would fail there every time. It wakes with the 2027 daily
