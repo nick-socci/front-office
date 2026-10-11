@@ -497,3 +497,34 @@ union as a whole. No scope moves: the count is the spec's.
 Also settled in task 2: `env_var('FO_BQ_PROJECT')` with no default is evaluated only when
 the `bq` target is used. `dev` and `ci` parse with the variable unset, and with
 `dbt-bigquery` not installed; `bq` fails naming the variable (R2.5).
+
+### 2026-10-11: `fo_unnest` is given a column, not an expression over a payload (build, task 6)
+
+The first real `dev` build of the ported models ran out of memory (23.9 GiB), which is
+the first risk listed above. Measured on the real schedule captures, alone: unnesting in
+the SELECT list, as before, 0.19 s; `from responses cross join
+unnest(json_extract(responses.payload, …))`, 5.1 s and 1.9 GB for one query; the list
+computed in one CTE and unnested from that CTE in the next, 0.05 s. DuckDB unnests a
+column in place and plans an expression in the FROM clause as a join that carries what
+the expression reads.
+
+So the port follows AGENTS.md rule 1 in the FROM clause too: `stg_mlb__games`, its
+singular test and `stg_espn__scoring_categories` compute the list in a CTE of their own
+before `fo_unnest`, and `stg_espn__roster_entries` and `stg_espn__pro_games` take each
+next list out as a column before unnesting it (`stg_espn__roster_entries` took 6.6 s
+against 2.6 s until it did). No DuckDB SQL is kept behind a macro's DuckDB form, which is
+what the risk allowed for: the models are still one definition. Small expressions
+(`fo_int_series`, the keys of one matchup) are unnested directly.
+
+Result, real season, four threads: 56 of 56 relations identical to the baseline with
+`--strict-columns`, 815 of 815 columns of the same type and nullability; build 58.5 s
+against 56.2 s, peak memory 19.8 GB against 20.0 GB.
+
+Not in the design's table and written as plain SQL by ADR 0051's rule, since both
+warehouses accept it: `max(x) filter (where c)` as `max(case when c then x end)`, and
+`count(col) filter (where c)` as `count(case when c then col end)`.
+
+sqlfluff's RF02 fires on the DuckDB form of `fo_unnest_pair`, a joined subquery, in
+`stg_espn__matchup_category_results`. The table's columns are qualified; the two unnested
+names cannot be, since what they would be qualified with differs by warehouse, and carry
+`-- noqa: RF02` with that reason (ADR 0043).

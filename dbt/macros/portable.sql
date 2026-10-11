@@ -49,8 +49,15 @@
       select header.league_id, team from header {{ fo_unnest('header.teams_list', 'team') }}
 
   A null or empty list gives no rows, on both. BigQuery has no unnest in a SELECT list, so
-  this is the only way a model unnests. The relation's other columns are repeated once per
-  element, as with any unnest: project a large payload away first (AGENTS.md rule 1).
+  this is the only way a model unnests.
+
+  Give it a column of a relation that holds nothing large, not an expression over a
+  payload (AGENTS.md rule 1). DuckDB unnests a column in place. An expression in the FROM
+  clause it plans as a join that carries what the expression reads: unnesting
+  json_extract(responses.payload, ...) straight from the raw responses held each 3.5 MB
+  schedule once per game and ran the real build out of memory (spec 0130, task 6). Compute
+  the list in one CTE and unnest it in the next. A small expression, such as
+  fo_int_series or the keys of one matchup, is fine.
 #}
 {% macro fo_unnest(list, alias) %}
     {{- return(adapter.dispatch('fo_unnest')(list, alias)) -}}

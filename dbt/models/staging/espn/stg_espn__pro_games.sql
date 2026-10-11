@@ -62,12 +62,14 @@ header as (
 
 ),
 
+-- Each step below computes the next list as a column and the step after unnests it:
+-- fo_unnest is given a column, never an expression (see stg_espn__roster_entries).
 teams as (
 
     select
         season,
         fetched_at,
-        team
+        {{ fo_json_values('team.proGamesByScoringPeriod', '$') }} as period_lists
     from header
     {{ fo_unnest('header.teams_list', 'team') }}
 
@@ -78,9 +80,9 @@ game_lists as (
     select
         season,
         fetched_at,
-        games
+        {{ fo_json_parse('games', '$', games_schema) }} as games_list
     from teams
-    {{ fo_unnest(fo_json_values('teams.team.proGamesByScoringPeriod', '$'), 'games') }}
+    {{ fo_unnest('teams.period_lists', 'games') }}
 
 ),
 
@@ -91,7 +93,7 @@ listed_games as (
         fetched_at,
         game
     from game_lists
-    {{ fo_unnest(fo_json_parse('game_lists.games', '$', games_schema), 'game') }}
+    {{ fo_unnest('game_lists.games_list', 'game') }}
 
 )
 

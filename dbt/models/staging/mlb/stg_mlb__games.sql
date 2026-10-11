@@ -24,13 +24,25 @@ with responses as (
 
 ),
 
+game_lists as (
+
+    -- The payload is left behind here, before the unnest (AGENTS.md rule 1). An unnest in
+    -- the FROM clause repeats every column of its relation once per element, used or not:
+    -- unnesting straight from `responses` held each 3.5 MB schedule once per game.
+    select
+        fetched_at,
+        {{ fo_json_array('payload', '$.dates[*].games[*]') }} as games
+    from responses
+
+),
+
 games as (
 
     select
         fetched_at,
         game
-    from responses
-    {{ fo_unnest(fo_json_array('responses.payload', '$.dates[*].games[*]'), 'game') }}
+    from game_lists
+    {{ fo_unnest('game_lists.games', 'game') }}
 
 )
 
