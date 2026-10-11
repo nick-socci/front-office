@@ -10,7 +10,7 @@ with bounds as (
         season,
         count(*) as periods,
         count(distinct scoring_date) as dates,
-        (max(scoring_date) - min(scoring_date)) + 1 as span_days
+        {{ fo_days_between('min(scoring_date)', 'max(scoring_date)') }} + 1 as span_days
     from {{ ref('stg_espn__scoring_periods') }}
     group by league_id, season
 

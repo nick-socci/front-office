@@ -173,3 +173,19 @@
 {% macro bigquery__fo_strip_accents(expression) -%}
     regexp_replace(normalize({{ expression }}, NFD), r'\pM', '')
 {%- endmacro %}
+
+
+{#
+  Whole days from one date to a later one. DuckDB subtracts dates to an integer; BigQuery
+  gives an INTERVAL for the same spelling, which cannot be added to a number (found by the
+  empty build, spec 0130 task 12).
+#}
+{% macro fo_days_between(earlier, later) %}
+    {{- return(adapter.dispatch('fo_days_between')(earlier, later)) -}}
+{% endmacro %}
+{% macro duckdb__fo_days_between(earlier, later) -%}
+    ({{ later }} - {{ earlier }})
+{%- endmacro %}
+{% macro bigquery__fo_days_between(earlier, later) -%}
+    date_diff({{ later }}, {{ earlier }}, day)
+{%- endmacro %}

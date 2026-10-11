@@ -351,8 +351,23 @@ def contract_types(models: set[str]) -> list[tuple[str, str, str]]:
     return found
 
 
+def seed_column_types(seeds: set[str]) -> list[tuple[str, str, str]]:
+    """(seed, column, type) for every `column_types` entry of the named seeds."""
+    import yaml
+
+    found = []
+    for path in sorted((DBT_ROOT / "models").rglob("*.yml")):
+        for seed in (yaml.safe_load(path.read_text()) or {}).get("seeds") or []:
+            if seed["name"] not in seeds:
+                continue
+            for column, kind in ((seed.get("config") or {}).get("column_types") or {}).items():
+                found.append((seed["name"], column, str(kind)))
+    return found
+
+
 def test_the_slices_contracts_name_only_types_both_warehouses_accept() -> None:
-    typed = contract_types(SLICE_MODELS)
+    typed = contract_types(SLICE_MODELS) + seed_column_types(SLICE_SEEDS)
+    assert seed_column_types(SLICE_SEEDS), "no seed column type found: the scan is broken"
     assert typed, "no contract found on the slice: the scan is broken"
     refused = [
         row

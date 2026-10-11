@@ -72,7 +72,9 @@ unambiguous_names as (
         min(mlbam_player_id) as mlbam_player_id
     from mlb_players
     group by match_name, season
-    having count(distinct mlbam_player_id) = 1
+    -- Qualified: BigQuery reads a bare name in HAVING as the select alias above, which
+    -- makes this an aggregate of an aggregate.
+    having count(distinct mlb_players.mlbam_player_id) = 1
 
 ),
 

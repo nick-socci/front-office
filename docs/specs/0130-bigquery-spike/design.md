@@ -579,3 +579,35 @@ already met. A pytest holds the slice's contracts to the shared names or that on
 expression. The 27 unported models' contracts are not touched. `median`, the other thing
 known ahead of task 12, is left for the empty build to show (owner, 2026-10-11).
 
+### 2026-10-11: what the empty build on BigQuery found (task 12)
+
+Six runs. Each finding is a construct the design's table did not have.
+
+- **Seed column types.** `column_types` in three seeds' YAML said `varchar` and `double`,
+  sent as written in the seed's `create table`. Changed as the contracts were: `string`,
+  and the target switch for the float. The contract test now reads seeds too.
+- **Date minus date.** `max(d) - min(d) + 1` in `stg_espn__scoring_periods_are_consecutive`:
+  DuckDB gives an integer, BigQuery an `INTERVAL` that cannot be added to a number. New
+  macro `fo_days_between`. The rule test cannot see this one: a regular expression does
+  not know that two operands are dates.
+- **`median(x)`.** `Function not found`. BigQuery has an exact median only as a window
+  function, so no macro could stand in for the aggregate. The owner chose on 2026-10-11 to
+  write the median out in SQL both accept: rows numbered in order, the middle one or the
+  mean of the middle two, `(least + greatest) / 2`. Checked first that DuckDB's `median`
+  of two doubles equals `(a + b) / 2` (20,000 random pairs, 0 differing), then on the real
+  season: 56 of 56 relations identical to the baseline.
+- **A bare column in HAVING.** `min(mlbam_player_id) as mlbam_player_id … having
+  count(distinct mlbam_player_id) = 1` in `int_fantasy__player_crosswalk`: BigQuery reads
+  the bare name as the select alias and refuses an aggregate of an aggregate. The column
+  is now qualified.
+- **How the empty build is run.** `dbt build --empty` stops at the first failing test and
+  skips everything after it, and two tests fail on purpose when there are no rows
+  (`int_fantasy__started_days_match_the_starting_slots` fails on zero started days;
+  `stg_mlb__batting_totals_match_team_stats` reads the raw rows, which are not empty,
+  against empty models). So the empty build is `dbt run --empty` and then `dbt test`:
+  29 models built, 204 data tests run, 202 passed, and the two failures are results, not
+  refusals. No statement was refused.
+- **Unit tests are left to task 14.** Four staging unit tests fail with `Invalid cast from
+  STRING to JSON`: dbt cannot type a `JSON` fixture on BigQuery, the risk this design
+  named. Tasks 12 and 13 build without unit tests so that they do not hide the models.
+

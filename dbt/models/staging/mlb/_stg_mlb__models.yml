@@ -322,7 +322,7 @@ seeds:
       warehouse and the audit can't drift apart silently.
     config:
       column_types:
-        detailed_state: varchar
+        detailed_state: string
         is_played: boolean
     columns:
       - name: detailed_state

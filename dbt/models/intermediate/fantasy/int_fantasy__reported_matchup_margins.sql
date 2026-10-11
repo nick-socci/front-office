@@ -207,14 +207,37 @@ period_means as (
 
 ),
 
-usual_means as (
+ranked_period_means as (
 
+    -- Each category's period means in order, for the median below. BigQuery has no
+    -- aggregate median, so it is written out, once, for both warehouses (spec 0130,
+    -- amendment of 2026-10-11): the middle term, or the mean of the middle two.
     select
         league_id,
         season,
         category_key,
-        median(mean_side_total) as usual_side_total
+        mean_side_total,
+        row_number() over (
+            partition by league_id, season, category_key
+            order by mean_side_total
+        ) as position,
+        count(*) over (partition by league_id, season, category_key) as terms
     from period_means
+
+),
+
+usual_means as (
+
+    -- The middle one or two terms are those whose doubled position is within one of
+    -- terms + 1. Their least and greatest are the same term when the count is odd, and
+    -- x + x is exact, so the odd case is the term itself.
+    select
+        league_id,
+        season,
+        category_key,
+        (min(mean_side_total) + max(mean_side_total)) / 2 as usual_side_total
+    from ranked_period_means
+    where position * 2 between terms and terms + 2
     group by league_id, season, category_key
 
 ),
@@ -230,6 +253,46 @@ regular_periods as (
 
 ),
 
+ranked_volume_ratios as (
+
+    -- A period's ratio in each counting category whose usual total is above zero, in
+    -- order, for the median below.
+    select
+        period_means.league_id,
+        period_means.season,
+        period_means.matchup_period,
+        period_means.mean_side_total / usual_means.usual_side_total as volume_ratio,
+        row_number() over (
+            partition by
+                period_means.league_id, period_means.season, period_means.matchup_period
+            order by period_means.mean_side_total / usual_means.usual_side_total
+        ) as position,
+        count(*) over (
+            partition by
+                period_means.league_id, period_means.season, period_means.matchup_period
+        ) as terms
+    from period_means
+    inner join usual_means
+        on usual_means.league_id = period_means.league_id
+        and usual_means.season = period_means.season
+        and usual_means.category_key = period_means.category_key
+        and usual_means.usual_side_total > 0
+
+),
+
+median_volume_ratios as (
+
+    select
+        league_id,
+        season,
+        matchup_period,
+        (min(volume_ratio) + max(volume_ratio)) / 2 as relative_volume
+    from ranked_volume_ratios
+    where position * 2 between terms and terms + 2
+    group by league_id, season, matchup_period
+
+),
+
 period_volumes as (
 
     -- Spined on the periods, so a period no counting category can measure still has a
@@ -238,21 +301,12 @@ period_volumes as (
         periods.league_id,
         periods.season,
         periods.matchup_period,
-        coalesce(
-            median(period_means.mean_side_total / usual_means.usual_side_total),
-            1
-        ) as relative_volume
+        coalesce(median_volume_ratios.relative_volume, 1) as relative_volume
     from regular_periods as periods
-    left join period_means
-        on period_means.league_id = periods.league_id
-        and period_means.season = periods.season
-        and period_means.matchup_period = periods.matchup_period
-    left join usual_means
-        on usual_means.league_id = period_means.league_id
-        and usual_means.season = period_means.season
-        and usual_means.category_key = period_means.category_key
-        and usual_means.usual_side_total > 0
-    group by periods.league_id, periods.season, periods.matchup_period
+    left join median_volume_ratios
+        on median_volume_ratios.league_id = periods.league_id
+        and median_volume_ratios.season = periods.season
+        and median_volume_ratios.matchup_period = periods.matchup_period
 
 ),
 
