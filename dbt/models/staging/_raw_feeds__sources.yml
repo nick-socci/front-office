@@ -1,0 +1,84 @@
+version: 2
+
+# One declaration per feed, for source freshness and nothing else (spec 0114, ADR 0050).
+#
+# raw.api_responses holds three feeds. dbt gives one age per declared table, so the table
+# is declared once per feed here: `identifier` points each name at the same relation, and
+# `freshness.filter` is the where clause dbt adds to the freshness query.
+#
+# Each filter selects the feed's run marker: the first call of a run that fetches the
+# feed's league or season data. An age over every row of a feed would be refreshed by a
+# capture that proves nothing: espn's public pro schedule lands with no login, so it
+# would stay fresh after the login expired.
+#
+# A marker counts only in the latest season that has one. Past seasons are fetched too
+# (2018 to 2025 were, for #57), and each lands a schedule and a settings capture: without
+# the season clause, fetching an old season would make a stalled feed look fresh. The id
+# map's captures carry no season, so it has no such clause.
+# The season clause names DuckDB's json_extract_string directly, because this is YAML and
+# not a model. It is the one place outside the fo_json_* macros where that syntax lives,
+# and is to be rewritten with them for BigQuery.
+#
+# No model reads these. Models read source('raw', 'api_responses').
+#
+# Still dormant: nothing runs `dbt source freshness`, and no gate or CI job may, because
+# the fixtures' newest capture is months old by design. It wakes with the 2027 daily
+# schedule.
+#
+# Known limits:
+#   - A run that lands its marker and then fails shows as fresh. Nothing checks that the
+#     latest run landed everything; `front-office audit` checks the season, not the run.
+#   - One age for espn however many leagues are fetched.
+#   - A later season's marker landed early (next year's schedule, fetched in the
+#     off-season) moves the scope to that season.
+
+sources:
+  - name: raw_feeds
+    description: >
+      raw.api_responses, declared once per feed so that source freshness gives one age
+      per feed: the age of the feed's last run. Freshness only: no model reads these.
+    schema: raw
+    tables:
+      - name: mlb_runs
+        identifier: api_responses
+        description: >
+          The schedule captures of the mlb feed. Every full run lands one first; a run
+          limited to the player list or the boxscores does not.
+        loaded_at_field: "strptime(fetched_at, '%Y%m%dT%H%M%SZ')"
+        freshness:
+          warn_after: {count: 36, period: hour}
+          error_after: {count: 7, period: day}
+          filter: >-
+            source = 'mlb' and endpoint = 'schedule'
+            and json_extract_string(partitions, '$.season') = (
+              select max(json_extract_string(partitions, '$.season'))
+              from raw.api_responses
+              where source = 'mlb' and endpoint = 'schedule'
+            )
+
+      - name: espn_runs
+        identifier: api_responses
+        description: >
+          The settings captures of the espn feed: the first call of a run that needs the
+          login. The pro schedule lands before it, without one, and does not count.
+        loaded_at_field: "strptime(fetched_at, '%Y%m%dT%H%M%SZ')"
+        freshness:
+          warn_after: {count: 36, period: hour}
+          error_after: {count: 7, period: day}
+          filter: >-
+            source = 'espn' and endpoint = 'settings'
+            and json_extract_string(partitions, '$.season') = (
+              select max(json_extract_string(partitions, '$.season'))
+              from raw.api_responses
+              where source = 'espn' and endpoint = 'settings'
+            )
+
+      - name: idmap_runs
+        identifier: api_responses
+        description: >
+          The idmap feed's one endpoint. Not fetched daily by design, so it warns late
+          and never errors.
+        loaded_at_field: "strptime(fetched_at, '%Y%m%dT%H%M%SZ')"
+        freshness:
+          warn_after: {count: 14, period: day}
+          filter: "source = 'idmap' and endpoint = 'player_id_map'"
