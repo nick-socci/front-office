@@ -228,6 +228,10 @@ def test_only_matchup_days_skips_landed_periods_and_refresh_requests_them_again(
     tmp_path, monkeypatch
 ):
     """Catches a second run re-requesting landed periods, or --refresh skipping them (R1.3)."""
+    # One stamp per run: the real one has a resolution of a second, and two runs landing
+    # the same period in the same second collide, as they should.
+    stamps = ["20260101T000001Z", "20260101T000002Z", "20260101T000003Z"]
+    monkeypatch.setattr(cli, "utc_stamp", lambda: stamps.pop(0))
     land_settings(tmp_path)
     first, _ = only_matchup_days(tmp_path, monkeypatch)
     assert first.exit_code == 0, first.output
