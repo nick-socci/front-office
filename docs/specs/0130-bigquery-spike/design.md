@@ -564,3 +564,18 @@ declares each column's `data_type` in YAML, and dbt writes those names into the
 YAML declares them 66 times in three files (`grep -c "data_type: \(varchar\|double\)"`;
 how many of those are on the slice's models was not counted). This is YAML, which the
 rule test does not read.
+
+### 2026-10-11: contract types in the slice's YAML
+
+Known before task 12 and decided by the owner on 2026-10-11. dbt writes each contracted
+column's `data_type` into the `create table` it sends, and `varchar` and `double` are not
+BigQuery types. In the slice that is 28 `varchar` and 9 `double` declarations, in ten
+models of `_intermediate__models.yml`. By ADR 0051: `varchar` becomes `string`, which both
+warehouses accept (DuckDB reads it as `VARCHAR`), and `double`, which has no shared name
+(DuckDB has no `float64`), becomes `"{{ 'float64' if target.type == 'bigquery' else
+'double' }}"`. The switch is written in the YAML and not as an `fo_*` macro because dbt
+does not make a project's macros available in a properties file, the limit ADR 0050
+already met. A pytest holds the slice's contracts to the shared names or that one
+expression. The 27 unported models' contracts are not touched. `median`, the other thing
+known ahead of task 12, is left for the empty build to show (owner, 2026-10-11).
+

@@ -326,3 +326,37 @@ def test_the_suffix_variable_leaves_every_ci_schema_where_it_was(target_path: Pa
         return {(str(r["name"]), str(r.get("schema"))) for r in rows}
 
     assert schemas("--vars", "{fo_schema_suffix: _b}") == schemas()
+
+
+# A contract's `data_type` is sent to the warehouse in the `create table`, so it has to be
+# a type both accept, or say which to use by target. dbt does not make project macros
+# available in a properties file, so the one type with no shared name is switched on
+# `target.type` there (the owner's decision on #130, 2026-10-11).
+SHARED_CONTRACT_TYPES = {"bigint", "integer", "boolean", "date", "timestamp", "string"}
+FLOAT_CONTRACT_TYPE = "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
+
+
+def contract_types(models: set[str]) -> list[tuple[str, str, str]]:
+    """(model, column, data_type) for every typed column of the named models."""
+    import yaml
+
+    found = []
+    for path in sorted((DBT_ROOT / "models").rglob("*.yml")):
+        for model in (yaml.safe_load(path.read_text()) or {}).get("models") or []:
+            if model["name"] not in models:
+                continue
+            for column in model.get("columns") or []:
+                if "data_type" in column:
+                    found.append((model["name"], column["name"], str(column["data_type"])))
+    return found
+
+
+def test_the_slices_contracts_name_only_types_both_warehouses_accept() -> None:
+    typed = contract_types(SLICE_MODELS)
+    assert typed, "no contract found on the slice: the scan is broken"
+    refused = [
+        row
+        for row in typed
+        if row[2] not in SHARED_CONTRACT_TYPES and row[2] != FLOAT_CONTRACT_TYPE
+    ]
+    assert not refused, f"contract types BigQuery or DuckDB would refuse: {refused}"
