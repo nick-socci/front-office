@@ -143,6 +143,7 @@ is a season of fixture work for no path A leaves untested.
 | [0055](../../adr/0055-a-scoring-periods-matchup-period-is-the-one-espn-attaches-its-rosters-to.md) | A scoring period's matchup period is the one ESPN attaches that day's rosters to, where the matchup does not list its days | accepted |
 | [0056](../../adr/0056-a-covered-league-season-says-whether-it-has-a-transaction-log.md) | A covered league-season says whether it has a transaction log | accepted |
 | [0057](../../adr/0057-complete-games-is-mlbs-count.md) | Complete games is MLB's count, credited like every pitching component | accepted |
+| [0061](../../adr/0061-two-endpoints-that-hold-member-data-are-uploaded-as-projections.md) | Two endpoints that hold member data are uploaded to BigQuery as projections of allowlisted fields; amends 0054 | proposed |
 
 Settled by the owner on 2026-10-11, going through the decisions one at a time: tier M;
 all seven played seasons; the three ADRs above, option 1 of each; CI coverage by unit
@@ -384,3 +385,14 @@ and holds for any league. Measured before the change: it removes those 78 rows a
 other, in 2025 or 2026 (every season's settings list slots 0 to 19). The spec's ledger
 had looked only at the slots players sat in on three probed days.
 
+### 2026-10-12: the BigQuery upload gains two endpoints, as projections (ADR 0061)
+
+Found when `main` was merged after #142: `stg_espn__transaction_logs` and
+`stg_espn__matchup_days` are parents of two models of the BigQuery slice, and their
+captures are not uploaded (ADR 0054). Six slice tests fail. Decided by the owner on
+2026-10-12: `scripts/spike_load_bigquery.py` uploads `espn/transactions` with an empty
+payload and `espn/matchup_days` with the five things the marker model and its tests read,
+each built from a list of wanted fields and checked by the same privacy patterns before
+anything is sent. This goes beyond the spec's original scope (the upload script is spec
+0130's); the ADR records why. The slice's expected models, its test counts and the
+portable SQL of the new models follow once this branch has `main`'s #143.
