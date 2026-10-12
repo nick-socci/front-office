@@ -56,7 +56,12 @@ MULTI_ROOT = REPO_ROOT / "fixtures/landing_multi"
 # legitimately differ between a combined and a single build. It is held to its own dbt
 # tests instead (R4.1 of spec 0060), which this script runs in every single build and the
 # combined build runs too.
-EXEMPT_FROM_ROW_COMPARISON = frozenset({"dim_players"})
+#
+# stg_raw__season_responses is the raw table under another name plus a date (spec 0143): it
+# holds every league's captures, and each build's file_path column names its own temporary
+# landing directory, so no single build's rows can equal the combined build's. The raw table
+# itself is not compared either. What it carries into the models is compared there.
+EXEMPT_FROM_ROW_COMPARISON = frozenset({"dim_players", "stg_raw__season_responses"})
 
 LEAGUE_SEASONS = [
     ("111111", 2026),

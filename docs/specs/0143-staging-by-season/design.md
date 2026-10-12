@@ -279,3 +279,13 @@ real `dbt build` is one command again; CI's already is.
 The baseline of task 1 was built with `dbt run --threads 1`: at four threads `main` ran
 out of memory twice at the default limit and was once killed by the kernel (peak 23.5 GB),
 where C2 had passed at 23.1 GB. The rows do not depend on the thread count.
+
+### 2026-10-12 — the view is not compared by the tenant-isolation check
+
+Answers the open question on that script. `stg_raw__season_responses` is the raw table
+under another name: it holds every league's captures, and its `file_path` names the
+landing directory of the build that loaded it, which the check makes anew for each
+build. No single build's rows can equal the combined build's (5 differing pairs, every
+row of each). The raw table itself is in a schema the check does not read. The view joins
+`dim_players` in `EXEMPT_FROM_ROW_COMPARISON`, with the reason beside it; the models that
+read it are compared as before, and R5.5's 0 differing pairs is over them.
