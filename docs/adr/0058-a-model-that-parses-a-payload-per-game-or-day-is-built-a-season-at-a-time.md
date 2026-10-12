@@ -1,6 +1,6 @@
 # 0058. A staging model that parses one payload per game or per scoring period is built a season at a time, by dbt's microbatch
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-12
 - Spec: [0143-staging-by-season](../specs/0143-staging-by-season/design.md) · Issue: #143
 

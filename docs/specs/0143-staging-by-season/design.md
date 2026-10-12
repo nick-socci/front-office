@@ -102,9 +102,9 @@ different project; a bigger machine moves the wall without removing it.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0058](../../adr/0058-a-model-that-parses-a-payload-per-game-or-day-is-built-a-season-at-a-time.md) | A staging model that parses one payload per game or per scoring period is built a season at a time, by dbt's microbatch | proposed |
-| [0059](../../adr/0059-every-build-rebuilds-every-season.md) | Every build rebuilds every season of a batched model | proposed |
-| [0060](../../adr/0060-batched-models-are-plain-tables-on-bigquery.md) | A batched model is a plain table on BigQuery | proposed |
+| [0058](../../adr/0058-a-model-that-parses-a-payload-per-game-or-day-is-built-a-season-at-a-time.md) | A staging model that parses one payload per game or per scoring period is built a season at a time, by dbt's microbatch | accepted |
+| [0059](../../adr/0059-every-build-rebuilds-every-season.md) | Every build rebuilds every season of a batched model | accepted |
+| [0060](../../adr/0060-batched-models-are-plain-tables-on-bigquery.md) | A batched model is a plain table on BigQuery | accepted |
 
 Settled by the owner on 2026-10-12, going through the decisions: tier L; the three ADRs
 above, option 1 of each; and the names, `season_start` (a date) for the column and

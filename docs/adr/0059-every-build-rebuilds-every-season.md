@@ -1,6 +1,6 @@
 # 0059. Every build rebuilds every season of a batched model
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-12
 - Spec: [0143-staging-by-season](../specs/0143-staging-by-season/design.md) · Issue: #143
 
