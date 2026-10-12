@@ -234,3 +234,52 @@ def test_the_unique_key_is_read_from_the_models_tests() -> None:
     assert cmp.unique_key(manifest, "model.front_office.one") == ["id"]
     assert cmp.unique_key(manifest, "model.front_office.two") == ["league_id", "season"]
     assert cmp.unique_key(manifest, "model.front_office.three") is None
+
+
+# -- JSON columns are not read back or compared (spec 0143, amendment of 2026-10-12) ---------
+
+
+def test_a_json_column_is_not_compared_and_is_named(con: duckdb.DuckDBPyConnection) -> None:
+    """Catches the raw payloads being compared: stg_raw__season_responses carries them, and
+    a JSON column is billed whole and BigQuery rewrites its text. The column is not read
+    back, so it is on DuckDB's side only; that must not be the problem a missing column is,
+    and the rest of the relation is still compared."""
+    con.execute(f"create table local.{RELATION} (id bigint, name varchar, payload json)")
+    con.execute(f"create table bq.{RELATION} (id bigint, name varchar)")
+    con.execute(f"""insert into local.{RELATION} values (1, 'a', '{{"x": 1}}')""")
+    con.execute(f"insert into bq.{RELATION} values (1, 'a')")
+    result = compare(con)
+    assert result.problems == [] and result.passed
+    assert result.uncompared == ["payload"]
+    assert any(
+        "JSON columns not compared: payload" in line
+        for line in cmp.describe(result, "DuckDB", "BigQuery")
+    )
+
+    con.execute(f"update bq.{RELATION} set name = 'b'")
+    assert not compare(con).passed
+
+
+def test_a_json_column_that_was_read_back_is_still_not_compared(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Catches the rule depending on how the BigQuery side was read: a JSON column read back
+    arrives as text, and comparing it would fail on formatting alone."""
+    con.execute(f"create table local.{RELATION} (id bigint, payload json)")
+    con.execute(f"create table bq.{RELATION} (id bigint, payload varchar)")
+    con.execute(f"""insert into local.{RELATION} values (1, '{{"x": 1}}')""")
+    con.execute(f"""insert into bq.{RELATION} values (1, '{{"x":1}}')""")
+    result = compare(con)
+    assert result.passed and result.uncompared == ["payload"]
+
+
+def test_only_the_fields_that_are_not_json_are_read_back() -> None:
+    """Catches the payloads being downloaded and, for a view, billed."""
+    from types import SimpleNamespace
+
+    schema = [
+        SimpleNamespace(name="source", field_type="STRING"),
+        SimpleNamespace(name="payload", field_type="JSON"),
+        SimpleNamespace(name="season_start", field_type="DATE"),
+    ]
+    assert [f.name for f in cmp.fields_read_back(schema)] == ["source", "season_start"]

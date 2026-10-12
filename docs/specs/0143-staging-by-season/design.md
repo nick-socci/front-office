@@ -310,3 +310,18 @@ are 2027.
   `first_season_start`.
 - `scripts/check_tenant_isolation.py` passes its builds an explicit window covering its
   fixtures' seasons. No fixture file changes, and an ordinary build stays one command.
+
+### 2026-10-12 — the comparison scripts leave JSON columns out
+
+Found by task 8 and decided by the owner the same day. The design had the view "compared
+like any other". It carries every raw payload, 2.7 GB for two seasons, and
+`compare_warehouses.py` on two warehouses that both hold it was killed by the kernel in
+its `EXCEPT ALL`. On BigQuery the same comparison would download the payloads, be billed
+for them whole, and fail on text BigQuery rewrites.
+
+`warehouse_diff.py`, `compare_warehouses.py` and `compare_bigquery_slice.py` do not
+compare a column whose type is JSON, and print its name under its relation; the scratch
+copy holds none of its values, and BigQuery's is not read back. The view is the only
+relation with such columns (`payload`, `partitions`). It is compared on the rest,
+`season_start` among them, so R4.3 stays 30 of 30 relations. The real comparison of two
+new warehouses then takes 12 s and 3.2 GB.

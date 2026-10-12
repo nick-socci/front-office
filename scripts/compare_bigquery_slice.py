@@ -24,6 +24,10 @@ Usage:  uv run --group bigquery python scripts/compare_bigquery_slice.py \\
    For each column the count of exactly equal values and the largest differences are
    printed.
 
+6. A JSON column is neither read back nor compared, and is printed as such: it is the raw
+   payload (stg_raw__season_responses, spec 0143), which is billed whole when queried and
+   whose text BigQuery rewrites.
+
 Exit 0 only if every relation passes. One line per relation either way.
 
 `--bq-against-bq SUFFIX` compares two BigQuery builds with each other instead, exactly,
@@ -44,7 +48,15 @@ from typing import Any
 
 import duckdb
 
-from warehouse_diff import columns, count_except, count_rows, qualified, quote, view_catalog
+from warehouse_diff import (
+    columns,
+    count_except,
+    count_rows,
+    is_json,
+    qualified,
+    quote,
+    view_catalog,
+)
 
 SELECTOR = "bigquery_slice"
 RELATIVE_TOLERANCE = 1e-9
@@ -105,6 +117,7 @@ class Result:
     only_right: int = 0
     unjoined: int = 0
     problems: list[str] = field(default_factory=list)
+    uncompared: list[str] = field(default_factory=list)
     floats: dict[str, FloatColumn] = field(default_factory=dict)
 
     @property
@@ -139,7 +152,9 @@ def compare_relation(
     )
     shared: dict[str, str] = {}
     for name, data_type in left_columns.items():
-        if name not in right_columns:
+        if is_json(data_type) or is_json(right_columns.get(name, "")):
+            result.uncompared.append(name)
+        elif name not in right_columns:
             result.problems.append(f"{name}: only in {left_name}")
         elif kind(data_type) != kind(right_columns[name]):
             result.problems.append(
@@ -149,7 +164,9 @@ def compare_relation(
         else:
             shared[name] = kind(data_type)
     result.problems.extend(
-        f"{name}: only in {right_name}" for name in right_columns if name not in left_columns
+        f"{name}: only in {right_name}"
+        for name, data_type in right_columns.items()
+        if name not in left_columns and not is_json(data_type)
     )
 
     float_names = [] if exact_floats else [n for n, k in shared.items() if k == "float"]
@@ -243,6 +260,11 @@ def slice_relations(target_path: Path) -> list[tuple[str, str, list[str] | None]
     return sorted(relations)
 
 
+def fields_read_back(schema: Any) -> list[Any]:
+    """The fields of a BigQuery relation that are read back: every one that is not JSON."""
+    return [f for f in schema if f.field_type.upper() != "JSON"]
+
+
 def read_back(
     con: duckdb.DuckDBPyConnection,
     project: str,
@@ -257,13 +279,15 @@ def read_back(
     for schema, name, _ in relations:
         table_id = f"{project}.{schema}{suffix}.{name}"
         table = client.get_table(table_id)
+        fields = fields_read_back(table.schema)
         if table.table_type == "VIEW":
             config = bigquery.QueryJobConfig(maximum_bytes_billed=MAXIMUM_BYTES_BILLED)
-            job = client.query(f"select * from `{table_id}`", job_config=config)
+            selection = ", ".join(f"`{f.name}`" for f in fields)
+            job = client.query(f"select {selection} from `{table_id}`", job_config=config)
             arrow = job.result().to_arrow()
             print(f"queried view {schema}{suffix}.{name}: {job.total_bytes_billed} bytes billed")
         else:
-            arrow = client.list_rows(table).to_arrow()
+            arrow = client.list_rows(table, selected_fields=fields).to_arrow()
         con.register("_arrow", arrow)
         con.execute(f"create schema if not exists {quote(catalog)}.{quote(schema)}")
         con.execute(
@@ -280,6 +304,8 @@ def describe(result: Result, left_name: str, right_name: str) -> list[str]:
         + (f"; rows with no partner on the key {result.unjoined}" if result.unjoined else "")
     ]
     lines.extend(f"       {problem}" for problem in result.problems)
+    if result.uncompared:
+        lines.append(f"       JSON columns not compared: {', '.join(result.uncompared)}")
     for name, column in result.floats.items():
         lines.append(
             f"       float {name}: {column.compared} compared, {column.exactly_equal} "

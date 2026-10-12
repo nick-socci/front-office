@@ -14,6 +14,11 @@ compare_warehouses.py compares.
 
 Comparison is EXCEPT ALL both ways, never plain EXCEPT: EXCEPT compares sets and would call
 the rows A, A, B, C and A, B, B, C equal.
+
+A JSON column is not compared, and is named in the result so that this is never silent
+(spec 0143). The one relation that has any, stg_raw__season_responses, carries every raw
+payload: 2.7 GB for two seasons, which EXCEPT ALL could not hold. `materialise` keeps such
+a column and none of its values.
 """
 
 from __future__ import annotations
@@ -26,6 +31,11 @@ import duckdb
 
 SCHEMAS = ("staging", "intermediate", "marts", "reconciliation")
 FLOAT_TYPES = ("DOUBLE", "FLOAT")
+JSON_TYPES = ("JSON",)
+
+
+def is_json(data_type: str) -> bool:
+    return data_type.upper() in JSON_TYPES
 
 
 def attach(con: duckdb.DuckDBPyConnection, path: Path | str) -> str:
@@ -100,6 +110,7 @@ def materialise(path: Path | str, scratch: Path | str) -> None:
     The warehouse is attached read-only under the catalog its views name, in a connection
     where it is the only warehouse. The scratch holds the model schemas under the same
     names and column types, so it is compared like any warehouse (attach it with `attach`).
+    A JSON column is copied as nulls: it is not compared, and its values may be gigabytes.
     """
     catalog = view_catalog(path)
     con = duckdb.connect()
@@ -111,9 +122,15 @@ def materialise(path: Path | str, scratch: Path | str) -> None:
         for schema in SCHEMAS:
             con.execute(f"create schema if not exists scratch.{quote(schema)}")
         for relation in relations:
+            emptied = ", ".join(
+                f"cast(null as json) as {quote(name)}"
+                for name, data_type in columns(con, catalog, relation).items()
+                if is_json(data_type)
+            )
+            star = f"* replace ({emptied})" if emptied else "*"
             con.execute(
                 f"create table {qualified('scratch', relation)} as "
-                f"select * from {qualified(catalog, relation)}"
+                f"select {star} from {qualified(catalog, relation)}"
             )
     finally:
         con.close()
@@ -161,6 +178,7 @@ class RelationDiff:
     left_only_columns: list[str] = field(default_factory=list)
     right_only_columns: list[str] = field(default_factory=list)
     shared_columns: list[str] = field(default_factory=list)
+    uncompared_columns: list[str] = field(default_factory=list)
 
     @property
     def differs(self) -> bool:
@@ -200,9 +218,10 @@ def compare_relation(
     right_where: str | None = None,
     round_doubles: int | None = None,
 ) -> RelationDiff:
-    """Compare one relation over the columns both sides have, as multisets."""
+    """Compare one relation over the columns both sides have, as multisets. A column that
+    is JSON on either side is left out and listed in `uncompared_columns`."""
     left_cols, right_cols = columns(con, left, relation), columns(con, right, relation)
-    shared = [c for c in left_cols if c in right_cols]
+    shared, uncompared = compared_columns(left_cols, right_cols)
     diff = RelationDiff(
         relation=relation,
         left_rows=count_rows(con, left, relation, left_where),
@@ -212,6 +231,7 @@ def compare_relation(
         left_only_columns=[c for c in left_cols if c not in right_cols],
         right_only_columns=[c for c in right_cols if c not in left_cols],
         shared_columns=shared,
+        uncompared_columns=uncompared,
     )
     if shared:
         left_sql = sql_select(
@@ -223,6 +243,15 @@ def compare_relation(
         diff.only_left = count_except(con, left_sql, right_sql)
         diff.only_right = count_except(con, right_sql, left_sql)
     return diff
+
+
+def compared_columns(
+    left_cols: dict[str, str], right_cols: dict[str, str]
+) -> tuple[list[str], list[str]]:
+    """The columns both sides have, split into those compared and the JSON ones that are not."""
+    both = [c for c in left_cols if c in right_cols]
+    uncompared = [c for c in both if is_json(left_cols[c]) or is_json(right_cols[c])]
+    return [c for c in both if c not in uncompared], uncompared
 
 
 def count_except(con: duckdb.DuckDBPyConnection, left_sql: str, right_sql: str) -> int:
@@ -241,7 +270,7 @@ def rows_missing_from(
 ) -> int:
     """Rows of left that right does not hold (EXCEPT ALL one way), over shared columns."""
     left_cols, right_cols = columns(con, left, relation), columns(con, right, relation)
-    shared = [c for c in left_cols if c in right_cols]
+    shared, _ = compared_columns(left_cols, right_cols)
     if not shared:
         return 0
     selection = ", ".join(quote(c) for c in shared)
