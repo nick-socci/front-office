@@ -54,6 +54,20 @@ def test_a_guid_as_a_key_or_outside_the_payload_is_found_too() -> None:
     assert in_partitions == ["espn/settings k=1: GUID at partitions $.owner"]
 
 
+def test_a_guid_in_the_request_key_is_not_printed_by_any_message_about_the_row() -> None:
+    """Catches the row's label carrying a value: a row keyed by an account id that is
+    rejected for something else would print the id in every message about it (PR #142,
+    review round 1)."""
+    keyed = row("espn", "roster", {"members": []}, request_key=f"owner={GUID}&view=mRoster")
+    hits = loader.privacy_hits(keyed)
+    assert hits, "the row should be rejected"
+    assert GUID not in "".join(hits)
+    assert any("owner=<guid>&view=mRoster" in hit for hit in hits)
+    with pytest.raises(loader.PrivacyHit) as raised:
+        loader.check([keyed])
+    assert GUID not in "".join(raised.value.hits) + str(raised.value)
+
+
 def test_mlbs_game_guid_is_allowed() -> None:
     """Catches the GUID rule reaching MLB rows, where gameGuid is a public game id and every
     schedule row would be refused."""

@@ -68,6 +68,8 @@ Explicitly out of scope. Work that drifts here is escalated, not done.
 - Rewriting the freshness filters of `_raw_feeds__sources.yml` (ADR 0050). Nothing runs
   `dbt source freshness`.
 - Any change to what a model computes. A ported model returns the rows it returned.
+  *Amended 2026-10-11:* with one exception the owner accepted, the tie-break of
+  `stg_mlb__games` (R4.4).
 
 ## Rabbit holes
 
@@ -170,6 +172,14 @@ What is ported, fixed in one place.
   produce a warehouse equal to the one built from `main` at the spike's base commit:
   `scripts/compare_warehouses.py OLD NEW --strict-columns` exits 0, over every relation
   and not only the slice's.
+  *Amended 2026-10-11 by the owner's decision (design.md, Amendments):* comparing the two
+  warehouses showed that `stg_mlb__games` kept one of two tied schedule entries with no
+  rule, and each warehouse kept a different one. The tie-break the owner chose changes 26
+  rows of that model on DuckDB, in no `official_date` or `is_played`, and no other
+  relation. So the requirement is held in two parts: the warehouse built from the port
+  before the tie-break equals the base commit's, 56 of 56 relations; the warehouse built
+  after it differs from the base commit's in those 26 rows only, and is the baseline
+  (`data/warehouse_baseline2.duckdb`) that every later build equals, 56 of 56.
 - R4.5 THE SYSTEM SHALL leave the DuckDB type of every column of every relation as it
   was.
 - R4.6 `.agentic/gates` SHALL pass, unchanged except for the new test of R4.3.
@@ -225,7 +235,7 @@ to show.
 | Check | Expected | How to verify |
 |---|---|---|
 | Models and seeds in the slice | 30 models (21 tables, 8 views, 1 ephemeral), 6 seeds, no Python model | `dbt ls --selector bigquery_slice` |
-| Tests in the slice | 204 data tests wholly inside it (179 generic, 25 singular); 59 unit tests | `dbt ls --selector bigquery_slice --resource-type test` / `unit_test` |
+| Tests in the slice | 204 data tests wholly inside it (179 generic, 25 singular); 59 unit tests, 61 with the two tie-break tests (amended 2026-10-11) | `dbt ls --selector bigquery_slice --resource-type test` / `unit_test` |
 | Raw rows uploaded | 5,179 of 5,192: boxscore 4,950, roster 182, settings 13, schedule 12, matchups 12, pro_schedule 9, player_id_map 1; each equal to its source as parsed JSON | R3.4 |
 | Raw rows not uploaded | 13: transactions 7, teams 5, players 1 | the same query on `dev` |
 | Member data in the seven endpoints | 0 account GUIDs; `firstName`/`lastName` only under `playerPoolEntry.player` | R3.3 passes |
@@ -239,5 +249,5 @@ to show.
 | `rec_espn__category_result_differences` by status | match 4,856 · explained 6 | `group by status` on both |
 | `int_fantasy__category_scales` | 17 rows, all `prior_and_current_seasons` | R5.2; its 3 float columns under R5.3 |
 | Relations with floating-point columns | 7, each with a declared unique key | R5.3 covers all 7 |
-| `dev` after the port | equal to `dev` before, every relation | R4.4 exits 0 |
+| `dev` after the port | equal to `dev` before, every relation; after the game tie-break (amended 2026-10-11), 55 of 56 relations, `stg_mlb__games` differing in 26 rows, and equal to the retaken baseline | R4.4, in its two parts |
 | Any one `bq` query | at most 10 GB billed | R2.4; the build does not fail on the cap |

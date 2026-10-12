@@ -92,7 +92,9 @@ class RawRow:
 
     @property
     def label(self) -> str:
-        return f"{self.source}/{self.endpoint} {self.request_key}"
+        """Which row, for a message. A GUID in the request key is masked: a rejection says
+        where a value is, never what it is (R3.3), and the key is itself a place one can be."""
+        return f"{self.source}/{self.endpoint} {privacy.GUID.sub('<guid>', self.request_key)}"
 
 
 class WarehouseRows:
