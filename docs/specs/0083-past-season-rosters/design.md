@@ -368,3 +368,19 @@ whose host has not yet reported any side has no stat values until it does.
 `int_fantasy__replacement_levels` holds one row per (league-season, day kind,
 component), so the new component adds two rows per league-season: 48 to 50 in CI and
 for 2026. No existing row changes. The owner accepted these and R6.7 now says so.
+
+### 2026-10-12: an eligibility for a slot the league does not have is no row
+
+Found by the first real build with 2025 covered. ESPN lists two 2025 call-ups (Grant
+Taylor, periods 85 to 138; Payton Tolle, 165 to 188) as eligible for lineup slot 22, on
+78 player-days. No roster entry sits in slot 22, no season's league settings hold it,
+2026's eligibility lists do not have it, and the seed generated from the espn-api
+package does not name it, so `not_null` on `lineup_slot` and `is_starting_slot` of
+`stg_espn__roster_entry_slots` failed. What ESPN means by 22 was not established.
+
+The owner chose on 2026-10-12: **an eligibility is kept only for a slot in that
+league-season's own slot settings**, whatever the slot's count. It needs no name for 22
+and holds for any league. Measured before the change: it removes those 78 rows and no
+other, in 2025 or 2026 (every season's settings list slots 0 to 19). The spec's ledger
+had looked only at the slots players sat in on three probed days.
+

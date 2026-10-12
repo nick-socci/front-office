@@ -373,6 +373,34 @@ models:
             combination_of_columns: [season, espn_game_id]
 
 unit_tests:
+  - name: roster_entry_slots_keep_only_the_slots_the_league_has
+    description: >
+      ESPN lists a player as eligible for slot ids a league may not have: in 2025 two
+      call-ups carry slot 22, which no season's settings hold and the seed does not name.
+      An eligibility is kept only for a slot in that league-season's own slot settings,
+      whatever its count (slot 13 has none here), so the player keeps 13 and 14 and
+      loses 22. Catches the filter being dropped (a row with no slot name), or reading
+      another season's settings (2024 has slot 22 here and must not rescue it).
+    model: stg_espn__roster_entry_slots
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: roster, request_path: /l, request_key: "scoringPeriodId=85&view=mRoster", fetched_at: "20261012T000000Z", file_path: a1, partitions: '{"season": 2025, "league_id": "1", "scoring_period": 85}', payload: '{"id":1,"seasonId":2025,"teams":[{"id":3,"roster":{"entries":[{"playerId":77,"playerPoolEntry":{"player":{"eligibleSlots":[13,14,22]}}}]}}]}'}
+      - input: ref('espn_lineup_slots')
+        rows:
+          - {lineup_slot_id: 13, slot_abbrev: P, is_starting_slot: true}
+          - {lineup_slot_id: 14, slot_abbrev: SP, is_starting_slot: true}
+      - input: ref('stg_espn__lineup_slot_limits')
+        rows:
+          - {league_id: "1", season: 2025, lineup_slot_id: 13, slot_count: 0}
+          - {league_id: "1", season: 2025, lineup_slot_id: 14, slot_count: 2}
+          - {league_id: "1", season: 2024, lineup_slot_id: 22, slot_count: 1}
+    expect:
+      rows:
+        - {league_id: "1", season: 2025, scoring_period: 85, team_id: 3, espn_player_id: 77, lineup_slot_id: 13, lineup_slot: P}
+        - {league_id: "1", season: 2025, scoring_period: 85, team_id: 3, espn_player_id: 77, lineup_slot_id: 14, lineup_slot: SP}
+
   - name: matchup_days_one_marked_period_gives_one_row
     description: >
       R5.2. Scoring period 5 is answered with three matchup periods; only period 4 carries

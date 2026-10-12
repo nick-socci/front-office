@@ -106,5 +106,15 @@ select
     slots.is_starting_slot,
     {{ fo_parse_fetched_at('eligible.fetched_at') }} as fetched_at
 from eligible
+-- Only slots the league-season has. ESPN lists eligibility for slot ids a league may
+-- not use at all: two 2025 call-ups carry slot 22, which no season's settings hold and
+-- the seed has no name for. A slot outside the league's own settings can never be
+-- played in, so such an eligibility is no row here (the owner, 2026-10-12; spec 0083).
+-- The settings list every slot the league knows, used or not, so a slot with a count of
+-- zero stays.
+inner join {{ ref('stg_espn__lineup_slot_limits') }} as league_slots
+    on league_slots.league_id = eligible.league_id
+    and league_slots.season = eligible.season
+    and league_slots.lineup_slot_id = eligible.lineup_slot_id
 left join {{ ref('espn_lineup_slots') }} as slots
     on slots.lineup_slot_id = eligible.lineup_slot_id
