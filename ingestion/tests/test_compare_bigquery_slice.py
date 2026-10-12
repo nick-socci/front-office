@@ -295,17 +295,19 @@ def test_the_json_fields_left_unread_are_reported_by_name() -> None:
     assert [f.name for f in cmp.fields_read_back(schema)] == ["source"]
 
 
-def test_a_json_column_that_was_read_back_is_still_not_compared(
+def test_a_json_column_that_bigquery_holds_as_text_is_a_problem(
     con: duckdb.DuckDBPyConnection,
 ) -> None:
-    """Catches the rule depending on how the BigQuery side was read: a JSON column read back
-    arrives as text, and comparing it would fail on formatting alone."""
+    """Catches the view's `payload` becoming a STRING on BigQuery unnoticed: a JSON field is
+    never read back, so a column of that name that was read is not JSON there (review of
+    #145, round 2). Its values are still not compared."""
     con.execute(f"create table local.{RELATION} (id bigint, payload json)")
     con.execute(f"create table bq.{RELATION} (id bigint, payload varchar)")
     con.execute(f"""insert into local.{RELATION} values (1, '{{"x": 1}}')""")
     con.execute(f"""insert into bq.{RELATION} values (1, '{{"x":1}}')""")
-    result = compare(con)
-    assert result.passed and result.uncompared == ["payload"]
+    result = compare(con, right_unread=set())
+    assert result.problems == ["payload: JSON in DuckDB, text in BigQuery"]
+    assert not result.passed and (result.only_left, result.only_right) == (0, 0)
 
 
 def test_only_the_fields_that_are_not_json_are_read_back() -> None:

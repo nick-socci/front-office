@@ -7,6 +7,9 @@
 -- test makes that loss loud. It returns one row per (model, season_start) where the
 -- endpoint has a capture with a season and the model holds no row of that season_start.
 --
+-- A capture of one of these endpoints with no season at all is returned too, with a null
+-- season_start: it is in no batch either (review of #145).
+--
 -- When it fails: for a season later than the run's year, run the build with
 -- `--event-time-start` and `--event-time-end` covering the season (the end is exclusive:
 -- the first of January of the year after). For a season earlier than the first batch,
@@ -62,7 +65,6 @@ captured as (
     inner join endpoints
         on endpoints.source = responses.source
         and endpoints.endpoint = responses.endpoint
-    where responses.season_start is not null
 
 ),
 

@@ -184,10 +184,17 @@ def compare_relation(
     shared: dict[str, str] = {}
     for name, data_type in left_columns.items():
         if is_json(data_type) or is_json(right_columns.get(name, "")):
-            if name in right_columns or name in right_unread:
+            # A JSON column is never read back from BigQuery, so one found in the right
+            # catalog under the same name was not JSON there, unless DuckDB typed it so.
+            other = right_columns.get(name)
+            if name in right_unread or (other is not None and is_json(data_type) == is_json(other)):
                 result.uncompared.append(name)
-            else:
+            elif other is None:
                 result.problems.append(f"{name}: only in {left_name}")
+            else:
+                result.problems.append(
+                    f"{name}: {kind(data_type)} in {left_name}, {kind(other)} in {right_name}"
+                )
         elif name not in right_columns:
             result.problems.append(f"{name}: only in {left_name}")
         elif kind(data_type) != kind(right_columns[name]):

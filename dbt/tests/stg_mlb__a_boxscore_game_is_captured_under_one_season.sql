@@ -11,6 +11,9 @@
 -- holds by construction; the test is here so that it cannot stop holding quietly.
 -- Rosters need no such test: fo_espn_latest already picks per league and partition season.
 --
+-- A capture with no season is not counted here (count distinct passes over a null); it is
+-- in no batch, and stg__batched_models_hold_every_season_with_captures fails on it.
+--
 -- Reads the request key and season_start of the view only, never the payload.
 
 select
