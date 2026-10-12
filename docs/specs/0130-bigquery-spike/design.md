@@ -611,3 +611,35 @@ Six runs. Each finding is a construct the design's table did not have.
   STRING to JSON`: dbt cannot type a `JSON` fixture on BigQuery, the risk this design
   named. Tasks 12 and 13 build without unit tests so that they do not hide the models.
 
+### 2026-10-11: two ties the comparison found, and a new DuckDB baseline (tasks 13 and 15)
+
+A seed's load job refuses `bigint`, which the DDL accepts; the slice's seeds say `int64`,
+read by both warehouses, and a test holds them to it. With that the slice built on
+BigQuery from the real rows: `PASS=238 WARN=1 ERROR=0`, the warning being DuckDB's own.
+
+The first comparison passed 27 of 29 relations, every float column inside the tolerance
+(largest relative difference 1.2e-15). The two that failed were not floats and not
+BigQuery's doing. Each keeps one row per entity, and the order it keeps by left a tie:
+
+- `stg_mlb__games`, 9 rows. MLB lists a suspended game twice under one `game_pk` in one
+  response, both `Final`, and a game postponed and then cancelled twice, neither played.
+  Played-before-not-played does not separate them. 42 games of 2018 to 2026 have such a
+  tie; each warehouse kept whichever entry it met first.
+- `stg_idmap__players`, 1 row. The id map lists Shohei Ohtani under one ESPN id as `P` and
+  as `DH`, in one capture.
+
+Rule 5 asks for a deterministic tie-break and neither model had one. The owner decided
+both on 2026-10-11: for a game, the entry with the latest scheduled start, where the game
+ended (as ADR 0020 reads a game); for the id map, the later position in text order, `P`
+before `DH`, a rule for the tie and not a statement about the player.
+
+The game tie-break moves **26 rows of `stg_mlb__games` on DuckDB** (2018: 2, 2019: 2,
+2020: 2, 2021: 7, 2022: 1, 2023: 5, 2024: 2, 2025: 4, 2026: 1): 25 suspended games now
+carry their resumed start and `resumed_from`, and one 2020 game reads `Cancelled` where
+it read `Postponed`. `official_date` and `is_played` change in none, and the other 55
+relations of the real warehouse are identical, so no day, total or value moved. This is
+the one place the spike changes what a ported model returns (a no-go, R4.4); the owner
+accepted it on 2026-10-11 as the correction of a tie never decided, and the baseline for
+the rest of the spike is the warehouse built after it, `data/warehouse_baseline2.duckdb`.
+The id-map tie-break moved no DuckDB row.
+

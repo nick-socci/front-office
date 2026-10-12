@@ -47,4 +47,11 @@ from mapped
 where
     {{ fo_json_int('row_json', '$.ESPNID') }} is not null
     and {{ fo_json_int('row_json', '$.MLBID') }} is not null
-{{ fo_latest_by_entity([fo_json_string('row_json', '$.ESPNID') | trim]) }}
+-- The map lists a two-way player once per position under one ESPN id (Shohei Ohtani as P
+-- and as DH), in one capture, so recency cannot choose. The later position in text order
+-- wins, P before DH: a rule to make the choice the same on every warehouse, not a claim
+-- about the player (the owner, 2026-10-11; spec 0130).
+{{ fo_latest_by_entity(
+    [fo_json_string('row_json', '$.ESPNID') | trim],
+    order_by="fetched_at desc, " ~ fo_json_text('row_json', '$.POS') ~ " desc"
+) }}

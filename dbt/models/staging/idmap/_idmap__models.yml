@@ -12,3 +12,26 @@ models:
         data_tests: [not_null, unique]
       - name: mlbam_player_id
         data_tests: [not_null]
+
+unit_tests:
+  - name: idmap_players_a_two_way_player_keeps_one_row_whichever_comes_first
+    description: >
+      The map lists a two-way player once per position under one ESPN id in one capture,
+      so recency cannot choose. The later position in text order wins, P before DH,
+      whichever row comes first in the payload. Without the rule DuckDB kept P and
+      BigQuery DH for the one such player in the real map (spec 0130).
+    model: stg_idmap__players
+    given:
+      - input: source('raw', 'api_responses')
+        rows:
+          - source: idmap
+            endpoint: player_id_map
+            request_key: ""
+            fetched_at: "20260701T000000Z"
+            file_path: map.json
+            payload: '[{"ESPNID":39832,"MLBID":660271,"PLAYERNAME":"Two Way","TEAM":"LAD","POS":"DH","IDFANGRAPHS":1},{"ESPNID":39832,"MLBID":660271,"PLAYERNAME":"Two Way","TEAM":"LAD","POS":"P","IDFANGRAPHS":1},{"ESPNID":7,"MLBID":8,"PLAYERNAME":"Other Way","TEAM":"NYY","POS":"P","IDFANGRAPHS":2},{"ESPNID":7,"MLBID":8,"PLAYERNAME":"Other Way","TEAM":"NYY","POS":"DH","IDFANGRAPHS":2}]'
+    expect:
+      rows:
+        - {espn_player_id: 39832, mlbam_player_id: 660271, position: P}
+        - {espn_player_id: 7, mlbam_player_id: 8, position: P}
+
