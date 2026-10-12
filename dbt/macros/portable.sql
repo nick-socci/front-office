@@ -189,3 +189,9 @@
 {% macro bigquery__fo_days_between(earlier, later) -%}
     date_diff({{ later }}, {{ earlier }}, day)
 {%- endmacro %}
+
+
+{# The first of January of a year, as a date. `year` is an integer expression. #}
+{% macro fo_year_start(year) %}{{ return(adapter.dispatch('fo_year_start')(year)) }}{% endmacro %}
+{% macro duckdb__fo_year_start(year) %}make_date({{ year }}, 1, 1){% endmacro %}
+{% macro bigquery__fo_year_start(year) %}date({{ year }}, 1, 1){% endmacro %}

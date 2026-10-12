@@ -425,3 +425,69 @@ def test_inputs_are_untouched_and_the_scratch_is_removed(tmp_path, monkeypatch):
     assert {p: digest(p) for p in (old, new)} == before
     assert sorted(p.name for d in (old.parent, new.parent) for p in d.iterdir()) == listing
     assert list(scratch_root.iterdir()) == []
+
+
+# -- JSON columns are not compared (spec 0143, amendment of 2026-10-12) ----------------------
+
+JSON_COLS = "k varchar, v integer, payload json"
+
+
+def test_a_json_column_is_named_and_not_compared(pair):
+    """Catches a comparison that hashes whole raw payloads: stg_raw__season_responses
+    carries 2.7 GB of them and EXCEPT ALL over it was killed by the kernel. The column is
+    reported, so that leaving it out is never silent."""
+    con, left, right = pair(
+        rel("""('a', 1, '{"x": 1}')""", JSON_COLS), rel("""('a', 1, '{"x": 2}')""", JSON_COLS)
+    )
+    diff = compare_relation(con, left, right, "marts.t")
+    assert not diff.differs
+    assert diff.uncompared_columns == ["payload"]
+    assert diff.shared_columns == ["k", "v"]
+    assert rows_missing_from(con, left, right, "marts.t") == 0
+
+
+def test_the_other_columns_of_a_relation_with_json_are_still_compared(pair):
+    """Catches the whole relation being passed over because it holds a JSON column."""
+    con, left, right = pair(
+        rel("""('a', 1, '{"x": 1}')""", JSON_COLS), rel("""('a', 2, '{"x": 1}')""", JSON_COLS)
+    )
+    diff = compare_relation(con, left, right, "marts.t")
+    assert diff.differs and (diff.only_left, diff.only_right) == (1, 1)
+    assert rows_missing_from(con, left, right, "marts.t") == 1
+
+
+def test_a_column_that_is_json_on_one_side_only_is_not_compared(pair):
+    """Catches a JSON column compared with its text twin, which would read every payload."""
+    con, left, right = pair(
+        rel("""('a', 1, '{"x": 1}')""", JSON_COLS),
+        rel("""('a', 1, '{"x": 1}')""", "k varchar, v integer, payload varchar"),
+    )
+    diff = compare_relation(con, left, right, "marts.t")
+    assert not diff.differs and diff.uncompared_columns == ["payload"]
+
+
+def test_materialise_keeps_a_json_column_and_none_of_its_values(tmp_path):
+    """Catches the scratch copy holding the payloads: it is made in a temporary directory,
+    which is memory on this machine. The column stays, typed JSON, so it is still reported."""
+    from warehouse_diff import columns, materialise
+
+    build(tmp_path / "wh.duckdb", rel("""('a', 1, '{"x": 1}')""", JSON_COLS))
+    materialise(tmp_path / "wh.duckdb", tmp_path / "scratch.duckdb")
+    con = duckdb.connect()
+    scratch = attach(con, tmp_path / "scratch.duckdb")
+    assert columns(con, scratch, "marts.t") == {"k": "VARCHAR", "v": "INTEGER", "payload": "JSON"}
+    assert con.execute("select k, v, payload from scratch.marts.t").fetchall() == [("a", 1, None)]
+
+
+def test_compare_warehouses_says_which_json_columns_it_did_not_compare(tmp_path, capsys):
+    """Catches the script passing a relation as identical without saying what it left out,
+    and --strict-columns failing on a column both sides have."""
+    import compare_warehouses
+
+    build(tmp_path / "old_wh.duckdb", rel("""('a', 1, '{"x": 1}')""", JSON_COLS))
+    build(tmp_path / "new_wh.duckdb", rel("""('a', 1, '{"x": 2}')""", JSON_COLS))
+    old, new = str(tmp_path / "old_wh.duckdb"), str(tmp_path / "new_wh.duckdb")
+    assert compare_warehouses.main([old, new, "--strict-columns"]) == 0
+    out = capsys.readouterr().out
+    assert "marts.t: JSON columns not compared: payload" in out
+    assert "1 identical, 0 differ" in out

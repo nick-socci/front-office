@@ -102,9 +102,9 @@ different project; a bigger machine moves the wall without removing it.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0058](../../adr/0058-a-model-that-parses-a-payload-per-game-or-day-is-built-a-season-at-a-time.md) | A staging model that parses one payload per game or per scoring period is built a season at a time, by dbt's microbatch | proposed |
-| [0059](../../adr/0059-every-build-rebuilds-every-season.md) | Every build rebuilds every season of a batched model | proposed |
-| [0060](../../adr/0060-batched-models-are-plain-tables-on-bigquery.md) | A batched model is a plain table on BigQuery | proposed |
+| [0058](../../adr/0058-a-model-that-parses-a-payload-per-game-or-day-is-built-a-season-at-a-time.md) | A staging model that parses one payload per game or per scoring period is built a season at a time, by dbt's microbatch | accepted |
+| [0059](../../adr/0059-every-build-rebuilds-every-season.md) | Every build rebuilds every season of a batched model | accepted |
+| [0060](../../adr/0060-batched-models-are-plain-tables-on-bigquery.md) | A batched model is a plain table on BigQuery | accepted |
 
 Settled by the owner on 2026-10-12, going through the decisions: tier L; the three ADRs
 above, option 1 of each; and the names, `season_start` (a date) for the column and
@@ -257,3 +257,85 @@ Every other model; ingestion; the raw table; the fixtures; the profile's threads
 
 ## Amendments
 
+### 2026-10-12 — R3.1 and R2.1 are measured with `dbt run` and `dbt test`, not one `dbt build`
+
+Found by task 1. The requirements say "the real `dbt build`"; the ledger's runs (C2 to C7)
+were `dbt run`, and on the real warehouse with both seasons the difference matters:
+
+- On `main`, `dbt test` over the two seasons gives 5 failing tests and 1 warning, all on
+  2025's rows and all #83's to settle: `not_null_stg_espn__roster_entry_slots_lineup_slot`
+  and `…_is_starting_slot` (78 rows each), `fct_matchup_results_match_espn` (8),
+  `fct_matchup_scores_match_espn` (31), `rec_espn__player_day_differences_are_registered`
+  (9); the warning is `stg_idmap__covers_started_players` (17).
+- `dbt build` skips every model downstream of a failing test, so a `dbt build` here stops
+  at the roster models' tests and measures the memory of half a build.
+
+So, with no requirement's meaning changed: R3.1 is `dbt run` under 16 GB, every model
+built, which is the run C4 showed failing on `main`; R2.1 compares warehouses made by
+`dbt run`; and `dbt test` on the new warehouse must give the same 5 failures and 1 warning
+as on `main`, no more and no fewer. No test is changed for it. Once #83 settles 2025 the
+real `dbt build` is one command again; CI's already is.
+
+The baseline of task 1 was built with `dbt run --threads 1`: at four threads `main` ran
+out of memory twice at the default limit and was once killed by the kernel (peak 23.5 GB),
+where C2 had passed at 23.1 GB. The rows do not depend on the thread count.
+
+### 2026-10-12 — the view is not compared by the tenant-isolation check
+
+Answers the open question on that script. `stg_raw__season_responses` is the raw table
+under another name: it holds every league's captures, and its `file_path` names the
+landing directory of the build that loaded it, which the check makes anew for each
+build. No single build's rows can equal the combined build's (5 differing pairs, every
+row of each). The raw table itself is in a schema the check does not read. The view joins
+`dim_players` in `EXEMPT_FROM_ROW_COMPARISON`, with the reason beside it; the models that
+read it are compared as before, and R5.5's 0 differing pairs is over them.
+
+### 2026-10-12 — a capture filed under a season later than the run's year
+
+Found before task 6, on `fixtures/landing_multi`, and decided by the owner the same day.
+dbt runs a microbatch model's batches up to the run's own calendar year and no further,
+and has no model config for the end of the window, only the flags `--event-time-start`
+and `--event-time-end`. A capture filed under a later season is therefore in no batch:
+with a prototype of the batched pitching model, the fixtures' 2027 boxscore was loaded
+and none of its rows were in the table, with no error. R1.3's "to the current one" said
+as much without saying what it costs.
+
+The real warehouse is not affected: a roster or a boxscore of a season is not captured
+before that year begins. The tenant-isolation fixtures are: two of their league-seasons
+are 2027.
+
+- A singular test, `stg__batched_models_hold_every_season_with_captures`, fails when one
+  of the five holds no row for a season its endpoint has captures of. The loss cannot be
+  silent, whatever causes it; the same test catches a season earlier than
+  `first_season_start`.
+- `scripts/check_tenant_isolation.py` passes its builds an explicit window covering its
+  fixtures' seasons. No fixture file changes, and an ordinary build stays one command.
+
+### 2026-10-12 — the comparison scripts leave JSON columns out
+
+Found by task 8 and decided by the owner the same day. The design had the view "compared
+like any other". It carries every raw payload, 2.7 GB for two seasons, and
+`compare_warehouses.py` on two warehouses that both hold it was killed by the kernel in
+its `EXCEPT ALL`. On BigQuery the same comparison would download the payloads, be billed
+for them whole, and fail on text BigQuery rewrites.
+
+`warehouse_diff.py`, `compare_warehouses.py` and `compare_bigquery_slice.py` do not
+compare a column whose type is JSON, and print its name under its relation; the scratch
+copy holds none of its values, and BigQuery's is not read back. The view is the only
+relation with such columns (`payload`, `partitions`). It is compared on the rest,
+`season_start` among them, so R4.3 stays 30 of 30 relations. The real comparison of two
+new warehouses then takes 12 s and 3.2 GB.
+
+### 2026-10-12 — on BigQuery the view is compared over the uploaded endpoints
+
+Found by task 9. BigQuery's raw table is given seven endpoints and no others (ADR 0054):
+`espn/teams` and `espn/transactions` carry members' names and never leave the machine,
+and `mlb/players` is not in the slice. The view mirrors the raw table, so DuckDB's held
+13 captures BigQuery's cannot (5,192 against 5,179) and R4.3's thirtieth relation could
+never pass as written. `compare_bigquery_slice.py` holds DuckDB's side of that one
+relation to `spike_load_bigquery.ALLOWLIST` and prints that it did; every model is
+compared whole, as before. Result: 30 of 30.
+
+R4.1 names five models; three of them are in the slice (`stg_espn__roster_entry_slots`
+and `stg_espn__player_game_stats` are not ported), and it is those three that were built
+on BigQuery. The real build there leaves out unit tests, as spec 0130's did (its R5.6).

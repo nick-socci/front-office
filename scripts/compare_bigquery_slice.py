@@ -24,6 +24,13 @@ Usage:  uv run --group bigquery python scripts/compare_bigquery_slice.py \\
    For each column the count of exactly equal values and the largest differences are
    printed.
 
+6. A JSON column is neither read back nor compared, and is printed as such: it is the raw
+   payload (stg_raw__season_responses, spec 0143), which is billed whole when queried and
+   whose text BigQuery rewrites.
+7. `stg_raw__season_responses` is the raw table under another name, and BigQuery's raw
+   table is given only the endpoints of `spike_load_bigquery.ALLOWLIST` (ADR 0054). DuckDB's
+   side of that one relation is held to those endpoints, and the line says so.
+
 Exit 0 only if every relation passes. One line per relation either way.
 
 `--bq-against-bq SUFFIX` compares two BigQuery builds with each other instead, exactly,
@@ -44,7 +51,16 @@ from typing import Any
 
 import duckdb
 
-from warehouse_diff import columns, count_except, count_rows, qualified, quote, view_catalog
+from spike_load_bigquery import ALLOWLIST
+from warehouse_diff import (
+    columns,
+    count_except,
+    count_rows,
+    is_json,
+    qualified,
+    quote,
+    view_catalog,
+)
 
 SELECTOR = "bigquery_slice"
 RELATIVE_TOLERANCE = 1e-9
@@ -52,6 +68,23 @@ ABSOLUTE_TOLERANCE = 1e-12
 NEAR_ZERO = 1e-3
 MAXIMUM_BYTES_BILLED = 10_000_000_000
 DBT_ROOT = Path(__file__).resolve().parents[1] / "dbt"
+# The relations that mirror raw.api_responses row for row.
+RAW_MIRRORS = frozenset({"staging.stg_raw__season_responses"})
+
+
+def uploaded_endpoints_only() -> str:
+    """A WHERE clause keeping the captures that are uploaded to BigQuery (ADR 0054)."""
+    pairs = ", ".join(f"('{source}', '{endpoint}')" for source, endpoint in ALLOWLIST)
+    return f"(source, endpoint) in ({pairs})"
+
+
+def left_filter(relation: str, *, bq_against_bq: bool) -> str | None:
+    """What DuckDB's side of a relation is held to: the uploaded endpoints for a mirror of
+    the raw table, nothing otherwise. Two BigQuery builds read the same raw table."""
+    if relation in RAW_MIRRORS and not bq_against_bq:
+        return uploaded_endpoints_only()
+    return None
+
 
 _KINDS = {
     "TINYINT": "integer",
@@ -105,6 +138,7 @@ class Result:
     only_right: int = 0
     unjoined: int = 0
     problems: list[str] = field(default_factory=list)
+    uncompared: list[str] = field(default_factory=list)
     floats: dict[str, FloatColumn] = field(default_factory=dict)
 
     @property
@@ -127,18 +161,54 @@ def compare_relation(
     key: list[str] | None,
     *,
     exact_floats: bool = False,
+    left_where: str | None = None,
+    left_unread: set[str] | None = None,
+    right_unread: set[str] | None = None,
     left_name: str = "DuckDB",
     right_name: str = "BigQuery",
 ) -> Result:
-    """Compare one relation held in two attached catalogs; `left` is DuckDB's build."""
+    """Compare one relation held in two attached catalogs; `left` is DuckDB's build.
+    `left_where` holds the left side to some of its rows (see `left_filter`).
+    `left_unread` and `right_unread` name the JSON columns a side has in BigQuery and that
+    were not read back: such a column is present on that side, though not in the catalog."""
+    left_unread, right_unread = left_unread or set(), right_unread or set()
+    left_from = qualified(left, relation)
+    if left_where:
+        left_from = f"(select * from {left_from} where {left_where})"
     left_columns, right_columns = columns(con, left, relation), columns(con, right, relation)
     result = Result(
         relation=relation,
-        left_rows=count_rows(con, left, relation),
+        left_rows=count_rows(con, left, relation, left_where),
         right_rows=count_rows(con, right, relation),
     )
+    # JSON columns first, by schema alone: a side's are those its catalog types JSON and
+    # those BigQuery's schema listed and that were not read back. They are never compared
+    # by value; both sides must have the column, and have it as JSON.
+    left_json = {n for n, t in left_columns.items() if is_json(t)} | left_unread
+    right_json = {n for n, t in right_columns.items() if is_json(t)} | right_unread
+    for name in sorted(left_json | right_json):
+        if name in left_json and name in right_json:
+            result.uncompared.append(name)
+        elif name in left_json:
+            other = right_columns.get(name)
+            result.problems.append(
+                f"{name}: only in {left_name}"
+                if other is None
+                else f"{name}: JSON in {left_name}, {kind(other)} in {right_name}"
+            )
+        else:
+            other = left_columns.get(name)
+            result.problems.append(
+                f"{name}: only in {right_name}"
+                if other is None
+                else f"{name}: {kind(other)} in {left_name}, JSON in {right_name}"
+            )
+    json_names = left_json | right_json
+
     shared: dict[str, str] = {}
     for name, data_type in left_columns.items():
+        if name in json_names:
+            continue
         if name not in right_columns:
             result.problems.append(f"{name}: only in {left_name}")
         elif kind(data_type) != kind(right_columns[name]):
@@ -149,14 +219,16 @@ def compare_relation(
         else:
             shared[name] = kind(data_type)
     result.problems.extend(
-        f"{name}: only in {right_name}" for name in right_columns if name not in left_columns
+        f"{name}: only in {right_name}"
+        for name in right_columns
+        if name not in left_columns and name not in json_names
     )
 
     float_names = [] if exact_floats else [n for n, k in shared.items() if k == "float"]
     exact = {name: k for name, k in shared.items() if name not in float_names}
     if exact:
         selection = ", ".join(f"{_comparable(n, k)} as {quote(n)}" for n, k in exact.items())
-        left_sql = f"select {selection} from {qualified(left, relation)}"
+        left_sql = f"select {selection} from {left_from}"
         right_sql = f"select {selection} from {qualified(right, relation)}"
         result.only_left = count_except(con, left_sql, right_sql)
         result.only_right = count_except(con, right_sql, left_sql)
@@ -167,10 +239,7 @@ def compare_relation(
         return result
 
     on = " and ".join(f"l.{quote(n)} is not distinct from r.{quote(n)}" for n in key)
-    joined = (
-        f"from {qualified(left, relation)} as l "
-        f"inner join {qualified(right, relation)} as r on {on}"
-    )
+    joined = f"from {left_from} as l inner join {qualified(right, relation)} as r on {on}"
     pairs = int(con.execute(f"select count(*) {joined}").fetchone()[0])  # type: ignore[index]
     result.unjoined = (result.left_rows - pairs) + (result.right_rows - pairs)
     for name in float_names:
@@ -243,33 +312,50 @@ def slice_relations(target_path: Path) -> list[tuple[str, str, list[str] | None]
     return sorted(relations)
 
 
+def fields_read_back(schema: Any) -> list[Any]:
+    """The fields of a BigQuery relation that are read back: every one that is not JSON."""
+    return [f for f in schema if f.field_type.upper() != "JSON"]
+
+
+def fields_left_unread(schema: Any) -> set[str]:
+    """The names of the JSON fields of a BigQuery relation, which are not read back."""
+    return {f.name for f in schema if f.field_type.upper() == "JSON"}
+
+
 def read_back(
     con: duckdb.DuckDBPyConnection,
     project: str,
     catalog: str,
     relations: list[tuple[str, str, list[str] | None]],
     suffix: str = "",
-) -> None:
-    """Copy each BigQuery relation into `catalog`, under the schema names DuckDB uses."""
+) -> dict[str, set[str]]:
+    """Copy each BigQuery relation into `catalog`, under the schema names DuckDB uses.
+    Returns, per `schema.name`, the JSON columns BigQuery's schema lists and that were not
+    read: the comparison needs to know they exist."""
+    unread: dict[str, set[str]] = {}
     from google.cloud import bigquery
 
     client = bigquery.Client(project=project, location="US")
     for schema, name, _ in relations:
         table_id = f"{project}.{schema}{suffix}.{name}"
         table = client.get_table(table_id)
+        fields = fields_read_back(table.schema)
+        unread[f"{schema}.{name}"] = fields_left_unread(table.schema)
         if table.table_type == "VIEW":
             config = bigquery.QueryJobConfig(maximum_bytes_billed=MAXIMUM_BYTES_BILLED)
-            job = client.query(f"select * from `{table_id}`", job_config=config)
+            selection = ", ".join(f"`{f.name}`" for f in fields)
+            job = client.query(f"select {selection} from `{table_id}`", job_config=config)
             arrow = job.result().to_arrow()
             print(f"queried view {schema}{suffix}.{name}: {job.total_bytes_billed} bytes billed")
         else:
-            arrow = client.list_rows(table).to_arrow()
+            arrow = client.list_rows(table, selected_fields=fields).to_arrow()
         con.register("_arrow", arrow)
         con.execute(f"create schema if not exists {quote(catalog)}.{quote(schema)}")
         con.execute(
             f"create table {quote(catalog)}.{quote(schema)}.{quote(name)} as select * from _arrow"
         )
         con.unregister("_arrow")
+    return unread
 
 
 def describe(result: Result, left_name: str, right_name: str) -> list[str]:
@@ -280,6 +366,8 @@ def describe(result: Result, left_name: str, right_name: str) -> list[str]:
         + (f"; rows with no partner on the key {result.unjoined}" if result.unjoined else "")
     ]
     lines.extend(f"       {problem}" for problem in result.problems)
+    if result.uncompared:
+        lines.append(f"       JSON columns not compared: {', '.join(result.uncompared)}")
     for name, column in result.floats.items():
         lines.append(
             f"       float {name}: {column.compared} compared, {column.exactly_equal} "
@@ -303,10 +391,12 @@ def main(argv: list[str] | None = None) -> int:
         relations = slice_relations(Path(scratch) / "dbt_target")
         con = duckdb.connect()
         con.execute(f"attach '{Path(scratch) / 'bq.duckdb'}' as bq")
-        read_back(con, args.project, "bq", relations)
+        unread = read_back(con, args.project, "bq", relations)
+        left_unread: dict[str, set[str]] = {}
         if args.bq_against_bq:
             con.execute(f"attach '{Path(scratch) / 'bq_second.duckdb'}' as bq_second")
-            read_back(con, args.project, "bq_second", relations, args.bq_against_bq)
+            left_unread = unread
+            unread = read_back(con, args.project, "bq_second", relations, args.bq_against_bq)
             left, right = "bq", "bq_second"
             names = ("BigQuery", f"BigQuery{args.bq_against_bq}")
         else:
@@ -315,6 +405,7 @@ def main(argv: list[str] | None = None) -> int:
             right, names = "bq", ("DuckDB", "BigQuery")
         failed = total_rows = 0
         for schema, name, key in relations:
+            where = left_filter(f"{schema}.{name}", bq_against_bq=bool(args.bq_against_bq))
             result = compare_relation(
                 con,
                 left,
@@ -322,10 +413,15 @@ def main(argv: list[str] | None = None) -> int:
                 f"{schema}.{name}",
                 key,
                 exact_floats=bool(args.bq_against_bq),
+                left_where=where,
+                left_unread=left_unread.get(f"{schema}.{name}"),
+                right_unread=unread.get(f"{schema}.{name}"),
                 left_name=names[0],
                 right_name=names[1],
             )
             print("\n".join(describe(result, *names)))
+            if where:
+                print(f"       {names[0]} held to the endpoints uploaded to BigQuery (ADR 0054)")
             failed += not result.passed
             total_rows += result.left_rows
         print(

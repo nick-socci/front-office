@@ -19,6 +19,10 @@ columns: a column on only one side of a relation, and a relation only in NEW, ar
 or relation is printed and passed over, which suits a change that is meant to alter them; use
 it where none should change.
 
+A JSON column is not compared and is printed as such under its relation: the raw payloads
+of stg_raw__season_responses are gigabytes (spec 0143). It is not a difference, with or
+without --strict-columns.
+
 The files may have any names, including the same one, and may be copies of a warehouse. A
 view stores the catalog it was created in (dbt: the file stem), so each file is first read
 alone, under the catalog its views name, and its relations are copied into a scratch database
@@ -118,6 +122,8 @@ def compare(con: duckdb.DuckDBPyConnection, old: str, new: str, args: argparse.N
             same += 1
         for note in notes:
             print(f"  {name}: {note}")
+        if diff.uncompared_columns:
+            print(f"  {name}: JSON columns not compared: {', '.join(diff.uncompared_columns)}")
         if args.strict_columns and notes:
             column_only += 1
             failed = True
