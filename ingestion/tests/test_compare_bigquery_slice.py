@@ -358,3 +358,45 @@ def test_only_the_raw_mirror_is_held_to_the_uploaded_endpoints() -> None:
     assert cmp.left_filter("staging.stg_raw__season_responses", bq_against_bq=True) is None
     assert "('espn', 'roster')" in cmp.uploaded_endpoints_only()
     assert "teams" not in cmp.uploaded_endpoints_only()
+
+
+def test_json_columns_are_held_to_the_same_schema_whichever_side_has_them(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Catches a JSON column on one side that the other holds as another type, or lacks,
+    in every arrangement: the JSON side read back or not, left or right. Rounds 1 to 3 of
+    #145's review each found one arrangement the case-by-case check let through; the last
+    was two BigQuery builds, the first with the column as JSON (so not read back) and the
+    second with it as text."""
+    con.execute(f"create table local.{RELATION} (id bigint)")
+    con.execute(f"create table bq.{RELATION} (id bigint, payload varchar)")
+    con.execute(f"insert into local.{RELATION} values (1)")
+    con.execute(f"""insert into bq.{RELATION} values (1, '{{"x":1}}')""")
+
+    def problems(**unread: set[str]) -> list[str]:
+        return cmp.compare_relation(
+            con, "local", "bq", RELATION, ["id"], left_name="A", right_name="B", **unread
+        ).problems
+
+    # JSON in A and not read back; text in B.
+    assert problems(left_unread={"payload"}, right_unread=set()) == [
+        "payload: JSON in A, text in B"
+    ]
+    # Neither side lists it as JSON: an ordinary column only B has.
+    assert problems(left_unread=set(), right_unread=set()) == ["payload: only in B"]
+
+    con.execute(f"alter table bq.{RELATION} drop column payload")
+    # JSON in both and read back from neither: present on both, not compared, no problem.
+    both = cmp.compare_relation(
+        con, "local", "bq", RELATION, ["id"], left_unread={"payload"}, right_unread={"payload"}
+    )
+    assert both.problems == [] and both.uncompared == ["payload"] and both.passed
+    # JSON in one only, absent from the other.
+    assert problems(left_unread={"payload"}, right_unread=set()) == ["payload: only in A"]
+    assert problems(left_unread=set(), right_unread={"payload"}) == ["payload: only in B"]
+
+    con.execute(f"alter table local.{RELATION} add column payload varchar")
+    # Text in A; JSON in B and not read back.
+    assert problems(left_unread=set(), right_unread={"payload"}) == [
+        "payload: text in A, JSON in B"
+    ]

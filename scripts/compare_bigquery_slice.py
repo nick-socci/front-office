@@ -181,21 +181,35 @@ def compare_relation(
         left_rows=count_rows(con, left, relation, left_where),
         right_rows=count_rows(con, right, relation),
     )
+    # JSON columns first, by schema alone: a side's are those its catalog types JSON and
+    # those BigQuery's schema listed and that were not read back. They are never compared
+    # by value; both sides must have the column, and have it as JSON.
+    left_json = {n for n, t in left_columns.items() if is_json(t)} | left_unread
+    right_json = {n for n, t in right_columns.items() if is_json(t)} | right_unread
+    for name in sorted(left_json | right_json):
+        if name in left_json and name in right_json:
+            result.uncompared.append(name)
+        elif name in left_json:
+            other = right_columns.get(name)
+            result.problems.append(
+                f"{name}: only in {left_name}"
+                if other is None
+                else f"{name}: JSON in {left_name}, {kind(other)} in {right_name}"
+            )
+        else:
+            other = left_columns.get(name)
+            result.problems.append(
+                f"{name}: only in {right_name}"
+                if other is None
+                else f"{name}: {kind(other)} in {left_name}, JSON in {right_name}"
+            )
+    json_names = left_json | right_json
+
     shared: dict[str, str] = {}
     for name, data_type in left_columns.items():
-        if is_json(data_type) or is_json(right_columns.get(name, "")):
-            # A JSON column is never read back from BigQuery, so one found in the right
-            # catalog under the same name was not JSON there, unless DuckDB typed it so.
-            other = right_columns.get(name)
-            if name in right_unread or (other is not None and is_json(data_type) == is_json(other)):
-                result.uncompared.append(name)
-            elif other is None:
-                result.problems.append(f"{name}: only in {left_name}")
-            else:
-                result.problems.append(
-                    f"{name}: {kind(data_type)} in {left_name}, {kind(other)} in {right_name}"
-                )
-        elif name not in right_columns:
+        if name in json_names:
+            continue
+        if name not in right_columns:
             result.problems.append(f"{name}: only in {left_name}")
         elif kind(data_type) != kind(right_columns[name]):
             result.problems.append(
@@ -207,19 +221,8 @@ def compare_relation(
     result.problems.extend(
         f"{name}: only in {right_name}"
         for name in right_columns
-        if name not in left_columns and name not in left_unread
+        if name not in left_columns and name not in json_names
     )
-    # A JSON column that was not read back is in neither catalog: it is present on both
-    # sides only if both schemas listed it, or the other side holds it as a column.
-    for name in sorted(left_unread | right_unread):
-        if name in left_columns or name in right_columns:
-            continue
-        if name not in right_unread:
-            result.problems.append(f"{name}: only in {left_name}")
-        elif name not in left_unread:
-            result.problems.append(f"{name}: only in {right_name}")
-        else:
-            result.uncompared.append(name)
 
     float_names = [] if exact_floats else [n for n, k in shared.items() if k == "float"]
     exact = {name: k for name, k in shared.items() if name not in float_names}
