@@ -52,6 +52,14 @@ _EXEMPTION = re.compile(r"order-exempt:.*[A-Za-z0-9]")
 
 
 _NOT_NEWLINE = re.compile(r"[^\n]")
+# The BigQuery forms of the two ordered-aggregate macros (ADR 0051, 0053). BigQuery has no
+# way to state the order of a float aggregate, so these two bodies, and no others, hold one
+# without it; a model reaches them only through fo_sum_in_order / fo_avg_in_order, whose
+# DuckDB forms state the order. Their bodies are not read as SQL here.
+_UNORDERED_BY_NECESSITY = re.compile(
+    r"\{%-?\s*macro\s+bigquery__fo_(?:sum|avg)_in_order\b.*?\{%-?\s*endmacro\s*-?%\}",
+    re.DOTALL,
+)
 _JINJA_EXPRESSION = re.compile(r"\{\{.*?\}\}", re.DOTALL)
 
 
@@ -154,7 +162,7 @@ def _is_exempt(lines: list[str], number: int) -> bool:
 
 def unordered_aggregates(sql: str) -> list[tuple[int, str]]:
     """(line number, aggregate) for each statistical aggregate with no order and no exemption."""
-    code = _code(sql)
+    code = _UNORDERED_BY_NECESSITY.sub(lambda m: _NOT_NEWLINE.sub(" ", m.group()), _code(sql))
     lines = sql.splitlines()
     found = []
     for match in _AGGREGATE.finditer(code):
@@ -328,3 +336,34 @@ def test_names_that_only_contain_an_aggregates_name_are_not_flagged() -> None:
     """Catches a scanner without word boundaries, and sum, median and count being swept in."""
     sql = "select moving_avg(x), sum(x), median(x), count(*), max(x), avg_score from t"
     assert unordered_aggregates(sql) == []
+
+
+def test_an_aggregate_written_through_the_in_order_macros_is_in_order() -> None:
+    """Catches the rule flagging a ported model: fo_avg_in_order is how a model of the
+    BigQuery slice states the order (ADR 0051), and its DuckDB form writes the order by."""
+    model = "select {{ fo_avg_in_order('margin', 'matchup_id') }} as mean_margin from t"
+    assert unordered_aggregates(model) == []
+    duckdb_form = (
+        "{% macro duckdb__fo_avg_in_order(expression, order_by) %}\n"
+        "    avg({{ expression }} order by {{ order_by }})\n"
+        "{%- endmacro %}"
+    )
+    assert unordered_aggregates(duckdb_form) == []
+
+
+def test_only_the_two_bigquery_forms_may_leave_the_order_out() -> None:
+    """Catches the allowance widening: BigQuery cannot state the order, so the BigQuery
+    forms of fo_sum_in_order and fo_avg_in_order hold an aggregate without one, and nothing
+    else may, whatever it is named and wherever it stands in the same file."""
+    allowed = (
+        "{% macro bigquery__fo_avg_in_order(expression, order_by) %}\n"
+        "    avg({{ expression }})\n"
+        "{%- endmacro %}\n"
+    )
+    assert unordered_aggregates(allowed) == []
+    other_form = allowed.replace("bigquery__fo_avg_in_order", "bigquery__fo_mean")
+    assert unordered_aggregates(other_form) == [(2, "avg")]
+    duckdb_form = allowed.replace("bigquery__", "duckdb__")
+    assert unordered_aggregates(duckdb_form) == [(2, "avg")]
+    after = allowed + "{% macro fo_other(x) %}\n    avg({{ x }})\n{%- endmacro %}\n"
+    assert unordered_aggregates(after) == [(5, "avg")]

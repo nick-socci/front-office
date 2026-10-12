@@ -38,14 +38,14 @@ select
     sides.is_home,
 
     count(days.scoring_date) as started_player_days,
-    count(days.scoring_date) filter (
-        where days.input_status in ('played', 'verified_off')
+    count(
+        case when days.input_status in ('played', 'verified_off') then days.scoring_date end
     ) as verified_player_days,
-    count(days.scoring_date) filter (
-        where days.input_status = 'missing_boxscore'
+    count(
+        case when days.input_status = 'missing_boxscore' then days.scoring_date end
     ) as missing_boxscore_player_days,
-    count(days.scoring_date) filter (
-        where days.input_status = 'unresolved_player'
+    count(
+        case when days.input_status = 'unresolved_player' then days.scoring_date end
     ) as unresolved_player_days,
     {%- for column in stat_columns %}
     coalesce(sum(days.{{ column }}), 0) as {{ column }}{% if not loop.last %},{% endif %}

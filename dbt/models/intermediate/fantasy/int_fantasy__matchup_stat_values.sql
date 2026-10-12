@@ -45,7 +45,7 @@ components as (
     select
         {{ side_columns | join(', ') }},
         '{{ column }}' as component,
-        cast({{ column }} as double) as component_value
+        cast({{ column }} as {{ fo_type_float() }}) as component_value
     from {{ ref('int_fantasy__matchup_side_totals') }}
     {{ 'union all' if not loop.last }}
     {%- endfor %}
@@ -82,14 +82,14 @@ parts as (
 select
     {{ side_columns | join(',\n    ') }},
     stat_key,
-    max(part_value) filter (where part = 'numerator') as numerator,
-    max(part_value) filter (where part = 'denominator') as denominator,
+    max(case when part = 'numerator' then part_value end) as numerator,
+    max(case when part = 'denominator' then part_value end) as denominator,
     case
-        when count(*) filter (where part = 'denominator') = 0
-            then max(part_value) filter (where part = 'numerator')
+        when count(case when part = 'denominator' then 1 end) = 0
+            then max(case when part = 'numerator' then part_value end)
         else
-            max(part_value) filter (where part = 'numerator')
-            / nullif(max(part_value) filter (where part = 'denominator'), 0)
+            max(case when part = 'numerator' then part_value end)
+            / nullif(max(case when part = 'denominator' then part_value end), 0)
     end as stat_value
 from parts
 group by

@@ -58,10 +58,10 @@ models:
         enforced: true
     columns:
       - name: platform
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: league_id
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: season
         data_type: bigint
@@ -93,10 +93,10 @@ models:
         enforced: true
     columns:
       - name: platform
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: league_id
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: season
         data_type: bigint
@@ -108,10 +108,10 @@ models:
         # test int_fantasy__scored_categories_have_a_component_rule: it holds for
         # league-seasons with rosters, which a relationships test cannot say (ADR 0026).
       - name: category_label
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: category_unit
-        data_type: varchar
+        data_type: string
       - name: is_lower_better
         data_type: boolean
         constraints: [{type: not_null}]
@@ -131,10 +131,10 @@ models:
         enforced: true
     columns:
       - name: platform
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: league_id
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: season
         data_type: bigint
@@ -151,7 +151,7 @@ models:
         constraints: [{type: not_null}]
       - name: margin
         description: Home's reported total minus away's, as reported.
-        data_type: double
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
         constraints: [{type: not_null}]
       - name: is_rate
         description: The category has a denominator part in int_fantasy__stat_components.
@@ -161,20 +161,20 @@ models:
         description: >
           For a rate, the home side's reported denominator; null for a count, or when
           the host does not report it.
-        data_type: double
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
       - name: away_denominator
-        data_type: double
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
       - name: relative_volume
         description: >
           How much was played in the matchup period against the league-season's usual
           regular-season period; 1 is usual. Null for a playoff matchup.
-        data_type: double
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
       - name: standard_margin
         description: >
           The margin restated for a period of usual volume: divided by the square root
           of relative_volume for a count, multiplied by it for a rate. Null where there
           is no relative volume above zero.
-        data_type: double
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
       - name: is_measured
         description: >
           Whether the row counts toward a scale: a regular-season matchup, in a period
@@ -250,11 +250,11 @@ models:
         enforced: true
     columns:
       - name: platform
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
         data_tests: [not_null]
       - name: league_id
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
         data_tests: [not_null]
       - name: season
@@ -274,15 +274,15 @@ models:
         constraints: [{type: not_null}]
         data_tests: [not_null]
       - name: margin_scale
-        data_type: double
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
       - name: side_denominator
-        data_type: double
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
       - name: scale_source
         description: >
           prior_and_current_seasons when the league's earlier seasons hold at least
           fantasy_scale_prior_matchups measured matchups in the category and are blended
           with the season's own; current_season when the scale is the season's alone.
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
         data_tests:
           - accepted_values:
@@ -300,7 +300,7 @@ models:
         description: >
           The scale of the earlier seasons alone, pooled over matchups; null under
           current_season. With margin_scale and matchups_measured it explains the blend.
-        data_type: double
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -319,10 +319,10 @@ models:
         enforced: true
     columns:
       - name: platform
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: league_id
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: season
         data_type: bigint
@@ -358,10 +358,10 @@ models:
         enforced: true
     columns:
       - name: platform
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: league_id
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: season
         data_type: bigint
@@ -382,7 +382,7 @@ models:
         data_type: boolean
         constraints: [{type: not_null}]
       - name: playoff_tier
-        data_type: varchar
+        data_type: string
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -407,19 +407,19 @@ models:
         enforced: true
     columns:
       - name: platform
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: stat_key
         data_type: bigint
         constraints: [{type: not_null}]
       - name: part
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: component
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: weight
-        data_type: double
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
         constraints: [{type: not_null}]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
@@ -437,10 +437,10 @@ models:
         enforced: true
     columns:
       - name: platform
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: league_id
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: season
         data_type: bigint
@@ -460,17 +460,17 @@ models:
       - name: mlbam_player_id
         data_type: bigint
       - name: player_resolution
-        data_type: varchar
+        data_type: string
         data_tests:
           - accepted_values:
               arguments:
                 values: ["crosswalk_id", "unambiguous_name", "unresolved"]
       - name: player_name
-        data_type: varchar
+        data_type: string
       - name: roster_slot_id
         data_type: bigint
       - name: roster_slot
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: is_started
         data_type: boolean
@@ -479,18 +479,18 @@ models:
         description: >
           Which side of the player's game this slot credits: hitter (batting only),
           pitcher (pitching only) or bench (neither).
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
         data_tests:
           - accepted_values:
               arguments:
                 values: [hitter, pitcher, bench]
       - name: default_position
-        data_type: varchar
+        data_type: string
       - name: injury_status
-        data_type: varchar
+        data_type: string
       - name: acquisition_type
-        data_type: varchar
+        data_type: string
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:

@@ -1,6 +1,6 @@
 # 0052. The spike loads raw rows into a native BigQuery table with a `JSON` payload, clustered by source and endpoint
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-11
 - Spec: [0130-bigquery-spike](../specs/0130-bigquery-spike/design.md) · Issue: #130
 

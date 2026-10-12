@@ -25,9 +25,9 @@ with loaded as (
 
 select
     games.official_date,
-    count(*) filter (where games.is_played) as played_games,
-    count(*) filter (where games.is_played and loaded.game_pk is not null) as loaded_games,
-    count(*) filter (where games.is_played and loaded.game_pk is null) = 0 as is_complete
+    count(case when games.is_played then 1 end) as played_games,
+    count(case when games.is_played and loaded.game_pk is not null then 1 end) as loaded_games,
+    count(case when games.is_played and loaded.game_pk is null then 1 end) = 0 as is_complete
 from {{ ref('stg_mlb__games') }} as games
 left join loaded
     on loaded.game_pk = games.game_pk
