@@ -18,9 +18,13 @@
   before #28: the join keeps every roster payload of the endpoint on its build side
   while three roster models parse them at once. file_path is unique per response and is
   the deterministic tie-break.
+
+  `relation` is what to read instead of the raw source. The models built a season at a
+  time pass ref('stg_raw__season_responses'), so dbt can filter each batch to one season
+  on its event time; season_start is carried out only then (spec 0143).
 #}
 
-{% macro fo_espn_latest(endpoint, extra_partition=none) %}
+{% macro fo_espn_latest(endpoint, extra_partition=none, relation=none) %}
 
     select
         payload,
@@ -28,7 +32,10 @@
         fetched_at,
         {{ fo_json_text('partitions', '$.league_id') }} as league_id,
         cast({{ fo_json_int('partitions', '$.season') }} as integer) as season
-    from {{ source('raw', 'api_responses') }}
+        {%- if relation %},
+        season_start
+        {%- endif %}
+    from {{ relation or source('raw', 'api_responses') }}
     where source = 'espn'
       and endpoint = '{{ endpoint }}'
     qualify row_number() over (
