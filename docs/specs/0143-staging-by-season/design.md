@@ -325,3 +325,17 @@ copy holds none of its values, and BigQuery's is not read back. The view is the 
 relation with such columns (`payload`, `partitions`). It is compared on the rest,
 `season_start` among them, so R4.3 stays 30 of 30 relations. The real comparison of two
 new warehouses then takes 12 s and 3.2 GB.
+
+### 2026-10-12 — on BigQuery the view is compared over the uploaded endpoints
+
+Found by task 9. BigQuery's raw table is given seven endpoints and no others (ADR 0054):
+`espn/teams` and `espn/transactions` carry members' names and never leave the machine,
+and `mlb/players` is not in the slice. The view mirrors the raw table, so DuckDB's held
+13 captures BigQuery's cannot (5,192 against 5,179) and R4.3's thirtieth relation could
+never pass as written. `compare_bigquery_slice.py` holds DuckDB's side of that one
+relation to `spike_load_bigquery.ALLOWLIST` and prints that it did; every model is
+compared whole, as before. Result: 30 of 30.
+
+R4.1 names five models; three of them are in the slice (`stg_espn__roster_entry_slots`
+and `stg_espn__player_game_stats` are not ported), and it is those three that were built
+on BigQuery. The real build there leaves out unit tests, as spec 0130's did (its R5.6).

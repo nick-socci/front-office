@@ -283,3 +283,41 @@ def test_only_the_fields_that_are_not_json_are_read_back() -> None:
         SimpleNamespace(name="season_start", field_type="DATE"),
     ]
     assert [f.name for f in cmp.fields_read_back(schema)] == ["source", "season_start"]
+
+
+# -- the raw responses' mirror is held to the endpoints that were uploaded -------------------
+
+
+def test_the_raw_mirror_is_compared_over_the_uploaded_endpoints_only(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Catches stg_raw__season_responses failing on rows BigQuery is never given: only the
+    endpoints of spike_load_bigquery.ALLOWLIST leave the machine (ADR 0054), so DuckDB's
+    view holds captures (espn/teams, with members' names) that BigQuery's cannot. And
+    catches the filter hiding a real difference in an uploaded endpoint."""
+    ddl = "(source varchar, endpoint varchar, request_key varchar, season_start date)"
+    con.execute(f"create table local.{RELATION} {ddl}")
+    con.execute(f"create table bq.{RELATION} {ddl}")
+    con.execute(
+        f"insert into local.{RELATION} values "
+        "('espn', 'roster', 'a', date '2026-01-01'), ('espn', 'teams', 'b', date '2026-01-01')"
+    )
+    con.execute(f"insert into bq.{RELATION} values ('espn', 'roster', 'a', date '2026-01-01')")
+    assert not compare(con).passed
+
+    result = compare(con, left_where=cmp.uploaded_endpoints_only())
+    assert result.passed and (result.left_rows, result.right_rows) == (1, 1)
+
+    con.execute(f"update bq.{RELATION} set season_start = date '2025-01-01'")
+    assert not compare(con, left_where=cmp.uploaded_endpoints_only()).passed
+
+
+def test_only_the_raw_mirror_is_held_to_the_uploaded_endpoints() -> None:
+    """Catches the filter reaching a model, where a missing row is a real difference."""
+    assert cmp.left_filter("staging.stg_raw__season_responses", bq_against_bq=False) == (
+        cmp.uploaded_endpoints_only()
+    )
+    assert cmp.left_filter("staging.stg_espn__roster_entries", bq_against_bq=False) is None
+    assert cmp.left_filter("staging.stg_raw__season_responses", bq_against_bq=True) is None
+    assert "('espn', 'roster')" in cmp.uploaded_endpoints_only()
+    assert "teams" not in cmp.uploaded_endpoints_only()

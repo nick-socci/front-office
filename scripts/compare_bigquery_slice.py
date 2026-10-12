@@ -27,6 +27,9 @@ Usage:  uv run --group bigquery python scripts/compare_bigquery_slice.py \\
 6. A JSON column is neither read back nor compared, and is printed as such: it is the raw
    payload (stg_raw__season_responses, spec 0143), which is billed whole when queried and
    whose text BigQuery rewrites.
+7. `stg_raw__season_responses` is the raw table under another name, and BigQuery's raw
+   table is given only the endpoints of `spike_load_bigquery.ALLOWLIST` (ADR 0054). DuckDB's
+   side of that one relation is held to those endpoints, and the line says so.
 
 Exit 0 only if every relation passes. One line per relation either way.
 
@@ -48,6 +51,7 @@ from typing import Any
 
 import duckdb
 
+from spike_load_bigquery import ALLOWLIST
 from warehouse_diff import (
     columns,
     count_except,
@@ -64,6 +68,23 @@ ABSOLUTE_TOLERANCE = 1e-12
 NEAR_ZERO = 1e-3
 MAXIMUM_BYTES_BILLED = 10_000_000_000
 DBT_ROOT = Path(__file__).resolve().parents[1] / "dbt"
+# The relations that mirror raw.api_responses row for row.
+RAW_MIRRORS = frozenset({"staging.stg_raw__season_responses"})
+
+
+def uploaded_endpoints_only() -> str:
+    """A WHERE clause keeping the captures that are uploaded to BigQuery (ADR 0054)."""
+    pairs = ", ".join(f"('{source}', '{endpoint}')" for source, endpoint in ALLOWLIST)
+    return f"(source, endpoint) in ({pairs})"
+
+
+def left_filter(relation: str, *, bq_against_bq: bool) -> str | None:
+    """What DuckDB's side of a relation is held to: the uploaded endpoints for a mirror of
+    the raw table, nothing otherwise. Two BigQuery builds read the same raw table."""
+    if relation in RAW_MIRRORS and not bq_against_bq:
+        return uploaded_endpoints_only()
+    return None
+
 
 _KINDS = {
     "TINYINT": "integer",
@@ -140,14 +161,19 @@ def compare_relation(
     key: list[str] | None,
     *,
     exact_floats: bool = False,
+    left_where: str | None = None,
     left_name: str = "DuckDB",
     right_name: str = "BigQuery",
 ) -> Result:
-    """Compare one relation held in two attached catalogs; `left` is DuckDB's build."""
+    """Compare one relation held in two attached catalogs; `left` is DuckDB's build.
+    `left_where` holds the left side to some of its rows (see `left_filter`)."""
+    left_from = qualified(left, relation)
+    if left_where:
+        left_from = f"(select * from {left_from} where {left_where})"
     left_columns, right_columns = columns(con, left, relation), columns(con, right, relation)
     result = Result(
         relation=relation,
-        left_rows=count_rows(con, left, relation),
+        left_rows=count_rows(con, left, relation, left_where),
         right_rows=count_rows(con, right, relation),
     )
     shared: dict[str, str] = {}
@@ -173,7 +199,7 @@ def compare_relation(
     exact = {name: k for name, k in shared.items() if name not in float_names}
     if exact:
         selection = ", ".join(f"{_comparable(n, k)} as {quote(n)}" for n, k in exact.items())
-        left_sql = f"select {selection} from {qualified(left, relation)}"
+        left_sql = f"select {selection} from {left_from}"
         right_sql = f"select {selection} from {qualified(right, relation)}"
         result.only_left = count_except(con, left_sql, right_sql)
         result.only_right = count_except(con, right_sql, left_sql)
@@ -184,10 +210,7 @@ def compare_relation(
         return result
 
     on = " and ".join(f"l.{quote(n)} is not distinct from r.{quote(n)}" for n in key)
-    joined = (
-        f"from {qualified(left, relation)} as l "
-        f"inner join {qualified(right, relation)} as r on {on}"
-    )
+    joined = f"from {left_from} as l inner join {qualified(right, relation)} as r on {on}"
     pairs = int(con.execute(f"select count(*) {joined}").fetchone()[0])  # type: ignore[index]
     result.unjoined = (result.left_rows - pairs) + (result.right_rows - pairs)
     for name in float_names:
@@ -341,6 +364,7 @@ def main(argv: list[str] | None = None) -> int:
             right, names = "bq", ("DuckDB", "BigQuery")
         failed = total_rows = 0
         for schema, name, key in relations:
+            where = left_filter(f"{schema}.{name}", bq_against_bq=bool(args.bq_against_bq))
             result = compare_relation(
                 con,
                 left,
@@ -348,10 +372,13 @@ def main(argv: list[str] | None = None) -> int:
                 f"{schema}.{name}",
                 key,
                 exact_floats=bool(args.bq_against_bq),
+                left_where=where,
                 left_name=names[0],
                 right_name=names[1],
             )
             print("\n".join(describe(result, *names)))
+            if where:
+                print(f"       {names[0]} held to the endpoints uploaded to BigQuery (ADR 0054)")
             failed += not result.passed
             total_rows += result.left_rows
         print(
