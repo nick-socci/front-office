@@ -129,6 +129,16 @@ def test_only_the_seven_endpoints_are_read(tmp_path: Path) -> None:
     }
 
 
+def test_a_row_off_the_allowlist_stops_the_upload_however_clean_it_is() -> None:
+    """Catches the second guard going: reading takes only the seven endpoints, and the check
+    refuses any other row it is handed, so a caller that builds its own rows cannot upload
+    `teams` or `transactions`."""
+    with pytest.raises(loader.PrivacyHit) as raised:
+        loader.check([row("espn", "teams", {"teams": []})])
+    assert any("not on the allowlist" in hit for hit in raised.value.hits)
+    assert loader.check([row("espn", "settings", {"teams": []})]) == {("espn", "settings"): 1}
+
+
 def test_a_hit_anywhere_means_nothing_is_written(tmp_path: Path) -> None:
     """Catches files being exported for the clean endpoints before a hit in another is
     found: on any hit nothing is written at all."""
