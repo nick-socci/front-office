@@ -257,3 +257,25 @@ Every other model; ingestion; the raw table; the fixtures; the profile's threads
 
 ## Amendments
 
+### 2026-10-12 — R3.1 and R2.1 are measured with `dbt run` and `dbt test`, not one `dbt build`
+
+Found by task 1. The requirements say "the real `dbt build`"; the ledger's runs (C2 to C7)
+were `dbt run`, and on the real warehouse with both seasons the difference matters:
+
+- On `main`, `dbt test` over the two seasons gives 5 failing tests and 1 warning, all on
+  2025's rows and all #83's to settle: `not_null_stg_espn__roster_entry_slots_lineup_slot`
+  and `…_is_starting_slot` (78 rows each), `fct_matchup_results_match_espn` (8),
+  `fct_matchup_scores_match_espn` (31), `rec_espn__player_day_differences_are_registered`
+  (9); the warning is `stg_idmap__covers_started_players` (17).
+- `dbt build` skips every model downstream of a failing test, so a `dbt build` here stops
+  at the roster models' tests and measures the memory of half a build.
+
+So, with no requirement's meaning changed: R3.1 is `dbt run` under 16 GB, every model
+built, which is the run C4 showed failing on `main`; R2.1 compares warehouses made by
+`dbt run`; and `dbt test` on the new warehouse must give the same 5 failures and 1 warning
+as on `main`, no more and no fewer. No test is changed for it. Once #83 settles 2025 the
+real `dbt build` is one command again; CI's already is.
+
+The baseline of task 1 was built with `dbt run --threads 1`: at four threads `main` ran
+out of memory twice at the default limit and was once killed by the kernel (peak 23.5 GB),
+where C2 had passed at 23.1 GB. The rows do not depend on the thread count.
