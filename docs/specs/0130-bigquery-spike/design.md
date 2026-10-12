@@ -642,4 +642,6 @@ the one place the spike changes what a ported model returns (a no-go, R4.4); the
 accepted it on 2026-10-11 as the correction of a tie never decided, and the baseline for
 the rest of the spike is the warehouse built after it, `data/warehouse_baseline2.duckdb`.
 The id-map tie-break moved no DuckDB row.
+Each tie-break has a dbt unit test, seen to fail without it, so the slice now has 61 unit
+tests where the spec counted 59.
 
