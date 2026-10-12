@@ -165,7 +165,7 @@ def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) ->
     """Catches a test added to or lost from the slice: the counts are the spec's."""
     tests = [r for r in selected if r["resource_type"] == "test"]
     generic = [r for r in tests if r.get("test_metadata")]
-    assert (len(tests), len(generic), len(tests) - len(generic)) == (207, 182, 25)
+    assert (len(tests), len(generic), len(tests) - len(generic)) == (208, 182, 26)
     assert len(names(selected, "unit_test")) == 65
 
 

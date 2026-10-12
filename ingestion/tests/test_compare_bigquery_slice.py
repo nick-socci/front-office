@@ -248,7 +248,7 @@ def test_a_json_column_is_not_compared_and_is_named(con: duckdb.DuckDBPyConnecti
     con.execute(f"create table bq.{RELATION} (id bigint, name varchar)")
     con.execute(f"""insert into local.{RELATION} values (1, 'a', '{{"x": 1}}')""")
     con.execute(f"insert into bq.{RELATION} values (1, 'a')")
-    result = compare(con)
+    result = compare(con, right_unread={"payload"})
     assert result.problems == [] and result.passed
     assert result.uncompared == ["payload"]
     assert any(
@@ -257,7 +257,42 @@ def test_a_json_column_is_not_compared_and_is_named(con: duckdb.DuckDBPyConnecti
     )
 
     con.execute(f"update bq.{RELATION} set name = 'b'")
-    assert not compare(con).passed
+    assert not compare(con, right_unread={"payload"}).passed
+
+
+def test_a_json_column_bigquery_does_not_have_is_a_problem(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Catches the view losing `payload` on BigQuery unnoticed: a JSON column is not read
+    back, so its absence from what was read proves nothing. It must be among the columns
+    BigQuery's own schema listed as JSON (review of #145, F2). The same the other way: a
+    JSON column only BigQuery has."""
+    con.execute(f"create table local.{RELATION} (id bigint, payload json)")
+    con.execute(f"create table bq.{RELATION} (id bigint)")
+    con.execute(f"""insert into local.{RELATION} values (1, '{{"x": 1}}')""")
+    con.execute(f"insert into bq.{RELATION} values (1)")
+    missing = compare(con, right_unread=set())
+    assert missing.problems == ["payload: only in DuckDB"] and not missing.passed
+
+    extra = compare(con, right_unread={"payload", "extra"})
+    assert extra.problems == ["extra: only in BigQuery"] and not extra.passed
+
+    both_unread = cmp.compare_relation(
+        con, "bq", "bq", RELATION, ["id"], left_unread={"payload"}, right_unread=set()
+    )
+    assert both_unread.problems == ["payload: only in DuckDB"]
+
+
+def test_the_json_fields_left_unread_are_reported_by_name() -> None:
+    """Catches the list of unread fields drifting from the fields that are read."""
+    from types import SimpleNamespace
+
+    schema = [
+        SimpleNamespace(name="source", field_type="STRING"),
+        SimpleNamespace(name="payload", field_type="json"),
+    ]
+    assert cmp.fields_left_unread(schema) == {"payload"}
+    assert [f.name for f in cmp.fields_read_back(schema)] == ["source"]
 
 
 def test_a_json_column_that_was_read_back_is_still_not_compared(

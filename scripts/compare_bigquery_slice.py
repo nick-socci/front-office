@@ -162,11 +162,16 @@ def compare_relation(
     *,
     exact_floats: bool = False,
     left_where: str | None = None,
+    left_unread: set[str] | None = None,
+    right_unread: set[str] | None = None,
     left_name: str = "DuckDB",
     right_name: str = "BigQuery",
 ) -> Result:
     """Compare one relation held in two attached catalogs; `left` is DuckDB's build.
-    `left_where` holds the left side to some of its rows (see `left_filter`)."""
+    `left_where` holds the left side to some of its rows (see `left_filter`).
+    `left_unread` and `right_unread` name the JSON columns a side has in BigQuery and that
+    were not read back: such a column is present on that side, though not in the catalog."""
+    left_unread, right_unread = left_unread or set(), right_unread or set()
     left_from = qualified(left, relation)
     if left_where:
         left_from = f"(select * from {left_from} where {left_where})"
@@ -179,7 +184,10 @@ def compare_relation(
     shared: dict[str, str] = {}
     for name, data_type in left_columns.items():
         if is_json(data_type) or is_json(right_columns.get(name, "")):
-            result.uncompared.append(name)
+            if name in right_columns or name in right_unread:
+                result.uncompared.append(name)
+            else:
+                result.problems.append(f"{name}: only in {left_name}")
         elif name not in right_columns:
             result.problems.append(f"{name}: only in {left_name}")
         elif kind(data_type) != kind(right_columns[name]):
@@ -191,9 +199,20 @@ def compare_relation(
             shared[name] = kind(data_type)
     result.problems.extend(
         f"{name}: only in {right_name}"
-        for name, data_type in right_columns.items()
-        if name not in left_columns and not is_json(data_type)
+        for name in right_columns
+        if name not in left_columns and name not in left_unread
     )
+    # A JSON column that was not read back is in neither catalog: it is present on both
+    # sides only if both schemas listed it, or the other side holds it as a column.
+    for name in sorted(left_unread | right_unread):
+        if name in left_columns or name in right_columns:
+            continue
+        if name not in right_unread:
+            result.problems.append(f"{name}: only in {left_name}")
+        elif name not in left_unread:
+            result.problems.append(f"{name}: only in {right_name}")
+        else:
+            result.uncompared.append(name)
 
     float_names = [] if exact_floats else [n for n, k in shared.items() if k == "float"]
     exact = {name: k for name, k in shared.items() if name not in float_names}
@@ -288,14 +307,22 @@ def fields_read_back(schema: Any) -> list[Any]:
     return [f for f in schema if f.field_type.upper() != "JSON"]
 
 
+def fields_left_unread(schema: Any) -> set[str]:
+    """The names of the JSON fields of a BigQuery relation, which are not read back."""
+    return {f.name for f in schema if f.field_type.upper() == "JSON"}
+
+
 def read_back(
     con: duckdb.DuckDBPyConnection,
     project: str,
     catalog: str,
     relations: list[tuple[str, str, list[str] | None]],
     suffix: str = "",
-) -> None:
-    """Copy each BigQuery relation into `catalog`, under the schema names DuckDB uses."""
+) -> dict[str, set[str]]:
+    """Copy each BigQuery relation into `catalog`, under the schema names DuckDB uses.
+    Returns, per `schema.name`, the JSON columns BigQuery's schema lists and that were not
+    read: the comparison needs to know they exist."""
+    unread: dict[str, set[str]] = {}
     from google.cloud import bigquery
 
     client = bigquery.Client(project=project, location="US")
@@ -303,6 +330,7 @@ def read_back(
         table_id = f"{project}.{schema}{suffix}.{name}"
         table = client.get_table(table_id)
         fields = fields_read_back(table.schema)
+        unread[f"{schema}.{name}"] = fields_left_unread(table.schema)
         if table.table_type == "VIEW":
             config = bigquery.QueryJobConfig(maximum_bytes_billed=MAXIMUM_BYTES_BILLED)
             selection = ", ".join(f"`{f.name}`" for f in fields)
@@ -317,6 +345,7 @@ def read_back(
             f"create table {quote(catalog)}.{quote(schema)}.{quote(name)} as select * from _arrow"
         )
         con.unregister("_arrow")
+    return unread
 
 
 def describe(result: Result, left_name: str, right_name: str) -> list[str]:
@@ -352,10 +381,12 @@ def main(argv: list[str] | None = None) -> int:
         relations = slice_relations(Path(scratch) / "dbt_target")
         con = duckdb.connect()
         con.execute(f"attach '{Path(scratch) / 'bq.duckdb'}' as bq")
-        read_back(con, args.project, "bq", relations)
+        unread = read_back(con, args.project, "bq", relations)
+        left_unread: dict[str, set[str]] = {}
         if args.bq_against_bq:
             con.execute(f"attach '{Path(scratch) / 'bq_second.duckdb'}' as bq_second")
-            read_back(con, args.project, "bq_second", relations, args.bq_against_bq)
+            left_unread = unread
+            unread = read_back(con, args.project, "bq_second", relations, args.bq_against_bq)
             left, right = "bq", "bq_second"
             names = ("BigQuery", f"BigQuery{args.bq_against_bq}")
         else:
@@ -373,6 +404,8 @@ def main(argv: list[str] | None = None) -> int:
                 key,
                 exact_floats=bool(args.bq_against_bq),
                 left_where=where,
+                left_unread=left_unread.get(f"{schema}.{name}"),
+                right_unread=unread.get(f"{schema}.{name}"),
                 left_name=names[0],
                 right_name=names[1],
             )
