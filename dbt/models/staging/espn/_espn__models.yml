@@ -73,7 +73,9 @@ models:
       - name: season_start
         description: >
           The first of January of the season of the capture the row was read from; the
-          column dbt batches this model on.
+          column dbt batches this model on. Never null. On DuckDB a batch cannot insert a
+          null (dbt keeps only the batch's own year); the not_null test is for BigQuery,
+          where this is a plain table.
         data_tests: [not_null]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
@@ -105,8 +107,9 @@ models:
       - name: season_start
         description: >
           The first of January of the season of the capture the row was read from; the
-          column dbt batches this model on.
-        data_tests: [not_null]
+          column dbt batches this model on. Never null, and there is no not_null test: a
+          batch keeps only rows of its own year, so a null cannot reach the table. A
+          season lost that way fails stg__batched_models_hold_every_season_with_captures.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -240,8 +243,9 @@ models:
       - name: season_start
         description: >
           The first of January of the season of the capture the row was read from; the
-          column dbt batches this model on.
-        data_tests: [not_null]
+          column dbt batches this model on. Never null, and there is no not_null test: a
+          batch keeps only rows of its own year, so a null cannot reach the table. A
+          season lost that way fails stg__batched_models_hold_every_season_with_captures.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
