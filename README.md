@@ -116,6 +116,11 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt deps && uv run dbt build
 duckdb ../data/warehouse.duckdb < ../docs/examples/roster_day_query.sql
 ```
 
+Five staging models that parse one large payload per game or per day are built a season
+at a time, so the build's memory is set by the largest season and not by how many are
+loaded. A warehouse built before that change needs one `uv run dbt build --full-refresh`;
+an ordinary build stops on those five models and says so.
+
 The audit checks the files rather than the models: that every played game and scoring
 period was captured, loaded, and captured late enough to be final. It exits non-zero on
 anything that makes the data unreliable, and is rerun after every backfill.
