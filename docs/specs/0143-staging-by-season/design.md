@@ -289,3 +289,24 @@ build. No single build's rows can equal the combined build's (5 differing pairs,
 row of each). The raw table itself is in a schema the check does not read. The view joins
 `dim_players` in `EXEMPT_FROM_ROW_COMPARISON`, with the reason beside it; the models that
 read it are compared as before, and R5.5's 0 differing pairs is over them.
+
+### 2026-10-12 — a capture filed under a season later than the run's year
+
+Found before task 6, on `fixtures/landing_multi`, and decided by the owner the same day.
+dbt runs a microbatch model's batches up to the run's own calendar year and no further,
+and has no model config for the end of the window, only the flags `--event-time-start`
+and `--event-time-end`. A capture filed under a later season is therefore in no batch:
+with a prototype of the batched pitching model, the fixtures' 2027 boxscore was loaded
+and none of its rows were in the table, with no error. R1.3's "to the current one" said
+as much without saying what it costs.
+
+The real warehouse is not affected: a roster or a boxscore of a season is not captured
+before that year begins. The tenant-isolation fixtures are: two of their league-seasons
+are 2027.
+
+- A singular test, `stg__batched_models_hold_every_season_with_captures`, fails when one
+  of the five holds no row for a season its endpoint has captures of. The loss cannot be
+  silent, whatever causes it; the same test catches a season earlier than
+  `first_season_start`.
+- `scripts/check_tenant_isolation.py` passes its builds an explicit window covering its
+  fixtures' seasons. No fixture file changes, and an ordinary build stays one command.

@@ -64,6 +64,7 @@ SLICE_MODELS = {
     "stg_mlb__batting_game_logs",
     "stg_mlb__games",
     "stg_mlb__pitching_game_logs",
+    "stg_raw__season_responses",
 }
 SLICE_SEEDS = {
     "espn_lineup_slots",
@@ -134,7 +135,7 @@ def names(rows: list[dict[str, object]], resource_type: str) -> set[str]:
     return {str(r["name"]) for r in rows if r["resource_type"] == resource_type}
 
 
-def test_the_slice_is_the_thirty_models_and_six_seeds_of_the_spec(
+def test_the_slice_is_the_thirty_one_models_and_six_seeds_of_the_spec(
     selected: list[dict[str, object]],
 ) -> None:
     """Catches a model or seed joining the slice through a new ref, or leaving it, unnoticed."""
@@ -149,15 +150,23 @@ def test_the_slice_has_no_python_model_and_the_materializations_counted(
     models = [r for r in selected if r["resource_type"] == "model"]
     assert all(str(r["original_file_path"]).endswith(".sql") for r in models)
     kinds = sorted(r["config"]["materialized"] for r in models)  # type: ignore[index]
-    assert (kinds.count("table"), kinds.count("view"), kinds.count("ephemeral")) == (21, 8, 1)
+    # Listed on the ci target: three of the 21 tables are incremental (microbatch) on DuckDB
+    # and tables on BigQuery (spec 0143, ADR 0060).
+    counted = (
+        kinds.count("table"),
+        kinds.count("incremental"),
+        kinds.count("view"),
+        kinds.count("ephemeral"),
+    )
+    assert counted == (18, 3, 9, 1)
 
 
 def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) -> None:
     """Catches a test added to or lost from the slice: the counts are the spec's."""
     tests = [r for r in selected if r["resource_type"] == "test"]
     generic = [r for r in tests if r.get("test_metadata")]
-    assert (len(tests), len(generic), len(tests) - len(generic)) == (204, 179, 25)
-    assert len(names(selected, "unit_test")) == 61
+    assert (len(tests), len(generic), len(tests) - len(generic)) == (207, 182, 25)
+    assert len(names(selected, "unit_test")) == 65
 
 
 def test_no_selected_test_reads_a_relation_outside_the_slice(

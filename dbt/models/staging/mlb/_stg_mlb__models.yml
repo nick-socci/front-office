@@ -97,6 +97,11 @@ models:
               arguments:
                 min_value: 0
                 inclusive: true
+      - name: season_start
+        description: >
+          The first of January of the season of the capture the row was read from; the
+          column dbt batches this model on.
+        data_tests: [not_null]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -137,6 +142,11 @@ models:
       - name: team_id
         data_tests:
           - not_null
+      - name: season_start
+        description: >
+          The first of January of the season of the capture the row was read from; the
+          column dbt batches this model on.
+        data_tests: [not_null]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -259,18 +269,20 @@ unit_tests:
       report the corrected value, not the original.
     model: stg_mlb__pitching_game_logs
     given:
-      - input: source('raw', 'api_responses')
+      - input: ref('stg_raw__season_responses')
         rows:
           - source: mlb
             endpoint: boxscore
             request_key: "gamePk=1"
             fetched_at: "20260401T000000Z"
+            season_start: "2026-01-01"
             file_path: first.json
             payload: '{"teams":{"home":{"team":{"id":10},"players":{"ID100":{"person":{"id":100,"fullName":"P One"},"stats":{"pitching":{"gamesPitched":1,"gamesStarted":1,"outs":19,"inningsPitched":"6.1","earnedRuns":3,"runs":3}}}}},"away":{"team":{"id":20},"players":{}}}}'
           - source: mlb
             endpoint: boxscore
             request_key: "gamePk=1"
             fetched_at: "20260405T000000Z"
+            season_start: "2026-01-01"
             file_path: second.json
             payload: '{"teams":{"home":{"team":{"id":10},"players":{"ID100":{"person":{"id":100,"fullName":"P One"},"stats":{"pitching":{"gamesPitched":1,"gamesStarted":1,"outs":19,"inningsPitched":"6.1","earnedRuns":2,"runs":3}}}}},"away":{"team":{"id":20},"players":{}}}}'
     expect:
@@ -289,12 +301,13 @@ unit_tests:
       appearances rather than gamesPlayed would silently drop real stolen bases.
     model: stg_mlb__batting_game_logs
     given:
-      - input: source('raw', 'api_responses')
+      - input: ref('stg_raw__season_responses')
         rows:
           - source: mlb
             endpoint: boxscore
             request_key: "gamePk=2"
             fetched_at: "20260401T000000Z"
+            season_start: "2026-01-01"
             file_path: bat.json
             payload: '{"teams":{"home":{"team":{"id":10},"players":{"ID200":{"person":{"id":200,"fullName":"Starter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":2,"doubles":1,"triples":0,"homeRuns":0,"stolenBases":0}}},"ID201":{"person":{"id":201,"fullName":"Bench"},"stats":{"batting":{}}},"ID202":{"person":{"id":202,"fullName":"Pinch Runner"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":0,"atBats":0,"hits":0,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":1}}}}},"away":{"team":{"id":20},"players":{}}}}'
     expect:
@@ -309,6 +322,37 @@ unit_tests:
           at_bats: 0
           hits: 0
           stolen_bases: 1
+
+  - name: batting_keeps_only_the_newer_capture_of_a_game
+    description: >
+      Catches a superseded capture's rows surviving. Two captures of one game in one
+      season disagree on a batter's line (an official scoring change turns a hit into an
+      error); only the newer capture's values may be in the result, and only once. Built a
+      season at a time, the batch replaces whole, so no row of the older capture is kept.
+    model: stg_mlb__batting_game_logs
+    given:
+      - input: ref('stg_raw__season_responses')
+        rows:
+          - source: mlb
+            endpoint: boxscore
+            request_key: "gamePk=3"
+            fetched_at: "20260401T000000Z"
+            season_start: "2026-01-01"
+            file_path: older.json
+            payload: '{"teams":{"home":{"team":{"id":10},"players":{"ID300":{"person":{"id":300,"fullName":"Batter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":3,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":0}}}}},"away":{"team":{"id":20},"players":{}}}}'
+          - source: mlb
+            endpoint: boxscore
+            request_key: "gamePk=3"
+            fetched_at: "20260405T000000Z"
+            season_start: "2026-01-01"
+            file_path: newer.json
+            payload: '{"teams":{"home":{"team":{"id":10},"players":{"ID300":{"person":{"id":300,"fullName":"Batter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":2,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":0}}}}},"away":{"team":{"id":20},"players":{}}}}'
+    expect:
+      rows:
+        - game_pk: 3
+          mlbam_player_id: 300
+          at_bats: 4
+          hits: 2
 
   - name: stg_mlb__players_keeps_the_newest_capture_per_season_and_player
     description: >
