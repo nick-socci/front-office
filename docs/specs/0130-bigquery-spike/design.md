@@ -92,10 +92,10 @@ means and what may be uploaded each have their own alternatives, in the ADRs bel
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0051](../../adr/0051-a-model-is-written-once-in-sql-both-warehouses-accept-and-dispatched-macros.md) | A model is written once: SQL both warehouses accept, and a dispatched `fo_*` macro for the rest | proposed |
-| [0052](../../adr/0052-the-spike-loads-raw-rows-into-a-native-bigquery-table-with-a-json-payload.md) | The spike loads raw rows into a native BigQuery table with a `JSON` payload, clustered by source and endpoint | proposed |
-| [0053](../../adr/0053-a-bigquery-build-is-held-to-duckdbs-exactly-except-floats-to-a-tolerance.md) | A BigQuery build is held to DuckDB's exactly, except floating-point columns, which are held to a tolerance | proposed |
-| [0054](../../adr/0054-only-endpoints-without-member-data-are-uploaded-and-whole.md) | Only endpoints without league members' data are uploaded, and their captures whole | proposed |
+| [0051](../../adr/0051-a-model-is-written-once-in-sql-both-warehouses-accept-and-dispatched-macros.md) | A model is written once: SQL both warehouses accept, and a dispatched `fo_*` macro for the rest | accepted |
+| [0052](../../adr/0052-the-spike-loads-raw-rows-into-a-native-bigquery-table-with-a-json-payload.md) | The spike loads raw rows into a native BigQuery table with a `JSON` payload, clustered by source and endpoint | accepted |
+| [0053](../../adr/0053-a-bigquery-build-is-held-to-duckdbs-exactly-except-floats-to-a-tolerance.md) | A BigQuery build is held to DuckDB's exactly, except floating-point columns, which are held to a tolerance | accepted |
+| [0054](../../adr/0054-only-endpoints-without-member-data-are-uploaded-and-whole.md) | Only endpoints without league members' data are uploaded, and their captures whole | accepted |
 
 Settled by the owner on 2026-10-11, going through the spec's decisions one at a time:
 
@@ -482,4 +482,166 @@ is a behaviour shown to be the same on inputs chosen to be awkward.
 | design-review, round 2 | F5 (P2): the load check did not compare `file_path`, the tie-break of `fo_espn_latest` | Changed: R3.4 compares `file_path` exactly; a one-field case is in the loader's tests. |
 
 ## Amendments
+
+
+### 2026-10-11: the selector names one test (build, task 2)
+
+The selector as written above selects 203 data tests, not the 204 of *Expected values*.
+dbt applies `indirect_selection: cautious` to each member of a union alone, so
+`fct_matchup_results_match_espn`, whose parents lie in two members, is in neither,
+although every model it reads is in the slice. The selector gains a fourth member naming
+that test, and `test_bigquery_slice.py` fails if the selector's tests ever differ from
+`dbt ls --select "+a +b +c" --indirect-selection cautious`, which applies the rule to the
+union as a whole. No scope moves: the count is the spec's.
+
+Also settled in task 2: `env_var('FO_BQ_PROJECT')` with no default is evaluated only when
+the `bq` target is used. `dev` and `ci` parse with the variable unset, and with
+`dbt-bigquery` not installed; `bq` fails naming the variable (R2.5).
+
+### 2026-10-11: `fo_unnest` is given a column, not an expression over a payload (build, task 6)
+
+The first real `dev` build of the ported models ran out of memory (23.9 GiB), which is
+the first risk listed above. Measured on the real schedule captures, alone: unnesting in
+the SELECT list, as before, 0.19 s; `from responses cross join
+unnest(json_extract(responses.payload, …))`, 5.1 s and 1.9 GB for one query; the list
+computed in one CTE and unnested from that CTE in the next, 0.05 s. DuckDB unnests a
+column in place and plans an expression in the FROM clause as a join that carries what
+the expression reads.
+
+So the port follows AGENTS.md rule 1 in the FROM clause too: `stg_mlb__games`, its
+singular test and `stg_espn__scoring_categories` compute the list in a CTE of their own
+before `fo_unnest`, and `stg_espn__roster_entries` and `stg_espn__pro_games` take each
+next list out as a column before unnesting it (`stg_espn__roster_entries` took 6.6 s
+against 2.6 s until it did). No DuckDB SQL is kept behind a macro's DuckDB form, which is
+what the risk allowed for: the models are still one definition. Small expressions
+(`fo_int_series`, the keys of one matchup) are unnested directly.
+
+Result, real season, four threads: 56 of 56 relations identical to the baseline with
+`--strict-columns`, 815 of 815 columns of the same type and nullability; build 58.5 s
+against 56.2 s, peak memory 19.8 GB against 20.0 GB.
+
+Not in the design's table and written as plain SQL by ADR 0051's rule, since both
+warehouses accept it: `max(x) filter (where c)` as `max(case when c then x end)`, and
+`count(col) filter (where c)` as `count(case when c then col end)`.
+
+sqlfluff's RF02 fires on the DuckDB form of `fo_unnest_pair`, a joined subquery, in
+`stg_espn__matchup_category_results`. The table's columns are qualified; the two unnested
+names cannot be, since what they would be qualified with differs by warehouse, and carry
+`-- noqa: RF02` with that reason (ADR 0043).
+
+### 2026-10-11: found by rendering the slice for BigQuery with no network (build, before task 10)
+
+No BigQuery job has been run: R2.7 waits for the owner. To see the BigQuery forms before
+then, the slice was compiled for the `bq` target inside a network namespace with no
+network (`unshare -rn dbt compile --target bq --selector bigquery_slice --no-introspect`,
+a placeholder project id), and the 234 rendered files (30 models, 204 data tests) parsed
+with sqlfluff's BigQuery dialect. A parser is not BigQuery, so R4.7 still stands. It found:
+
+- **dbt parses every model on every target, selected or not.** `fo_json_parse`'s refusal
+  of a type it has no BigQuery form for stopped the `bq` target from parsing at all, on
+  `stg_espn__player_game_stats`, which is outside the slice and passes a `MAP`. The
+  BigQuery forms now refuse only when a model is compiled (`execute`), which a model
+  outside the selector never is. A ported model still fails with the type named.
+- **`union` alone.** BigQuery wants `union all` or `union distinct`. Both accept
+  `union distinct`, so it is plain SQL: one place in the slice
+  (`int_fantasy__player_crosswalk`), five in files outside it. Added to the rule test.
+- **`strip_accents`**, in the same model, has no BigQuery function. New dispatched macro
+  `fo_strip_accents`: `strip_accents(x)` / `regexp_replace(normalize(x, NFD), r'\pM', '')`.
+  Whether the two agree on every name is for R5.2 to show. Added to the rule test.
+
+After these the real `dev` build is again identical to the baseline, 56 of 56 relations.
+
+**Open, and the owner's:** `median(x)` as an aggregate, twice in
+`int_fantasy__reported_matchup_margins`. BigQuery has no aggregate median that is exact:
+`percentile_cont` is a window function there, and `approx_quantiles` is approximate. It
+is not in the design's table, it is not a respelling, and the model's shape would change
+on both warehouses, as `stg_espn__pro_games`' did. It is left as it is, is not yet in the
+rule test, and will fail the `--empty` build of task 12 unless decided first.
+
+**Expected to fail in task 12 as well:** the contracts. A model with an enforced contract
+declares each column's `data_type` in YAML, and dbt writes those names into the
+`create table` it sends. `varchar` and `double` are not BigQuery types, and the project's
+YAML declares them 66 times in three files (`grep -c "data_type: \(varchar\|double\)"`;
+how many of those are on the slice's models was not counted). This is YAML, which the
+rule test does not read.
+
+### 2026-10-11: contract types in the slice's YAML
+
+Known before task 12 and decided by the owner on 2026-10-11. dbt writes each contracted
+column's `data_type` into the `create table` it sends, and `varchar` and `double` are not
+BigQuery types. In the slice that is 28 `varchar` and 9 `double` declarations, in ten
+models of `_intermediate__models.yml`. By ADR 0051: `varchar` becomes `string`, which both
+warehouses accept (DuckDB reads it as `VARCHAR`), and `double`, which has no shared name
+(DuckDB has no `float64`), becomes `"{{ 'float64' if target.type == 'bigquery' else
+'double' }}"`. The switch is written in the YAML and not as an `fo_*` macro because dbt
+does not make a project's macros available in a properties file, the limit ADR 0050
+already met. A pytest holds the slice's contracts to the shared names or that one
+expression. The 27 unported models' contracts are not touched. `median`, the other thing
+known ahead of task 12, is left for the empty build to show (owner, 2026-10-11).
+
+### 2026-10-11: what the empty build on BigQuery found (task 12)
+
+Six runs. Each finding is a construct the design's table did not have.
+
+- **Seed column types.** `column_types` in three seeds' YAML said `varchar` and `double`,
+  sent as written in the seed's `create table`. Changed as the contracts were: `string`,
+  and the target switch for the float. The contract test now reads seeds too.
+- **Date minus date.** `max(d) - min(d) + 1` in `stg_espn__scoring_periods_are_consecutive`:
+  DuckDB gives an integer, BigQuery an `INTERVAL` that cannot be added to a number. New
+  macro `fo_days_between`. The rule test cannot see this one: a regular expression does
+  not know that two operands are dates.
+- **`median(x)`.** `Function not found`. BigQuery has an exact median only as a window
+  function, so no macro could stand in for the aggregate. The owner chose on 2026-10-11 to
+  write the median out in SQL both accept: rows numbered in order, the middle one or the
+  mean of the middle two, `(least + greatest) / 2`. Checked first that DuckDB's `median`
+  of two doubles equals `(a + b) / 2` (20,000 random pairs, 0 differing), then on the real
+  season: 56 of 56 relations identical to the baseline.
+- **A bare column in HAVING.** `min(mlbam_player_id) as mlbam_player_id … having
+  count(distinct mlbam_player_id) = 1` in `int_fantasy__player_crosswalk`: BigQuery reads
+  the bare name as the select alias and refuses an aggregate of an aggregate. The column
+  is now qualified.
+- **How the empty build is run.** `dbt build --empty` stops at the first failing test and
+  skips everything after it, and two tests fail on purpose when there are no rows
+  (`int_fantasy__started_days_match_the_starting_slots` fails on zero started days;
+  `stg_mlb__batting_totals_match_team_stats` reads the raw rows, which are not empty,
+  against empty models). So the empty build is `dbt run --empty` and then `dbt test`:
+  29 models built, 204 data tests run, 202 passed, and the two failures are results, not
+  refusals. No statement was refused.
+- **Unit tests are left to task 14.** Four staging unit tests fail with `Invalid cast from
+  STRING to JSON`: dbt cannot type a `JSON` fixture on BigQuery, the risk this design
+  named. Tasks 12 and 13 build without unit tests so that they do not hide the models.
+
+### 2026-10-11: two ties the comparison found, and a new DuckDB baseline (tasks 13 and 15)
+
+A seed's load job refuses `bigint`, which the DDL accepts; the slice's seeds say `int64`,
+read by both warehouses, and a test holds them to it. With that the slice built on
+BigQuery from the real rows: `PASS=238 WARN=1 ERROR=0`, the warning being DuckDB's own.
+
+The first comparison passed 27 of 29 relations, every float column inside the tolerance
+(largest relative difference 1.2e-15). The two that failed were not floats and not
+BigQuery's doing. Each keeps one row per entity, and the order it keeps by left a tie:
+
+- `stg_mlb__games`, 9 rows. MLB lists a suspended game twice under one `game_pk` in one
+  response, both `Final`, and a game postponed and then cancelled twice, neither played.
+  Played-before-not-played does not separate them. 42 games of 2018 to 2026 have such a
+  tie; each warehouse kept whichever entry it met first.
+- `stg_idmap__players`, 1 row. The id map lists Shohei Ohtani under one ESPN id as `P` and
+  as `DH`, in one capture.
+
+Rule 5 asks for a deterministic tie-break and neither model had one. The owner decided
+both on 2026-10-11: for a game, the entry with the latest scheduled start, where the game
+ended (as ADR 0020 reads a game); for the id map, the later position in text order, `P`
+before `DH`, a rule for the tie and not a statement about the player.
+
+The game tie-break moves **26 rows of `stg_mlb__games` on DuckDB** (2018: 2, 2019: 2,
+2020: 2, 2021: 7, 2022: 1, 2023: 5, 2024: 2, 2025: 4, 2026: 1): 25 suspended games now
+carry their resumed start and `resumed_from`, and one 2020 game reads `Cancelled` where
+it read `Postponed`. `official_date` and `is_played` change in none, and the other 55
+relations of the real warehouse are identical, so no day, total or value moved. This is
+the one place the spike changes what a ported model returns (a no-go, R4.4); the owner
+accepted it on 2026-10-11 as the correction of a tie never decided, and the baseline for
+the rest of the spike is the warehouse built after it, `data/warehouse_baseline2.duckdb`.
+The id-map tie-break moved no DuckDB row.
+Each tie-break has a dbt unit test, seen to fail without it, so the slice now has 61 unit
+tests where the spec counted 59.
 

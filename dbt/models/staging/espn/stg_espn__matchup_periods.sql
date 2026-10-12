@@ -40,8 +40,9 @@ matchups as (
         league_id,
         season,
         fetched_at,
-        unnest(schedule) as matchup
+        matchup
     from header
+    {{ fo_unnest('header.schedule', 'matchup') }}
 
 ),
 
@@ -54,10 +55,11 @@ period_keys as (
         season,
         fetched_at,
         {{ fo_json_int('matchup', '$.matchupPeriodId') }} as matchup_period,
-        unnest(
-            {{ fo_json_keys('matchup', '$.' ~ side ~ '.pointsByScoringPeriod') }}
-        ) as scoring_period_key
+        scoring_period_key
     from matchups
+    {{ fo_unnest(
+        fo_json_keys('matchup', '$.' ~ side ~ '.pointsByScoringPeriod'), 'scoring_period_key'
+    ) }}
     where {{ fo_json_exists('matchup', '$.' ~ side ~ '.pointsByScoringPeriod') }}
     {{ 'union all' if not loop.last }}
     {% endfor %}
@@ -68,6 +70,6 @@ select distinct
     league_id,
     season,
     matchup_period,
-    try_cast(scoring_period_key as bigint) as scoring_period,
+    {{ fo_safe_cast('scoring_period_key', 'bigint') }} as scoring_period,
     {{ fo_parse_fetched_at() }} as fetched_at
 from period_keys

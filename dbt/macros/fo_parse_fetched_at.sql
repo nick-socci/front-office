@@ -5,5 +5,13 @@
 #}
 
 {% macro fo_parse_fetched_at(column='fetched_at') %}
+    {{- return(adapter.dispatch('fo_parse_fetched_at')(column)) -}}
+{% endmacro %}
+
+{% macro duckdb__fo_parse_fetched_at(column) %}
     strptime({{ column }}, '%Y%m%dT%H%M%SZ')
+{%- endmacro %}
+
+{% macro bigquery__fo_parse_fetched_at(column) %}
+    parse_timestamp('%Y%m%dT%H%M%SZ', {{ column }})
 {%- endmacro %}

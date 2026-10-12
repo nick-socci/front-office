@@ -1,6 +1,6 @@
 # 0051. A model is written once: SQL both warehouses accept, and a dispatched `fo_*` macro for the rest
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-11
 - Spec: [0130-bigquery-spike](../specs/0130-bigquery-spike/design.md) · Issue: #130
 

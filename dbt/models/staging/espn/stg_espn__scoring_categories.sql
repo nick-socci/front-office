@@ -10,15 +10,28 @@ with latest as (
 
 ),
 
-items as (
+header as (
 
+    -- the payload is left behind here, before the unnest (AGENTS.md rule 1)
     select
         {{ fo_json_text('payload', '$.id') }} as league_id,
         {{ fo_json_int('payload', '$.seasonId') }} as season,
-        unnest({{ fo_json_array('payload', '$.settings.scoringSettings.scoringItems[*]') }})
-            as item,
+        {{ fo_json_array('payload', '$.settings.scoringSettings.scoringItems[*]') }}
+            as scoring_items,
         fetched_at
     from latest
+
+),
+
+items as (
+
+    select
+        league_id,
+        season,
+        item,
+        fetched_at
+    from header
+    {{ fo_unnest('header.scoring_items', 'item') }}
 
 )
 

@@ -10,8 +10,9 @@
 #}
 
 {% macro fo_innings_to_outs(column) %}
+    {%- set innings = fo_safe_cast(column, fo_type_float()) %}
     (
-        floor(try_cast({{ column }} as double))::bigint * 3
-        + round((try_cast({{ column }} as double) - floor(try_cast({{ column }} as double))) * 10)::bigint
+        cast(floor({{ innings }}) as bigint) * 3
+        + cast(round(({{ innings }} - floor({{ innings }})) * 10) as bigint)
     )
 {%- endmacro %}

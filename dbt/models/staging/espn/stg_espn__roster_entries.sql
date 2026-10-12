@@ -60,13 +60,18 @@ header as (
 
 teams as (
 
+    -- A team's entries are taken out as a column of their own here: fo_unnest is given a
+    -- column, never an expression. DuckDB unnests a column in place; an expression in the
+    -- FROM clause it plans as a join, and this model took two and a half times as long.
     select
         league_id,
         season,
         scoring_period,
         fetched_at,
-        unnest(teams_list) as team
+        team.id as team_id,
+        team.roster.entries as roster_entries
     from header
+    {{ fo_unnest('header.teams_list', 'team') }}
 
 ),
 
@@ -77,9 +82,10 @@ entries as (
         season,
         scoring_period,
         fetched_at,
-        team.id as team_id,
-        unnest(team.roster.entries) as entry
+        team_id,
+        entry
     from teams
+    {{ fo_unnest('teams.roster_entries', 'entry') }}
 
 )
 

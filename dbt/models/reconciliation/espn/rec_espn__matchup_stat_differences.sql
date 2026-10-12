@@ -131,23 +131,43 @@ espn_formula as (
         espn.matchup_id,
         espn.fantasy_team_id,
         rules.stat_key,
-        sum(rules.weight * component_scores.espn_value) filter (where rules.part = 'numerator')
+        sum(
+            case
+                when rules.part = 'numerator' then rules.weight * component_scores.espn_value
+            end
+        )
         / nullif(
-            sum(rules.weight * component_scores.espn_value) filter (
-                where rules.part = 'denominator'
+            sum(
+                case
+                    when rules.part = 'denominator'
+                        then rules.weight * component_scores.espn_value
+                end
             ),
             0
         ) as espn_formula_value,
         sum(
-            rules.weight * (component_scores.espn_value + coalesce(register.expected_difference, 0))
+            case
+                when rules.part = 'numerator'
+                    then
+                        rules.weight
+                        * (
+                            component_scores.espn_value
+                            + coalesce(register.expected_difference, 0)
+                        )
+            end
         )
-        filter (where rules.part = 'numerator')
         / nullif(
             sum(
-                rules.weight
-                * (component_scores.espn_value + coalesce(register.expected_difference, 0))
-            )
-            filter (where rules.part = 'denominator'),
+                case
+                    when rules.part = 'denominator'
+                        then
+                            rules.weight
+                            * (
+                                component_scores.espn_value
+                                + coalesce(register.expected_difference, 0)
+                            )
+                end
+            ),
             0
         ) as implied_value
     from espn

@@ -35,8 +35,9 @@ matchups as (
         league_id,
         season,
         fetched_at,
-        unnest(schedule) as matchup
+        matchup
     from header
+    {{ fo_unnest('header.schedule', 'matchup') }}
 
 ),
 
@@ -47,21 +48,24 @@ stat_keys as (
     -- together, so each stat_key stays paired with its own stat_value and no path is
     -- built from a key.
     {% for side in ['home', 'away'] %}
+    {%- set score_by_stat = '$.' ~ side ~ '.cumulativeScore.scoreByStat' %}
+    -- stat_key and stat_value are the names fo_unnest_pair gives the two unnested values.
+    -- What they would be qualified with differs by warehouse, so they stay bare.
     select
-        league_id,
-        season,
-        fetched_at,
-        matchup,
+        matchups.league_id,
+        matchups.season,
+        matchups.fetched_at,
+        matchups.matchup,
         '{{ side }}' as side,
-        {{ fo_json_int('matchup', '$.' ~ side ~ '.teamId') }} as team_id,
-        unnest(
-            {{ fo_json_keys('matchup', '$.' ~ side ~ '.cumulativeScore.scoreByStat') }}
-        ) as stat_key,
-        unnest(
-            {{ fo_json_values('matchup', '$.' ~ side ~ '.cumulativeScore.scoreByStat') }}
-        ) as stat_value
+        {{ fo_json_int('matchups.matchup', '$.' ~ side ~ '.teamId') }} as team_id,
+        stat_key,  -- noqa: RF02
+        stat_value  -- noqa: RF02
     from matchups
-    where {{ fo_json_string('matchup', '$.' ~ side ~ '.teamId') }} is not null
+    {{ fo_unnest_pair(
+        fo_json_keys('matchups.matchup', score_by_stat), 'stat_key',
+        fo_json_values('matchups.matchup', score_by_stat), 'stat_value'
+    ) }}
+    where {{ fo_json_string('matchups.matchup', '$.' ~ side ~ '.teamId') }} is not null
     {{ 'union all' if not loop.last }}
     {% endfor %}
 
@@ -78,7 +82,7 @@ results as (
         team_id,
         {{ fo_json_int('matchup', '$.id') }} as matchup_id,
         {{ fo_json_int('matchup', '$.matchupPeriodId') }} as matchup_period,
-        try_cast({{ fo_json_string('stat_value', '$.score') }} as double) as score,
+        {{ fo_safe_cast(fo_json_string('stat_value', '$.score'), fo_type_float()) }} as score,
         {{ fo_json_text('stat_value', '$.result') }} as result
     from stat_keys
 
@@ -91,7 +95,7 @@ select
     results.matchup_period,
     results.team_id,
     results.side,
-    try_cast(results.stat_key as bigint) as stat_id,
+    {{ fo_safe_cast('results.stat_key', 'bigint') }} as stat_id,
     stats.stat_abbrev,
     stats.display_label,
     results.score,
@@ -102,4 +106,4 @@ select
     {{ fo_parse_fetched_at('results.fetched_at') }} as fetched_at
 from results
 left join {{ ref('espn_stat_ids') }} as stats
-    on stats.stat_id = try_cast(results.stat_key as bigint)
+    on stats.stat_id = {{ fo_safe_cast('results.stat_key', 'bigint') }}

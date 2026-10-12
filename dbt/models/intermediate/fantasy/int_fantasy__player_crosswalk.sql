@@ -45,17 +45,17 @@
 with mlb_players as (
 
     select
-        strip_accents(logs.player_name) as match_name,
+        {{ fo_strip_accents('logs.player_name') }} as match_name,
         logs.mlbam_player_id,
         games.season
     from {{ ref('stg_mlb__batting_game_logs') }} as logs
     inner join {{ ref('stg_mlb__games') }} as games
         on games.game_pk = logs.game_pk
 
-    union
+    union distinct
 
     select
-        strip_accents(logs.player_name) as match_name,
+        {{ fo_strip_accents('logs.player_name') }} as match_name,
         logs.mlbam_player_id,
         games.season
     from {{ ref('stg_mlb__pitching_game_logs') }} as logs
@@ -72,7 +72,9 @@ unambiguous_names as (
         min(mlbam_player_id) as mlbam_player_id
     from mlb_players
     group by match_name, season
-    having count(distinct mlbam_player_id) = 1
+    -- Qualified: BigQuery reads a bare name in HAVING as the select alias above, which
+    -- makes this an aggregate of an aggregate.
+    having count(distinct mlb_players.mlbam_player_id) = 1
 
 ),
 
@@ -108,5 +110,5 @@ from entries
 left join {{ ref('stg_idmap__players') }} as crosswalk
     on crosswalk.espn_player_id = entries.espn_player_id
 left join unambiguous_names
-    on unambiguous_names.match_name = strip_accents(entries.player_name)
+    on unambiguous_names.match_name = {{ fo_strip_accents('entries.player_name') }}
     and unambiguous_names.season = entries.season

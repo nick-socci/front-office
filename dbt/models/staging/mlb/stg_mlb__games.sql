@@ -11,6 +11,14 @@
 -- played" means the seed's is_played = false, the same set as ingestion's NOT_PLAYED,
 -- so the two pick the same row. A state the seed doesn't list ranks with the played
 -- ones, as in ingestion, and then fails the build on its own.
+--
+-- Two entries can still tie: a suspended game has its original and its resumed entry, both
+-- 'Final', and a game postponed and then cancelled has both, neither played. 42 games of
+-- 2018 to 2026 do. The entry with the latest scheduled start wins, the one where the game
+-- ended (the owner, 2026-10-11; ADR 0020 reads a game by its last scheduled start too).
+-- gameDate is an ISO instant in UTC, so its text sorts as time. Without this the row kept
+-- was whichever the warehouse met first, and DuckDB and BigQuery met different ones (spec
+-- 0130).
 
 with responses as (
 
@@ -24,12 +32,25 @@ with responses as (
 
 ),
 
+game_lists as (
+
+    -- The payload is left behind here, before the unnest (AGENTS.md rule 1). An unnest in
+    -- the FROM clause repeats every column of its relation once per element, used or not:
+    -- unnesting straight from `responses` held each 3.5 MB schedule once per game.
+    select
+        fetched_at,
+        {{ fo_json_array('payload', '$.dates[*].games[*]') }} as games
+    from responses
+
+),
+
 games as (
 
     select
         fetched_at,
-        unnest({{ fo_json_array('payload', '$.dates[*].games[*]') }}) as game
-    from responses
+        game
+    from game_lists
+    {{ fo_unnest('game_lists.games', 'game') }}
 
 )
 
@@ -70,5 +91,6 @@ left join {{ ref('mlb_game_states') }} as states
 where {{ fo_json_text('game', '$.gameType') }} = 'R'
 {{ fo_latest_by_entity(
     ['game_pk'],
-    order_by="fetched_at desc, case when states.is_played = false then 1 else 0 end"
+    order_by="fetched_at desc, case when states.is_played = false then 1 else 0 end, "
+    ~ fo_json_text('game', '$.gameDate') ~ " desc"
 ) }}
