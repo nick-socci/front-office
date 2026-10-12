@@ -68,6 +68,17 @@ def test_a_guid_in_the_request_key_is_not_printed_by_any_message_about_the_row()
     assert GUID not in "".join(raised.value.hits) + str(raised.value)
 
 
+def test_a_guid_that_is_a_key_on_the_way_to_a_hit_is_not_printed_in_the_path() -> None:
+    """Catches a path carrying a value: a path is made of the document's keys, so a hit
+    found under an object keyed by account id would print the id (PR #142, review round
+    2)."""
+    nested = row("espn", "settings", {"byOwner": {GUID: {"members": [], "note": f"x {GUID}"}}})
+    hits = loader.privacy_hits(nested)
+    assert len(hits) >= 3, hits
+    assert GUID not in "".join(hits)
+    assert any("$.byOwner.<guid>" in hit for hit in hits)
+
+
 def test_mlbs_game_guid_is_allowed() -> None:
     """Catches the GUID rule reaching MLB rows, where gameGuid is a public game id and every
     schedule row would be refused."""

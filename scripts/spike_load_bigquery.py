@@ -161,7 +161,9 @@ def privacy_hits(row: RawRow) -> list[str]:
         for name in ("request_path", "request_key", "file_path"):
             if privacy.GUID.search(getattr(row, name)):
                 hits.append(f"{row.source}/{row.endpoint}: GUID in {name}")
-    return hits
+    # A path is built from the document's own keys, and a key can be an account id: mask
+    # every message whole, so no part of one can carry a value (R3.3).
+    return [privacy.GUID.sub("<guid>", hit) for hit in hits]
 
 
 class PrivacyHit(Exception):
