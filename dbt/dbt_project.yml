@@ -51,3 +51,7 @@ vars:
   # tests and by scripts/check_tenant_isolation.py, whose fixtures have two matchups a
   # season.
   fantasy_scale_prior_matchups: 100
+  # The first of January of the earliest season any league here has data for. The staging
+  # models built a season at a time start their batches here (spec 0143, R1.4). A season
+  # earlier than this needs this one value changed and a `dbt build --full-refresh`.
+  first_season_start: '2018-01-01'

@@ -70,6 +70,13 @@ models:
         data_tests: [not_null]
       - name: lineup_slot_id
         data_tests: [not_null]
+      - name: season_start
+        description: >
+          The first of January of the season of the capture the row was read from; the
+          column dbt batches this model on. Never null. On DuckDB a batch cannot insert a
+          null (dbt keeps only the batch's own year); the not_null test is for BigQuery,
+          where this is a plain table.
+        data_tests: [not_null]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -97,6 +104,12 @@ models:
         data_tests: [not_null]
       - name: is_starting_slot
         data_tests: [not_null]
+      - name: season_start
+        description: >
+          The first of January of the season of the capture the row was read from; the
+          column dbt batches this model on. Never null, and there is no not_null test: a
+          batch keeps only rows of its own year, so a null cannot reach the table. A
+          season lost that way fails stg__batched_models_hold_every_season_with_captures.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -250,6 +263,12 @@ models:
         data_tests: [not_null]
       - name: stat_id
         data_tests: [not_null]
+      - name: season_start
+        description: >
+          The first of January of the season of the capture the row was read from; the
+          column dbt batches this model on. Never null, and there is no not_null test: a
+          batch keeps only rows of its own year, so a null cannot reach the table. A
+          season lost that way fails stg__batched_models_hold_every_season_with_captures.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -548,6 +567,30 @@ unit_tests:
         - {league_id: "A", season: 2026, fetched_at: "2026-09-01 00:00:00"}
         - {league_id: "A", season: 2025, fetched_at: "2026-09-02 00:00:00"}
         - {league_id: "B", season: 2026, fetched_at: "2026-09-03 00:00:00"}
+
+  - name: roster_entries_keep_only_the_newer_capture_of_a_scoring_period
+    description: >
+      Catches a superseded capture's rows surviving. Two captures of one league, season
+      and scoring period: the older lists player 11, whom the newer does not, and player
+      10 in the starting catcher slot, where the newer has him on the bench. The result
+      holds the newer capture's rows only: player 10 on the bench, and no player 11.
+    model: stg_espn__roster_entries
+    given:
+      - input: ref('stg_raw__season_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: roster, request_path: /r, request_key: "scoringPeriodId=5&view=x", fetched_at: "20260601T000000Z", file_path: r1, season_start: "2026-01-01", partitions: '{"season": 2026, "league_id": "1"}', payload: '{"id": 1, "seasonId": 2026, "teams": [{"id": 1, "roster": {"entries": [{"playerId": 10, "lineupSlotId": 0, "playerPoolEntry": {"player": {"fullName": "Ten", "defaultPositionId": 2, "proTeamId": 5}}}, {"playerId": 11, "lineupSlotId": 0, "playerPoolEntry": {"player": {"fullName": "Eleven", "defaultPositionId": 2, "proTeamId": 5}}}]}}]}'}
+          - {source: espn, endpoint: roster, request_path: /r, request_key: "scoringPeriodId=5&view=x", fetched_at: "20260602T000000Z", file_path: r2, season_start: "2026-01-01", partitions: '{"season": 2026, "league_id": "1"}', payload: '{"id": 1, "seasonId": 2026, "teams": [{"id": 1, "roster": {"entries": [{"playerId": 10, "lineupSlotId": 16, "playerPoolEntry": {"player": {"fullName": "Ten", "defaultPositionId": 2, "proTeamId": 5}}}]}}]}'}
+      - input: ref('espn_lineup_slots')
+        rows:
+          - {lineup_slot_id: 0, slot_abbrev: C}
+          - {lineup_slot_id: 16, slot_abbrev: BE}
+      - input: ref('espn_player_positions')
+        rows:
+          - {position_id: 2, position_abbrev: C}
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, scoring_period: 5, team_id: 1, espn_player_id: 10, lineup_slot_id: 16, lineup_slot: BE, season_start: "2026-01-01"}
 
   - name: scoring_periods_run_to_each_leagues_own_final_period
     description: >

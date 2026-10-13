@@ -18,8 +18,24 @@
 -- For the BigQuery migration: the structure string is DuckDB-specific. It is passed to
 -- fo_json_parse, which is where the DuckDB form (from_json) lives; its BigQuery variant
 -- will be JSON_QUERY_ARRAY plus per-field extraction.
+--
+-- 3. Built a season at a time. DuckDB holds every parsed payload of a run at once, and two
+--    seasons took the build to its memory limit, so dbt runs this model once per calendar
+--    year (microbatch), reading one season's captures through stg_raw__season_responses.
+--    Every build redoes every season. On BigQuery it is a plain table (spec 0143, ADRs
+--    0058 to 0060). season_start, the column dbt batches on, is small and is carried
+--    beside the other header columns; the payload is still dropped in `header`.
 
-{{ config(materialized='table') }}
+{{ config(
+    materialized=('incremental' if target.type == 'duckdb' else 'table'),
+    incremental_strategy=('microbatch' if target.type == 'duckdb' else none),
+    event_time='season_start',
+    batch_size='year',
+    begin=var('first_season_start'),
+    lookback=fo_batches_back_to_first_season(),
+    concurrent_batches=false,
+    on_schema_change='fail'
+) }}
 
 {% set roster_schema %}
 [{
@@ -40,7 +56,11 @@
 
 with latest as (
 
-    {{ fo_espn_latest('roster', extra_partition='scoringPeriodId') }}
+    {{ fo_espn_latest(
+        'roster',
+        extra_partition='scoringPeriodId',
+        relation=ref('stg_raw__season_responses')
+    ) }}
 
 ),
 
@@ -53,6 +73,7 @@ header as (
         {{ fo_json_int('payload', '$.seasonId') }} as season,
         {{ fo_request_param('request_key', 'scoringPeriodId') }} as scoring_period,
         fetched_at,
+        season_start,
         {{ fo_json_parse('payload', '$.teams', roster_schema) }} as teams_list
     from latest
 
@@ -68,6 +89,7 @@ teams as (
         season,
         scoring_period,
         fetched_at,
+        season_start,
         team.id as team_id,
         team.roster.entries as roster_entries
     from header
@@ -82,6 +104,7 @@ entries as (
         season,
         scoring_period,
         fetched_at,
+        season_start,
         team_id,
         entry
     from teams
@@ -103,7 +126,8 @@ select
     entry.playerPoolEntry.player.proTeamId as pro_team_id,
     nullif(entry.injuryStatus, '') as injury_status,
     nullif(entry.acquisitionType, '') as acquisition_type,
-    {{ fo_parse_fetched_at() }} as fetched_at
+    {{ fo_parse_fetched_at() }} as fetched_at,
+    entries.season_start
 from entries
 left join {{ ref('espn_lineup_slots') }} as slots
     on slots.lineup_slot_id = entry.lineupSlotId

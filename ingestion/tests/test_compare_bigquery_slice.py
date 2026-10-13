@@ -234,3 +234,169 @@ def test_the_unique_key_is_read_from_the_models_tests() -> None:
     assert cmp.unique_key(manifest, "model.front_office.one") == ["id"]
     assert cmp.unique_key(manifest, "model.front_office.two") == ["league_id", "season"]
     assert cmp.unique_key(manifest, "model.front_office.three") is None
+
+
+# -- JSON columns are not read back or compared (spec 0143, amendment of 2026-10-12) ---------
+
+
+def test_a_json_column_is_not_compared_and_is_named(con: duckdb.DuckDBPyConnection) -> None:
+    """Catches the raw payloads being compared: stg_raw__season_responses carries them, and
+    a JSON column is billed whole and BigQuery rewrites its text. The column is not read
+    back, so it is on DuckDB's side only; that must not be the problem a missing column is,
+    and the rest of the relation is still compared."""
+    con.execute(f"create table local.{RELATION} (id bigint, name varchar, payload json)")
+    con.execute(f"create table bq.{RELATION} (id bigint, name varchar)")
+    con.execute(f"""insert into local.{RELATION} values (1, 'a', '{{"x": 1}}')""")
+    con.execute(f"insert into bq.{RELATION} values (1, 'a')")
+    result = compare(con, right_unread={"payload"})
+    assert result.problems == [] and result.passed
+    assert result.uncompared == ["payload"]
+    assert any(
+        "JSON columns not compared: payload" in line
+        for line in cmp.describe(result, "DuckDB", "BigQuery")
+    )
+
+    con.execute(f"update bq.{RELATION} set name = 'b'")
+    assert not compare(con, right_unread={"payload"}).passed
+
+
+def test_a_json_column_bigquery_does_not_have_is_a_problem(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Catches the view losing `payload` on BigQuery unnoticed: a JSON column is not read
+    back, so its absence from what was read proves nothing. It must be among the columns
+    BigQuery's own schema listed as JSON (review of #145, F2). The same the other way: a
+    JSON column only BigQuery has."""
+    con.execute(f"create table local.{RELATION} (id bigint, payload json)")
+    con.execute(f"create table bq.{RELATION} (id bigint)")
+    con.execute(f"""insert into local.{RELATION} values (1, '{{"x": 1}}')""")
+    con.execute(f"insert into bq.{RELATION} values (1)")
+    missing = compare(con, right_unread=set())
+    assert missing.problems == ["payload: only in DuckDB"] and not missing.passed
+
+    extra = compare(con, right_unread={"payload", "extra"})
+    assert extra.problems == ["extra: only in BigQuery"] and not extra.passed
+
+    both_unread = cmp.compare_relation(
+        con, "bq", "bq", RELATION, ["id"], left_unread={"payload"}, right_unread=set()
+    )
+    assert both_unread.problems == ["payload: only in DuckDB"]
+
+
+def test_the_json_fields_left_unread_are_reported_by_name() -> None:
+    """Catches the list of unread fields drifting from the fields that are read."""
+    from types import SimpleNamespace
+
+    schema = [
+        SimpleNamespace(name="source", field_type="STRING"),
+        SimpleNamespace(name="payload", field_type="json"),
+    ]
+    assert cmp.fields_left_unread(schema) == {"payload"}
+    assert [f.name for f in cmp.fields_read_back(schema)] == ["source"]
+
+
+def test_a_json_column_that_bigquery_holds_as_text_is_a_problem(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Catches the view's `payload` becoming a STRING on BigQuery unnoticed: a JSON field is
+    never read back, so a column of that name that was read is not JSON there (review of
+    #145, round 2). Its values are still not compared."""
+    con.execute(f"create table local.{RELATION} (id bigint, payload json)")
+    con.execute(f"create table bq.{RELATION} (id bigint, payload varchar)")
+    con.execute(f"""insert into local.{RELATION} values (1, '{{"x": 1}}')""")
+    con.execute(f"""insert into bq.{RELATION} values (1, '{{"x":1}}')""")
+    result = compare(con, right_unread=set())
+    assert result.problems == ["payload: JSON in DuckDB, text in BigQuery"]
+    assert not result.passed and (result.only_left, result.only_right) == (0, 0)
+
+
+def test_only_the_fields_that_are_not_json_are_read_back() -> None:
+    """Catches the payloads being downloaded and, for a view, billed."""
+    from types import SimpleNamespace
+
+    schema = [
+        SimpleNamespace(name="source", field_type="STRING"),
+        SimpleNamespace(name="payload", field_type="JSON"),
+        SimpleNamespace(name="season_start", field_type="DATE"),
+    ]
+    assert [f.name for f in cmp.fields_read_back(schema)] == ["source", "season_start"]
+
+
+# -- the raw responses' mirror is held to the endpoints that were uploaded -------------------
+
+
+def test_the_raw_mirror_is_compared_over_the_uploaded_endpoints_only(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Catches stg_raw__season_responses failing on rows BigQuery is never given: only the
+    endpoints of spike_load_bigquery.ALLOWLIST leave the machine (ADR 0054), so DuckDB's
+    view holds captures (espn/teams, with members' names) that BigQuery's cannot. And
+    catches the filter hiding a real difference in an uploaded endpoint."""
+    ddl = "(source varchar, endpoint varchar, request_key varchar, season_start date)"
+    con.execute(f"create table local.{RELATION} {ddl}")
+    con.execute(f"create table bq.{RELATION} {ddl}")
+    con.execute(
+        f"insert into local.{RELATION} values "
+        "('espn', 'roster', 'a', date '2026-01-01'), ('espn', 'teams', 'b', date '2026-01-01')"
+    )
+    con.execute(f"insert into bq.{RELATION} values ('espn', 'roster', 'a', date '2026-01-01')")
+    assert not compare(con).passed
+
+    result = compare(con, left_where=cmp.uploaded_endpoints_only())
+    assert result.passed and (result.left_rows, result.right_rows) == (1, 1)
+
+    con.execute(f"update bq.{RELATION} set season_start = date '2025-01-01'")
+    assert not compare(con, left_where=cmp.uploaded_endpoints_only()).passed
+
+
+def test_only_the_raw_mirror_is_held_to_the_uploaded_endpoints() -> None:
+    """Catches the filter reaching a model, where a missing row is a real difference."""
+    assert cmp.left_filter("staging.stg_raw__season_responses", bq_against_bq=False) == (
+        cmp.uploaded_endpoints_only()
+    )
+    assert cmp.left_filter("staging.stg_espn__roster_entries", bq_against_bq=False) is None
+    assert cmp.left_filter("staging.stg_raw__season_responses", bq_against_bq=True) is None
+    assert "('espn', 'roster')" in cmp.uploaded_endpoints_only()
+    assert "teams" not in cmp.uploaded_endpoints_only()
+
+
+def test_json_columns_are_held_to_the_same_schema_whichever_side_has_them(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Catches a JSON column on one side that the other holds as another type, or lacks,
+    in every arrangement: the JSON side read back or not, left or right. Rounds 1 to 3 of
+    #145's review each found one arrangement the case-by-case check let through; the last
+    was two BigQuery builds, the first with the column as JSON (so not read back) and the
+    second with it as text."""
+    con.execute(f"create table local.{RELATION} (id bigint)")
+    con.execute(f"create table bq.{RELATION} (id bigint, payload varchar)")
+    con.execute(f"insert into local.{RELATION} values (1)")
+    con.execute(f"""insert into bq.{RELATION} values (1, '{{"x":1}}')""")
+
+    def problems(**unread: set[str]) -> list[str]:
+        return cmp.compare_relation(
+            con, "local", "bq", RELATION, ["id"], left_name="A", right_name="B", **unread
+        ).problems
+
+    # JSON in A and not read back; text in B.
+    assert problems(left_unread={"payload"}, right_unread=set()) == [
+        "payload: JSON in A, text in B"
+    ]
+    # Neither side lists it as JSON: an ordinary column only B has.
+    assert problems(left_unread=set(), right_unread=set()) == ["payload: only in B"]
+
+    con.execute(f"alter table bq.{RELATION} drop column payload")
+    # JSON in both and read back from neither: present on both, not compared, no problem.
+    both = cmp.compare_relation(
+        con, "local", "bq", RELATION, ["id"], left_unread={"payload"}, right_unread={"payload"}
+    )
+    assert both.problems == [] and both.uncompared == ["payload"] and both.passed
+    # JSON in one only, absent from the other.
+    assert problems(left_unread={"payload"}, right_unread=set()) == ["payload: only in A"]
+    assert problems(left_unread=set(), right_unread={"payload"}) == ["payload: only in B"]
+
+    con.execute(f"alter table local.{RELATION} add column payload varchar")
+    # Text in A; JSON in B and not read back.
+    assert problems(left_unread=set(), right_unread={"payload"}) == [
+        "payload: text in A, JSON in B"
+    ]

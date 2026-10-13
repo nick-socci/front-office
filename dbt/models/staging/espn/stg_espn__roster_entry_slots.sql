@@ -25,8 +25,23 @@
 -- fewer fields declared, the less of each 2.3 MB payload DuckDB has to materialise. The
 -- payload is projected away in `header` before any unnest, for the reason documented at
 -- length in stg_espn__roster_entries.
+--
+-- Built a season at a time. DuckDB holds every parsed payload of a run at once, and two
+-- seasons took the build to its memory limit, so dbt runs this model once per calendar
+-- year (microbatch), reading one season's captures through stg_raw__season_responses.
+-- Every build redoes every season. On BigQuery it is a plain table (spec 0143, ADRs 0058
+-- to 0060).
 
-{{ config(materialized='table') }}
+{{ config(
+    materialized=('incremental' if target.type == 'duckdb' else 'table'),
+    incremental_strategy=('microbatch' if target.type == 'duckdb' else none),
+    event_time='season_start',
+    batch_size='year',
+    begin=var('first_season_start'),
+    lookback=fo_batches_back_to_first_season(),
+    concurrent_batches=false,
+    on_schema_change='fail'
+) }}
 
 {% set slots_schema %}
 [{
@@ -40,7 +55,11 @@
 
 with latest as (
 
-    {{ fo_espn_latest('roster', extra_partition='scoringPeriodId') }}
+    {{ fo_espn_latest(
+        'roster',
+        extra_partition='scoringPeriodId',
+        relation=ref('stg_raw__season_responses')
+    ) }}
 
 ),
 
@@ -51,6 +70,7 @@ header as (
         {{ fo_json_int('payload', '$.seasonId') }} as season,
         {{ fo_request_param('request_key', 'scoringPeriodId') }} as scoring_period,
         fetched_at,
+        season_start,
         {{ fo_json_parse('payload', '$.teams', slots_schema) }} as teams_list
     from latest
 
@@ -63,6 +83,7 @@ teams as (
         season,
         scoring_period,
         fetched_at,
+        season_start,
         unnest(teams_list) as team
     from header
 
@@ -75,6 +96,7 @@ entries as (
         season,
         scoring_period,
         fetched_at,
+        season_start,
         team.id as team_id,
         unnest(team.roster.entries) as entry
     from teams
@@ -88,6 +110,7 @@ eligible as (
         season,
         scoring_period,
         fetched_at,
+        season_start,
         team_id,
         entry.playerId as espn_player_id,
         unnest(entry.playerPoolEntry.player.eligibleSlots) as lineup_slot_id
@@ -104,7 +127,8 @@ select
     eligible.lineup_slot_id,
     slots.slot_abbrev as lineup_slot,
     slots.is_starting_slot,
-    {{ fo_parse_fetched_at('eligible.fetched_at') }} as fetched_at
+    {{ fo_parse_fetched_at('eligible.fetched_at') }} as fetched_at,
+    eligible.season_start
 from eligible
 -- Only slots the league-season has. ESPN lists eligibility for slot ids a league may
 -- not use at all: two 2025 call-ups carry slot 22, which no season's settings hold and

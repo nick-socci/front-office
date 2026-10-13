@@ -16,7 +16,7 @@ from pathlib import Path
 
 import duckdb
 
-from front_office.landing import VANISHED, LandingZone
+from front_office.landing import VANISHED, LandedResponse, LandingZone
 
 SCHEMA = "raw"
 TABLE = "api_responses"
@@ -47,55 +47,90 @@ class RawSchemaOutdated(Exception):
     """The warehouse's raw table predates request_path and cannot take the new rows."""
 
 
+# How many new captures are read and inserted at once. A roster payload is about 2.5 MB,
+# so a batch is at most a few hundred megabytes of text, whatever the landing zone holds.
+BATCH_ROWS = 50
+
+
 def load_landing_zone(
     con: duckdb.DuckDBPyConnection,
     zone: LandingZone,
     *,
     source: str | None = None,
     endpoint: str | None = None,
+    batch_rows: int = BATCH_ROWS,
 ) -> int:
     """Insert every landed response not already present. Returns the number inserted.
 
     Raises RawSchemaOutdated if the raw table has the pre-request_path shape,
-    RawKeyCollision if two different files share a key, and PayloadNotJson if a committed
-    capture's payload is not JSON; in every case nothing is changed.
+    RawKeyCollision if two different files share a key, and PayloadNotJson if a new
+    committed capture's payload is not JSON; in every case nothing is changed.
+
+    Memory is set by `batch_rows`, not by the landing zone (#149). The first pass reads
+    sidecars only: it finds collisions and which captures are new. The second reads the
+    payloads of the new ones, a batch at a time, and inserts them in one transaction, so
+    a load that fails or is interrupted leaves no row of the run. A payload already in the
+    table is never read: the landing zone is checked at rest by `front-office audit`.
     """
+    if batch_rows < 1:
+        raise ValueError(f"batch_rows must be at least 1, not {batch_rows}")
     _refuse_old_table(con)
     con.execute(CREATE_SQL)
 
     # iter_landed yields committed captures only (LandingZone.check): anything else under
-    # the root, such as a temporary directory or an old-layout file, is not loaded. A
-    # committed capture whose payload does not parse is corruption at rest, so it fails
-    # the load (PayloadNotJson names the file) instead of being skipped; no row from
-    # this run is inserted. A capture that vanishes mid-read (a sweep moved it) is not
-    # committed any more and is passed over.
-    rows = []
+    # the root, such as a temporary directory or an old-layout file, is not loaded.
+    existing = _existing_file_paths(con)
+    seen: dict[tuple[str, ...], str] = {}
+    new: list[tuple[tuple[str, ...], str, LandedResponse]] = []
     for landed in zone.iter_landed(source=source, endpoint=endpoint):
         meta = landed.meta
-        try:
-            payload = json.dumps(landed.payload)
-        except VANISHED:
-            continue
-        rows.append(
-            (
-                meta["source"],
-                meta["endpoint"],
-                LandingZone.request_path(meta["url"]),
-                meta["request_key"],
-                meta["fetched_at"],
-                json.dumps(meta["partitions"]),
-                payload,
-                str(landed.path),
-            )
+        key: tuple[str, ...] = (
+            meta["source"],
+            meta["endpoint"],
+            LandingZone.request_path(meta["url"]),
+            meta["request_key"],
+            meta["fetched_at"],
         )
-    if not rows:
+        file_path = str(landed.path)
+        other = seen.get(key, existing.get(key))
+        if other is not None and other != file_path:
+            raise RawKeyCollision(_collision_message(key, other, file_path))
+        seen[key] = file_path
+        if key not in existing:
+            new.append((key, json.dumps(meta["partitions"]), landed))
+    if not new:
         return 0
 
-    _raise_on_collision(con, rows)
-    new_rows = [row for row in rows if not _exists(con, row)]
-    if new_rows:
-        con.executemany(f"insert into {QUALIFIED} values (?, ?, ?, ?, ?, ?, ?, ?)", new_rows)
-    return len(new_rows)
+    # A committed capture whose payload does not parse is corruption at rest, so it fails
+    # the load (PayloadNotJson names the file) instead of being skipped, and the
+    # transaction is rolled back. A capture that vanishes mid-read (a sweep moved it) is
+    # not committed any more and is passed over.
+    inserted = 0
+    con.execute("begin transaction")
+    try:
+        for start in range(0, len(new), batch_rows):
+            rows = []
+            for key, partitions, landed in new[start : start + batch_rows]:
+                try:
+                    payload = json.dumps(landed.payload)
+                except VANISHED:
+                    continue
+                rows.append((*key, partitions, payload, str(landed.path)))
+            if rows:
+                con.executemany(f"insert into {QUALIFIED} values (?, ?, ?, ?, ?, ?, ?, ?)", rows)
+                inserted += len(rows)
+    except BaseException:
+        con.execute("rollback")
+        raise
+    con.execute("commit")
+    return inserted
+
+
+def _existing_file_paths(con: duckdb.DuckDBPyConnection) -> dict[tuple[str, ...], str]:
+    """The key of every row of the raw table, with the file it was loaded from. Keys and
+    paths only: a few megabytes for eight seasons."""
+    rows = con.execute(f"select {', '.join(KEY_COLUMNS)}, file_path from {QUALIFIED}").fetchall()
+    return {tuple(row[:5]): row[5] for row in rows}
 
 
 def _refuse_old_table(con: duckdb.DuckDBPyConnection) -> None:
@@ -114,38 +149,12 @@ def _refuse_old_table(con: duckdb.DuckDBPyConnection) -> None:
         )
 
 
-def _raise_on_collision(con: duckdb.DuckDBPyConnection, rows: Sequence[tuple[str, ...]]) -> None:
-    """Fail if two files in the batch, or a file and an existing row, share a key."""
-    seen: dict[tuple[str, ...], str] = {}
-    for row in rows:
-        key, file_path = row[:5], row[7]
-        if key in seen and seen[key] != file_path:
-            raise RawKeyCollision(_collision_message(key, seen[key], file_path))
-        seen[key] = file_path
-    for row in rows:
-        existing = con.execute(
-            f"select file_path from {QUALIFIED} where "
-            + " and ".join(f"{c} = ?" for c in KEY_COLUMNS),
-            list(row[:5]),
-        ).fetchone()
-        if existing and existing[0] != row[7]:
-            raise RawKeyCollision(_collision_message(row[:5], existing[0], row[7]))
-
-
-def _collision_message(key: tuple[str, ...], first: str, second: str) -> str:
+def _collision_message(key: Sequence[str], first: str, second: str) -> str:
     named = ", ".join(f"{column}={value!r}" for column, value in zip(KEY_COLUMNS, key, strict=True))
     return (
         f"two files share one raw key ({named}): {first} and {second}. "
         "Nothing was loaded; remove or fix one of them."
     )
-
-
-def _exists(con: duckdb.DuckDBPyConnection, row: tuple[str, ...]) -> bool:
-    found = con.execute(
-        f"select 1 from {QUALIFIED} where " + " and ".join(f"{c} = ?" for c in KEY_COLUMNS),
-        list(row[:5]),
-    ).fetchone()
-    return found is not None
 
 
 def connect(db_path: Path | str) -> duckdb.DuckDBPyConnection:

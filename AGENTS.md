@@ -83,6 +83,29 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
 - A seed CSV that gains a **column** needs `dbt seed --full-refresh` locally; dbt otherwise
   reuses the old table schema and DuckDB rejects the mismatch. CI builds from empty, so
   only local builds hit this.
+- Five staging models are built **a season at a time** on DuckDB: `stg_mlb__batting_game_logs`,
+  `stg_mlb__pitching_game_logs`, `stg_espn__roster_entries`, `stg_espn__roster_entry_slots`
+  and `stg_espn__player_game_stats` (spec 0143, ADRs 0058 to 0060). Each parses one large
+  payload per game or per scoring period, DuckDB holds a whole run's parsed payloads at
+  once, and two seasons took the build to its memory limit. They are incremental models
+  with the `microbatch` strategy: dbt runs the SQL once per calendar year, from
+  `first_season_start` to the year of the run, and replaces that year's rows. On BigQuery
+  they are plain tables.
+  - A model of this kind reads its captures **only through `stg_raw__season_responses`**,
+    whose `season_start` is the event time dbt filters each batch on. An input with no
+    event time is read whole by every batch and its rows inserted once per season;
+    `test_dbt_batched_models.py` fails on one, and on a sixth model batched unlisted.
+  - A **column** added to one needs `dbt build --full-refresh` locally, as a seed's does:
+    they are `on_schema_change: fail`, so an ordinary build stops and says so. The first
+    build of a warehouse made before spec 0143 is a full refresh for the same reason. If
+    one ever gains an enforced contract, the contract and the table's columns must agree.
+  - dbt runs no batch for a season **later than the run's year**, and none earlier than
+    `first_season_start`: such a capture's rows would be missing with no error.
+    `stg__batched_models_hold_every_season_with_captures` fails the build instead and
+    says what to do. `scripts/check_tenant_isolation.py`, whose fixtures hold a later
+    season, passes `--event-time-start` and `--event-time-end`.
+  - A dbt unit test of one runs the SQL without the batch filter: it shows what the model
+    does with its rows, not that a batch holds one season.
 - dbt renders YAML `description:` fields as Jinja: `{{ source(...) }}` in prose is a
   compilation error.
 - dbt 1.12: generic test arguments nest under `arguments:`.

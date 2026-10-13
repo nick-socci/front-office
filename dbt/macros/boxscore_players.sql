@@ -15,13 +15,18 @@
   per player instead would keep an older row for a player a correction removed.
 
   Both batting and pitching models build on this; each then reads its own stats block.
+
+  `relation` is passed down to fo_latest_boxscore_responses. The models built a season at
+  a time pass ref('stg_raw__season_responses'), so dbt can filter each batch to one
+  season on its event time; season_start is carried out only then, beside small columns
+  (the payload is dropped in sides), spec 0143.
 #}
 
-{% macro fo_boxscore_players() %}
+{% macro fo_boxscore_players(relation=none) %}
 
 with responses as (
 
-    {{ fo_latest_boxscore_responses() }}
+    {{ fo_latest_boxscore_responses(relation) }}
 
 ),
 
@@ -31,6 +36,8 @@ sides as (
     select
         fetched_at,
         request_key,
+        {% if relation %}season_start,
+        {% endif -%}
         '{{ side }}' as side,
         {{ fo_json_int('payload', '$.teams.' ~ side ~ '.team.id') }} as team_id,
         {{ fo_json_values('payload', '$.teams.' ~ side ~ '.players') }} as players
@@ -46,6 +53,9 @@ select
     team_id,
     player,
     fetched_at
+    {%- if relation %},
+    season_start
+    {%- endif %}
 from sides
 {{ fo_unnest('sides.players', 'player') }}
 
