@@ -435,3 +435,17 @@ def test_a_file_with_the_key_of_a_row_whose_own_file_is_gone_still_fails(zone, c
         load_landing_zone(con, zone)
     assert str(original) in str(excinfo.value) and str(copy) in str(excinfo.value)
     assert row_count(con) == 1
+
+
+@pytest.mark.parametrize("batch_rows", [0, -1])
+def test_a_batch_size_below_one_is_refused_before_anything_is_read(
+    zone, con, payload_reads, batch_rows
+):
+    """Catches a load that says it loaded nothing and is believed: a negative batch size
+    made the range of batches empty, so new captures were skipped and 0 returned with no
+    error (review of #151)."""
+    land_days(zone, 2)
+    with pytest.raises(ValueError, match="batch_rows"):
+        load_landing_zone(con, zone, batch_rows=batch_rows)
+    assert payload_reads == []
+    assert load_landing_zone(con, zone) == 2

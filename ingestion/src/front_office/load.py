@@ -72,6 +72,8 @@ def load_landing_zone(
     a load that fails or is interrupted leaves no row of the run. A payload already in the
     table is never read: the landing zone is checked at rest by `front-office audit`.
     """
+    if batch_rows < 1:
+        raise ValueError(f"batch_rows must be at least 1, not {batch_rows}")
     _refuse_old_table(con)
     con.execute(CREATE_SQL)
 
