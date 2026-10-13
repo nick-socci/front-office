@@ -338,7 +338,7 @@ models:
         constraints: [{type: not_null}]
       - name: mapping_source
         description: Which source mapped this scoring period to its matchup period.
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
         data_tests:
           - accepted_values:

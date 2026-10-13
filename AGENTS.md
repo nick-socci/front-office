@@ -83,9 +83,9 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
 - A seed CSV that gains a **column** needs `dbt seed --full-refresh` locally; dbt otherwise
   reuses the old table schema and DuckDB rejects the mismatch. CI builds from empty, so
   only local builds hit this.
-- Five staging models are built **a season at a time** on DuckDB: `stg_mlb__batting_game_logs`,
-  `stg_mlb__pitching_game_logs`, `stg_espn__roster_entries`, `stg_espn__roster_entry_slots`
-  and `stg_espn__player_game_stats` (spec 0143, ADRs 0058 to 0060). Each parses one large
+- Six staging models are built **a season at a time** on DuckDB: `stg_mlb__batting_game_logs`,
+  `stg_mlb__pitching_game_logs`, `stg_espn__roster_entries`, `stg_espn__roster_entry_slots`,
+  `stg_espn__player_game_stats` and `stg_espn__matchup_days` (spec 0143, ADRs 0058 to 0060). Each parses one large
   payload per game or per scoring period, DuckDB holds a whole run's parsed payloads at
   once, and two seasons took the build to its memory limit. They are incremental models
   with the `microbatch` strategy: dbt runs the SQL once per calendar year, from
@@ -94,7 +94,9 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
   - A model of this kind reads its captures **only through `stg_raw__season_responses`**,
     whose `season_start` is the event time dbt filters each batch on. An input with no
     event time is read whole by every batch and its rows inserted once per season;
-    `test_dbt_batched_models.py` fails on one, and on a sixth model batched unlisted.
+    `test_dbt_batched_models.py` fails on one, and on a seventh model batched unlisted.
+    The one exception is a lookup named in that test's `LOOKUPS`, joined on its unique key
+    so that reading it whole adds no row; each entry says why.
   - A **column** added to one needs `dbt build --full-refresh` locally, as a seed's does:
     they are `on_schema_change: fail`, so an ordinary build stops and says so. The first
     build of a warehouse made before spec 0143 is a full refresh for the same reason. If

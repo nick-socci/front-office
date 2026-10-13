@@ -396,3 +396,28 @@ each built from a list of wanted fields and checked by the same privacy patterns
 anything is sent. This goes beyond the spec's original scope (the upload script is spec
 0130's); the ADR records why. The slice's expected models, its test counts and the
 portable SQL of the new models follow once this branch has `main`'s #143.
+
+### 2026-10-13: after `main`'s #143, the marker model is batched and one lookup is allowed
+
+`main` was merged into this branch on 2026-10-13 (56a38f6) with spec 0143: the staging
+models that parse a payload per game or per day are built a season at a time, reading
+their captures through `stg_raw__season_responses`. Three things followed here.
+
+- **`stg_espn__matchup_days` is the sixth such model**, as ADR 0058 named it: the same
+  configuration, the capture macro given the view, and `season_start` as its last column.
+  It joins the list in `test_dbt_batched_models.py` and the two singular tests of spec
+  0143. Its unit tests take the same rows through the view.
+- **`stg_espn__roster_entry_slots` reads a lookup.** The slot-22 rule above joins
+  `stg_espn__lineup_slot_limits`, which has no event time, and spec 0143's test refuses
+  such an input to a batched model. Decided by the owner on 2026-10-13: the test allows
+  inputs named as lookups, each for one model and with the reason it cannot multiply
+  rows; this one is joined on league, season and slot, the view's unique key. A second
+  test fails a stale entry, or a lookup that has lost its uniqueness test.
+- **The two models new to the BigQuery slice are written under ADR 0051**, and the slice
+  is 33 models: `stg_espn__matchup_days` and `stg_espn__transaction_logs` join it, and
+  `compare_bigquery_slice.py` holds DuckDB's side of the raw view to the nine uploaded
+  endpoints (ADR 0061).
+
+On the fixtures, every relation is identical to the build of this branch before the
+merge (58 of 58); the only additions are the view and the `season_start` columns.
+

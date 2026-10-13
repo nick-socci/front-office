@@ -1,9 +1,9 @@
-"""The five staging models built a season at a time (spec 0143, R1.1, R1.5, R1.7, R5.4).
+"""The six staging models built a season at a time (spec 0143, R1.1, R1.5, R1.7, R5.4).
 
-Five staging models parse one large payload per game or per scoring period. On DuckDB they
+Six staging models parse one large payload per game or per scoring period. On DuckDB they
 are incremental models with the microbatch strategy: dbt runs each once per calendar year,
 filtering every input that declares an event time to that year. These tests read dbt's
-manifest and hold the project to that: exactly those five are batched, with the settings
+manifest and hold the project to that: exactly those six are batched, with the settings
 that keep one season in memory at a time, and each reads only inputs dbt can filter.
 
 dbt is run as a subprocess, on the `ci` (DuckDB) target, with its target directory in a
@@ -32,6 +32,20 @@ BATCHED = {
     "stg_espn__roster_entries",
     "stg_espn__roster_entry_slots",
     "stg_espn__player_game_stats",
+    "stg_espn__matchup_days",
+}
+
+# Inputs a batched model may read whole, by model: {batched model: {input: reason}}. A
+# lookup has no event time, so every batch reads all of it; that is safe only if the join
+# to it cannot multiply rows, and each entry says why. Decided by the owner on 2026-10-13.
+LOOKUPS: dict[str, dict[str, str]] = {
+    "stg_espn__roster_entry_slots": {
+        "stg_espn__lineup_slot_limits": (
+            "joined on league, season and slot, which is that view's unique key, so a batch "
+            "that reads it whole gains no row; it keeps an eligibility only for a slot the "
+            "league-season has (spec 0083, the owner's decision of 2026-10-12)"
+        ),
+    },
 }
 
 
@@ -68,8 +82,8 @@ def model_nodes(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
-def test_exactly_the_five_models_are_microbatch(manifest: dict[str, Any]) -> None:
-    """Catches a sixth model batched by accident, and one of the five left a plain table.
+def test_exactly_the_six_models_are_microbatch(manifest: dict[str, Any]) -> None:
+    """Catches a seventh model batched by accident, and one of the six left a plain table.
     Any other incremental materialization is caught too: the set is of incremental models
     of every strategy, and each must be a microbatch one."""
     models = model_nodes(manifest)
@@ -86,7 +100,7 @@ def test_exactly_the_five_models_are_microbatch(manifest: dict[str, Any]) -> Non
         f"incremental but not microbatch: {sorted(incremental - batched)}"
     )
     assert batched == BATCHED, (
-        f"not batched: {sorted(BATCHED - batched)}; batched but not in the five: "
+        f"not batched: {sorted(BATCHED - batched)}; batched but not in the six: "
         f"{sorted(batched - BATCHED)}"
     )
 
@@ -109,7 +123,9 @@ def test_every_input_of_a_batched_model_is_a_seed_or_has_an_event_time(
     manifest: dict[str, Any], name: str
 ) -> None:
     """Catches an input dbt cannot filter to a batch: it is read whole by every batch, so
-    every batch would insert every season's rows."""
+    every batch would insert every season's rows. A lookup is the one exception: an input
+    listed in LOOKUPS for this model, which is read whole but joined on its unique key, so
+    it adds no row. Each entry must say why it cannot multiply rows."""
     node = model_nodes(manifest)[name]
     unfiltered = []
     for parent_id in node["depends_on"]["nodes"]:
@@ -117,6 +133,36 @@ def test_every_input_of_a_batched_model_is_a_seed_or_has_an_event_time(
         assert parent is not None, f"{name} depends on {parent_id}, not in the manifest"
         if parent["resource_type"] == "seed":
             continue
+        if parent["name"] in LOOKUPS.get(name, {}):
+            continue
         if not parent.get("config", {}).get("event_time"):
             unfiltered.append(parent_id)
     assert not unfiltered, f"{name} reads inputs with no event_time: {unfiltered}"
+
+
+@pytest.mark.parametrize(
+    ("name", "lookup"),
+    sorted((name, lookup) for name, lookups in LOOKUPS.items() for lookup in lookups),
+)
+def test_every_lookup_is_still_a_real_input_with_a_unique_key(
+    manifest: dict[str, Any], name: str, lookup: str
+) -> None:
+    """Catches a stale exception: the model is no longer batched, no longer reads the
+    lookup, or the lookup lost the uniqueness test that makes reading it whole safe."""
+    assert name in BATCHED, f"{name} is not a batched model"
+    models = model_nodes(manifest)
+    parents = {
+        manifest["nodes"][parent_id]["name"]
+        for parent_id in models[name]["depends_on"]["nodes"]
+        if parent_id in manifest["nodes"]
+    }
+    assert lookup in parents, f"{name} no longer reads {lookup}"
+    lookup_id = models[lookup]["unique_id"]
+    unique_tests = [
+        node
+        for node in manifest["nodes"].values()
+        if node["resource_type"] == "test"
+        and node.get("attached_node") == lookup_id
+        and node.get("test_metadata", {}).get("name") in {"unique", "unique_combination_of_columns"}
+    ]
+    assert unique_tests, f"{lookup} has no unique or unique_combination_of_columns test"
