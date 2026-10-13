@@ -30,7 +30,7 @@ recorded on #133 during the build, and this file is not edited to show it.
 6. Rewrite `docs/adr/README.md` without the table; add the links in `README.md`,
    `docs/README.md` and `dbt/models/overview.md`; correct `README.md`'s sentence that the
    site is assembled from three files; add the line to `AGENTS.md`; add
-   "amended by 0061" to ADR 0042's `Status` line — `impl` — R1.9, R3.1, R3.3
+   "amended by 0062" to ADR 0042's `Status` line — `impl` — R1.9, R3.1, R3.3
    - Verify: the R3.2 case passes; `test_readme.py` still passes.
 7. Decide how the overview links the page: build the fixture site with `.agentic/gates`
    and open `site/index.html` and `site/decisions.html` in a browser — `judgment` — R1.9

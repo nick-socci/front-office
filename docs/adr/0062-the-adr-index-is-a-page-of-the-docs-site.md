@@ -1,4 +1,4 @@
-# 0061. The ADR index is a page of the docs site, generated from the ADR files
+# 0062. The ADR index is a page of the docs site, generated from the ADR files
 
 - Status: proposed
 - Date: 2026-10-12

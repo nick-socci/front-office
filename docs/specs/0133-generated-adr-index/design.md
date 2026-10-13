@@ -83,7 +83,7 @@ was not tested, and it leaves the drift (C9, C10) in place. See *Open questions*
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0061](../../adr/0061-the-adr-index-is-a-page-of-the-docs-site.md) | The ADR index is a page of the docs site, generated from the ADR files; no committed file lists them. Amends 0042: the site holds four files | proposed |
+| [0062](../../adr/0062-the-adr-index-is-a-page-of-the-docs-site.md) | The ADR index is a page of the docs site, generated from the ADR files; no committed file lists them. Amends 0042: the site holds four files | proposed |
 
 ## Detailed design
 
@@ -150,7 +150,7 @@ Runs in the existing pytest step, so the gates and CI need no new step.
 - `dbt/models/overview.md`: one sentence linking the page from the site's landing text.
 - `AGENTS.md`, *How work is done here*: ADRs are listed by a page the docs site
   generates; no file is edited to list them.
-- ADR 0042's `Status` line gains "amended by 0061" when 0061 is accepted, as 0010 and
+- ADR 0042's `Status` line gains "amended by 0062" when 0062 is accepted, as 0010 and
   0012 record theirs.
 
 ## Test strategy
@@ -199,7 +199,7 @@ Each new test is seen to fail against the code it covers before the PR opens.
 | Source | Finding | Resolution |
 |---|---|---|
 | design-review | F1 (P1): "first word" of a status is undefined, and six lines open `accepted;` or `accepted,` | R2.2 now defines the status word and its terminators; C7 records the six; a test case per form |
-| design-review | F2 (P1): C2's query does not reproduce "five" or show the merges resolved conflicts | recounted by replaying each merge's two parents: nine, listed in C2. The requirements and ADR 0061 say nine |
+| design-review | F2 (P1): C2's query does not reproduce "five" or show the merges resolved conflicts | recounted by replaying each merge's two parents: nine, listed in C2. The requirements and ADR 0062 say nine |
 | design-review | F3 (P2): a missing or empty ADR directory would publish an empty table | R1.10 added, with its test |
 | design-review | F4 (P2): a repeated `Status`, `Date` or `Spec` line is not caught | R2.1 now requires exactly one of each, with a test |
 | design-review | F5 (P2): `README.md` says the site is three files | C15 and the prose section name line 234; task 6 changes it |
