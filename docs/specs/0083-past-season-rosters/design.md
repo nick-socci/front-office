@@ -436,9 +436,11 @@ investigation is on #83. Under R6.4 they went to the owner, who decided on 2026-
    13 starts a week since 2022) is a rule the models do not apply. It gets its own issue
    and spec; this spec ships without it, and the values it causes stay `unexplained` and
    listed. It also says what lineup slot 22 is: the key that limit is filed under.
-4. **2019's probable-starter flag**: on postponed games ESPN's 2019 lines carry stat 99,
+4. **2019's postponed games**: on postponed games ESPN's 2019 lines carry stat 99,
    `STARTER`, alone, so `stg_espn__scoring_periods_agree_with_espn_game_lines` counted
-   games MLB did not play on 13 dates. The test counts an ESPN game only if some line in
-   it has a stat other than 99. The flag stays in staging as ESPN gave it: the owner will
-   use it in season.
+   games MLB did not play on 13 dates. Ignoring 99 left three, where the lines carry stat
+   81, `G` (a batter's games count), as 1 and every other stat as zero. Decided on
+   2026-10-14: the test counts an ESPN game only if a line in it has a non-zero value in
+   a stat the league-season scores. Both stats stay in staging as ESPN gave them: the
+   owner will use the starter flag in season.
 

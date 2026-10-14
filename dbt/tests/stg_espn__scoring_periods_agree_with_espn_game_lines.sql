@@ -20,18 +20,25 @@
 -- no line to check.
 
 with espn_games as (
+    -- A game counts only if a line in it has a non-zero value in a stat the league-season
+    -- scores. In 2019 ESPN lists postponed games with lines that carry only a probable-
+    -- starter flag (stat 99, STARTER) or a batter's games count (stat 81, G) of 1 and
+    -- zeros: no game was played, and MLB's count rightly omits it. A game counted short by
+    -- this, one in which no rostered player did anything the league scores, cannot make
+    -- the check fail, which is only for ESPN having more games than MLB. Owner's decision
+    -- of 2026-10-14 (spec 0083, amendment); both stats stay in staging as ESPN gave them.
     select
-        league_id,
-        season,
-        scoring_period,
-        count(distinct espn_game_id) as espn_games
-    from {{ ref('stg_espn__player_game_stats') }}
-    -- Stat 99 is STARTER, a probable-starter flag. In 2019 ESPN leaves it, alone, on
-    -- games that were postponed: a game with no other stat was not played, and MLB's
-    -- count rightly omits it. Owner's decision of 2026-10-13 (spec 0083, amendment);
-    -- the flag stays in staging as ESPN gave it.
-    where stat_id != 99
-    group by league_id, season, scoring_period
+        lines.league_id,
+        lines.season,
+        lines.scoring_period,
+        count(distinct lines.espn_game_id) as espn_games
+    from {{ ref('stg_espn__player_game_stats') }} as lines
+    inner join {{ ref('stg_espn__scoring_categories') }} as scored
+        on scored.league_id = lines.league_id
+        and scored.season = lines.season
+        and scored.stat_id = lines.stat_id
+    where lines.stat_value != 0
+    group by lines.league_id, lines.season, lines.scoring_period
 ),
 
 mlb_games as (
