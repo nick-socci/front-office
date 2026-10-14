@@ -18,19 +18,31 @@
 --   missing_espn           we have it, ESPN doesn't.
 --   unverified             the side rests on a missing boxscore or unresolved player
 --                          (#25): not compared, because a difference would prove nothing.
---   formula_mismatch       a rate: our formula applied to ESPN's OWN components does
---                          not reproduce ESPN's rate. The formula is wrong, whatever our
---                          inputs say.
+--   formula_mismatch       a rate: our formula applied to ESPN's OWN components ran, and
+--                          does not reproduce ESPN's rate. The formula is wrong, whatever
+--                          our inputs say. A rate for which ESPN gives no components (2018
+--                          has no at-bats, hits allowed, walks allowed or earned runs) has
+--                          no formula value: the check did not run, and the rate goes on to
+--                          the value statuses below (ADR 0063).
 --   match                  within tolerance: exact for counts, 1e-6 for rates.
 --   registered             a count off by exactly the difference recorded for this
 --                          league-season, matchup, side and stat in the
 --                          espn_reconciliation_residuals seed, with its cause.
+--   explained_by_game_lines  a count with no register row, off by exactly (1e-9) the sum of
+--                          this side's player-day differences against ESPN's own game
+--                          lines for the stat (game_line_difference). The cause is not
+--                          named; it is very likely an official scoring change (ADR 0064).
+--                          A register row always wins: this is decided after 'registered'.
 --   explained_by_component a rate that differs from ESPN's but equals, within 1e-6, the
 --                          rate the register implies: our rules applied to ESPN's own
 --                          components, each shifted by its registered difference on
---                          this side. Rates are never registered themselves; their
+--                          this side, or, where it has none, by its game-line difference
+--                          (ADR 0064). Rates are never registered themselves; their
 --                          difference must follow exactly from the components'.
 --   unexplained            anything else. The singular test fails on it.
+--
+-- formula_checked says whether the formula check ran (ADR 0063): true for a rate whose
+-- espn_formula_value is not null, false for a rate whose is null, null for a count.
 -- A registered residual that no longer occurs leaves its seed row attached to no
 -- 'registered' row; the test fails on that too, so the register cannot go stale.
 
@@ -120,6 +132,25 @@ register as (
 
 ),
 
+-- What ESPN's own game lines say of each side and stat: the sum of the player-day
+-- differences against them (ADR 0064). Read from rec_espn__player_day_differences and not
+-- from rec_espn__player_day_residuals, which reads this table.
+game_lines as (
+
+    select
+        league_id,
+        season,
+        matchup_id,
+        fantasy_team_id,
+        stat_id as stat_key,
+        -- In a fixed order, as every floating-point sum here is.
+        sum(difference order by difference) as game_line_difference
+    from {{ ref('rec_espn__player_day_differences') }}
+    where status = 'difference'
+    group by league_id, season, matchup_id, fantasy_team_id, stat_id
+
+),
+
 -- Each rate recomputed by our rules from ESPN's own component scores, twice: as ESPN
 -- reports them (which must reproduce ESPN's rate -- the formula check), and shifted by
 -- this side's registered residuals (the rate the register implies -- what ours must be).
@@ -152,7 +183,11 @@ espn_formula as (
                         rules.weight
                         * (
                             component_scores.espn_value
-                            + coalesce(register.expected_difference, 0)
+                            + coalesce(
+                                register.expected_difference,
+                                component_lines.game_line_difference,
+                                0
+                            )
                         )
             end
         )
@@ -164,7 +199,11 @@ espn_formula as (
                             rules.weight
                             * (
                                 component_scores.espn_value
-                                + coalesce(register.expected_difference, 0)
+                                + coalesce(
+                                    register.expected_difference,
+                                    component_lines.game_line_difference,
+                                    0
+                                )
                             )
                 end
             ),
@@ -189,6 +228,12 @@ espn_formula as (
         and register.matchup_id = espn.matchup_id
         and register.team_id = espn.fantasy_team_id
         and register.stat_id = bridge.stat_key
+    left join game_lines as component_lines
+        on component_lines.league_id = espn.league_id
+        and component_lines.season = espn.season
+        and component_lines.matchup_id = espn.matchup_id
+        and component_lines.fantasy_team_id = espn.fantasy_team_id
+        and component_lines.stat_key = bridge.stat_key
     group by espn.league_id, espn.season, espn.matchup_id, espn.fantasy_team_id, rules.stat_key
 
 ),
@@ -227,7 +272,8 @@ annotated as (
         espn_formula.implied_value,
         played_matchups.matchup_id is null as is_bye,
         register.expected_difference as registered_difference,
-        register.cause as registered_cause
+        register.cause as registered_cause,
+        game_lines.game_line_difference
     from compared
     left join rate_stats
         on rate_stats.stat_key = compared.stat_key
@@ -247,6 +293,12 @@ annotated as (
         and register.matchup_id = compared.matchup_id
         and register.team_id = compared.fantasy_team_id
         and register.stat_id = compared.stat_key
+    left join game_lines
+        on game_lines.league_id = compared.league_id
+        and game_lines.season = compared.season
+        and game_lines.matchup_id = compared.matchup_id
+        and game_lines.fantasy_team_id = compared.fantasy_team_id
+        and game_lines.stat_key = compared.stat_key
 
 )
 
@@ -261,24 +313,29 @@ select
     espn_value,
     difference,
     espn_formula_value,
+    case when is_rate then espn_formula_value is not null end as formula_checked,
     implied_value,
     registered_difference,
     registered_cause,
+    game_line_difference,
     case
         when not has_ours and is_bye then 'bye'
         when not has_ours then 'missing_ours'
         when not has_espn then 'missing_espn'
         when not is_verified then 'unverified'
-        when is_rate and (
-            espn_formula_value is null
-            or abs(espn_formula_value - espn_value) > tolerance
-        ) then 'formula_mismatch'
+        when
+            is_rate and espn_formula_value is not null
+            and abs(espn_formula_value - espn_value) > tolerance then 'formula_mismatch'
         when
             our_value is not null and abs(difference) <= tolerance
             and registered_difference is null then 'match'
         when
             not is_rate and registered_difference is not null
             and abs(difference - registered_difference) <= tolerance then 'registered'
+        when
+            not is_rate and registered_difference is null
+            and game_line_difference is not null
+            and abs(difference - game_line_difference) <= tolerance then 'explained_by_game_lines'
         when
             is_rate and our_value is not null and implied_value is not null
             and abs(our_value - implied_value) <= tolerance then 'explained_by_component'

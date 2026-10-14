@@ -26,6 +26,11 @@ with espn_games as (
         scoring_period,
         count(distinct espn_game_id) as espn_games
     from {{ ref('stg_espn__player_game_stats') }}
+    -- Stat 99 is STARTER, a probable-starter flag. In 2019 ESPN leaves it, alone, on
+    -- games that were postponed: a game with no other stat was not played, and MLB's
+    -- count rightly omits it. Owner's decision of 2026-10-13 (spec 0083, amendment);
+    -- the flag stays in staging as ESPN gave it.
+    where stat_id != 99
     group by league_id, season, scoring_period
 ),
 

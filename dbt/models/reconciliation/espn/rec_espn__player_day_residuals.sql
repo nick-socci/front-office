@@ -11,12 +11,15 @@
 -- register row nor make one wrong (ADR 0032).
 --
 -- problem is, in this order:
---   unregistered        the key has no register row. This is the rule on the key and not on
---                       the sum: differences that cancel, one player credited a hit ESPN
---                       does not have and another the reverse, leave the side's total
---                       matching, and are still differences.
+--   unregistered        the key has no register row, and its side and stat is not
+--                       explained_by_game_lines in rec_espn__matchup_stat_differences
+--                       (ADR 0064: a count off by exactly the sum of these differences is
+--                       explained by them, and needs no row). Otherwise this is the rule
+--                       on the key and not on the sum: differences that cancel, one player
+--                       credited a hit ESPN does not have and another the reverse, leave
+--                       the side's total matching, and are still differences.
 --   wrong_size          the sum differs from the registered difference by more than 1e-9.
---   null                the register accounts for the key.
+--   null                the register accounts for the key, or the game lines do.
 --
 -- It runs one way: from the player-days to the register. A register row with no player-day
 -- rows (an inconsistent ESPN total, or a stat this table does not compare) is not returned;
@@ -59,6 +62,20 @@ register as (
 
     select * from {{ ref('espn_reconciliation_residuals') }}
 
+),
+
+explained_by_game_lines as (
+
+    -- The sides and stats whose count the game lines themselves account for (ADR 0064).
+    select
+        league_id,
+        season,
+        matchup_id,
+        fantasy_team_id,
+        stat_key
+    from {{ ref('rec_espn__matchup_stat_differences') }}
+    where status = 'explained_by_game_lines'
+
 )
 
 select
@@ -71,7 +88,9 @@ select
     keys.difference_rows,
     register.expected_difference,
     case
-        when register.expected_difference is null then 'unregistered'
+        when
+            register.expected_difference is null
+            and explained_by_game_lines.stat_key is null then 'unregistered'
         when abs(keys.difference_sum - register.expected_difference) > 1e-9 then 'wrong_size'
     end as problem
 from keys
@@ -81,3 +100,9 @@ left join register
     and register.matchup_id = keys.matchup_id
     and register.team_id = keys.fantasy_team_id
     and register.stat_id = keys.stat_id
+left join explained_by_game_lines
+    on explained_by_game_lines.league_id = keys.league_id
+    and explained_by_game_lines.season = keys.season
+    and explained_by_game_lines.matchup_id = keys.matchup_id
+    and explained_by_game_lines.fantasy_team_id = keys.fantasy_team_id
+    and explained_by_game_lines.stat_key = keys.stat_id

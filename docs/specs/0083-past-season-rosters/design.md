@@ -144,6 +144,8 @@ is a season of fixture work for no path A leaves untested.
 | [0056](../../adr/0056-a-covered-league-season-says-whether-it-has-a-transaction-log.md) | A covered league-season says whether it has a transaction log | accepted |
 | [0057](../../adr/0057-complete-games-is-mlbs-count.md) | Complete games is MLB's count, credited like every pitching component | accepted |
 | [0061](../../adr/0061-two-endpoints-that-hold-member-data-are-uploaded-as-projections.md) | Two endpoints that hold member data are uploaded to BigQuery as projections of allowlisted fields; amends 0054 | proposed |
+| [0063](../../adr/0063-a-rate-espn-gives-no-components-for-is-compared-directly.md) | A rate ESPN gives no components for is compared with ESPN's rate directly | proposed |
+| [0064](../../adr/0064-a-count-traced-to-espns-own-game-lines-is-explained.md) | A count whose difference is traced to ESPN's own game lines is explained without a register row | proposed |
 
 Settled by the owner on 2026-10-11, going through the decisions one at a time: tier M;
 all seven played seasons; the three ADRs above, option 1 of each; CI coverage by unit
@@ -420,4 +422,23 @@ their captures through `stg_raw__season_responses`. Three things followed here.
 
 On the fixtures, every relation is identical to the build of this branch before the
 merge (58 of 58); the only additions are the view and the `season_start` columns.
+
+### 2026-10-13: four findings of the eight-season build, decided by the owner
+
+The first build of all eight seasons (task 10) failed five tests on the data. The
+investigation is on #83. Under R6.4 they went to the owner, who decided on 2026-10-13:
+
+1. **2018's rates** are compared with ESPN's directly where ESPN gives no components for
+   the formula check (ADR 0063).
+2. **Counts traced to ESPN's own game lines** are explained without a register row
+   (ADR 0064).
+3. **The league's games-started limit** (`rosterSettings.lineupSlotStatLimits`, stat 33,
+   13 starts a week since 2022) is a rule the models do not apply. It gets its own issue
+   and spec; this spec ships without it, and the values it causes stay `unexplained` and
+   listed. It also says what lineup slot 22 is: the key that limit is filed under.
+4. **2019's probable-starter flag**: on postponed games ESPN's 2019 lines carry stat 99,
+   `STARTER`, alone, so `stg_espn__scoring_periods_agree_with_espn_game_lines` counted
+   games MLB did not play on 13 dates. The test counts an ESPN game only if some line in
+   it has a stat other than 99. The flag stays in staging as ESPN gave it: the owner will
+   use it in season.
 
