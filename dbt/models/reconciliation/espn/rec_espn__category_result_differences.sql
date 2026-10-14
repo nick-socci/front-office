@@ -17,8 +17,9 @@
 --   unverified   the category rests on unverified inputs on either side (#25).
 --   explained    the results differ, and so do the values, by residuals already
 --                accounted for in rec_espn__matchup_stat_differences on either side
---                ('registered' or 'explained_by_component'). The flip is a consequence,
---                not a separate finding.
+--                ('registered', 'explained_by_game_lines' (ADR 0064) or
+--                'explained_by_component'). The flip is a consequence, not a separate
+--                finding.
 --   unexplained  anything else, including a category missing on either end.
 
 {{ config(materialized='table') }}
@@ -68,12 +69,16 @@ ours as (
 
 accounted as (
 
+    -- Keyed by league and season too: matchup ids restart every season and repeat across
+    -- leagues, so a value explained in one league-season must not excuse a flip in another.
     select
+        league_id,
+        season,
         matchup_id,
         fantasy_team_id,
         stat_key
     from {{ ref('rec_espn__matchup_stat_differences') }}
-    where status in ('registered', 'explained_by_component')
+    where status in ('registered', 'explained_by_game_lines', 'explained_by_component')
 
 )
 
@@ -93,7 +98,9 @@ select
         when exists (
             select 1 from accounted
             where
-                accounted.matchup_id = ours.matchup_id
+                accounted.league_id = ours.league_id
+                and accounted.season = ours.season
+                and accounted.matchup_id = ours.matchup_id
                 and accounted.stat_key = ours.category_key
                 and accounted.fantasy_team_id in (ours.fantasy_team_id, ours.opponent_team_id)
         ) then 'explained'

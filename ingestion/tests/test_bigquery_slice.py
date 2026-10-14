@@ -52,14 +52,18 @@ SLICE_MODELS = {
     "int_mlb__player_game_days",
     "rec_espn__category_result_differences",
     "rec_espn__matchup_stat_differences",
+    "rec_espn__player_day_differences",
     "stg_espn__league_settings",
     "stg_espn__matchup_category_results",
+    "stg_espn__matchup_days",
     "stg_espn__matchup_periods",
     "stg_espn__matchups",
+    "stg_espn__player_game_stats",
     "stg_espn__pro_games",
     "stg_espn__roster_entries",
     "stg_espn__scoring_categories",
     "stg_espn__scoring_periods",
+    "stg_espn__transaction_logs",
     "stg_idmap__players",
     "stg_mlb__batting_game_logs",
     "stg_mlb__games",
@@ -135,7 +139,7 @@ def names(rows: list[dict[str, object]], resource_type: str) -> set[str]:
     return {str(r["name"]) for r in rows if r["resource_type"] == resource_type}
 
 
-def test_the_slice_is_the_thirty_one_models_and_six_seeds_of_the_spec(
+def test_the_slice_is_the_thirty_five_models_and_six_seeds_of_the_spec(
     selected: list[dict[str, object]],
 ) -> None:
     """Catches a model or seed joining the slice through a new ref, or leaving it, unnoticed."""
@@ -150,7 +154,7 @@ def test_the_slice_has_no_python_model_and_the_materializations_counted(
     models = [r for r in selected if r["resource_type"] == "model"]
     assert all(str(r["original_file_path"]).endswith(".sql") for r in models)
     kinds = sorted(r["config"]["materialized"] for r in models)  # type: ignore[index]
-    # Listed on the ci target: three of the 21 tables are incremental (microbatch) on DuckDB
+    # Listed on the ci target: five of the 24 tables are incremental (microbatch) on DuckDB
     # and tables on BigQuery (spec 0143, ADR 0060).
     counted = (
         kinds.count("table"),
@@ -158,15 +162,15 @@ def test_the_slice_has_no_python_model_and_the_materializations_counted(
         kinds.count("view"),
         kinds.count("ephemeral"),
     )
-    assert counted == (18, 3, 9, 1)
+    assert counted == (19, 5, 10, 1)
 
 
 def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) -> None:
     """Catches a test added to or lost from the slice: the counts are the spec's."""
     tests = [r for r in selected if r["resource_type"] == "test"]
     generic = [r for r in tests if r.get("test_metadata")]
-    assert (len(tests), len(generic), len(tests) - len(generic)) == (208, 182, 26)
-    assert len(names(selected, "unit_test")) == 65
+    assert (len(tests), len(generic), len(tests) - len(generic)) == (234, 202, 32)
+    assert len(names(selected, "unit_test")) == 83
 
 
 def test_no_selected_test_reads_a_relation_outside_the_slice(

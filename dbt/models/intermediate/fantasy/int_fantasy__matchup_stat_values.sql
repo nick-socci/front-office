@@ -11,6 +11,14 @@
 -- be a perfect one. 2026 never has a zero-out or zero-at-bat side, so how ESPN scores
 -- one is unobserved. The null surfaces in the marts' not_null tests rather than being
 -- guessed at here.
+--
+-- Only stats the host reports. A stat has a row for a league-season only if the host
+-- reports it for at least one matchup side of that league-season. The rules cover every
+-- stat any season reports, and seasons differ: ESPN reports 18 stats in 2018 and 24 from
+-- 2022, and complete games only where it was scored. A value for a stat the host never
+-- reports there could be compared with nothing, and the reconciliation would call each
+-- one missing on ESPN's side (spec 0083, R3.4). Nothing scored is lost: a scored
+-- category is always reported. The components stay in the side totals either way.
 
 {{ config(materialized='table') }}
 
@@ -20,7 +28,18 @@
     'fantasy_team_id', 'opponent_team_id', 'is_home',
 ] %}
 
-with components as (
+with reported_stats as (
+
+    select distinct
+        'espn' as platform,
+        league_id,
+        season,
+        stat_id as stat_key
+    from {{ ref('stg_espn__matchup_category_results') }}
+
+),
+
+components as (
 
     {%- for column in stat_columns %}
     select
@@ -46,6 +65,11 @@ parts as (
     inner join {{ ref('int_fantasy__stat_components') }} as rules
         on rules.platform = components.platform
         and rules.component = components.component
+    inner join reported_stats
+        on reported_stats.platform = components.platform
+        and reported_stats.league_id = components.league_id
+        and reported_stats.season = components.season
+        and reported_stats.stat_key = rules.stat_key
     group by
         {%- for column in side_columns %}
         components.{{ column }},

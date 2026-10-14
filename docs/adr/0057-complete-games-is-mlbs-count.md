@@ -1,6 +1,6 @@
 # 0057. Complete games is MLB's count, credited like every pitching component
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-11
 - Spec: [0083-past-season-rosters](../specs/0083-past-season-rosters/design.md) · Issue: #83
 

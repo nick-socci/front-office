@@ -177,6 +177,36 @@ models:
           arguments:
             combination_of_columns: [league_id, season, matchup_period, scoring_period]
 
+  - name: stg_espn__matchup_days
+    description: >
+      One row per (scoring period, matchup period): the matchup period ESPN marked, with
+      rosterForCurrentScoringPeriod on its matchup sides, in the response it gave for that
+      scoring period. The mapping for a past season, whose matchups carry no
+      pointsByScoringPeriod (ADR 0055). Empty where no matchup_days response is loaded,
+      which includes CI. scoring_period is the one asked for, not read from the payload.
+    columns:
+      - name: league_id
+        data_tests: [not_null]
+      - name: season
+        data_tests: [not_null]
+      - name: scoring_period
+        data_tests: [not_null]
+      - name: matchup_period
+        data_tests: [not_null]
+      - name: fetched_at
+        data_tests: [not_null]
+      - name: season_start
+        description: >
+          The first of January of the season of the capture the row was read from; the
+          column dbt batches this model on. Never null. On DuckDB a batch cannot insert a
+          null (dbt keeps only the batch's own year); the not_null test is for BigQuery,
+          where this is a plain table.
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, scoring_period, matchup_period]
+
   - name: stg_espn__lineup_slot_limits
     description: >
       One row per lineup slot with how many a team fills each day -- the shape of a legal
@@ -250,6 +280,24 @@ models:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns: [league_id, season, scoring_period, espn_player_id, espn_game_id, stat_id]
+
+  - name: stg_espn__transaction_logs
+    description: >
+      One row per league and season with at least one transactions response loaded, and
+      the newest capture's time. Present for a landed log with no transaction in it, so
+      "no log landed" can be told apart from "a log with nothing in it" (ADR 0056). Reads
+      identifiers only, never the topics.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season]
+    columns:
+      - name: league_id
+        data_tests: [not_null]
+      - name: season
+        data_tests: [not_null]
+      - name: fetched_at
+        data_tests: [not_null]
 
   - name: stg_espn__transactions
     description: >
@@ -351,6 +399,90 @@ models:
             combination_of_columns: [season, espn_game_id]
 
 unit_tests:
+  - name: roster_entry_slots_keep_only_the_slots_the_league_has
+    description: >
+      ESPN lists a player as eligible for slot ids a league may not have: in 2025 two
+      call-ups carry slot 22, which no season's settings hold and the seed does not name.
+      An eligibility is kept only for a slot in that league-season's own slot settings,
+      whatever its count (slot 13 has none here), so the player keeps 13 and 14 and
+      loses 22. Catches the filter being dropped (a row with no slot name), or reading
+      another season's settings (2024 has slot 22 here and must not rescue it).
+    model: stg_espn__roster_entry_slots
+    given:
+      - input: ref('stg_raw__season_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: roster, request_path: /l, request_key: "scoringPeriodId=85&view=mRoster", fetched_at: "20261012T000000Z", file_path: a1, season_start: "2025-01-01", partitions: '{"season": 2025, "league_id": "1", "scoring_period": 85}', payload: '{"id":1,"seasonId":2025,"teams":[{"id":3,"roster":{"entries":[{"playerId":77,"playerPoolEntry":{"player":{"eligibleSlots":[13,14,22]}}}]}}]}'}
+      - input: ref('espn_lineup_slots')
+        rows:
+          - {lineup_slot_id: 13, slot_abbrev: P, is_starting_slot: true}
+          - {lineup_slot_id: 14, slot_abbrev: SP, is_starting_slot: true}
+      - input: ref('stg_espn__lineup_slot_limits')
+        rows:
+          - {league_id: "1", season: 2025, lineup_slot_id: 13, slot_count: 0}
+          - {league_id: "1", season: 2025, lineup_slot_id: 14, slot_count: 2}
+          - {league_id: "1", season: 2024, lineup_slot_id: 22, slot_count: 1}
+    expect:
+      rows:
+        - {league_id: "1", season: 2025, scoring_period: 85, team_id: 3, espn_player_id: 77, lineup_slot_id: 13, lineup_slot: P}
+        - {league_id: "1", season: 2025, scoring_period: 85, team_id: 3, espn_player_id: 77, lineup_slot_id: 14, lineup_slot: SP}
+
+  - name: matchup_days_one_marked_period_gives_one_row
+    description: >
+      R5.2. Scoring period 5 is answered with three matchup periods; only period 4 carries
+      rosterForCurrentScoringPeriod. Period 4 has two matchups marked on both sides, and a
+      third marked on its home side only (its away is an empty bye object). Catches the
+      marker read from the wrong key, and an unmarked period (3, 5) being returned. It
+      cannot catch a row per marked side or matchup: dbt compares a unit test's rows as a
+      set, so duplicates pass. The model's uniqueness test and
+      stg_espn__matchup_days_mark_one_period catch those (shown on 2026-10-14 by removing
+      the distinct: both failed with 1,469 rows on the real warehouse).
+    model: stg_espn__matchup_days
+    given:
+      - input: ref('stg_raw__season_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=5&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", file_path: a1, season_start: "2018-01-01", partitions: '{"season": 2018, "league_id": "1", "scoring_period": 5}', payload: '{"id": 1, "seasonId": 2018, "scoringPeriodId": 5, "schedule": [{"matchupPeriodId": 3, "home": {"teamId": 1}, "away": {"teamId": 2}}, {"matchupPeriodId": 4, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2, "rosterForCurrentScoringPeriod": {"entries": []}}}, {"matchupPeriodId": 4, "home": {"teamId": 3, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 4, "rosterForCurrentScoringPeriod": {"entries": []}}}, {"matchupPeriodId": 4, "home": {"teamId": 5, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {}}, {"matchupPeriodId": 5, "home": {"teamId": 1}, "away": {"teamId": 2}}]}'}
+    expect:
+      rows:
+        - {league_id: "1", season: 2018, scoring_period: 5, matchup_period: 4, fetched_at: "2026-09-01 00:00:00"}
+
+  - name: matchup_days_the_newer_capture_of_a_scoring_period_wins
+    description: >
+      R5.2. Two captures of scoring period 5: the older (09-01) marks matchup period 4, the
+      newer (09-15) marks 6, and the newer is listed first. Catches a model that keeps both
+      (two rows) or the older one.
+    model: stg_espn__matchup_days
+    given:
+      - input: ref('stg_raw__season_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=5&view=mMatchupScore,mScoreboard", fetched_at: "20260915T000000Z", file_path: a2, season_start: "2018-01-01", partitions: '{"season": 2018, "league_id": "1", "scoring_period": 5}', payload: '{"id": 1, "seasonId": 2018, "scoringPeriodId": 5, "schedule": [{"matchupPeriodId": 4, "home": {"teamId": 1}, "away": {"teamId": 2}}, {"matchupPeriodId": 6, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}]}'}
+          - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=5&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", file_path: a1, season_start: "2018-01-01", partitions: '{"season": 2018, "league_id": "1", "scoring_period": 5}', payload: '{"id": 1, "seasonId": 2018, "scoringPeriodId": 5, "schedule": [{"matchupPeriodId": 4, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}, {"matchupPeriodId": 6, "home": {"teamId": 1}, "away": {"teamId": 2}}]}'}
+    expect:
+      rows:
+        - {league_id: "1", season: 2018, scoring_period: 5, matchup_period: 6, fetched_at: "2026-09-15 00:00:00"}
+
+  - name: matchup_days_leagues_and_seasons_stay_apart
+    description: >
+      R5.2. The same scoring period 5 is captured for league 1 in 2018 and 2019 and for
+      league 2 in 2018, each marking a different matchup period. Catches a dedupe keyed on
+      scoring period alone (two of the three rows lost) and league or season read from the
+      wrong place.
+    model: stg_espn__matchup_days
+    given:
+      - input: ref('stg_raw__season_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=5&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", file_path: a1, season_start: "2018-01-01", partitions: '{"season": 2018, "league_id": "1", "scoring_period": 5}', payload: '{"id": 1, "seasonId": 2018, "scoringPeriodId": 5, "schedule": [{"matchupPeriodId": 4, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}]}'}
+          - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=5&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", file_path: a2, season_start: "2019-01-01", partitions: '{"season": 2019, "league_id": "1", "scoring_period": 5}', payload: '{"id": 1, "seasonId": 2019, "scoringPeriodId": 5, "schedule": [{"matchupPeriodId": 6, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}]}'}
+          - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=5&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", file_path: b1, season_start: "2018-01-01", partitions: '{"season": 2018, "league_id": "2", "scoring_period": 5}', payload: '{"id": 2, "seasonId": 2018, "scoringPeriodId": 5, "schedule": [{"matchupPeriodId": 7, "home": {"teamId": 1}, "away": {"teamId": 2, "rosterForCurrentScoringPeriod": {"entries": []}}}]}'}
+    expect:
+      rows:
+        - {league_id: "1", season: 2018, scoring_period: 5, matchup_period: 4, fetched_at: "2026-09-01 00:00:00"}
+        - {league_id: "1", season: 2019, scoring_period: 5, matchup_period: 6, fetched_at: "2026-09-01 00:00:00"}
+        - {league_id: "2", season: 2018, scoring_period: 5, matchup_period: 7, fetched_at: "2026-09-01 00:00:00"}
+
   - name: transactions_keep_each_league_seasons_newest_run
     description: >
       Catches a global newest run. League A's newest run (fetched 09-01) is older than
@@ -394,6 +526,57 @@ unit_tests:
     expect:
       rows:
         - {league_id: "A", season: 2026, transaction_id: "m1", espn_player_id: 2}
+
+  - name: transaction_logs_one_row_per_league_season_at_its_newest_capture
+    description: >
+      R4.1. League A, 2026 has two pages of one run (09-01, offsets 0 and 2000) and an
+      older run (08-01). Catches a row per page or per run, which would give three, and
+      a fetched_at taken from the older run.
+    model: stg_espn__transaction_logs
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: "limit=2000&offset=0&view=x", fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2026, "league_id": "A"}', payload: '{"topics": []}'}
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: "limit=2000&offset=2000&view=x", fetched_at: "20260901T000000Z", file_path: a2, partitions: '{"season": 2026, "league_id": "A", "offset": 2000}', payload: '{"topics": []}'}
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: "limit=2000&offset=0&view=x", fetched_at: "20260801T000000Z", file_path: a0, partitions: '{"season": 2026, "league_id": "A"}', payload: '{"topics": []}'}
+    expect:
+      rows:
+        - {league_id: "A", season: 2026, fetched_at: "2026-09-01 00:00:00"}
+
+  - name: transaction_logs_an_empty_landed_log_still_has_its_row
+    description: >
+      R4.2. The log ESPN answered for league A, 2026 has an empty list of topics. Catches
+      a model that unnests topics and so loses the league-season, which would read as "no
+      log landed".
+    model: stg_espn__transaction_logs
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: "limit=2000&offset=0&view=x", fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2026, "league_id": "A"}', payload: '{"topics": []}'}
+    expect:
+      rows:
+        - {league_id: "A", season: 2026, fetched_at: "2026-09-01 00:00:00"}
+
+  - name: transaction_logs_leagues_and_seasons_stay_apart
+    description: >
+      Two leagues and two seasons, each with its own capture time. Catches a grouping on
+      the league alone or the season alone, which would merge them, and a global newest
+      run.
+    model: stg_espn__transaction_logs
+    given:
+      - input: source('raw', 'api_responses')
+        format: dict
+        rows:
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: x, fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2026, "league_id": "A"}', payload: '{"topics": []}'}
+          - {source: espn, endpoint: transactions, request_path: /a, request_key: x, fetched_at: "20260902T000000Z", file_path: a2, partitions: '{"season": 2025, "league_id": "A"}', payload: '{"topics": []}'}
+          - {source: espn, endpoint: transactions, request_path: /b, request_key: x, fetched_at: "20260903T000000Z", file_path: b1, partitions: '{"season": 2026, "league_id": "B"}', payload: '{"topics": []}'}
+    expect:
+      rows:
+        - {league_id: "A", season: 2026, fetched_at: "2026-09-01 00:00:00"}
+        - {league_id: "A", season: 2025, fetched_at: "2026-09-02 00:00:00"}
+        - {league_id: "B", season: 2026, fetched_at: "2026-09-03 00:00:00"}
 
   - name: roster_entries_keep_only_the_newer_capture_of_a_scoring_period
     description: >
@@ -748,7 +931,7 @@ seeds:
           - not_null
           - accepted_values:
               arguments:
-                values: [games_batted, plate_appearances, at_bats, hits, doubles, triples, home_runs, runs, runs_batted_in, batter_walks, batter_strikeouts, stolen_bases, caught_stealing, hit_by_pitch, sacrifice_flies, total_bases, games_pitched, games_started, outs_recorded, batters_faced, hits_allowed, runs_allowed, earned_runs, home_runs_allowed, pitcher_walks, pitcher_strikeouts, hit_batsmen, wins, losses, saves, holds, blown_saves]
+                values: [games_batted, plate_appearances, at_bats, hits, doubles, triples, home_runs, runs, runs_batted_in, batter_walks, batter_strikeouts, stolen_bases, caught_stealing, hit_by_pitch, sacrifice_flies, total_bases, games_pitched, games_started, outs_recorded, batters_faced, hits_allowed, runs_allowed, earned_runs, home_runs_allowed, pitcher_walks, pitcher_strikeouts, hit_batsmen, wins, losses, saves, holds, blown_saves, complete_games]
       - name: weight
         data_tests: [not_null]
     data_tests:
