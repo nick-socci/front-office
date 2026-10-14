@@ -431,9 +431,12 @@ unit_tests:
     description: >
       R5.2. Scoring period 5 is answered with three matchup periods; only period 4 carries
       rosterForCurrentScoringPeriod. Period 4 has two matchups marked on both sides, and a
-      third marked on its home side only (its away is an empty bye object). Catches a row
-      per marked side or matchup (the distinct), the marker read from the wrong key, and
-      an unmarked period (3, 5) being returned.
+      third marked on its home side only (its away is an empty bye object). Catches the
+      marker read from the wrong key, and an unmarked period (3, 5) being returned. It
+      cannot catch a row per marked side or matchup: dbt compares a unit test's rows as a
+      set, so duplicates pass. The model's uniqueness test and
+      stg_espn__matchup_days_mark_one_period catch those (shown on 2026-10-14 by removing
+      the distinct: both failed with 1,469 rows on the real warehouse).
     model: stg_espn__matchup_days
     given:
       - input: ref('stg_raw__season_responses')
