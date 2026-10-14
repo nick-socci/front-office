@@ -143,8 +143,10 @@ game_lines as (
         matchup_id,
         fantasy_team_id,
         stat_id as stat_key,
-        -- In a fixed order, as every floating-point sum here is.
-        {{ fo_sum_in_order('difference', 'difference') }} as game_line_difference
+        -- In a fixed order, as every floating-point sum here is: the player-day key.
+        {{ fo_sum_in_order(
+            'difference', 'scoring_date, platform_player_id'
+        ) }} as game_line_difference
     from {{ ref('rec_espn__player_day_differences') }}
     where status = 'difference'
     group by league_id, season, matchup_id, fantasy_team_id, stat_id
