@@ -156,6 +156,35 @@ so several leagues and seasons can share one warehouse. Two things enforce it:
   league's earlier seasons (a category's scale blends them in); it may not read another
   league, or a later season.
 
+### Building many seasons on one machine
+
+With all eight seasons loaded (8.6 GB of raw JSON), the real build does not run with the
+committed profile on a 29 GB machine: DuckDB takes up to 80% of memory and all of its
+cores, and the kernel kills it (17.4 GB, measured 2026-10-14, #83). It runs with DuckDB
+held to 12 GB and four of its own threads, and dbt to two: 59 of 59 models in about five
+minutes, peak 12 GB. The six staging models that parse a payload per game or per day are
+built a season at a time, so that bound does not grow with the seasons loaded; one
+season of boxscores still needs more than 12 GB at DuckDB's default sixteen threads.
+
+The committed profile stays as it is. Keep a copy of `dbt/profiles.yml` outside the
+repository, add the two settings to its `dev` output, and point dbt at it:
+
+```yaml
+    dev:
+      # ... as in dbt/profiles.yml, plus:
+      settings:
+        memory_limit: "12GB"
+        threads: 4
+```
+
+```bash
+cd dbt && DBT_PROFILES_DIR=~/.dbt/front_office_local uv run dbt run --threads 2
+```
+
+`dbt test` runs the same way. Two tests read every payload in one piece and run out of
+memory with many seasons loaded (#146); the raw layer's design, which is behind both, is
+#150.
+
 ### What a killed run leaves behind
 
 At most a temporary directory. The next `backfill` moves anything under the landing zone

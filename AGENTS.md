@@ -47,6 +47,7 @@ uv run ruff check && uv run ruff format --check
 uv run mypy                                    # strict, on ingestion/src
 FO_CI_DUCKDB_PATH=dbt/ci.duckdb uv run sqlfluff lint dbt/models dbt/tests   # from the repo root
 cd dbt && DBT_PROFILES_DIR=. uv run dbt build --select <model>          # real season
+# Many seasons loaded: DuckDB's memory and threads are held down by a local profile (README, "Building many seasons on one machine")
 cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: true}'
 ```
 
