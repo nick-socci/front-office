@@ -133,7 +133,7 @@ def test_only_the_seven_endpoints_are_read(tmp_path: Path) -> None:
         "varchar, request_key varchar, fetched_at varchar, partitions json, payload json, "
         "file_path varchar)"
     )
-    pairs = [*loader.ALLOWLIST, ("espn", "teams"), ("espn", "transactions"), ("mlb", "players")]
+    pairs = [*loader.ALLOWLIST, ("espn", "teams"), ("mlb", "players")]
     for number, (source, endpoint) in enumerate(pairs):
         con.execute(
             "insert into raw.api_responses values (?, ?, '/p', ?, 't', '{}', '{\"n\": 1}', 'f')",
@@ -155,9 +155,9 @@ def test_only_the_seven_endpoints_are_read(tmp_path: Path) -> None:
 
 
 def test_a_row_off_the_allowlist_stops_the_upload_however_clean_it_is() -> None:
-    """Catches the second guard going: reading takes only the seven endpoints, and the check
-    refuses any other row it is handed, so a caller that builds its own rows cannot upload
-    `teams` or `transactions`."""
+    """Catches the second guard going: reading takes only the listed endpoints, and the
+    check refuses any other row it is handed, so a caller that builds its own rows cannot
+    upload `teams`."""
     with pytest.raises(loader.PrivacyHit) as raised:
         loader.check([row("espn", "teams", {"teams": []})])
     assert any("not on the allowlist" in hit for hit in raised.value.hits)
@@ -252,3 +252,164 @@ def test_the_same_key_loaded_twice_is_not_a_pair() -> None:
     source = row("mlb", "boxscore", {"a": 1})
     result = loader.compare_rows([source], [loaded(source), loaded(source)])
     assert result[("mlb", "boxscore")] == loader.Tally(paired=1, equal=1, only_loaded=1)
+
+
+# -- the two endpoints uploaded as projections (ADR 0061) ------------------------------------
+
+MEMBER = {"firstName": "A", "lastName": "Member", "id": GUID}
+MATCHUP_DAY = {
+    "id": 73677,
+    "seasonId": 2025,
+    "scoringPeriodId": 12,
+    "status": {"currentMatchupPeriod": 2},
+    "members": [MEMBER],
+    "teams": [{"id": 1, "owners": [GUID], "primaryOwner": GUID}],
+    "settings": {"name": "League"},
+    "schedule": [
+        {
+            "id": 7,
+            "matchupPeriodId": 2,
+            "winner": "HOME",
+            "home": {
+                "teamId": 1,
+                "totalPoints": 5,
+                "rosterForCurrentScoringPeriod": {
+                    "entries": [{"playerId": 9, "playerPoolEntry": {"player": {"firstName": "B"}}}]
+                },
+            },
+            "away": {
+                "teamId": 2,
+                "totalPoints": 4,
+                "rosterForCurrentScoringPeriod": {"entries": []},
+            },
+        },
+        {"id": 8, "matchupPeriodId": 3, "home": {"teamId": 3}},
+        {"id": 9, "matchupPeriodId": 1, "home": {"teamId": 4}, "away": {"teamId": 5}},
+    ],
+}
+
+
+def test_a_matchup_day_goes_up_as_the_five_things_the_marker_model_reads() -> None:
+    """Catches a field outside ADR 0061's list being uploaded (the response holds `teams`,
+    `members` and `settings`), and one of the five being lost: the ids, each matchup's
+    period, and the marker's presence on each side, as an empty object."""
+    assert loader.project_matchup_day(MATCHUP_DAY) == {
+        "id": 73677,
+        "seasonId": 2025,
+        "scoringPeriodId": 12,
+        "schedule": [
+            {
+                "matchupPeriodId": 2,
+                "home": {"rosterForCurrentScoringPeriod": {}},
+                "away": {"rosterForCurrentScoringPeriod": {}},
+            },
+            {"matchupPeriodId": 3},
+            {"matchupPeriodId": 1},
+        ],
+    }
+
+
+def test_a_projection_is_built_from_wanted_fields_so_an_unknown_one_is_dropped() -> None:
+    """Catches a projection made by removing known member keys: a key ESPN adds tomorrow
+    must not go up because nobody listed it."""
+    grown = {**MATCHUP_DAY, "newThing": {"author": GUID}}
+    grown["schedule"] = [{**MATCHUP_DAY["schedule"][0], "alsoNew": GUID}]  # type: ignore[dict-item]
+    projected = loader.project_matchup_day(grown)
+    assert GUID not in json.dumps(projected) and "newThing" not in projected
+    assert projected["schedule"] == [
+        {
+            "matchupPeriodId": 2,
+            "home": {"rosterForCurrentScoringPeriod": {}},
+            "away": {"rosterForCurrentScoringPeriod": {}},
+        }
+    ]
+
+
+def test_a_payload_of_an_unexpected_shape_projects_to_what_it_can() -> None:
+    """Catches the projection crashing, or passing a value through, when ESPN answers with
+    something else: no schedule, a schedule that is not a list, a side that is not an
+    object."""
+    assert loader.project_matchup_day({"id": 1}) == {"id": 1, "schedule": []}
+    assert loader.project_matchup_day({"schedule": "x"}) == {"schedule": []}
+    assert loader.project_matchup_day({"schedule": [{"home": GUID}, GUID]}) == {
+        "schedule": [{}, {}]
+    }
+    assert loader.project_matchup_day([GUID]) == {"schedule": []}
+
+
+def test_a_transactions_capture_goes_up_with_no_payload() -> None:
+    """Catches any part of a transaction log leaving the machine: its topics carry authors
+    and account ids, and the one model that reads these captures reads no payload."""
+    assert loader.project_transactions({"topics": [{"author": GUID}]}) == {}
+
+
+def _warehouse(tmp_path: Path, rows: list[tuple[str, str, str, object]]) -> Path:
+    db = tmp_path / "w.duckdb"
+    con = duckdb.connect(str(db))
+    con.execute("create schema raw")
+    con.execute(
+        "create table raw.api_responses (source varchar, endpoint varchar, request_path "
+        "varchar, request_key varchar, fetched_at varchar, partitions json, payload json, "
+        "file_path varchar)"
+    )
+    for source, endpoint, key, payload in rows:
+        con.execute(
+            "insert into raw.api_responses values (?, ?, '/p', ?, 't', ?, ?, 'f')",
+            [source, endpoint, key, '{"season": 2025}', json.dumps(payload)],
+        )
+    con.close()
+    return db
+
+
+def test_the_two_endpoints_are_read_already_projected_and_pass_the_check(tmp_path: Path) -> None:
+    """Catches the raw payload of either endpoint reaching the check, the export or the
+    read-back comparison: what is read for upload is the projection, so every later step
+    sees only that."""
+    db = _warehouse(
+        tmp_path,
+        [
+            ("espn", "transactions", "k=1", {"topics": [{"author": GUID, "messages": []}]}),
+            ("espn", "matchup_days", "scoringPeriodId=12", MATCHUP_DAY),
+            ("espn", "settings", "k=3", {"n": 1}),
+            ("espn", "teams", "k=4", {"teams": []}),
+        ],
+    )
+    rows = {(r.source, r.endpoint): r for r in loader.read_rows(db)}
+    assert sorted(rows) == [
+        ("espn", "matchup_days"),
+        ("espn", "settings"),
+        ("espn", "transactions"),
+    ]
+    assert json.loads(rows[("espn", "transactions")].payload) == {}
+    assert json.loads(rows[("espn", "matchup_days")].payload) == loader.project_matchup_day(
+        MATCHUP_DAY
+    )
+    assert json.loads(rows[("espn", "settings")].payload) == {"n": 1}
+    assert json.loads(rows[("espn", "transactions")].partitions) == {"season": 2025}
+    assert loader.check(loader.read_rows(db)) == {
+        ("espn", "matchup_days"): 1,
+        ("espn", "settings"): 1,
+        ("espn", "transactions"): 1,
+    }
+    assert set(loader.PROJECTIONS) == {("espn", "transactions"), ("espn", "matchup_days")}
+
+
+def test_a_row_of_a_projected_endpoint_that_was_not_projected_stops_the_upload() -> None:
+    """Catches a caller handing the check a whole capture of one of the two endpoints, even
+    one with nothing the privacy patterns know: only the projection may go up."""
+    whole = row("espn", "matchup_days", {"id": 1, "schedule": [], "status": {"x": 1}})
+    with pytest.raises(loader.PrivacyHit) as raised:
+        loader.check([whole])
+    assert raised.value.hits == ["espn/matchup_days k=1: not in its projected form (ADR 0061)"]
+    with pytest.raises(loader.PrivacyHit):
+        loader.check([row("espn", "transactions", {"topics": []})])
+    projected = row("espn", "matchup_days", loader.project_matchup_day(MATCHUP_DAY))
+    assert loader.check([projected]) == {("espn", "matchup_days"): 1}
+
+
+def test_a_guid_left_in_a_projected_row_still_stops_the_upload() -> None:
+    """Catches the projection being trusted in place of the check: an account id in the
+    request key of a projected row is found like any other."""
+    dirty = row("espn", "transactions", {}, request_key=f"owner={GUID}")
+    with pytest.raises(loader.PrivacyHit):
+        loader.check([dirty])

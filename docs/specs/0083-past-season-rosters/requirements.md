@@ -33,7 +33,8 @@ The owner chose on 2026-10-11 to land all seven played seasons: 2018, 2019 and 2
   period, from what ESPN reports, with no season-specific rule.
 - Complete games is computed from MLB's boxscores and reconciles with ESPN's totals.
 - Our totals for the past seasons reconcile with ESPN's, or each difference is in the
-  register with its evidence.
+  register with its evidence, or is traced exactly to ESPN's own game lines (ADR 0064).
+  *Amended 2026-10-14 by the owner's decision (design.md, Amendments).*
 - Nothing about the 2026 season changes.
 - A covered league-season with no transaction log is stated as such in data.
 
@@ -50,8 +51,14 @@ The owner chose on 2026-10-11 to land all seven played seasons: 2018, 2019 and 2
 - **No new fixture season, and no change to an existing fixture file.** The owner chose
   unit tests for the new paths (design.md, *CI coverage*).
 - **No change to the grain or name of an existing model.** Columns are added only as
-  R2.6, R3.1 and R4.2 say; none is removed or changed.
-- **No narrowing or weakening of a test to get a past season through.**
+  R2.6, R3.1 and R4.2 say, and `formula_checked` and `game_line_difference` on
+  `rec_espn__matchup_stat_differences` (ADRs 0063, 0064); none is removed or changed.
+  *Amended 2026-10-14 by the owner's decision.*
+- **No narrowing or weakening of a test to get a past season through.** One exception,
+  the owner's decision of 2026-10-14: `stg_espn__scoring_periods_agree_with_espn_game_lines`
+  counts an ESPN game only if a line in it scores something, because ESPN's 2019 lines
+  list postponed games with a starter flag or a games count alone. The check still fails
+  on 588 periods with the date mapping shifted by one day.
 
 ## Rabbit holes
 
@@ -125,6 +132,12 @@ The owner chose on 2026-10-11 to land all seven played seasons: 2018, 2019 and 2
   `int_fantasy__matchup_side_totals`).
 - R3.2 THE SYSTEM SHALL compute ESPN stat 62 as the sum of `complete_games`, credited to
   a team by the rule every pitching component follows.
+- R3.4 THE SYSTEM SHALL compute a stat's value for a matchup side only where the host
+  reports that stat for at least one side of that league-season. A stat with a rule that
+  the host reports nowhere in the league-season has no row in
+  `int_fantasy__matchup_stat_values`, and so none in the reconciliation. `missing_espn`
+  keeps its meaning: the host reports the stat in the league-season and not for this
+  side. *Added 2026-10-11 by the owner's decision (design.md, Amendments).*
 - R3.3 THE SYSTEM SHALL keep `int_fantasy__scored_categories_have_a_component_rule`
   unchanged, and it SHALL return no rows with every played season covered.
 
@@ -172,10 +185,17 @@ The owner chose on 2026-10-11 to land all seven played seasons: 2018, 2019 and 2
   for every game its MLB schedule lists as played.
 - R6.3 THE SYSTEM SHALL build and test clean on the real warehouse with the eight played
   seasons covered, the 2026 warning unchanged.
+  *Amended 2026-10-14 by the owner's decision:* the build's PR may merge before this
+  holds. It holds when the real build and test are clean; until then #83 stays open, and
+  what is left of it is tracked there (with #146 and #152).
 - R6.4 IF a past season fails a test, or our totals differ from ESPN's in a way the
   register does not already explain THEN the build SHALL stop and take it to the owner
   with the season, the test and the rows. A row is added to
   `espn_reconciliation_residuals.csv` only with its evidence and the owner's agreement.
+  A difference whose size equals the sum of the side's player-day differences against
+  ESPN's own game lines is explained without a register row, and a rate ESPN gives no
+  components for is compared directly (ADRs 0064, 0063). *Amended 2026-10-14 by the
+  owner's decision (design.md, Amendments).*
 - R6.5 WHEN the build stops under R6.4 THE SYSTEM SHALL first have landed and built
   every season it can, so that every season with a problem is reported together. It
   SHALL NOT exclude a season to get past one. A stop under R6.1 is immediate: nothing
@@ -183,9 +203,12 @@ The owner chose on 2026-10-11 to land all seven played seasons: 2018, 2019 and 2
 - R6.6 THE SYSTEM SHALL record, on the issue: requests made per command; bytes landed
   per endpoint; the real build's wall time and peak memory before and after. IF the real
   build cannot complete on the owner's machine THEN the build SHALL stop for the owner.
-- R6.7 THE SYSTEM SHALL NOT change a row of any model for the 2026 league-season: over
-  the columns each model had before, its 2026 rows are identical. The columns R2.6, R3.1
-  and R4.2 add are left out of that comparison and checked on their own.
+- R6.7 THE SYSTEM SHALL NOT change or remove a row of any model for the 2026
+  league-season: over the columns each model had before, every 2026 row it had is still
+  there, unchanged. The columns R2.6, R3.1 and R4.2 add are left out of that comparison
+  and checked on their own. Rows may be added for 2026 only where a model holds one row
+  per component and the row's component is `complete_games`; the build lists them.
+  *Amended 2026-10-11 by the owner's decision (design.md, Amendments).*
 - R6.8 THE SYSTEM SHALL record `front-office audit --season <year>` for each past
   season. The findings expected are the missing transaction log and, until the second
   pass, boxscores not yet settled; any other is R6.4.
@@ -204,7 +227,7 @@ Where a value is not known the build records what it finds.
 
 | Check | Expected | How to verify |
 |---|---|---|
-| Every row of every model, 2026 league-season, existing columns | identical before and after | `EXCEPT ALL` both ways against a copy, `season = 2026` |
+| Every row of every model, 2026 league-season, existing columns | every earlier row still there, unchanged; rows added only for the component `complete_games` (`int_fantasy__replacement_levels`: 48 to 50; `int_fantasy__stat_components`, which has no season: 30 to 31) | `EXCEPT ALL` both ways against a copy, `season = 2026` |
 | `int_fantasy__league_seasons` | 9 rows; `has_rosters` true for all but 2020; `has_transaction_log` true for 2026 only | query |
 | Marker against `pointsByScoringPeriod` | equal for 188 periods of 2025 and 180 of 2026 | R6.1's query; R2.4's test |
 | Marker against 2018's 24 period starts | each start's marker is that matchup period, and the day before it the one before | query |

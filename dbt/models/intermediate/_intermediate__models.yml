@@ -72,6 +72,13 @@ models:
           the data, never declared.
         data_type: boolean
         constraints: [{type: not_null}]
+      - name: has_transaction_log
+        description: >
+          True when at least one transactions response is loaded for the league-season,
+          including a log with no transaction in it. False means no log landed (ESPN serves
+          the log of the current season only), not an empty one (ADR 0056).
+        data_type: boolean
+        constraints: [{type: not_null}]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -302,7 +309,11 @@ models:
   - name: int_fantasy__matchup_periods
     description: >
       One row per (matchup period, calendar date). Periods are not a uniform length --
-      12, 14 and 7 days all occur -- so consumers take the span from here.
+      12, 14 and 7 days all occur -- so consumers take the span from here. A scoring period
+      is mapped from each matchup side's pointsByScoringPeriod where ESPN publishes it,
+      and otherwise from the matchup period ESPN marked in its answer for that day; the
+      first source wins per scoring period, so no row of a season that has it changes and a
+      running season never depends on a marker. mapping_source says which gave the row.
     config:
       contract:
         enforced: true
@@ -325,6 +336,14 @@ models:
       - name: scoring_date
         data_type: date
         constraints: [{type: not_null}]
+      - name: mapping_source
+        description: Which source mapped this scoring period to its matchup period.
+        data_type: string
+        constraints: [{type: not_null}]
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [points_by_scoring_period, matchup_day_marker]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -613,6 +632,7 @@ models:
                   - saves
                   - holds
                   - blown_saves
+                  - complete_games
       - name: pool_players
         data_tests: [not_null]
       - name: pool_played_days
@@ -1043,6 +1063,71 @@ models:
 # -----------------------------------------------------------------------------
 
 unit_tests:
+  - name: matchup_periods_the_marker_fills_a_scoring_period_the_points_source_lacks
+    description: >
+      R5.3 (i). Scoring period 5 exists only in stg_espn__matchup_days (a past season).
+      Catches the marker source not being read, and a wrong mapping_source.
+    model: int_fantasy__matchup_periods
+    given:
+      - input: ref('stg_espn__matchup_periods')
+        rows: []
+      - input: ref('stg_espn__matchup_days')
+        rows:
+          - {league_id: "1", season: 2018, scoring_period: 5, matchup_period: 4}
+      - input: ref('stg_espn__scoring_periods')
+        rows:
+          - {league_id: "1", season: 2018, scoring_period: 5, scoring_date: "2018-04-05"}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2018, matchup_period: 4, scoring_period: 5, scoring_date: "2018-04-05", mapping_source: matchup_day_marker}
+
+  - name: matchup_periods_the_points_source_wins_a_scoring_period_both_know
+    description: >
+      R5.3 (ii). Scoring period 5 is in both sources, mapped to matchup period 4 by the
+      points source and to 9 by the marker. Catches the marker overriding the existing
+      source, and a scoring period mapped twice.
+    model: int_fantasy__matchup_periods
+    given:
+      - input: ref('stg_espn__matchup_periods')
+        rows:
+          - {league_id: "1", season: 2026, matchup_period: 4, scoring_period: 5}
+      - input: ref('stg_espn__matchup_days')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 5, matchup_period: 9}
+      - input: ref('stg_espn__scoring_periods')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 5, scoring_date: "2026-04-05"}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, matchup_period: 4, scoring_period: 5, scoring_date: "2026-04-05", mapping_source: points_by_scoring_period}
+
+  - name: matchup_periods_each_scoring_period_takes_its_own_source_in_one_league_season
+    description: >
+      R5.3 (iii). One league-season: scoring period 5 is in both sources (points says
+      matchup period 4, marker says 9), period 6 only in the points source, period 7 only
+      in the marker. Catches the fallback being decided per league-season instead of per
+      scoring period, in either direction.
+    model: int_fantasy__matchup_periods
+    given:
+      - input: ref('stg_espn__matchup_periods')
+        rows:
+          - {league_id: "1", season: 2026, matchup_period: 4, scoring_period: 5}
+          - {league_id: "1", season: 2026, matchup_period: 4, scoring_period: 6}
+      - input: ref('stg_espn__matchup_days')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 5, matchup_period: 9}
+          - {league_id: "1", season: 2026, scoring_period: 7, matchup_period: 5}
+      - input: ref('stg_espn__scoring_periods')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 5, scoring_date: "2026-04-05"}
+          - {league_id: "1", season: 2026, scoring_period: 6, scoring_date: "2026-04-06"}
+          - {league_id: "1", season: 2026, scoring_period: 7, scoring_date: "2026-04-07"}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, matchup_period: 4, scoring_period: 5, scoring_date: "2026-04-05", mapping_source: points_by_scoring_period}
+        - {platform: espn, league_id: "1", season: 2026, matchup_period: 4, scoring_period: 6, scoring_date: "2026-04-06", mapping_source: points_by_scoring_period}
+        - {platform: espn, league_id: "1", season: 2026, matchup_period: 5, scoring_period: 7, scoring_date: "2026-04-07", mapping_source: matchup_day_marker}
+
   - name: league_seasons_are_covered_only_where_rosters_are_loaded
     description: >
       Season 2026 has settings and roster entries; season 2025 has settings only, as a
@@ -1058,6 +1143,8 @@ unit_tests:
         rows:
           - {league_id: "1", season: 2026, scoring_period: 1}
           - {league_id: "1", season: 2026, scoring_period: 2}
+      - input: ref('stg_espn__transaction_logs')
+        rows: []
     expect:
       rows:
         - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
@@ -1082,12 +1169,66 @@ unit_tests:
           - {league_id: "1", season: 2026, scoring_period: 1}
           - {league_id: "1", season: 2026, scoring_period: 2}
           - {league_id: "2", season: 2025, scoring_period: 1}
+      - input: ref('stg_espn__transaction_logs')
+        rows: []
     expect:
       rows:
         - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
         - {platform: espn, league_id: "1", season: 2025, has_rosters: false}
         - {platform: espn, league_id: "2", season: 2026, has_rosters: false}
         - {platform: espn, league_id: "2", season: 2025, has_rosters: true}
+
+  - name: league_seasons_say_whether_a_transaction_log_is_landed
+    description: >
+      R4.1, R5.5. League 1, 2026 has rosters and a log; 2025 has rosters and no log (ESPN
+      serves the log of the current season only); league 2, 2026 has settings only. Catches
+      has_transaction_log tied to has_rosters, and a log taken as the absence of rows.
+    model: int_fantasy__league_seasons
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026}
+          - {league_id: "1", season: 2025}
+          - {league_id: "2", season: 2026}
+      - input: ref('stg_espn__roster_entries')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 1}
+          - {league_id: "1", season: 2025, scoring_period: 1}
+      - input: ref('stg_espn__transaction_logs')
+        rows:
+          - {league_id: "1", season: 2026}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, has_rosters: true, has_transaction_log: true}
+        - {platform: espn, league_id: "1", season: 2025, has_rosters: true, has_transaction_log: false}
+        - {platform: espn, league_id: "2", season: 2026, has_rosters: false, has_transaction_log: false}
+
+  - name: league_season_transaction_log_does_not_leak_between_leagues_or_seasons
+    description: >
+      R4.1. Logs are landed for league 1 in 2026 and league 2 in 2025 only. Each of the
+      four league-seasons is one row, with a log only if its own is landed. Catches a join
+      on the league alone or the season alone.
+    model: int_fantasy__league_seasons
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026}
+          - {league_id: "1", season: 2025}
+          - {league_id: "2", season: 2026}
+          - {league_id: "2", season: 2025}
+      - input: ref('stg_espn__roster_entries')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 1}
+      - input: ref('stg_espn__transaction_logs')
+        rows:
+          - {league_id: "1", season: 2026}
+          - {league_id: "2", season: 2025}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, has_rosters: true, has_transaction_log: true}
+        - {platform: espn, league_id: "1", season: 2025, has_rosters: false, has_transaction_log: false}
+        - {platform: espn, league_id: "2", season: 2026, has_rosters: false, has_transaction_log: false}
+        - {platform: espn, league_id: "2", season: 2025, has_rosters: false, has_transaction_log: true}
 
   - name: crosswalk_one_row_per_id_named_by_the_latest_snapshot
     description: >
@@ -1394,6 +1535,34 @@ unit_tests:
            at_bats: 0, hits: 0, home_runs: 0, total_bases: 0, batter_walks: 0, runs: 0, runs_batted_in: 0, stolen_bases: 0, batter_strikeouts: 0,
            outs_recorded: 21, hits_allowed: 22, pitcher_walks: 23, earned_runs: 24, pitcher_strikeouts: 25, wins: 26, losses: 27, saves: 28, holds: 29}
 
+  - name: started_player_days_a_started_pitchers_complete_game_is_credited_a_benched_ones_is_not
+    description: >
+      Two pitchers each threw a complete game on the same day, one in a pitcher slot (SP)
+      and one on the bench (BN). Only the started pitcher has a row, and his complete
+      game is credited; the benched pitcher's is not credited to anyone (#10, R5.4). A
+      started hitter's day carries a complete game in the stats and credits none of it.
+      Catches: complete_games missing from the credited pitching columns, so a complete
+      game never reaches a team's stat 62; a benched pitcher's complete game credited.
+    model: int_fantasy__started_player_days
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, roster_slot: SP, slot_role: pitcher}
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 910002, is_started: false, roster_slot: BN, slot_role: bench}
+          - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 3, mlbam_player_id: 910003, is_started: true, roster_slot: UTIL, slot_role: hitter}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910001, game_date: "2026-06-01", games_pitched: 1, complete_games: 1}
+          - {mlbam_player_id: 910002, game_date: "2026-06-01", games_pitched: 1, complete_games: 1}
+          - {mlbam_player_id: 910003, game_date: "2026-06-01", games_pitched: 1, complete_games: 1}
+      - input: ref('int_mlb__game_dates')
+        rows:
+          - {official_date: "2026-06-01", is_complete: true}
+    expect:
+      rows:
+        - {platform_player_id: 1, slot_role: pitcher, complete_games: 1}
+        - {platform_player_id: 3, slot_role: hitter, complete_games: 0}
+
   - name: started_player_days_status_verified_off_on_a_complete_date
     description: >
       Every game that date is loaded and he is in none of them: a real zero. A benched
@@ -1538,6 +1707,36 @@ unit_tests:
         - {fantasy_team_id: 1, started_player_days: 2, verified_player_days: 1, missing_boxscore_player_days: 1, unresolved_player_days: 0, at_bats: 7, hits: 3, outs_recorded: 6}
         - {fantasy_team_id: 2, started_player_days: 0, verified_player_days: 0, missing_boxscore_player_days: 0, unresolved_player_days: 0, at_bats: 0, hits: 0, outs_recorded: 0}
 
+  - name: matchup_side_totals_sum_complete_games_over_the_started_days
+    description: >
+      Team 1 has two started days in the period, each crediting a complete game, and one
+      day in another period; team 2 has none. Team 1's complete_games is the two in the
+      period, the stat 62 component a side's total feeds (R5.4). Catches: complete_games
+      left out of the summed columns, so the side total is absent or zero.
+    model: int_fantasy__matchup_side_totals
+    given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+      - input: ref('int_fantasy__matchup_sides')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 1, fantasy_team_id: 1, opponent_team_id: 2, is_home: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 1, fantasy_team_id: 2, opponent_team_id: 1, is_home: false}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-02"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-03"}
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, input_status: played, complete_games: 1}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, input_status: played, complete_games: 1}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", fantasy_team_id: 1, input_status: played, complete_games: 1}
+    expect:
+      rows:
+        - {fantasy_team_id: 1, complete_games: 2}
+        - {fantasy_team_id: 2, complete_games: 0}
+
   - name: matchup_stat_values_follow_the_component_rules
     description: >
       One side's totals through four kinds of rule: a count (HR), a sum (SVHD = saves +
@@ -1562,6 +1761,12 @@ unit_tests:
           - {platform: espn, stat_key: 41, part: numerator, component: hits_allowed, weight: 3}
           - {platform: espn, stat_key: 41, part: numerator, component: pitcher_walks, weight: 3}
           - {platform: espn, stat_key: 41, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('stg_espn__matchup_category_results')
+        rows:
+          - {league_id: "1", season: 2026, stat_id: 5}
+          - {league_id: "1", season: 2026, stat_id: 83}
+          - {league_id: "1", season: 2026, stat_id: 47}
+          - {league_id: "1", season: 2026, stat_id: 41}
     expect:
       rows:
         - {fantasy_team_id: 1, stat_key: 5, numerator: 4, denominator: null, stat_value: 4}
@@ -1572,6 +1777,43 @@ unit_tests:
         - {fantasy_team_id: 2, stat_key: 83, numerator: 0, denominator: null, stat_value: 0}
         - {fantasy_team_id: 2, stat_key: 47, numerator: 0, denominator: 0, stat_value: null}
         - {fantasy_team_id: 2, stat_key: 41, numerator: 0, denominator: 0, stat_value: null}
+
+  - name: matchup_stat_values_leave_out_a_stat_the_host_does_not_report_that_season
+    description: >
+      Two league-seasons with the same two rules, home runs and complete games. The host
+      reports complete games (stat 62) in 2021 and not in 2026, and reports it for one
+      side only in 2021. 2026 gets no complete-games row, which the reconciliation would
+      otherwise call missing on ESPN's side; 2021 gets one for both sides, since a stat
+      reported anywhere in the league-season is computed for every side. A stat reported
+      by another league only (league 2) is not computed for league 1. Catches the filter
+      being dropped, applied per side, or leaking across leagues or seasons (spec 0083,
+      R3.4).
+    model: int_fantasy__matchup_stat_values
+    given:
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 1, fantasy_team_id: 1, opponent_team_id: 2, is_home: true, home_runs: 4, complete_games: 1}
+          - {platform: espn, league_id: "1", season: 2021, matchup_id: 7, matchup_period: 1, fantasy_team_id: 1, opponent_team_id: 2, is_home: true, home_runs: 3, complete_games: 2}
+          - {platform: espn, league_id: "1", season: 2021, matchup_id: 7, matchup_period: 1, fantasy_team_id: 2, opponent_team_id: 1, is_home: false, home_runs: 1, complete_games: 0}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 5, part: numerator, component: home_runs, weight: 1}
+          - {platform: espn, stat_key: 62, part: numerator, component: complete_games, weight: 1}
+          - {platform: espn, stat_key: 60, part: numerator, component: holds, weight: 1}
+      - input: ref('stg_espn__matchup_category_results')
+        rows:
+          - {league_id: "1", season: 2026, team_id: 1, stat_id: 5}
+          - {league_id: "1", season: 2021, team_id: 1, stat_id: 5}
+          - {league_id: "1", season: 2021, team_id: 1, stat_id: 62}
+          - {league_id: "2", season: 2026, team_id: 1, stat_id: 62}
+          - {league_id: "2", season: 2026, team_id: 1, stat_id: 60}
+    expect:
+      rows:
+        - {season: 2026, fantasy_team_id: 1, stat_key: 5, stat_value: 4}
+        - {season: 2021, fantasy_team_id: 1, stat_key: 5, stat_value: 3}
+        - {season: 2021, fantasy_team_id: 2, stat_key: 5, stat_value: 1}
+        - {season: 2021, fantasy_team_id: 1, stat_key: 62, stat_value: 2}
+        - {season: 2021, fantasy_team_id: 2, stat_key: 62, stat_value: 0}
 
 # -----------------------------------------------------------------------------
 # Unit tests: int_fantasy__replacement_levels (#11).

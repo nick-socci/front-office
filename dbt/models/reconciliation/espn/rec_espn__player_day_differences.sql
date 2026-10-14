@@ -65,7 +65,7 @@ credited as (
         roster_slot,
         input_status,
         '{{ column }}' as component,
-        cast({{ column }} as double) as our_value
+        cast({{ column }} as {{ fo_type_float() }}) as our_value
     from {{ ref('int_fantasy__started_player_days') }}
     where
         platform = 'espn'

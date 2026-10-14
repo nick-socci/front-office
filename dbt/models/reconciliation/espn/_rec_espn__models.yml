@@ -8,13 +8,26 @@ models:
       reconciliation itself (#10); fct_matchup_scores_match_espn fails on any status
       that isn't. See the model header for the status rules.
     columns:
+      - name: formula_checked
+        description: >
+          Whether the formula check ran (ADR 0063). True for a rate whose
+          espn_formula_value is not null, false for a rate ESPN gives no components for
+          (its formula value is null, so it is compared with ESPN's rate directly), null
+          for a count.
+      - name: game_line_difference
+        description: >
+          The sum of this side's player-day differences against ESPN's own game lines for
+          the stat (rows of rec_espn__player_day_differences with status difference), or
+          null if there are none (ADR 0064). A count whose difference equals it and has no
+          register row is explained_by_game_lines.
       - name: status
         data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: [bye, missing_ours, missing_espn, unverified, formula_mismatch,
-                         match, registered, explained_by_component, unexplained]
+                         match, registered, explained_by_game_lines,
+                         explained_by_component, unexplained]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -258,6 +271,9 @@ unit_tests:
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 2, stat_id: 1, expected_difference: 1, cause: official_scoring_change, evidence: x}
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 0, expected_difference: 1, cause: official_scoring_change, evidence: stale}
           - {league_id: "1", season: 2026, matchup_id: 11, team_id: 6, stat_id: 1, expected_difference: 1, cause: official_scoring_change, evidence: x}
+      # No player-day differences: nothing here is traced to ESPN's game lines (ADR 0064).
+      - input: ref('rec_espn__player_day_differences')
+        rows: []
     expect:
       rows:
         - {matchup_id: 7, fantasy_team_id: 1, stat_key: 0, status: unexplained}
@@ -339,6 +355,8 @@ unit_tests:
         rows:
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 2, stat_id: 1, expected_difference: 1, cause: official_scoring_change, evidence: x}
           - {league_id: "2", season: 2026, matchup_id: 7, team_id: 2, stat_id: 1, expected_difference: 2, cause: official_scoring_change, evidence: x}
+      - input: ref('rec_espn__player_day_differences')
+        rows: []
     expect:
       rows:
         - {league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, stat_key: 0, status: match}
@@ -351,11 +369,161 @@ unit_tests:
         - {league_id: "2", season: 2026, matchup_id: 7, fantasy_team_id: 2, stat_key: 1, status: registered}
         - {league_id: "2", season: 2026, matchup_id: 7, fantasy_team_id: 2, stat_key: 2, status: explained_by_component}
 
+  - name: matchup_stat_differences_compare_a_rate_directly_when_espn_gives_no_components
+    description: >
+      Rules: H = hits, AB = at_bats, AVG = H / AB. Matchup 7, four sides. Team 1: ESPN
+      reports AVG 0.25 and neither H nor AB, as for 2018 (ADR 0063); ours is 0.25. The
+      formula cannot run, so the rate is compared directly: match, formula_checked false.
+      Team 2: ESPN reports AB 40, H 10 and AVG 0.5, so the formula runs and fails (0.25
+      is not 0.5), though ours is also 0.5: formula_mismatch, formula_checked true. Team 3:
+      no components and ours, 0.3, differs from ESPN's 0.25: unexplained, formula_checked
+      false, since explained_by_component needs the components. Team 4: everything
+      matches; the counts carry formula_checked null and the rate true. Catches a rate
+      with no formula value called formula_mismatch; the formula_mismatch branch losing
+      its meaning when components do exist; formula_checked set on a count.
+    model: rec_espn__matchup_stat_differences
+    given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 0, part: numerator, component: at_bats, weight: 1}
+          - {platform: espn, stat_key: 1, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 2, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 2, part: denominator, component: at_bats, weight: 1}
+      - input: ref('stg_espn__matchups')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 7}
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, started_player_days: 10, verified_player_days: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, started_player_days: 10, verified_player_days: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 3, started_player_days: 10, verified_player_days: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 4, started_player_days: 10, verified_player_days: 10}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, stat_key: 2, stat_value: 0.25}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, stat_key: 0, stat_value: 40}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, stat_key: 1, stat_value: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, stat_key: 2, stat_value: 0.5}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 3, stat_key: 2, stat_value: 0.3}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 4, stat_key: 0, stat_value: 40}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 4, stat_key: 1, stat_value: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 4, stat_key: 2, stat_value: 0.25}
+      - input: ref('stg_espn__matchup_category_results')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 2, score: 0.25}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 2, stat_id: 0, score: 40}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 2, stat_id: 1, score: 10}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 2, stat_id: 2, score: 0.5}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 3, stat_id: 2, score: 0.25}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 4, stat_id: 0, score: 40}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 4, stat_id: 1, score: 10}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 4, stat_id: 2, score: 0.25}
+      - input: ref('espn_reconciliation_residuals')
+        rows:
+          - {league_id: "9", season: 2026, matchup_id: 7, team_id: 1, stat_id: 1, expected_difference: 1, cause: official_scoring_change, evidence: x}
+      - input: ref('rec_espn__player_day_differences')
+        rows: []
+    expect:
+      rows:
+        - {fantasy_team_id: 1, stat_key: 2, status: match, formula_checked: false}
+        - {fantasy_team_id: 2, stat_key: 0, status: match, formula_checked: null}
+        - {fantasy_team_id: 2, stat_key: 1, status: match, formula_checked: null}
+        - {fantasy_team_id: 2, stat_key: 2, status: formula_mismatch, formula_checked: true}
+        - {fantasy_team_id: 3, stat_key: 2, status: unexplained, formula_checked: false}
+        - {fantasy_team_id: 4, stat_key: 0, status: match, formula_checked: null}
+        - {fantasy_team_id: 4, stat_key: 1, status: match, formula_checked: null}
+        - {fantasy_team_id: 4, stat_key: 2, status: match, formula_checked: true}
+
+  - name: matchup_stat_differences_explain_a_count_by_its_game_line_differences
+    description: >
+      Rules: H = hits, AB = at_bats, AVG = H / AB. Matchup 7, five sides, ESPN scoring AB
+      40, H 10 and AVG 0.25 on each (ADR 0064). Ours is H 11 on teams 1 to 4 and 12 on
+      team 5. Team 1: no register row, and its player-day differences against ESPN's lines
+      (2, -1, and an unverified 5 that is not counted) sum to 1: H is explained_by_game_lines
+      and AVG, 11 / 40, is the rate the components imply once H is shifted by the sum:
+      explained_by_component. Team 2: the same, with a register row of 1: registered (the
+      register wins), game_line_difference still 1. Team 3: player-day differences summing
+      to 2 against a difference of 1: unexplained, and so is AVG. Team 4: no player-day
+      difference at all: unexplained, game_line_difference null. Team 5: a difference of 2
+      and a player-day sum of 2 in another league-season (league 2): unexplained. Catches
+      the sum not compared with the difference; the register not winning; the sum taken
+      over unverified rows, or over the wrong side or league-season; the rate's implied
+      value not shifted by the sum.
+    model: rec_espn__matchup_stat_differences
+    given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 0, part: numerator, component: at_bats, weight: 1}
+          - {platform: espn, stat_key: 1, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 2, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 2, part: denominator, component: at_bats, weight: 1}
+      - input: ref('stg_espn__matchups')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 7}
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, started_player_days: 10, verified_player_days: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, started_player_days: 10, verified_player_days: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 3, started_player_days: 10, verified_player_days: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 4, started_player_days: 10, verified_player_days: 10}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 5, started_player_days: 10, verified_player_days: 10}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, stat_key: 0, stat_value: 40}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, stat_key: 1, stat_value: 11}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, stat_key: 2, stat_value: 0.275}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, stat_key: 1, stat_value: 11}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 3, stat_key: 0, stat_value: 40}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 3, stat_key: 1, stat_value: 11}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 3, stat_key: 2, stat_value: 0.275}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 4, stat_key: 1, stat_value: 11}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 5, stat_key: 1, stat_value: 12}
+      - input: ref('stg_espn__matchup_category_results')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 0, score: 40}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 1, score: 10}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 2, score: 0.25}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 2, stat_id: 1, score: 10}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 3, stat_id: 0, score: 40}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 3, stat_id: 1, score: 10}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 3, stat_id: 2, score: 0.25}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 4, stat_id: 1, score: 10}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 5, stat_id: 1, score: 10}
+      - input: ref('espn_reconciliation_residuals')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 2, stat_id: 1, expected_difference: 1, cause: official_scoring_change, evidence: x}
+      - input: ref('rec_espn__player_day_differences')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, stat_id: 1, difference: 2, status: difference}
+          - {league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, stat_id: 1, difference: -1, status: difference}
+          - {league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, stat_id: 1, difference: 5, status: unverified}
+          - {league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, stat_id: 1, difference: 1, status: difference}
+          - {league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 3, stat_id: 1, difference: 2, status: difference}
+          - {league_id: "2", season: 2026, matchup_id: 7, fantasy_team_id: 5, stat_id: 1, difference: 2, status: difference}
+    expect:
+      rows:
+        - {fantasy_team_id: 1, stat_key: 0, status: match, game_line_difference: null}
+        - {fantasy_team_id: 1, stat_key: 1, status: explained_by_game_lines, game_line_difference: 1}
+        - {fantasy_team_id: 1, stat_key: 2, status: explained_by_component, game_line_difference: null}
+        - {fantasy_team_id: 2, stat_key: 1, status: registered, game_line_difference: 1}
+        - {fantasy_team_id: 3, stat_key: 0, status: match, game_line_difference: null}
+        - {fantasy_team_id: 3, stat_key: 1, status: unexplained, game_line_difference: 2}
+        - {fantasy_team_id: 3, stat_key: 2, status: unexplained, game_line_difference: null}
+        - {fantasy_team_id: 4, stat_key: 1, status: unexplained, game_line_difference: null}
+        - {fantasy_team_id: 5, stat_key: 1, status: unexplained, game_line_difference: null}
+
   - name: category_result_differences_compare_both_directions
     description: >
       Matchup 7, teams 1 and 2. HR matches. AVG flips, but team 2's AVG difference is
       accounted for upstream, so the flip is explained -- for both sides. R flips with
-      nothing accounted for: unexplained. ERA is scored at ESPN but missing from our
+      nothing accounted for: unexplained. Category 9 flips on a count that is
+      explained_by_game_lines on team 2 (ADR 0064): explained. ERA is scored at ESPN but missing from our
       marts (say, absent from int_fantasy__categories); SB is in our marts but not
       scored at ESPN (PR #46 review). Both fail rather than vanish.
     model: rec_espn__category_result_differences
@@ -374,6 +542,8 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, category_key: 20, result: WIN, has_unverified_inputs: false}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, category_key: 20, result: LOSS, has_unverified_inputs: false}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, category_key: 23, result: TIE, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, category_key: 9, result: WIN, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, category_key: 9, result: LOSS, has_unverified_inputs: false}
       - input: ref('stg_espn__matchup_category_results')
         rows:
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 5, result: WIN, is_scored_category: true}
@@ -382,6 +552,8 @@ unit_tests:
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 2, stat_id: 2, result: LOSS, is_scored_category: true}
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 20, result: LOSS, is_scored_category: true}
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 2, stat_id: 20, result: WIN, is_scored_category: true}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 9, result: LOSS, is_scored_category: true}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 2, stat_id: 9, result: WIN, is_scored_category: true}
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 47, result: WIN, is_scored_category: true}
           # Season 2025 has no rosters: scored at ESPN, and no missing_ours row (ADR 0026).
           - {league_id: "1", season: 2025, matchup_id: 7, team_id: 1, stat_id: 5, result: WIN, is_scored_category: true}
@@ -389,8 +561,9 @@ unit_tests:
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 0, result: null, is_scored_category: false}
       - input: ref('rec_espn__matchup_stat_differences')
         rows:
-          - {matchup_id: 7, fantasy_team_id: 2, stat_key: 2, status: explained_by_component}
-          - {matchup_id: 7, fantasy_team_id: 1, stat_key: 20, status: unexplained}
+          - {league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, stat_key: 2, status: explained_by_component}
+          - {league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, stat_key: 20, status: unexplained}
+          - {league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, stat_key: 9, status: explained_by_game_lines}
     expect:
       rows:
         - {fantasy_team_id: 1, category_key: 2, status: explained}
@@ -399,8 +572,42 @@ unit_tests:
         - {fantasy_team_id: 2, category_key: 5, status: match}
         - {fantasy_team_id: 1, category_key: 20, status: unexplained}
         - {fantasy_team_id: 2, category_key: 20, status: unexplained}
+        - {fantasy_team_id: 1, category_key: 9, status: explained}
+        - {fantasy_team_id: 2, category_key: 9, status: explained}
         - {fantasy_team_id: 1, category_key: 23, status: missing_espn}
         - {fantasy_team_id: 1, category_key: 47, status: missing_ours}
+
+  - name: category_result_differences_explain_a_flip_only_from_its_own_season
+    description: >
+      Catches a value explained in one season excusing a flipped category in another.
+      Matchup ids restart every season, so matchup 7 of 2025 and of 2026 share an id. AVG
+      (2) flips in both; only 2026's side has an explained AVG. 2026's flip is explained,
+      2025's is not. The same holds across leagues, which share matchup ids too.
+    model: rec_espn__category_result_differences
+    given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2025, has_rosters: true}
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+          - {platform: espn, league_id: "2", season: 2026, has_rosters: true}
+      - input: ref('fct_matchup_category_scores')
+        rows:
+          - {platform: espn, league_id: "1", season: 2025, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, category_key: 2, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, category_key: 2, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "2", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, category_key: 2, result: LOSS, has_unverified_inputs: false}
+      - input: ref('stg_espn__matchup_category_results')
+        rows:
+          - {league_id: "1", season: 2025, matchup_id: 7, team_id: 1, stat_id: 2, result: WIN, is_scored_category: true}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 2, result: WIN, is_scored_category: true}
+          - {league_id: "2", season: 2026, matchup_id: 7, team_id: 1, stat_id: 2, result: WIN, is_scored_category: true}
+      - input: ref('rec_espn__matchup_stat_differences')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, stat_key: 2, status: explained_by_component}
+    expect:
+      rows:
+        - {league_id: "1", season: 2025, fantasy_team_id: 1, category_key: 2, status: unexplained}
+        - {league_id: "1", season: 2026, fantasy_team_id: 1, category_key: 2, status: explained}
+        - {league_id: "2", season: 2026, fantasy_team_id: 1, category_key: 2, status: unexplained}
 
   - name: player_day_residuals_judge_each_key_against_the_register
     description: >
@@ -428,6 +635,8 @@ unit_tests:
         rows:
           - {league_id: "1", season: 2026, matchup_id: 1, team_id: 1, stat_id: 1, expected_difference: 2}
           - {league_id: "1", season: 2026, matchup_id: 3, team_id: 1, stat_id: 1, expected_difference: 2}
+      - input: ref('rec_espn__matchup_stat_differences')
+        rows: []
     expect:
       rows:
         - {matchup_id: 1, difference_sum: 2, difference_rows: 2, expected_difference: 2, problem: null}
@@ -454,11 +663,45 @@ unit_tests:
         rows:
           - {league_id: "1", season: 2026, matchup_id: 1, team_id: 1, stat_id: 1, expected_difference: 1}
           - {league_id: "2", season: 2026, matchup_id: 1, team_id: 1, stat_id: 1, expected_difference: 2}
+      - input: ref('rec_espn__matchup_stat_differences')
+        rows: []
     expect:
       rows:
         - {league_id: "1", season: 2026, matchup_id: 1, difference_sum: 1, expected_difference: 1, problem: null}
         - {league_id: "1", season: 2027, matchup_id: 1, difference_sum: 1, expected_difference: null, problem: unregistered}
         - {league_id: "2", season: 2026, matchup_id: 1, difference_sum: 1, expected_difference: 2, problem: wrong_size}
+
+  - name: player_day_residuals_do_not_call_a_key_unregistered_when_game_lines_explain_its_side
+    description: >
+      One league-season, team 1 and stat 1, a difference of 1 and no register row in each
+      of four matchups. Matchup 1's side and stat is explained_by_game_lines in
+      rec_espn__matchup_stat_differences: no problem (ADR 0064). Matchup 2's is unexplained:
+      unregistered. Matchup 3 has no row there at all: unregistered. Matchup 4's is
+      explained_by_game_lines for another league (league 2): unregistered. Catches the
+      explanation not being honoured; an explanation honoured for any status; and a join
+      to the status that leaves out the league, the season or the side.
+    model: rec_espn__player_day_residuals
+    given:
+      - input: ref('rec_espn__player_day_differences')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, fantasy_team_id: 1, stat_id: 1, difference: 1, status: difference}
+          - {league_id: "1", season: 2026, matchup_id: 2, fantasy_team_id: 1, stat_id: 1, difference: 1, status: difference}
+          - {league_id: "1", season: 2026, matchup_id: 3, fantasy_team_id: 1, stat_id: 1, difference: 1, status: difference}
+          - {league_id: "1", season: 2026, matchup_id: 4, fantasy_team_id: 1, stat_id: 1, difference: 1, status: difference}
+      - input: ref('espn_reconciliation_residuals')
+        rows:
+          - {league_id: "9", season: 2026, matchup_id: 1, team_id: 1, stat_id: 1, expected_difference: 1}
+      - input: ref('rec_espn__matchup_stat_differences')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 1, fantasy_team_id: 1, stat_key: 1, status: explained_by_game_lines}
+          - {league_id: "1", season: 2026, matchup_id: 2, fantasy_team_id: 1, stat_key: 1, status: unexplained}
+          - {league_id: "2", season: 2026, matchup_id: 4, fantasy_team_id: 1, stat_key: 1, status: explained_by_game_lines}
+    expect:
+      rows:
+        - {matchup_id: 1, difference_sum: 1, expected_difference: null, problem: null}
+        - {matchup_id: 2, difference_sum: 1, expected_difference: null, problem: unregistered}
+        - {matchup_id: 3, difference_sum: 1, expected_difference: null, problem: unregistered}
+        - {matchup_id: 4, difference_sum: 1, expected_difference: null, problem: unregistered}
 
   - name: register_rows_are_judged_in_their_own_league_season
     description: >

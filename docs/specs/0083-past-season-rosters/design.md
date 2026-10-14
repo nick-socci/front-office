@@ -140,9 +140,12 @@ is a season of fixture work for no path A leaves untested.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0055](../../adr/0055-a-scoring-periods-matchup-period-is-the-one-espn-attaches-its-rosters-to.md) | A scoring period's matchup period is the one ESPN attaches that day's rosters to, where the matchup does not list its days | proposed |
-| [0056](../../adr/0056-a-covered-league-season-says-whether-it-has-a-transaction-log.md) | A covered league-season says whether it has a transaction log | proposed |
-| [0057](../../adr/0057-complete-games-is-mlbs-count.md) | Complete games is MLB's count, credited like every pitching component | proposed |
+| [0055](../../adr/0055-a-scoring-periods-matchup-period-is-the-one-espn-attaches-its-rosters-to.md) | A scoring period's matchup period is the one ESPN attaches that day's rosters to, where the matchup does not list its days | accepted |
+| [0056](../../adr/0056-a-covered-league-season-says-whether-it-has-a-transaction-log.md) | A covered league-season says whether it has a transaction log | accepted |
+| [0057](../../adr/0057-complete-games-is-mlbs-count.md) | Complete games is MLB's count, credited like every pitching component | accepted |
+| [0061](../../adr/0061-two-endpoints-that-hold-member-data-are-uploaded-as-projections.md) | Two endpoints that hold member data are uploaded to BigQuery as projections of allowlisted fields; amends 0054 | proposed |
+| [0063](../../adr/0063-a-rate-espn-gives-no-components-for-is-compared-directly.md) | A rate ESPN gives no components for is compared with ESPN's rate directly | proposed |
+| [0064](../../adr/0064-a-count-traced-to-espns-own-game-lines-is-explained.md) | A count whose difference is traced to ESPN's own game lines is explained without a register row | proposed |
 
 Settled by the owner on 2026-10-11, going through the decisions one at a time: tier M;
 all seven played seasons; the three ADRs above, option 1 of each; CI coverage by unit
@@ -332,4 +335,112 @@ freshness declarations.
 | design-review | F6 (P2): task 11 verified everything before the PR while R6.9 falls after it | Confirmed. Task 11 excludes R6.9, the PR says it is owed, and #83 stays open until task 12 |
 
 ## Amendments
+
+### 2026-10-11: the own-scoring-periods test reads the two sources
+
+*Detailed design* repoints three tests at `int_fantasy__matchup_periods`. For
+`…matchup_periods_use_their_own_scoring_periods` that would have emptied the test: the
+model inner-joins `stg_espn__scoring_periods` for its dates, so a mapped period with no
+scoring period of its own league-season is dropped before the test could see it. Found
+by the implementer in task 4. The test is renamed as designed and reads the union of
+`stg_espn__matchup_periods` and `stg_espn__matchup_days` instead, which is the combined
+mapping before the date join. It is as strong as before for the existing source and
+now covers the marker too (R2.7). The other two tests are repointed as designed. No
+requirement changes.
+
+### 2026-10-11: a stat the host does not report is not computed, and a new component adds rows
+
+Found in task 6, in CI, and settled by the owner the same day.
+
+`int_fantasy__matchup_stat_values` computed every stat that has a rule, for every
+league-season, and the reconciliation fails on a stat we hold and ESPN lacks
+(`missing_espn`). With a rule for stat 62 the 2026 fixture season failed
+`fct_matchup_scores_match_espn` on 4 rows, ours 0.0 and ESPN's absent. The same would
+have happened without complete games as soon as a past season was covered: ESPN reports
+18 distinct stats in 2018, 23 in 2019, 22 in 2021 and 24 from 2022 on, and of the stats
+with a rule it does not report 0, 33, 37, 39, 45, 60 and 83 in 2018, nor 33, 60 and 83
+in 2021 (real warehouse, 2026-10-11). The spec's ledger did not look at this.
+
+The owner chose: **a stat's value is computed only where the host reports that stat
+somewhere in the league-season** (R3.4). The alternative, computing every stat and
+giving the reconciliation a status for "not reported", would have added 286 rows of
+stat 62 to 2026. Scored categories are always reported, so nothing scored is lost; the
+components stay in the side totals whatever is reported. Accepted cost: a league-season
+whose host has not yet reported any side has no stat values until it does.
+
+`int_fantasy__replacement_levels` holds one row per (league-season, day kind,
+component), so the new component adds two rows per league-season: 48 to 50 in CI and
+for 2026. No existing row changes. The owner accepted these and R6.7 now says so.
+
+### 2026-10-12: an eligibility for a slot the league does not have is no row
+
+Found by the first real build with 2025 covered. ESPN lists two 2025 call-ups (Grant
+Taylor, periods 85 to 138; Payton Tolle, 165 to 188) as eligible for lineup slot 22, on
+78 player-days. No roster entry sits in slot 22, no season's league settings hold it,
+2026's eligibility lists do not have it, and the seed generated from the espn-api
+package does not name it, so `not_null` on `lineup_slot` and `is_starting_slot` of
+`stg_espn__roster_entry_slots` failed. What ESPN means by 22 was not established.
+
+The owner chose on 2026-10-12: **an eligibility is kept only for a slot in that
+league-season's own slot settings**, whatever the slot's count. It needs no name for 22
+and holds for any league. Measured before the change: it removes those 78 rows and no
+other, in 2025 or 2026 (every season's settings list slots 0 to 19). The spec's ledger
+had looked only at the slots players sat in on three probed days.
+
+### 2026-10-12: the BigQuery upload gains two endpoints, as projections (ADR 0061)
+
+Found when `main` was merged after #142: `stg_espn__transaction_logs` and
+`stg_espn__matchup_days` are parents of two models of the BigQuery slice, and their
+captures are not uploaded (ADR 0054). Six slice tests fail. Decided by the owner on
+2026-10-12: `scripts/spike_load_bigquery.py` uploads `espn/transactions` with an empty
+payload and `espn/matchup_days` with the five things the marker model and its tests read,
+each built from a list of wanted fields and checked by the same privacy patterns before
+anything is sent. This goes beyond the spec's original scope (the upload script is spec
+0130's); the ADR records why. The slice's expected models, its test counts and the
+portable SQL of the new models follow once this branch has `main`'s #143.
+
+### 2026-10-13: after `main`'s #143, the marker model is batched and one lookup is allowed
+
+`main` was merged into this branch on 2026-10-13 (56a38f6) with spec 0143: the staging
+models that parse a payload per game or per day are built a season at a time, reading
+their captures through `stg_raw__season_responses`. Three things followed here.
+
+- **`stg_espn__matchup_days` is the sixth such model**, as ADR 0058 named it: the same
+  configuration, the capture macro given the view, and `season_start` as its last column.
+  It joins the list in `test_dbt_batched_models.py` and the two singular tests of spec
+  0143. Its unit tests take the same rows through the view.
+- **`stg_espn__roster_entry_slots` reads a lookup.** The slot-22 rule above joins
+  `stg_espn__lineup_slot_limits`, which has no event time, and spec 0143's test refuses
+  such an input to a batched model. Decided by the owner on 2026-10-13: the test allows
+  inputs named as lookups, each for one model and with the reason it cannot multiply
+  rows; this one is joined on league, season and slot, the view's unique key. A second
+  test fails a stale entry, or a lookup that has lost its uniqueness test.
+- **The two models new to the BigQuery slice are written under ADR 0051**, and the slice
+  is 33 models: `stg_espn__matchup_days` and `stg_espn__transaction_logs` join it, and
+  `compare_bigquery_slice.py` holds DuckDB's side of the raw view to the nine uploaded
+  endpoints (ADR 0061).
+
+On the fixtures, every relation is identical to the build of this branch before the
+merge (58 of 58); the only additions are the view and the `season_start` columns.
+
+### 2026-10-13: four findings of the eight-season build, decided by the owner
+
+The first build of all eight seasons (task 10) failed five tests on the data. The
+investigation is on #83. Under R6.4 they went to the owner, who decided on 2026-10-13:
+
+1. **2018's rates** are compared with ESPN's directly where ESPN gives no components for
+   the formula check (ADR 0063).
+2. **Counts traced to ESPN's own game lines** are explained without a register row
+   (ADR 0064).
+3. **The league's games-started limit** (`rosterSettings.lineupSlotStatLimits`, stat 33,
+   13 starts a week since 2022) is a rule the models do not apply. It gets its own issue
+   and spec; this spec ships without it, and the values it causes stay `unexplained` and
+   listed. It also says what lineup slot 22 is: the key that limit is filed under.
+4. **2019's postponed games**: on postponed games ESPN's 2019 lines carry stat 99,
+   `STARTER`, alone, so `stg_espn__scoring_periods_agree_with_espn_game_lines` counted
+   games MLB did not play on 13 dates. Ignoring 99 left three, where the lines carry stat
+   81, `G` (a batter's games count), as 1 and every other stat as zero. Decided on
+   2026-10-14: the test counts an ESPN game only if a line in it has a non-zero value in
+   a stat the league-season scores. Both stats stay in staging as ESPN gave them: the
+   owner will use the starter flag in season.
 

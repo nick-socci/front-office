@@ -194,7 +194,7 @@ def test_the_slice_and_the_macros_it_reaches_hold_no_sql_bigquery_refuses(
     sitting in a shared macro one of them calls."""
     models = [label for label in slice_sources if label.startswith("models/")]
     macros = [label for label in slice_sources if label.startswith("macros/")]
-    assert len(models) == 31, "the slice's models were not all found"
+    assert len(models) == 35, "the slice's models were not all found"
     assert any("boxscore_players.sql" in label for label in macros), "macros are not followed"
     assert any("json.sql::bigquery__" in label for label in macros), "bigquery forms not reached"
     assert not any("::duckdb__" in label for label in slice_sources)

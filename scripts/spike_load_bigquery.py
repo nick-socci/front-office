@@ -8,10 +8,12 @@ Usage:  uv run --group bigquery python scripts/spike_load_bigquery.py \\
 
 What it does, in order:
 
-1. Reads `raw.api_responses` from the local warehouse, read-only, for seven endpoints and no
-   others. The list is the constant ALLOWLIST; there is no option to widen it. `espn/teams`
-   and `espn/transactions` carry league members' names and account ids and are never read
-   here.
+1. Reads `raw.api_responses` from the local warehouse, read-only, for nine endpoints and no
+   others: the seven of the constant ALLOWLIST whole, and two as projections (ADR 0061).
+   `espn/transactions` carries members' names and account ids, and `espn/matchup_days`
+   carries `teams` and `settings`: of the first nothing of the payload is uploaded, of the
+   second the five things the marker model reads, rebuilt from a list of wanted fields.
+   There is no option to widen either list. `espn/teams` is never read here.
 2. Checks every row before anything is written. A key that names a person
    (`privacy.FORBIDDEN_KEYS`) is a hit in any row; the one exception is `firstName` and
    `lastName` directly in a `playerPoolEntry.player` object, which name a ballplayer. An
@@ -61,6 +63,10 @@ ALLOWLIST: tuple[tuple[str, str], ...] = (
     ("espn", "pro_schedule"),
     ("idmap", "player_id_map"),
 )
+# Endpoints that hold member data and go up as a projection: a payload rebuilt from a list
+# of wanted fields, made before the check and never by removing unwanted ones (ADR 0061).
+# The functions are defined below; PROJECTIONS maps each endpoint to its own.
+MARKER = "rosterForCurrentScoringPeriod"
 KEY_COLUMNS = ("source", "endpoint", "request_path", "request_key", "fetched_at")
 JSON_COLUMNS = ("partitions", "payload")
 COLUMNS = (*KEY_COLUMNS, "file_path", *JSON_COLUMNS)
@@ -97,15 +103,59 @@ class RawRow:
         return f"{self.source}/{self.endpoint} {privacy.GUID.sub('<guid>', self.request_key)}"
 
 
+def _whole_number(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def project_matchup_day(payload: Any) -> dict[str, Any]:
+    """What of a `matchup_days` response is uploaded: the five things
+    stg_espn__matchup_days and its tests read, and nothing else. The ids only as whole
+    numbers; the marker only as its presence, an empty object."""
+    if not isinstance(payload, dict):
+        return {"schedule": []}
+    projected: dict[str, Any] = {
+        name: payload[name]
+        for name in ("id", "seasonId", "scoringPeriodId")
+        if _whole_number(payload.get(name))
+    }
+    schedule = payload.get("schedule")
+    projected["schedule"] = []
+    for matchup in schedule if isinstance(schedule, list) else []:
+        kept: dict[str, Any] = {}
+        if isinstance(matchup, dict):
+            if _whole_number(matchup.get("matchupPeriodId")):
+                kept["matchupPeriodId"] = matchup["matchupPeriodId"]
+            for side in ("home", "away"):
+                if isinstance(matchup.get(side), dict) and MARKER in matchup[side]:
+                    kept[side] = {MARKER: {}}
+        projected["schedule"].append(kept)
+    return projected
+
+
+def project_transactions(payload: Any) -> dict[str, Any]:
+    """Nothing of a transaction log is uploaded: stg_espn__transaction_logs reads a
+    capture's partitions and time, never its payload."""
+    return {}
+
+
+PROJECTIONS: dict[tuple[str, str], Any] = {
+    ("espn", "transactions"): project_transactions,
+    ("espn", "matchup_days"): project_matchup_day,
+}
+# Everything that is read for upload: ADR 0054's seven whole, ADR 0061's two projected.
+UPLOADED: tuple[tuple[str, str], ...] = (*ALLOWLIST, *PROJECTIONS)
+
+
 class WarehouseRows:
-    """The allowlisted rows of a local warehouse. Iterable more than once: each pass opens
-    the file read-only and streams, so the 1.5 GB of payloads is never held at once."""
+    """The rows of a local warehouse that are uploaded, the two projected endpoints already
+    projected. Iterable more than once: each pass opens the file read-only and streams, so
+    the 1.5 GB of payloads is never held at once."""
 
     def __init__(self, db: Path) -> None:
         self.db = db
 
     def __iter__(self) -> Iterator[RawRow]:
-        pairs = ", ".join(f"('{source}', '{endpoint}')" for source, endpoint in ALLOWLIST)
+        pairs = ", ".join(f"('{source}', '{endpoint}')" for source, endpoint in UPLOADED)
         con = duckdb.connect(str(self.db), read_only=True)
         try:
             cursor = con.execute(
@@ -116,7 +166,12 @@ class WarehouseRows:
             )
             while batch := cursor.fetchmany(50):
                 for values in batch:
-                    yield RawRow(*values)
+                    row = RawRow(*values)
+                    project = PROJECTIONS.get((row.source, row.endpoint))
+                    if project is not None:
+                        payload = json.dumps(project(json.loads(row.payload)))
+                        row = RawRow(*values[:-1], payload)
+                    yield row
         finally:
             con.close()
 
@@ -179,8 +234,13 @@ def check(rows: Iterable[RawRow]) -> dict[tuple[str, str], int]:
     counts: dict[tuple[str, str], int] = {}
     hits: list[str] = []
     for row in rows:
-        if (row.source, row.endpoint) not in ALLOWLIST:
+        project = PROJECTIONS.get((row.source, row.endpoint))
+        if (row.source, row.endpoint) not in UPLOADED:
             hits.append(f"{row.label}: endpoint is not on the allowlist")
+        elif project is not None and project(json.loads(row.payload)) != json.loads(row.payload):
+            # Only what the projection itself would produce may go up: a whole capture of
+            # one of these endpoints is refused, however clean it looks.
+            hits.append(f"{row.label}: not in its projected form (ADR 0061)")
         hits.extend(privacy_hits(row))
         counts[(row.source, row.endpoint)] = counts.get((row.source, row.endpoint), 0) + 1
     if hits:

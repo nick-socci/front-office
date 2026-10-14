@@ -1,6 +1,6 @@
 -- A season with captures of a batched model's endpoint, and no row of it in the model.
 --
--- The five models are built a season at a time (spec 0143): dbt runs one batch per
+-- The six models are built a season at a time (spec 0143): dbt runs one batch per
 -- calendar year, from `first_season_start` to the year of the run, and no further. A
 -- capture filed under a later season is in no batch, and one filed under an earlier season
 -- than `first_season_start` is in none either: its rows would vanish with no error. This
@@ -54,6 +54,13 @@ with endpoints as (
         'mlb' as source,
         'boxscore' as endpoint
 
+    union all
+
+    select
+        'stg_espn__matchup_days' as model,
+        'espn' as source,
+        'matchup_days' as endpoint
+
 ),
 
 captured as (
@@ -106,6 +113,14 @@ held as (
         'stg_mlb__pitching_game_logs' as model,
         season_start
     from {{ ref('stg_mlb__pitching_game_logs') }}
+    group by season_start
+
+    union all
+
+    select
+        'stg_espn__matchup_days' as model,
+        season_start
+    from {{ ref('stg_espn__matchup_days') }}
     group by season_start
 
 )

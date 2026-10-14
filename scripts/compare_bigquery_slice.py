@@ -28,7 +28,8 @@ Usage:  uv run --group bigquery python scripts/compare_bigquery_slice.py \\
    payload (stg_raw__season_responses, spec 0143), which is billed whole when queried and
    whose text BigQuery rewrites.
 7. `stg_raw__season_responses` is the raw table under another name, and BigQuery's raw
-   table is given only the endpoints of `spike_load_bigquery.ALLOWLIST` (ADR 0054). DuckDB's
+   table is given only the endpoints of `spike_load_bigquery.UPLOADED`: ADR 0054's seven
+   allowlisted ones whole and ADR 0061's two projected ones. DuckDB's
    side of that one relation is held to those endpoints, and the line says so.
 
 Exit 0 only if every relation passes. One line per relation either way.
@@ -51,7 +52,7 @@ from typing import Any
 
 import duckdb
 
-from spike_load_bigquery import ALLOWLIST
+from spike_load_bigquery import UPLOADED
 from warehouse_diff import (
     columns,
     count_except,
@@ -73,8 +74,9 @@ RAW_MIRRORS = frozenset({"staging.stg_raw__season_responses"})
 
 
 def uploaded_endpoints_only() -> str:
-    """A WHERE clause keeping the captures that are uploaded to BigQuery (ADR 0054)."""
-    pairs = ", ".join(f"('{source}', '{endpoint}')" for source, endpoint in ALLOWLIST)
+    """A WHERE clause keeping the captures that are uploaded to BigQuery: the nine endpoints
+    of spike_load_bigquery.UPLOADED (ADR 0054's seven and ADR 0061's two projected ones)."""
+    pairs = ", ".join(f"('{source}', '{endpoint}')" for source, endpoint in UPLOADED)
     return f"(source, endpoint) in ({pairs})"
 
 

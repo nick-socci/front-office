@@ -27,5 +27,6 @@ stat_id,part,component,weight
 54,numerator,losses,1
 57,numerator,saves,1
 60,numerator,holds,1
+62,numerator,complete_games,1
 83,numerator,saves,1
 83,numerator,holds,1

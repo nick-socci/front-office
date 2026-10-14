@@ -28,7 +28,7 @@ with per_period as (
         and league_seasons.league_id = periods.league_id
         and league_seasons.season = periods.season
         and league_seasons.has_rosters
-    left join {{ ref('stg_espn__matchup_periods') }} as matchups
+    left join {{ ref('int_fantasy__matchup_periods') }} as matchups
         on matchups.league_id = periods.league_id
         and matchups.season = periods.season
         and matchups.scoring_period = periods.scoring_period

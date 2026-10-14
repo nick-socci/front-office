@@ -18,6 +18,7 @@ import httpx
 import typer
 
 from front_office import audit as landing_audit
+from front_office.espn import matchup_days as espn_matchup_days
 from front_office.espn import matchups as espn_matchups
 from front_office.espn import pro_schedule as espn_pro_schedule
 from front_office.espn import rosters as espn_rosters
@@ -217,8 +218,10 @@ def backfill_espn(
         str | None,
         typer.Option(
             "--only",
-            help="Limit the run: pro-schedule (needs no login), or matchups "
-            "(pro schedule, settings and matchups only).",
+            help="Limit the run: pro-schedule (needs no login), matchups "
+            "(pro schedule, settings and matchups only), rosters (settings, teams and "
+            "rosters only), or matchup-days (each scoring period's matchups, for the "
+            "periods of the landed settings).",
         ),
     ] = None,
 ) -> None:
@@ -228,9 +231,16 @@ def backfill_espn(
     reported and the league run goes on, then the command exits 1. `--only pro-schedule`
     fetches just that, and needs no .env. `--only matchups` fetches the pro schedule,
     settings and matchups, and no teams, transactions or rosters; it needs the .env.
+    `--only rosters` fetches settings, teams and every scoring period's roster, and no
+    pro schedule, matchups or transactions. `--only matchup-days` fetches the matchups of
+    each scoring period of the newest landed settings, skipping those already landed
+    unless `--refresh`; it needs settings landed first, and the .env.
     """
-    if only is not None and only not in ("pro-schedule", "matchups"):
-        raise typer.BadParameter(f"unknown endpoint: {only} (expected pro-schedule or matchups)")
+    only_values = ("pro-schedule", "matchups", "rosters", "matchup-days")
+    if only is not None and only not in only_values:
+        raise typer.BadParameter(
+            f"unknown endpoint: {only} (expected one of {', '.join(only_values)})"
+        )
 
     zone = LandingZone(root=raw_root)
     fetched_at = utc_stamp()
@@ -244,6 +254,83 @@ def backfill_espn(
 
     load_env_file()
     credentials = EspnCredentials.from_env()
+
+    if only == "matchup-days":
+        with (
+            writing_session(zone, fetched_at),
+            exit_on_expired_auth(),
+            espn_client(credentials) as client,
+        ):
+            try:
+                days = espn_matchup_days.backfill_matchup_days(
+                    zone=zone,
+                    client=client,
+                    season=season,
+                    league_id=credentials.league_id,
+                    fetched_at=fetched_at,
+                    refresh=refresh,
+                )
+            except espn_matchup_days.SettingsNotLanded as error:
+                typer.echo(str(error), err=True)
+                raise typer.Exit(code=1) from None
+            typer.echo(
+                f"matchup days: fetched={days.fetched} skipped={days.skipped} failed={days.failed}"
+            )
+            if days.failed:
+                typer.echo(f"failed scoring periods: {days.failed_periods}", err=True)
+                raise typer.Exit(code=1)
+        return
+
+    if only == "rosters":
+        # A past season's rosters without its matchups or transactions: settings, teams and
+        # rosters as the full run makes them. Settings come first because the rosters take
+        # their periods from its status.
+        with (
+            writing_session(zone, fetched_at),
+            exit_on_expired_auth(),
+            espn_client(credentials) as client,
+        ):
+            settings_path, settings_payload = espn_settings.backfill_settings(
+                zone=zone,
+                client=client,
+                season=season,
+                league_id=credentials.league_id,
+                fetched_at=fetched_at,
+            )
+            typer.echo(f"landed settings -> {settings_path}")
+            teams_path = espn_teams.backfill_teams(
+                zone=zone,
+                client=client,
+                season=season,
+                league_id=credentials.league_id,
+                fetched_at=fetched_at,
+            )
+            typer.echo(f"landed teams -> {teams_path}")
+            status = settings_payload.get("status", {})
+            typer.echo(
+                f"scoring periods: latest={status.get('latestScoringPeriod')} "
+                f"final={status.get('finalScoringPeriod')}"
+            )
+            summary = espn_rosters.backfill_rosters(
+                zone=zone,
+                client=client,
+                season=season,
+                league_id=credentials.league_id,
+                status=status,
+                fetched_at=fetched_at,
+                refresh=refresh,
+            )
+            typer.echo(
+                f"rosters: fetched={summary.fetched} skipped={summary.skipped} "
+                f"failed={summary.failed}"
+            )
+            if summary.failed:
+                typer.echo(f"failed scoring periods: {summary.failed_periods}", err=True)
+            if summary.unproven:
+                typer.echo(f"unproven scoring periods: {summary.unproven}", err=True)
+            if summary.failed or summary.unproven:
+                raise typer.Exit(code=1)
+        return
 
     if only == "matchups":
         # A past season's league data without its rosters: the same calls as the full run

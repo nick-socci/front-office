@@ -18,8 +18,15 @@
 -- build on that instead. Coverage describes a season deliberately landed in part, not one
 -- half landed by accident.
 --
--- One boolean on purpose. A season with rosters and a missing boxscore is covered, and is
--- reported by the input checks on int_fantasy__started_player_days (#25), not here.
+-- Two booleans, each answering one question. has_rosters is coverage. has_transaction_log
+-- says whether a transaction log is landed (ADR 0056): ESPN serves the log of the current
+-- season only, so a past season with rosters has no log, and that must not read as a log
+-- with no transaction in it. It is read from stg_espn__transaction_logs, which has a row
+-- for a landed log even when empty. It does not decide coverage: the transaction models
+-- simply hold no row where there is no log.
+--
+-- A season with rosters and a missing boxscore is covered, and is reported by the input
+-- checks on int_fantasy__started_player_days (#25), not here.
 --
 -- A table despite being tiny, like int_fantasy__categories: a contract's not_null
 -- constraints are dropped on a view.
@@ -38,8 +45,12 @@ select
     'espn' as platform,
     settings.league_id,
     settings.season,
-    rostered.league_id is not null as has_rosters
+    rostered.league_id is not null as has_rosters,
+    logged.league_id is not null as has_transaction_log
 from {{ ref('stg_espn__league_settings') }} as settings
 left join rostered
     on rostered.league_id = settings.league_id
     and rostered.season = settings.season
+left join {{ ref('stg_espn__transaction_logs') }} as logged
+    on logged.league_id = settings.league_id
+    and logged.season = settings.season

@@ -329,7 +329,7 @@ def test_the_raw_mirror_is_compared_over_the_uploaded_endpoints_only(
     con: duckdb.DuckDBPyConnection,
 ) -> None:
     """Catches stg_raw__season_responses failing on rows BigQuery is never given: only the
-    endpoints of spike_load_bigquery.ALLOWLIST leave the machine (ADR 0054), so DuckDB's
+    endpoints of spike_load_bigquery.UPLOADED leave the machine (ADR 0054, 0061), so DuckDB's
     view holds captures (espn/teams, with members' names) that BigQuery's cannot. And
     catches the filter hiding a real difference in an uploaded endpoint."""
     ddl = "(source varchar, endpoint varchar, request_key varchar, season_start date)"
@@ -357,6 +357,8 @@ def test_only_the_raw_mirror_is_held_to_the_uploaded_endpoints() -> None:
     assert cmp.left_filter("staging.stg_espn__roster_entries", bq_against_bq=False) is None
     assert cmp.left_filter("staging.stg_raw__season_responses", bq_against_bq=True) is None
     assert "('espn', 'roster')" in cmp.uploaded_endpoints_only()
+    assert "('espn', 'matchup_days')" in cmp.uploaded_endpoints_only()
+    assert "('espn', 'transactions')" in cmp.uploaded_endpoints_only()
     assert "teams" not in cmp.uploaded_endpoints_only()
 
 
