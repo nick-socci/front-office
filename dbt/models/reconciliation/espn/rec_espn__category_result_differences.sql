@@ -69,7 +69,11 @@ ours as (
 
 accounted as (
 
+    -- Keyed by league and season too: matchup ids restart every season and repeat across
+    -- leagues, so a value explained in one league-season must not excuse a flip in another.
     select
+        league_id,
+        season,
         matchup_id,
         fantasy_team_id,
         stat_key
@@ -94,7 +98,9 @@ select
         when exists (
             select 1 from accounted
             where
-                accounted.matchup_id = ours.matchup_id
+                accounted.league_id = ours.league_id
+                and accounted.season = ours.season
+                and accounted.matchup_id = ours.matchup_id
                 and accounted.stat_key = ours.category_key
                 and accounted.fantasy_team_id in (ours.fantasy_team_id, ours.opponent_team_id)
         ) then 'explained'

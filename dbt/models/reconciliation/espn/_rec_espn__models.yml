@@ -561,9 +561,9 @@ unit_tests:
           - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 0, result: null, is_scored_category: false}
       - input: ref('rec_espn__matchup_stat_differences')
         rows:
-          - {matchup_id: 7, fantasy_team_id: 2, stat_key: 2, status: explained_by_component}
-          - {matchup_id: 7, fantasy_team_id: 1, stat_key: 20, status: unexplained}
-          - {matchup_id: 7, fantasy_team_id: 2, stat_key: 9, status: explained_by_game_lines}
+          - {league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, stat_key: 2, status: explained_by_component}
+          - {league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, stat_key: 20, status: unexplained}
+          - {league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, stat_key: 9, status: explained_by_game_lines}
     expect:
       rows:
         - {fantasy_team_id: 1, category_key: 2, status: explained}
@@ -576,6 +576,38 @@ unit_tests:
         - {fantasy_team_id: 2, category_key: 9, status: explained}
         - {fantasy_team_id: 1, category_key: 23, status: missing_espn}
         - {fantasy_team_id: 1, category_key: 47, status: missing_ours}
+
+  - name: category_result_differences_explain_a_flip_only_from_its_own_season
+    description: >
+      Catches a value explained in one season excusing a flipped category in another.
+      Matchup ids restart every season, so matchup 7 of 2025 and of 2026 share an id. AVG
+      (2) flips in both; only 2026's side has an explained AVG. 2026's flip is explained,
+      2025's is not. The same holds across leagues, which share matchup ids too.
+    model: rec_espn__category_result_differences
+    given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2025, has_rosters: true}
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+          - {platform: espn, league_id: "2", season: 2026, has_rosters: true}
+      - input: ref('fct_matchup_category_scores')
+        rows:
+          - {platform: espn, league_id: "1", season: 2025, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, category_key: 2, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, category_key: 2, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "2", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, category_key: 2, result: LOSS, has_unverified_inputs: false}
+      - input: ref('stg_espn__matchup_category_results')
+        rows:
+          - {league_id: "1", season: 2025, matchup_id: 7, team_id: 1, stat_id: 2, result: WIN, is_scored_category: true}
+          - {league_id: "1", season: 2026, matchup_id: 7, team_id: 1, stat_id: 2, result: WIN, is_scored_category: true}
+          - {league_id: "2", season: 2026, matchup_id: 7, team_id: 1, stat_id: 2, result: WIN, is_scored_category: true}
+      - input: ref('rec_espn__matchup_stat_differences')
+        rows:
+          - {league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, stat_key: 2, status: explained_by_component}
+    expect:
+      rows:
+        - {league_id: "1", season: 2025, fantasy_team_id: 1, category_key: 2, status: unexplained}
+        - {league_id: "1", season: 2026, fantasy_team_id: 1, category_key: 2, status: explained}
+        - {league_id: "2", season: 2026, fantasy_team_id: 1, category_key: 2, status: unexplained}
 
   - name: player_day_residuals_judge_each_key_against_the_register
     description: >

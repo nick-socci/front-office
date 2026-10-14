@@ -170,7 +170,7 @@ def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) ->
     tests = [r for r in selected if r["resource_type"] == "test"]
     generic = [r for r in tests if r.get("test_metadata")]
     assert (len(tests), len(generic), len(tests) - len(generic)) == (234, 202, 32)
-    assert len(names(selected, "unit_test")) == 82
+    assert len(names(selected, "unit_test")) == 83
 
 
 def test_no_selected_test_reads_a_relation_outside_the_slice(
