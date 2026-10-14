@@ -33,7 +33,8 @@ The owner chose on 2026-10-11 to land all seven played seasons: 2018, 2019 and 2
   period, from what ESPN reports, with no season-specific rule.
 - Complete games is computed from MLB's boxscores and reconciles with ESPN's totals.
 - Our totals for the past seasons reconcile with ESPN's, or each difference is in the
-  register with its evidence.
+  register with its evidence, or is traced exactly to ESPN's own game lines (ADR 0064).
+  *Amended 2026-10-14 by the owner's decision (design.md, Amendments).*
 - Nothing about the 2026 season changes.
 - A covered league-season with no transaction log is stated as such in data.
 
@@ -50,8 +51,14 @@ The owner chose on 2026-10-11 to land all seven played seasons: 2018, 2019 and 2
 - **No new fixture season, and no change to an existing fixture file.** The owner chose
   unit tests for the new paths (design.md, *CI coverage*).
 - **No change to the grain or name of an existing model.** Columns are added only as
-  R2.6, R3.1 and R4.2 say; none is removed or changed.
-- **No narrowing or weakening of a test to get a past season through.**
+  R2.6, R3.1 and R4.2 say, and `formula_checked` and `game_line_difference` on
+  `rec_espn__matchup_stat_differences` (ADRs 0063, 0064); none is removed or changed.
+  *Amended 2026-10-14 by the owner's decision.*
+- **No narrowing or weakening of a test to get a past season through.** One exception,
+  the owner's decision of 2026-10-14: `stg_espn__scoring_periods_agree_with_espn_game_lines`
+  counts an ESPN game only if a line in it scores something, because ESPN's 2019 lines
+  list postponed games with a starter flag or a games count alone. The check still fails
+  on 588 periods with the date mapping shifted by one day.
 
 ## Rabbit holes
 
@@ -178,10 +185,18 @@ The owner chose on 2026-10-11 to land all seven played seasons: 2018, 2019 and 2
   for every game its MLB schedule lists as played.
 - R6.3 THE SYSTEM SHALL build and test clean on the real warehouse with the eight played
   seasons covered, the 2026 warning unchanged.
+  *Not met at merge, by the owner's decision of 2026-10-14:* the real build needs DuckDB's
+  memory and threads held down (README), two tests run out of memory (#146), and values
+  ESPN's own lines do not account for stay `unexplained` (the games-started limit, #152,
+  among them). Listed on the PR; #83 stays open.
 - R6.4 IF a past season fails a test, or our totals differ from ESPN's in a way the
   register does not already explain THEN the build SHALL stop and take it to the owner
   with the season, the test and the rows. A row is added to
   `espn_reconciliation_residuals.csv` only with its evidence and the owner's agreement.
+  A difference whose size equals the sum of the side's player-day differences against
+  ESPN's own game lines is explained without a register row, and a rate ESPN gives no
+  components for is compared directly (ADRs 0064, 0063). *Amended 2026-10-14 by the
+  owner's decision (design.md, Amendments).*
 - R6.5 WHEN the build stops under R6.4 THE SYSTEM SHALL first have landed and built
   every season it can, so that every season with a problem is reported together. It
   SHALL NOT exclude a season to get past one. A stop under R6.1 is immediate: nothing
