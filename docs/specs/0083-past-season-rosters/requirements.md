@@ -185,10 +185,9 @@ The owner chose on 2026-10-11 to land all seven played seasons: 2018, 2019 and 2
   for every game its MLB schedule lists as played.
 - R6.3 THE SYSTEM SHALL build and test clean on the real warehouse with the eight played
   seasons covered, the 2026 warning unchanged.
-  *Not met at merge, by the owner's decision of 2026-10-14:* the real build needs DuckDB's
-  memory and threads held down (README), two tests run out of memory (#146), and values
-  ESPN's own lines do not account for stay `unexplained` (the games-started limit, #152,
-  among them). Listed on the PR; #83 stays open.
+  *Amended 2026-10-14 by the owner's decision:* the build's PR may merge before this
+  holds. It holds when the real build and test are clean; until then #83 stays open, and
+  what is left of it is tracked there (with #146 and #152).
 - R6.4 IF a past season fails a test, or our totals differ from ESPN's in a way the
   register does not already explain THEN the build SHALL stop and take it to the owner
   with the season, the test and the rows. A row is added to
