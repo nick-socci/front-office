@@ -341,4 +341,8 @@ a nested type. The two unit tests of `stg_raw__season_responses` go with it.
 
 ## Amendments
 
-<Dated entries if the approved design changes during build. Empty until then.>
+- **2026-10-15, `scripts/verify_migration.py` is left unchanged.** *Detailed design* listed
+  it among the readers of the old table. It verifies spec 0029's landing-layout migration,
+  which is finished, by comparing two warehouses of the old shape; those keep
+  `raw.api_responses`, so it has nothing to read in `raw.captures`. Its test builds its own
+  old-shape warehouses instead of using the loader. Within the goals and no-goes.
