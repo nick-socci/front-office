@@ -16,10 +16,11 @@ given day, what those players did in real games, and where the value is.
 
 ```
 MLB Stats API  ─┐
-ESPN Fantasy   ─┼─►  raw JSON on disk  ─►  raw.api_responses  ─►  staging  ─►  intermediate  ─►  marts
-SFBB id map    ─┘    (landing zone)        (one row per          (shaped       (the project's     (shaped like
-                                            API response)         like the      own terms, no      a question)
-                                                                  API)          platform's)
+ESPN Fantasy   ─┼─►  raw JSON on disk  ─►  raw.captures  ─►  staging  ─►  intermediate  ─►  marts
+SFBB id map    ─┘    (landing zone)        (one row per     (reads the    (the project's     (shaped like
+                                            capture: key     files;        own terms, no      a question)
+                                            and file path)   shaped like   platform's)
+                                                             the API)
                                                                                       └─►  reconciliation
                                                                                            (ours against ESPN's)
 ```
@@ -116,10 +117,12 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt deps && uv run dbt build
 duckdb ../data/warehouse.duckdb < ../docs/examples/roster_day_query.sql
 ```
 
-Five staging models that parse one large payload per game or per day are built a season
-at a time, so the build's memory is set by the largest season and not by how many are
-loaded. A warehouse built before that change needs one `uv run dbt build --full-refresh`;
-an ordinary build stops on those five models and says so.
+`front-office load` lists what has landed in `raw.captures`, a manifest of keys and file
+paths that holds no payload, and the staging models read the payloads from their files
+(spec 0150). A load of eight seasons takes seconds, and a build's memory does not grow with
+the number of seasons. dbt finds the landing zone at the repository's `data/raw` (and CI's
+at `fixtures/landing`); set `FO_LANDING_ROOT` (`FO_CI_LANDING_ROOT` for the `ci` target) to
+an absolute path to point it elsewhere.
 
 The audit checks the files rather than the models: that every played game and scoring
 period was captured, loaded, and captured late enough to be final. It exits non-zero on
@@ -158,32 +161,11 @@ so several leagues and seasons can share one warehouse. Two things enforce it:
 
 ### Building many seasons on one machine
 
-With all eight seasons loaded (8.6 GB of raw JSON), the real build does not run with the
-committed profile on a 29 GB machine: DuckDB takes up to 80% of memory and all of its
-cores, and the kernel kills it (17.4 GB, measured 2026-10-14, #83). It runs with DuckDB
-held to 12 GB and four of its own threads, and dbt to two: 59 of 59 models in about five
-minutes, peak 12 GB. The six staging models that parse a payload per game or per day are
-built a season at a time, so that bound does not grow with the seasons loaded; one
-season of boxscores still needs more than 12 GB at DuckDB's default sixteen threads.
-
-The committed profile stays as it is. Keep a copy of `dbt/profiles.yml` outside the
-repository, add the two settings to its `dev` output, and point dbt at it:
-
-```yaml
-    dev:
-      # ... as in dbt/profiles.yml, plus:
-      settings:
-        memory_limit: "12GB"
-        threads: 4
-```
-
-```bash
-cd dbt && DBT_PROFILES_DIR=~/.dbt/front_office_local uv run dbt run --threads 2
-```
-
-`dbt test` runs the same way. Two tests read every payload in one piece and run out of
-memory with many seasons loaded (#146); the raw layer's design, which is behind both, is
-#150.
+The committed profile builds every landed season. Payloads are read from their files with
+the fields each model needs declared, so no megabyte JSON value passes through a query, and
+the memory a build needs does not grow with the seasons loaded (spec 0150, ADR 0065). Until
+spec 0150 the eight-season build needed DuckDB's memory held down by a local profile; it no
+longer does.
 
 ### What a killed run leaves behind
 
@@ -204,8 +186,9 @@ uv run front-office repair --deep        # also move captures whose payload fail
 ### Rebuilding the warehouse after the raw table changes shape
 
 The raw table is derived from the landing zone, so a change to its shape is a rebuild,
-not a migration. `front-office load` refuses a warehouse with the old shape and changes
-nothing. Build a new file beside the old one, compare, and only then swap them yourself:
+not a migration. `front-office load` refuses a warehouse with the old shape (since spec
+0150, one that still holds `raw.api_responses`) and changes nothing. Build a new file
+beside the old one, compare, and only then swap them yourself:
 
 ```bash
 uv run front-office load --db data/warehouse_r2.duckdb
@@ -240,7 +223,7 @@ are stored as `outs_recorded`, because "6.1 innings" means 6⅓ and treating it 
 decimal silently corrupts every rate built on it.
 
 **Source freshness is defined, and dormant.** Source freshness is dbt's check of how
-old a source's newest row is. `raw.api_responses` holds three feeds, so it is declared
+old a source's newest row is. `raw.captures` holds three feeds, so it is declared
 once per feed and `dbt source freshness` gives three ages: a stalled feed shows whatever
 the others are doing. A feed's age is the age of its last run, read from one capture
 that marks a run. For `mlb` it is the schedule, which every full run lands first and a
