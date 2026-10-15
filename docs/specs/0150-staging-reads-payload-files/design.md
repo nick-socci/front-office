@@ -363,3 +363,12 @@ a nested type. The two unit tests of `stg_raw__season_responses` go with it.
   and their semantics (`fo_json_exists` true for a JSON null, `fo_json_text` turning `''`
   into null), do not change; only the megabyte document is no longer a value. The probes
   that typed those elements fully (C7, C20) were within the same memory.
+- **2026-10-15, R3.6 binds the two shared latest-capture macros, not the small endpoints'
+  own dedups.** R3.6 says the newest capture is chosen on the manifest's columns, never by
+  ranking parsed rows. `fo_espn_latest` and `fo_latest_boxscore_responses`, which every
+  heavy endpoint's model reads through, now do exactly that (`fo_capture_keys()`, a
+  semi-join on `file_path`). Five models of small endpoints (`stg_espn__transactions`,
+  `stg_espn__transaction_logs`, `stg_mlb__games`, `stg_mlb__players`, `stg_idmap__players`)
+  dedupe their own rows with their own rules today; they keep those rules over their
+  capture view, ranking rows whose payloads are small (those eight endpoints are 0.13 GB
+  in all, C1). Rewriting their dedups would risk their rows for no memory gain.
