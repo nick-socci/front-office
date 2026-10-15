@@ -7,7 +7,7 @@ checks the files themselves:
   landing  everything under the root is a committed capture (one directory holding a
            payload and a sidecar that agrees with its path) whose payload matches its
            checksum; nothing is waiting in quarantine
-  loaded   every committed capture is a row in raw.api_responses, with no key collisions
+  loaded   every committed capture is a row in raw.captures, with no key collisions
   mlb      every played game in the newest schedule has a boxscore, and one was captured
            a settle window (7 days) after its first capture that postdates the game's last
            scheduled start, by the same functions the backfill uses (specs/0030)

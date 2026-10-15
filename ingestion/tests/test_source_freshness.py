@@ -1,7 +1,7 @@
 """The source-freshness declarations are held by tests (spec 0114, ADR 0050).
 
 Freshness itself cannot be a gate: the fixtures' newest capture is months old by design.
-What can be held in CI is the declarations: `raw_feeds` declares `raw.api_responses` once
+What can be held in CI is the declarations: `raw_feeds` declares `raw.captures` once
 per feed, each with a filter that selects the feed's run marker.
 
 The checks are small pure functions that take parsed data and return a list of problems.
@@ -115,7 +115,7 @@ def expected_filter(feed, endpoint):
     text = f"source = '{feed}' and endpoint = '{endpoint}'"
     if feed in SEASON_SCOPED:
         text += (
-            f" and {SEASON_PATH} = ( select max({SEASON_PATH}) from raw.api_responses"
+            f" and {SEASON_PATH} = ( select max({SEASON_PATH}) from raw.captures"
             f" where source = '{feed}' and endpoint = '{endpoint}' )"
         )
     return text
@@ -186,7 +186,7 @@ def config_problems(source):
         problems.append(f"source schema is {source.get('schema')!r}, not 'raw'")
     for table in source.get("tables") or []:
         name = table.get("name")
-        if table.get("identifier") != "api_responses":
+        if table.get("identifier") != "captures":
             problems.append(f"{name}: identifier is {table.get('identifier')!r}")
         if table.get("loaded_at_field") != LOADED_AT:
             problems.append(f"{name}: loaded_at_field is {table.get('loaded_at_field')!r}")
@@ -261,7 +261,7 @@ def good_source():
         tables.append(
             {
                 "name": name,
-                "identifier": "api_responses",
+                "identifier": "captures",
                 "loaded_at_field": LOADED_AT,
                 "freshness": {
                     **copy.deepcopy(THRESHOLDS[name]),
