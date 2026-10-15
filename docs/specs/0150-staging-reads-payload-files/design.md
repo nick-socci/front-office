@@ -346,3 +346,20 @@ a nested type. The two unit tests of `stg_raw__season_responses` go with it.
   which is finished, by comparing two warehouses of the old shape; those keep
   `raw.api_responses`, so it has nothing to read in `raw.captures`. Its test builds its own
   old-shape warehouses instead of using the loader. Within the goals and no-goes.
+- **2026-10-15, the capture views are tested by `test_capture_glob.py` and a data test, not
+  by dbt unit tests.** Task 5 asked for unit tests per capture view. A dbt unit test
+  replaces a view's `ref()` and `source()` inputs, and the file read is neither: that is
+  why ADR 0068 puts the read in a view at all. R3.2 and R3.3 are held instead by
+  `ingestion/tests/test_capture_glob.py` (the whole-document read gives one row for an
+  array; a declared structure, map included, gives its typed fields and drops the rest),
+  and a new data test, `stg_raw__capture_views_cover_the_manifest`, checks on every build
+  that each view has exactly one row per manifest row of its endpoint, which is what
+  would catch a listed capture the glob misses. On the eight seasons: 27,417 captures,
+  every endpoint equal, 5 s.
+- **2026-10-15, a structure stops where its model already reads element by element.** The
+  roster's game-line `stats`, a matchup's two sides and a boxscore's team batting totals
+  and players stay `JSON` in the structures (the players as a map of JSON), and the models
+  keep the `fo_json_*` reads they make of those elements today. So a model's expressions,
+  and their semantics (`fo_json_exists` true for a JSON null, `fo_json_text` turning `''`
+  into null), do not change; only the megabyte document is no longer a value. The probes
+  that typed those elements fully (C7, C20) were within the same memory.
