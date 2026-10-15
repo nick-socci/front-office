@@ -1,6 +1,6 @@
 # 0059. Every build rebuilds every season of a batched model
 
-- Status: accepted
+- Status: superseded by [0069](0069-staging-models-are-built-whole-not-a-season-at-a-time.md)
 - Date: 2026-10-12
 - Spec: [0143-staging-by-season](../specs/0143-staging-by-season/design.md) · Issue: #143
 
