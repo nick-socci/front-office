@@ -5,12 +5,15 @@
 -- full rosters. stg_espn__matchup_days asks only which matchups attach a roster for the
 -- scoring period asked, so a side stays JSON and the model asks it, with fo_json_exists,
 -- whether `rosterForCurrentScoringPeriod` is there, exactly as it asked the payload before.
--- `id` is read as text, as the models read the league id.
+-- `id` is read as text, as the models read the league id. `scoringPeriodId` is the period
+-- ESPN says it answered, which stg_espn__matchup_days_answer_the_period_asked compares
+-- with the one asked for.
 
 {% set structure %}
 {
   "id": "VARCHAR",
   "seasonId": "BIGINT",
+  "scoringPeriodId": "BIGINT",
   "schedule": [{
     "matchupPeriodId": "BIGINT",
     "home": "JSON",

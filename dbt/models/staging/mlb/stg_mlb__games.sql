@@ -25,10 +25,7 @@ with responses as (
     select
         payload,
         fetched_at
-    from {{ source('raw', 'api_responses') }}
-    where
-        source = 'mlb'
-        and endpoint = 'schedule'
+    from {{ ref('stg_raw__mlb_schedule') }}
 
 ),
 

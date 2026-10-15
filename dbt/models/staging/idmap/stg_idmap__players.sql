@@ -8,10 +8,7 @@ with latest as (
     select
         payload,
         fetched_at
-    from {{ source('raw', 'api_responses') }}
-    where
-        source = 'idmap'
-        and endpoint = 'player_id_map'
+    from {{ ref('stg_raw__idmap_player_id_map') }}
     qualify row_number() over (order by fetched_at desc) = 1
 
 ),

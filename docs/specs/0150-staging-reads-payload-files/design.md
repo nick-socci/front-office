@@ -372,3 +372,12 @@ a nested type. The two unit tests of `stg_raw__season_responses` go with it.
   dedupe their own rows with their own rules today; they keep those rules over their
   capture view, ranking rows whose payloads are small (those eight endpoints are 0.13 GB
   in all, C1). Rewriting their dedups would risk their rows for no memory gain.
+- **2026-10-15, `stg_raw__espn_matchup_days` also declares `scoringPeriodId`.** The view
+  table above lists `league_id`, `season` and `schedule`; the test
+  `stg_espn__matchup_days_answer_the_period_asked` reads the payload's own
+  `scoringPeriodId` (that the marker answers the period asked), so the structure gains it.
+- **2026-10-15, spec 0130's pinned slice counts move.** `test_bigquery_slice.py` and
+  `test_dbt_portable_sql_rule.py` pin the BigQuery slice's size. The slice selects parents,
+  so it now holds nine capture views and no longer `stg_raw__season_responses`: 43 models,
+  materializations (24, 0, 18, 1), tests (228, 198, 30), 81 unit tests. The pins exist to
+  catch an unintended change to the slice; this one is the design's.

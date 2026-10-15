@@ -501,3 +501,14 @@
 {% macro bigquery__fo_map_entries(column) %}
     {{ column }}
 {%- endmacro %}
+
+{#
+  The manifest's rows, to choose captures on narrow columns (spec 0150, R3.6): raw.captures
+  on DuckDB; on BigQuery the uploaded table, whose key columns and file_path are the same
+  (ADR 0070). Only the latest-capture macros and the capture views read it.
+#}
+{% macro fo_capture_keys() %}
+    {{- return(adapter.dispatch('fo_capture_keys')()) -}}
+{% endmacro %}
+{% macro duckdb__fo_capture_keys() %}{{ source('raw', 'captures') }}{% endmacro %}
+{% macro bigquery__fo_capture_keys() %}{{ source('raw', 'api_responses') }}{% endmacro %}

@@ -22,7 +22,7 @@ unit_tests:
       BigQuery DH for the one such player in the real map (spec 0130).
     model: stg_idmap__players
     given:
-      - input: source('raw', 'api_responses')
+      - input: ref('stg_raw__idmap_player_id_map')
         rows:
           - source: idmap
             endpoint: player_id_map

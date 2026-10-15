@@ -10,7 +10,10 @@
 
 with manifest as (
 
-    select source, endpoint, count(*) as listed
+    select
+        source,
+        endpoint,
+        count(*) as listed
     from {{ source('raw', 'captures') }}
     group by source, endpoint
 

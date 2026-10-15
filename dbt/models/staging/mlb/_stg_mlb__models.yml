@@ -97,13 +97,6 @@ models:
               arguments:
                 min_value: 0
                 inclusive: true
-      - name: season_start
-        description: >
-          The first of January of the season of the capture the row was read from; the
-          column dbt batches this model on. Never null. On DuckDB a batch cannot insert a
-          null (dbt keeps only the batch's own year); the not_null test is for BigQuery,
-          where this is a plain table.
-        data_tests: [not_null]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -144,13 +137,6 @@ models:
       - name: team_id
         data_tests:
           - not_null
-      - name: season_start
-        description: >
-          The first of January of the season of the capture the row was read from; the
-          column dbt batches this model on. Never null. On DuckDB a batch cannot insert a
-          null (dbt keeps only the batch's own year); the not_null test is for BigQuery,
-          where this is a plain table.
-        data_tests: [not_null]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -216,7 +202,7 @@ unit_tests:
       ingestion's NOT_PLAYED tie-break (PR #43 review).
     model: stg_mlb__games
     given:
-      - input: source('raw', 'api_responses')
+      - input: ref('stg_raw__mlb_schedule')
         rows:
           - source: mlb
             endpoint: schedule
@@ -247,7 +233,7 @@ unit_tests:
       ones for nine games of the real seasons (spec 0130).
     model: stg_mlb__games
     given:
-      - input: source('raw', 'api_responses')
+      - input: ref('stg_raw__mlb_schedule')
         rows:
           - source: mlb
             endpoint: schedule
@@ -273,22 +259,26 @@ unit_tests:
       report the corrected value, not the original.
     model: stg_mlb__pitching_game_logs
     given:
-      - input: ref('stg_raw__season_responses')
+      # The capture view's rows, `teams` typed as the view declares it (a map of JSON
+      # players). The manifest is given as well: the latest-capture macro chooses on it.
+      - input: ref('stg_raw__mlb_boxscore')
+        format: sql
+        rows: |
+          select
+              'mlb' as source, 'boxscore' as endpoint, '/b' as request_path,
+              'gamePk=1' as request_key, '20260401T000000Z' as fetched_at,
+              '{"season": 2026}'::JSON as partitions, 'first.json' as file_path,
+              from_json('{"home":{"team":{"id":10},"players":{"ID100":{"person":{"id":100,"fullName":"P One"},"stats":{"pitching":{"gamesPitched":1,"gamesStarted":1,"outs":19,"inningsPitched":"6.1","earnedRuns":3,"runs":3}}}}},"away":{"team":{"id":20},"players":{}}}', '{"home": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, JSON)"}, "away": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, JSON)"}}') as teams
+          union all
+          select
+              'mlb', 'boxscore', '/b',
+              'gamePk=1', '20260405T000000Z',
+              '{"season": 2026}'::JSON, 'second.json',
+              from_json('{"home":{"team":{"id":10},"players":{"ID100":{"person":{"id":100,"fullName":"P One"},"stats":{"pitching":{"gamesPitched":1,"gamesStarted":1,"outs":19,"inningsPitched":"6.1","earnedRuns":2,"runs":3}}}}},"away":{"team":{"id":20},"players":{}}}', '{"home": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, JSON)"}, "away": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, JSON)"}}')
+      - input: source('raw', 'captures')
         rows:
-          - source: mlb
-            endpoint: boxscore
-            request_key: "gamePk=1"
-            fetched_at: "20260401T000000Z"
-            season_start: "2026-01-01"
-            file_path: first.json
-            payload: '{"teams":{"home":{"team":{"id":10},"players":{"ID100":{"person":{"id":100,"fullName":"P One"},"stats":{"pitching":{"gamesPitched":1,"gamesStarted":1,"outs":19,"inningsPitched":"6.1","earnedRuns":3,"runs":3}}}}},"away":{"team":{"id":20},"players":{}}}}'
-          - source: mlb
-            endpoint: boxscore
-            request_key: "gamePk=1"
-            fetched_at: "20260405T000000Z"
-            season_start: "2026-01-01"
-            file_path: second.json
-            payload: '{"teams":{"home":{"team":{"id":10},"players":{"ID100":{"person":{"id":100,"fullName":"P One"},"stats":{"pitching":{"gamesPitched":1,"gamesStarted":1,"outs":19,"inningsPitched":"6.1","earnedRuns":2,"runs":3}}}}},"away":{"team":{"id":20},"players":{}}}}'
+          - {source: mlb, endpoint: boxscore, request_path: /b, request_key: "gamePk=1", fetched_at: "20260401T000000Z", partitions: '{"season": 2026}', file_path: first.json}
+          - {source: mlb, endpoint: boxscore, request_path: /b, request_key: "gamePk=1", fetched_at: "20260405T000000Z", partitions: '{"season": 2026}', file_path: second.json}
     expect:
       rows:
         - game_pk: 1
@@ -305,15 +295,17 @@ unit_tests:
       appearances rather than gamesPlayed would silently drop real stolen bases.
     model: stg_mlb__batting_game_logs
     given:
-      - input: ref('stg_raw__season_responses')
+      - input: ref('stg_raw__mlb_boxscore')
+        format: sql
+        rows: |
+          select
+              'mlb' as source, 'boxscore' as endpoint, '/b' as request_path,
+              'gamePk=2' as request_key, '20260401T000000Z' as fetched_at,
+              '{"season": 2026}'::JSON as partitions, 'bat.json' as file_path,
+              from_json('{"home":{"team":{"id":10},"players":{"ID200":{"person":{"id":200,"fullName":"Starter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":2,"doubles":1,"triples":0,"homeRuns":0,"stolenBases":0}}},"ID201":{"person":{"id":201,"fullName":"Bench"},"stats":{"batting":{}}},"ID202":{"person":{"id":202,"fullName":"Pinch Runner"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":0,"atBats":0,"hits":0,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":1}}}}},"away":{"team":{"id":20},"players":{}}}', '{"home": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, JSON)"}, "away": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, JSON)"}}') as teams
+      - input: source('raw', 'captures')
         rows:
-          - source: mlb
-            endpoint: boxscore
-            request_key: "gamePk=2"
-            fetched_at: "20260401T000000Z"
-            season_start: "2026-01-01"
-            file_path: bat.json
-            payload: '{"teams":{"home":{"team":{"id":10},"players":{"ID200":{"person":{"id":200,"fullName":"Starter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":2,"doubles":1,"triples":0,"homeRuns":0,"stolenBases":0}}},"ID201":{"person":{"id":201,"fullName":"Bench"},"stats":{"batting":{}}},"ID202":{"person":{"id":202,"fullName":"Pinch Runner"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":0,"atBats":0,"hits":0,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":1}}}}},"away":{"team":{"id":20},"players":{}}}}'
+          - {source: mlb, endpoint: boxscore, request_path: /b, request_key: "gamePk=2", fetched_at: "20260401T000000Z", partitions: '{"season": 2026}', file_path: bat.json}
     expect:
       rows:
         - game_pk: 2
@@ -331,26 +323,27 @@ unit_tests:
     description: >
       Catches a superseded capture's rows surviving. Two captures of one game in one
       season disagree on a batter's line (an official scoring change turns a hit into an
-      error); only the newer capture's values may be in the result, and only once. Built a
-      season at a time, the batch replaces whole, so no row of the older capture is kept.
+      error); only the newer capture's values may be in the result, and only once.
     model: stg_mlb__batting_game_logs
     given:
-      - input: ref('stg_raw__season_responses')
+      - input: ref('stg_raw__mlb_boxscore')
+        format: sql
+        rows: |
+          select
+              'mlb' as source, 'boxscore' as endpoint, '/b' as request_path,
+              'gamePk=3' as request_key, '20260401T000000Z' as fetched_at,
+              '{"season": 2026}'::JSON as partitions, 'older.json' as file_path,
+              from_json('{"home":{"team":{"id":10},"players":{"ID300":{"person":{"id":300,"fullName":"Batter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":3,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":0}}}}},"away":{"team":{"id":20},"players":{}}}', '{"home": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, JSON)"}, "away": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, JSON)"}}') as teams
+          union all
+          select
+              'mlb', 'boxscore', '/b',
+              'gamePk=3', '20260405T000000Z',
+              '{"season": 2026}'::JSON, 'newer.json',
+              from_json('{"home":{"team":{"id":10},"players":{"ID300":{"person":{"id":300,"fullName":"Batter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":2,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":0}}}}},"away":{"team":{"id":20},"players":{}}}', '{"home": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, JSON)"}, "away": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, JSON)"}}')
+      - input: source('raw', 'captures')
         rows:
-          - source: mlb
-            endpoint: boxscore
-            request_key: "gamePk=3"
-            fetched_at: "20260401T000000Z"
-            season_start: "2026-01-01"
-            file_path: older.json
-            payload: '{"teams":{"home":{"team":{"id":10},"players":{"ID300":{"person":{"id":300,"fullName":"Batter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":3,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":0}}}}},"away":{"team":{"id":20},"players":{}}}}'
-          - source: mlb
-            endpoint: boxscore
-            request_key: "gamePk=3"
-            fetched_at: "20260405T000000Z"
-            season_start: "2026-01-01"
-            file_path: newer.json
-            payload: '{"teams":{"home":{"team":{"id":10},"players":{"ID300":{"person":{"id":300,"fullName":"Batter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":2,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":0}}}}},"away":{"team":{"id":20},"players":{}}}}'
+          - {source: mlb, endpoint: boxscore, request_path: /b, request_key: "gamePk=3", fetched_at: "20260401T000000Z", partitions: '{"season": 2026}', file_path: older.json}
+          - {source: mlb, endpoint: boxscore, request_path: /b, request_key: "gamePk=3", fetched_at: "20260405T000000Z", partitions: '{"season": 2026}', file_path: newer.json}
     expect:
       rows:
         - game_pk: 3
@@ -365,7 +358,7 @@ unit_tests:
       season is a row of his own.
     model: stg_mlb__players
     given:
-      - input: source('raw', 'api_responses')
+      - input: ref('stg_raw__mlb_players')
         rows:
           - source: mlb
             endpoint: players

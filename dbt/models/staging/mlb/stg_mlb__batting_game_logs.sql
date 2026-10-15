@@ -4,29 +4,15 @@
 -- averaged over games is not the same as the ratio of the sums -- computing them
 -- downstream from components is the only way to get them right.
 --
--- Stored, not a view: this parses ~2,400 boxscore payloads, so a view would redo that
--- work on every query.
---
--- Built a season at a time. DuckDB holds every parsed payload of a run at once, and two
--- seasons took the build to its memory limit, so dbt runs this model once per calendar
--- year (microbatch), reading one season's captures through stg_raw__season_responses.
--- Every build redoes every season. On BigQuery it is a plain table (spec 0143, ADRs 0058
--- to 0060).
+-- Stored, not a view: this reads thousands of boxscore captures, so a view would redo
+-- that work on every query. They come from the boxscore capture view
+-- (stg_raw__mlb_boxscore, spec 0150), which parses each file as it reads it.
 
-{{ config(
-    materialized=('incremental' if target.type == 'duckdb' else 'table'),
-    incremental_strategy=('microbatch' if target.type == 'duckdb' else none),
-    event_time='season_start',
-    batch_size='year',
-    begin=var('first_season_start'),
-    lookback=fo_batches_back_to_first_season(),
-    concurrent_batches=false,
-    on_schema_change='fail'
-) }}
+{{ config(materialized='table') }}
 
 with players as (
 
-    {{ fo_boxscore_players(ref('stg_raw__season_responses')) }}
+    {{ fo_boxscore_players() }}
 
 )
 
@@ -61,8 +47,7 @@ select
         as grounded_into_double_play,
     {{ fo_json_int('player', '$.stats.batting.catchersInterference') }} as catchers_interference,
 
-    {{ fo_parse_fetched_at() }} as fetched_at,
-    season_start
+    {{ fo_parse_fetched_at() }} as fetched_at
 from players
 -- Bench players carry an empty batting block; gamesPlayed = 1 marks an appearance. A
 -- pinch runner has 0 plate appearances but can still steal a base, so filtering on

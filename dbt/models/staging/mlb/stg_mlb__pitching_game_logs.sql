@@ -4,26 +4,14 @@
 -- original notation is kept in innings_pitched so a test can cross-check the two (see
 -- tests/stg_mlb__pitching_outs_match_innings.sql).
 --
--- Built a season at a time. DuckDB holds every parsed payload of a run at once, and two
--- seasons took the build to its memory limit, so dbt runs this model once per calendar
--- year (microbatch), reading one season's captures through stg_raw__season_responses.
--- Every build redoes every season. On BigQuery it is a plain table (spec 0143, ADRs 0058
--- to 0060).
+-- The boxscores come from the boxscore capture view (stg_raw__mlb_boxscore, spec 0150),
+-- which parses each file as it reads it.
 
-{{ config(
-    materialized=('incremental' if target.type == 'duckdb' else 'table'),
-    incremental_strategy=('microbatch' if target.type == 'duckdb' else none),
-    event_time='season_start',
-    batch_size='year',
-    begin=var('first_season_start'),
-    lookback=fo_batches_back_to_first_season(),
-    concurrent_batches=false,
-    on_schema_change='fail'
-) }}
+{{ config(materialized='table') }}
 
 with players as (
 
-    {{ fo_boxscore_players(ref('stg_raw__season_responses')) }}
+    {{ fo_boxscore_players() }}
 
 )
 
@@ -60,8 +48,7 @@ select
     {{ fo_json_int('player', '$.stats.pitching.completeGames') }} as complete_games,
     {{ fo_json_int('player', '$.stats.pitching.shutouts') }} as shutouts,
 
-    {{ fo_parse_fetched_at() }} as fetched_at,
-    season_start
+    {{ fo_parse_fetched_at() }} as fetched_at
 from players
 where {{ fo_json_int('player', '$.stats.pitching.gamesPitched') }} = 1
 {{ fo_latest_by_entity(['game_pk', fo_json_string('player', '$.person.id') | trim]) }}
