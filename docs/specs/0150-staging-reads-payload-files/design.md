@@ -381,3 +381,16 @@ a nested type. The two unit tests of `stg_raw__season_responses` go with it.
   so it now holds nine capture views and no longer `stg_raw__season_responses`: 43 models,
   materializations (24, 0, 18, 1), tests (228, 198, 30), 81 unit tests. The pins exist to
   catch an unintended change to the slice; this one is the design's.
+- **2026-10-15, a boxscore player is a struct of small JSON parts, not one JSON value.**
+  The amendment above kept each boxscore player as one JSON value. On the eight seasons the
+  first build from empty with the committed profile was killed by the kernel at a 15.8 GB
+  peak, and `stg_mlb__batting_game_logs` alone peaked at 15 GB uncapped and needed 4 GB
+  under a cap: a player's JSON holds his season stats and fielding, most of a boxscore.
+  `stg_raw__mlb_boxscore` now declares a player as `person`, `position`, `battingOrder`,
+  `gameStatus` and `stats.batting` / `stats.pitching`, each a JSON value, and drops the rest
+  while reading; the two game-log models read the same fields with the same `fo_json_*`
+  accessors, from a shorter path (`fo_json_int('player.stats.batting', '$.hits')` for
+  `fo_json_int('player', '$.stats.batting.hits')`), so their semantics do not change. The
+  shape alone reads every capture under a 1 GB limit (5.6 s); the models, with their window,
+  pass just above it. The rebuild from empty then passed with the committed profile:
+  load 21 s, `dbt build` 179 s at a 9.2 GB peak.
