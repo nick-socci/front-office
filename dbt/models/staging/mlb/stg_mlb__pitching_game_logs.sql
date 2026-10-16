@@ -97,4 +97,6 @@ from lines
 -- he changed teams) ties on fetched_at, since both sides are one capture. The line with
 -- the most batters faced is kept, the one where he played, then the side, so the choice
 -- is stated and not left to row order (rule 5; the owner's decision, 2026-10-15).
-{{ fo_latest_by_entity(['game_pk', 'person_key'], order_by='fetched_at desc, batters_faced desc, side') }}
+{{ fo_latest_by_entity(
+    ['game_pk', 'person_key'], order_by='fetched_at desc, batters_faced desc, side'
+) }}

@@ -51,7 +51,8 @@ lines as (
         {{ fo_json_int('player.stats.batting', '$.totalBases') }} as total_bases,
         {{ fo_json_int('player.stats.batting', '$.groundIntoDoublePlay') }}
             as grounded_into_double_play,
-        {{ fo_json_int('player.stats.batting', '$.catchersInterference') }} as catchers_interference,
+        {{ fo_json_int('player.stats.batting', '$.catchersInterference') }}
+            as catchers_interference,
 
         {{ fo_parse_fetched_at() }} as fetched_at,
         {{ fo_json_string('player.person', '$.id') | trim }} as person_key
@@ -97,4 +98,6 @@ from lines
 -- he changed teams) ties on fetched_at, since both sides are one capture. The line with
 -- the most plate appearances is kept, the one where he played, then the side, so the choice
 -- is stated and not left to row order (rule 5; the owner's decision, 2026-10-15).
-{{ fo_latest_by_entity(['game_pk', 'person_key'], order_by='fetched_at desc, plate_appearances desc, side') }}
+{{ fo_latest_by_entity(
+    ['game_pk', 'person_key'], order_by='fetched_at desc, plate_appearances desc, side'
+) }}
