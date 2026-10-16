@@ -374,7 +374,9 @@
 #}
 {% macro duckdb__fo_captures(source_name, endpoint, structure) %}
     {%- set root = fo_landing_root() -%}
-    {%- set pattern = root ~ '/' ~ source_name ~ '/' ~ endpoint ~ '/**/fetched_at=*Z/payload.json' -%}
+    {#- The pattern goes into SQL string literals, so a quote in the root is doubled. -#}
+    {%- set pattern = (root ~ '/' ~ source_name ~ '/' ~ endpoint ~ '/**/fetched_at=*Z/payload.json')
+        | replace("'", "''") -%}
     {%- set fields = fromjson(structure | trim) if structure else none -%}
     {%- set has_files = true -%}
     {%- if execute -%}

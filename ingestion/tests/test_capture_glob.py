@@ -186,3 +186,23 @@ def test_a_declared_structure_gives_its_typed_fields_and_drops_the_rest(landing,
         {"id": 3, "roster": {"entries": [{"playerId": 11}, {"playerId": 12}]}}
     ]
     assert json.loads(stats) == {"20": 1.5, "21": 2.0}
+
+
+def test_a_landing_root_with_a_quote_in_its_path_is_read(tmp_path, monkeypatch):
+    """Catches the root being put into the SQL unescaped: a path with a quote (a user's
+    directory, "o'brien") would end the string literal and fail the view."""
+    root = tmp_path / "o'brien" / "landing"
+    path = _capture(root, "espn/settings/season=2026/fetched_at=20260101T000000Z", '{"id": 1}')
+    db = tmp_path / "warehouse.duckdb"
+    con = duckdb.connect(str(db))
+    con.execute(
+        "create schema raw; create table raw.captures (source varchar, endpoint varchar, "
+        "request_path varchar, request_key varchar, fetched_at varchar, partitions json, "
+        "file_path varchar)"
+    )
+    con.execute(
+        "insert into raw.captures values ('espn', 'settings', '/p', 'k', 'x', '{}', ?)", [path]
+    )
+    con.close()
+    rows = _rows((root, db), monkeypatch, "fo_captures('espn', 'settings')")
+    assert [row[6] for row in rows] == [path]
