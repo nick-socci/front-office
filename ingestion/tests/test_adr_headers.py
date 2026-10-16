@@ -188,6 +188,18 @@ def test_a_link_with_a_scheme_other_than_http_fails(tmp_path, target):
     fails(write_adr(tmp_path, lines=lines), "Status", "http")
 
 
+def test_link_syntax_inside_a_code_span_is_not_checked_as_a_link(tmp_path):
+    """Catches text shown as code being refused as a link the page never makes."""
+    lines = with_status("accepted; `[x](javascript:alert(1))` and `[y](0099-gone.md)` are code")
+    assert adr_index.read_adr(write_adr(tmp_path, lines=lines)).status_word == "accepted"
+
+
+def test_a_spec_link_inside_a_code_span_does_not_count(tmp_path):
+    """Catches a Spec line whose only link-shaped text is code being read as its link."""
+    lines = ["- Status: accepted", "- Date: 2026-10-12", f"- Spec: `{SPEC_LINK}`"]
+    fails(write_adr(tmp_path, lines=lines), "Spec", "one link")
+
+
 def test_a_link_fragment_is_stripped_before_the_check(tmp_path):
     """Catches `file.md#section` being looked up as a file with that name."""
     path = write_adr(tmp_path, lines=with_status("accepted; see [x](0002-y.md#why)"))
@@ -327,13 +339,25 @@ def test_a_readme_without_adr_links_is_clean(tmp_path):
 
 @pytest.mark.parametrize(
     "text",
-    ["[0001](<0001-x.md>)", "[0001][1]\n\n[1]: 0001-x.md", "[0001](./0001-x.md#why)"],
+    [
+        "[0001](<0001-x.md>)",
+        "[0001][1]\n\n[1]: 0001-x.md",
+        "[0001](./0001-x.md#why)",
+        '<a href="0001-x.md">0001</a>',
+    ],
 )
 def test_a_readme_linking_an_adr_in_another_markdown_form_is_caught(tmp_path, text):
     """Catches an angle-bracket, reference-style or ./ link to an ADR slipping past R3.2."""
     readme = tmp_path / "README.md"
     readme.write_text(text + "\n")
     assert adr_index.readme_links(readme) == ["0001-x.md"]
+
+
+def test_a_readme_naming_an_adr_file_without_linking_it_is_clean(tmp_path):
+    """Catches R3.2 (links) being widened to any mention of a filename."""
+    readme = tmp_path / "README.md"
+    readme.write_text("Files are named like `0062-the-adr-index.md`, as 0001-x.md is.\n")
+    assert adr_index.readme_links(readme) == []
 
 
 def test_the_real_readme_lists_no_adr():
@@ -424,6 +448,13 @@ def test_render_keeps_link_syntax_inside_a_code_span_as_code(tmp_path):
     page = adr_index.render([adr_index.read_adr(path)])
     assert "<code>[a](https://example.com/b)</code>" in page
     assert '<a href="https://example.com/b"' not in page
+
+
+def test_render_keeps_a_link_whose_label_is_code(tmp_path):
+    """Catches a code span inside a link label breaking the link apart."""
+    path = write_adr(tmp_path, lines=with_status("accepted; see [`x_y`](https://example.com/b)"))
+    page = adr_index.render([adr_index.read_adr(path)])
+    assert '<a href="https://example.com/b"><code>x_y</code></a>' in page
 
 
 def test_the_real_adrs_render():

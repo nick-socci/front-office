@@ -30,9 +30,15 @@ URL_SCHEME = re.compile(r"^([A-Za-z][A-Za-z0-9+.-]*):")
 WEB_SCHEMES = ("http", "https")
 ADR_FILE = "[0-9][0-9][0-9][0-9]-*.md"
 CODE_SPAN = re.compile(r"`([^`]+)`")
-# An ADR filename anywhere in a text, in whatever markdown form links it: inline, in angle
-# brackets, or as a reference definition.
-ADR_NAME = re.compile(r"(?<![\w-])[0-9]{4}-[\w.-]*?\.md(?![\w-])")
+# A link or a code span, whichever starts first: link syntax inside a code span is code,
+# and a code span inside a link's label is part of the link.
+TOKEN = re.compile(f"{LINK.pattern}|{CODE_SPAN.pattern}")
+# A link's destination in a README: inline (bare or in angle brackets), a reference
+# definition, or an HTML href.
+README_LINK = re.compile(
+    r"\]\(\s*<?([^)>\s]+)>?[^)]*\)|^ {0,3}\[[^\]]+\]:\s*<?([^>\s]+)>?|href=[\"']([^\"']+)[\"']",
+    re.MULTILINE,
+)
 # A clause of a Status line that names what this ADR amends or supersedes, up to the next `;`.
 NAMING_CLAUSE = re.compile(r"(?:^|[;,])\s*(?:amends|supersedes)\b([^;]*)")
 
@@ -85,8 +91,13 @@ def _required(path: Path, header: list[str], key: str) -> str:
     return line
 
 
+def _links(text: str) -> list[tuple[str, str]]:
+    """The (label, target) of every markdown link in `text` outside code spans."""
+    return [(m.group(1), m.group(2)) for m in TOKEN.finditer(text) if m.group(2) is not None]
+
+
 def _check_links(path: Path, key: str, line: str) -> None:
-    for _text, target in LINK.findall(line):
+    for _text, target in _links(line):
         scheme = URL_SCHEME.match(target)
         if scheme:
             if scheme.group(1).lower() not in WEB_SCHEMES:
@@ -131,7 +142,7 @@ def read_adr(path: Path) -> Adr:
     except ValueError:
         raise AdrError(path, f"the Date {date!r} is not a real date") from None
 
-    spec_links = LINK.findall(spec)
+    spec_links = _links(spec)
     if len(spec_links) != 1:
         raise AdrError(
             path, f"the Spec line must hold exactly one link, it holds {len(spec_links)}"
@@ -184,7 +195,7 @@ def read_all(adr_dir: Path) -> list[Adr]:
 def _file_targets(text: str) -> list[str]:
     """The `NNNN-*.md` files, in the same directory, that the links in `text` point to."""
     names = []
-    for _text, target in LINK.findall(text):
+    for _text, target in _links(text):
         file_part = posixpath.normpath(target.split("#", 1)[0])
         if "/" not in file_part and fnmatch(file_part, ADR_FILE):
             names.append(file_part)
@@ -219,7 +230,13 @@ def _check_amendments(adrs: list[Adr]) -> None:
 
 def readme_links(path: Path) -> list[str]:
     """The `NNNN-*.md` link targets a README holds (it should hold none)."""
-    return ADR_NAME.findall(path.read_text(encoding="utf-8"))
+    names = []
+    for match in README_LINK.finditer(path.read_text(encoding="utf-8")):
+        target = next(group for group in match.groups() if group is not None)
+        name = posixpath.basename(target.split("#", 1)[0])
+        if fnmatch(name, ADR_FILE):
+            names.append(name)
+    return names
 
 
 CSS = """\
@@ -243,19 +260,19 @@ def _href(target: str, repo_url: str) -> str:
 
 
 def _status_cell(text: str, repo_url: str) -> str:
-    """Escaped text with `code` and, outside code spans, [text](target) turned into HTML."""
-    parts = CODE_SPAN.split(text)  # odd indices are the insides of code spans
+    """Escaped text with its code spans and links (outside code spans) turned into HTML."""
     out = []
-    for i, part in enumerate(parts):
-        escaped = html.escape(part)
-        if i % 2:
-            out.append(f"<code>{escaped}</code>")
+    position = 0
+    for m in TOKEN.finditer(text):
+        out.append(html.escape(text[position : m.start()]))
+        label, target, code = m.groups()
+        if target is not None:
+            shown = CODE_SPAN.sub(r"<code>\1</code>", html.escape(label))
+            out.append(f'<a href="{html.escape(_href(target, repo_url))}">{shown}</a>')
         else:
-            out.append(
-                LINK.sub(
-                    lambda m: f'<a href="{_href(m.group(2), repo_url)}">{m.group(1)}</a>', escaped
-                )
-            )
+            out.append(f"<code>{html.escape(code)}</code>")
+        position = m.end()
+    out.append(html.escape(text[position:]))
     return "".join(out)
 
 
