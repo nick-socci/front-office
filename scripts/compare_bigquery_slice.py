@@ -24,14 +24,15 @@ Usage:  uv run --group bigquery python scripts/compare_bigquery_slice.py \\
    For each column the count of exactly equal values and the largest differences are
    printed.
 
-6. A JSON column is neither read back nor compared, and is printed as such: a JSON value
-   is billed whole when queried, and BigQuery rewrites its text.
-7. The capture views (`stg_raw__*`, spec 0150) are not compared, and are listed as such.
-   On BigQuery each is a view over the uploaded payloads, so reading one back would bill
-   its endpoint's payloads whole; their fields are nested values the two warehouses spell
-   differently; and BigQuery holds only the endpoints of `spike_load_bigquery.UPLOADED`,
-   two of them projected (ADRs 0054, 0061). What they give is held by the staging models
-   built on them, which are compared exactly.
+6. A JSON or nested column (a struct, list or map; a BigQuery RECORD or REPEATED field)
+   is neither read back nor compared, and is printed as such: a JSON value is billed whole
+   when queried and BigQuery rewrites its text, and the two warehouses spell a nested value
+   differently. Both sides must still have the column.
+7. The capture views (`stg_raw__*`, spec 0150) are compared like any relation, on their
+   scalar columns: the manifest's key and path, and the payload fields read as plain
+   values (a league id, a season). Selecting only those from a BigQuery view leaves its
+   payload unread, so it costs little. Their nested fields are what the staging models
+   built on them read, and those models are compared exactly.
 
 Exit 0 only if every relation passes. One line per relation either way.
 
@@ -69,19 +70,19 @@ ABSOLUTE_TOLERANCE = 1e-12
 NEAR_ZERO = 1e-3
 MAXIMUM_BYTES_BILLED = 10_000_000_000
 DBT_ROOT = Path(__file__).resolve().parents[1] / "dbt"
-# The capture views: read through the staging models built on them, never compared (7.).
-CAPTURE_VIEW_PREFIX = "stg_raw__"
 
 
-def without_capture_views(
-    relations: list[tuple[str, str, list[str] | None]],
-) -> tuple[list[tuple[str, str, list[str] | None]], list[str]]:
-    """The relations to compare, and the `schema.name` of the capture views left out."""
-    kept = [r for r in relations if not r[1].startswith(CAPTURE_VIEW_PREFIX)]
-    left_out = [
-        f"{schema}.{name}" for schema, name, _ in relations if name.startswith(CAPTURE_VIEW_PREFIX)
-    ]
-    return kept, left_out
+def is_uncompared(data_type: str) -> bool:
+    """A DuckDB column type that is not compared by value: JSON, or a nested type."""
+    upper = data_type.upper()
+    return (
+        is_json(data_type) or upper.startswith(("STRUCT(", "MAP(", "UNION(")) or upper.endswith("]")
+    )
+
+
+def _bq_uncompared(field: Any) -> bool:
+    mode = (getattr(field, "mode", None) or "NULLABLE").upper()
+    return field.field_type.upper() in ("JSON", "RECORD", "STRUCT") or mode == "REPEATED"
 
 
 _KINDS = {
@@ -182,8 +183,8 @@ def compare_relation(
     # JSON columns first, by schema alone: a side's are those its catalog types JSON and
     # those BigQuery's schema listed and that were not read back. They are never compared
     # by value; both sides must have the column, and have it as JSON.
-    left_json = {n for n, t in left_columns.items() if is_json(t)} | left_unread
-    right_json = {n for n, t in right_columns.items() if is_json(t)} | right_unread
+    left_json = {n for n, t in left_columns.items() if is_uncompared(t)} | left_unread
+    right_json = {n for n, t in right_columns.items() if is_uncompared(t)} | right_unread
     for name in sorted(left_json | right_json):
         if name in left_json and name in right_json:
             result.uncompared.append(name)
@@ -311,13 +312,14 @@ def slice_relations(target_path: Path) -> list[tuple[str, str, list[str] | None]
 
 
 def fields_read_back(schema: Any) -> list[Any]:
-    """The fields of a BigQuery relation that are read back: every one that is not JSON."""
-    return [f for f in schema if f.field_type.upper() != "JSON"]
+    """The fields of a BigQuery relation that are read back: every one that is neither
+    JSON nor nested (6.)."""
+    return [f for f in schema if not _bq_uncompared(f)]
 
 
 def fields_left_unread(schema: Any) -> set[str]:
-    """The names of the JSON fields of a BigQuery relation, which are not read back."""
-    return {f.name for f in schema if f.field_type.upper() == "JSON"}
+    """The names of the JSON and nested fields of a BigQuery relation, not read back."""
+    return {f.name for f in schema if _bq_uncompared(f)}
 
 
 def read_back(
@@ -365,7 +367,7 @@ def describe(result: Result, left_name: str, right_name: str) -> list[str]:
     ]
     lines.extend(f"       {problem}" for problem in result.problems)
     if result.uncompared:
-        lines.append(f"       JSON columns not compared: {', '.join(result.uncompared)}")
+        lines.append(f"       JSON or nested columns not compared: {', '.join(result.uncompared)}")
     for name, column in result.floats.items():
         lines.append(
             f"       float {name}: {column.compared} compared, {column.exactly_equal} "
@@ -386,11 +388,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     with tempfile.TemporaryDirectory() as scratch:
-        relations, left_out = without_capture_views(slice_relations(Path(scratch) / "dbt_target"))
-        print(
-            "not compared, capture views (read through their staging models): "
-            + ", ".join(left_out)
-        )
+        relations = slice_relations(Path(scratch) / "dbt_target")
         con = duckdb.connect()
         con.execute(f"attach '{Path(scratch) / 'bq.duckdb'}' as bq")
         unread = read_back(con, args.project, "bq", relations)

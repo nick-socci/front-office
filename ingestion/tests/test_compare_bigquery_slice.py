@@ -252,7 +252,7 @@ def test_a_json_column_is_not_compared_and_is_named(con: duckdb.DuckDBPyConnecti
     assert result.problems == [] and result.passed
     assert result.uncompared == ["payload"]
     assert any(
-        "JSON columns not compared: payload" in line
+        "JSON or nested columns not compared: payload" in line
         for line in cmp.describe(result, "DuckDB", "BigQuery")
     )
 
@@ -290,9 +290,12 @@ def test_the_json_fields_left_unread_are_reported_by_name() -> None:
     schema = [
         SimpleNamespace(name="source", field_type="STRING"),
         SimpleNamespace(name="payload", field_type="json"),
+        SimpleNamespace(name="teams", field_type="RECORD", mode="REPEATED"),
+        SimpleNamespace(name="eligible", field_type="INT64", mode="REPEATED"),
+        SimpleNamespace(name="season", field_type="INT64", mode="NULLABLE"),
     ]
-    assert cmp.fields_left_unread(schema) == {"payload"}
-    assert [f.name for f in cmp.fields_read_back(schema)] == ["source"]
+    assert cmp.fields_left_unread(schema) == {"payload", "teams", "eligible"}
+    assert [f.name for f in cmp.fields_read_back(schema)] == ["source", "season"]
 
 
 def test_a_json_column_that_bigquery_holds_as_text_is_a_problem(
@@ -322,21 +325,40 @@ def test_only_the_fields_that_are_not_json_are_read_back() -> None:
     assert [f.name for f in cmp.fields_read_back(schema)] == ["source", "season_start"]
 
 
-# -- the capture views are left out (spec 0150) ------------------------------------------
+# -- nested columns are left out like JSON; the rest of a capture view is compared ---------
 
 
-def test_the_capture_views_are_left_out_and_named_and_nothing_else_is() -> None:
-    """Catches a capture view being read back from BigQuery, which would bill its endpoint's
-    payloads whole, and catches the rule reaching a model, which must be compared."""
-    relations = [
-        ("staging", "stg_raw__espn_roster", None),
-        ("staging", "stg_espn__roster_entries", ["league_id"]),
-        ("marts", "fct_matchup_results", None),
-        ("staging", "stg_raw__mlb_boxscore", None),
-    ]
-    kept, left_out = cmp.without_capture_views(relations)
-    assert kept == [relations[1], relations[2]]
-    assert left_out == ["staging.stg_raw__espn_roster", "staging.stg_raw__mlb_boxscore"]
+def test_a_nested_column_is_not_compared_and_the_scalar_columns_are(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Catches a capture view's nested field (spelled differently by the two warehouses)
+    failing the comparison, and catches its scalar columns, the capture's identity, not
+    being compared (spec 0150, PR #157 review)."""
+    con.execute(
+        f"create table local.{RELATION} (file_path varchar, id varchar, teams struct(id bigint)[])"
+    )
+    con.execute(f"create table bq.{RELATION} (file_path varchar, id varchar)")
+    con.execute(f"insert into local.{RELATION} values ('a', '7', [{{'id': 3}}])")
+    con.execute(f"insert into bq.{RELATION} values ('a', '7')")
+    result = compare(con, right_unread={"teams"})
+    assert result.passed and result.uncompared == ["teams"]
+
+    con.execute(f"update bq.{RELATION} set id = '8'")
+    assert not compare(con, right_unread={"teams"}).passed
+
+
+def test_nested_duckdb_types_are_recognised() -> None:
+    """Catches a nested type being compared by value, or a scalar one being skipped."""
+    for nested in (
+        "STRUCT(id BIGINT)[]",
+        "MAP(VARCHAR, JSON)",
+        "STRUCT(a JSON)",
+        "BIGINT[]",
+        "JSON",
+    ):
+        assert cmp.is_uncompared(nested), nested
+    for scalar in ("VARCHAR", "BIGINT", "DOUBLE", "DATE", "TIMESTAMP"):
+        assert not cmp.is_uncompared(scalar), scalar
 
 
 def test_json_columns_are_held_to_the_same_schema_whichever_side_has_them(

@@ -410,10 +410,20 @@ a nested type. The two unit tests of `stg_raw__season_responses` go with it.
   join written as a left join from the files). The full ladder after the change: 2026 at
   2 GB, eight seasons at 8 GB, where 4 GB fails only because the heavy models that dbt's
   four threads build at once share one limit (`stg_espn__player_game_stats` alone passes
-  eight seasons at 1 GB). R6.2 is therefore not met; this is reported to the owner.
+  eight seasons at 1 GB). R6.2 is therefore not met. Reported to the owner, who decided
+  on 2026-10-15 to ship without it rather than be held up by the historical seasons; the
+  remaining growth is #156. The rest of ADR 0065's bar (the committed profile builds
+  every season from empty) holds.
 - **2026-10-15, the game-log dedup's tie-break (owner's decision).** Game 746942 lists player
   643376 on both sides (a suspended game resumed after he changed teams); both rows have
   one fetched_at, so the dedup's order was left to row order (rule 5) and a reshaped query
   kept the other row. The owner chose: most plate appearances (batters faced, for
   pitching), then side. That keeps the line where he played, `main`'s row: 58 of 58
   relations identical to the baseline again.
+- **2026-10-15, the BigQuery slice comparison compares the capture views on their scalar
+  columns (PR #157 review, F2).** A JSON or nested column (struct, list, map; BigQuery's
+  RECORD and REPEATED) is neither read back nor compared, as JSON was before; the rest of
+  a capture view, the manifest's key and path and the payload fields read as plain values,
+  is compared like any relation. Selecting those from a BigQuery view leaves the payload
+  unread (about 10 MB billed per view). On 2026: 42 of 42 relations pass, the nine capture
+  views among them.
