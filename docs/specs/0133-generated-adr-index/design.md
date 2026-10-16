@@ -205,3 +205,30 @@ Each new test is seen to fail against the code it covers before the PR opens.
 | design-review | F5 (P2): `README.md` says the site is three files | C15 and the prose section name line 234; task 6 changes it |
 
 ## Amendments
+
+### 2026-10-15: the status cell shows the `Amends` and `Supersedes` lines, and amendments are named both ways
+
+Found at task 1. C10 says the nine statuses that differ between table and file differ
+"each because the file says more". That holds for six. For 0048 and 0056 the table's cell
+added `amends [X]`, which those files hold on their `Amends:` line, not in `Status`; for
+0045 the table said `amended by [0048]`, which no file said. Rendering the `Status` line
+alone would have dropped all three. Four amended ADRs did not name their amender in their
+`Status` line: 0025 (by 0030), 0026 (by 0056), 0029 (by 0031) and 0045 (by 0048). The
+owner chose, on 2026-10-15:
+
+- **R1.3, amended.** The status cell is the file's `Status` line whole, followed by its
+  `Amends:` and `Supersedes:` lines when it has them, each under its own key and rendered
+  as R1.3 says. Every cell is still the file's own text, so the decision of ADR 0062 stands;
+  its *Decision* section says so.
+- **The four `Status` lines gain `amended by [X]`**, in the form 0010, 0012 and 0013 use.
+  This corrects their record; it is not a rewrite to suit the generator, so the first
+  no-go is not crossed.
+- **R2.5, added.** THE SYSTEM SHALL fail the tests IF an `accepted` ADR names another ADR
+  in its `Amends:` or `Supersedes:` line, or in a clause of its `Status` line that opens
+  `amends` or `supersedes`, and that ADR's `Status` line does not link it. A `proposed`
+  ADR is not held to it: an amendment takes effect when it is accepted, which is when the
+  build marks the ADR it amends (as #150's first commit marks 0052 and 0058 to 0060).
+
+The expected values change with it: the status comparison of task 8 is made against the
+`Status` line plus those two lines, and the four corrected lines are among its
+differences.

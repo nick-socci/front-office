@@ -1,6 +1,6 @@
 # 0045. An example query is an exposure the gates check, and the planned dashboard reads every mart
 
-- Status: accepted
+- Status: accepted, amended by [0048](0048-an-example-is-held-to-stated-counts-on-the-fixtures.md)
 - Date: 2026-10-09
 - Spec: [0013-docs-lint-exposures](../specs/0013-docs-lint-exposures/design.md) · Issue: #13
 

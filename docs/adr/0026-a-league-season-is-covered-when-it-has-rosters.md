@@ -1,6 +1,6 @@
 # 0026. A league-season is covered when it has rosters, and value models build only for covered ones
 
-- Status: accepted
+- Status: accepted, amended by [0056](0056-a-covered-league-season-says-whether-it-has-a-transaction-log.md)
 - Date: 2026-10-08
 - Spec: [0085-past-season-matchups](../specs/0085-past-season-matchups/design.md) · Issue: #85
 
