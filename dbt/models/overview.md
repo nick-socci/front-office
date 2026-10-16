@@ -8,6 +8,7 @@ one holds, the SQL that builds it, the tests on it, and what it is built from.
 
 The code, the design records and the reasoning behind each decision are in the
 repository: [github.com/nick-socci/front-office](https://github.com/nick-socci/front-office).
+Every decision is listed, with its status, on the [decisions](decisions.html) page.
 
 ## Start with the lineage graph
 

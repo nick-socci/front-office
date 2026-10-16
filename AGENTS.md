@@ -124,6 +124,10 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
   issues say what is done. Record run evidence as issue comments.
 - **Specs** live in `docs/specs/NNNN-slug/` and **ADRs** in `docs/adr/` (see
   `.agentic/config.toml`). `docs/design/` is the pre-spec record and is not edited.
+  The index of ADRs is generated: the docs site builds its decisions page from the ADR
+  headers (ADR 0062), so no file lists the ADRs and none is edited to add one. Once a
+  record that amends or supersedes another is accepted, the other's `Status` links it
+  (`amended by`, `superseded by`); the tests fail otherwise.
 - Tests before models; say what each test is expected to catch. Never weaken a test to
   make it pass — a failing test is usually telling you something true about the data.
 - Every model opens with a comment block explaining *why*; CTEs are named for what they

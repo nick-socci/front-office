@@ -37,7 +37,7 @@ and records the conditions for doing milestone 9 before the general ingestion fi
 | [`design/01-ingestion-and-staging.md`](design/01-ingestion-and-staging.md) | Raw JSON landing zone, the warehouse, the dbt staging layer, CI. |
 | [`design/02-intermediate-and-marts.md`](design/02-intermediate-and-marts.md) | The platform-neutral intermediate layer and the marts built on it. |
 | [`specs/`](specs/) | One directory per unit of work since October 2026: requirements with expected values, a design with the alternatives weighed, and the tasks. Approved before anything is built; amended in the open, with a date, when the build shows the spec was wrong. |
-| [`adr/`](adr/README.md) | One record per decision a reasonable engineer could have made differently, with the options considered and what the choice costs. |
+| [`adr/`](adr/README.md) | One record per decision a reasonable engineer could have made differently, with the options considered and what the choice costs. Listed with status, date and spec on the docs site's [decisions](https://nick-socci.github.io/front-office/decisions.html) page. |
 | [`examples/`](examples/) | Queries to run against a built warehouse: sub-project 1's definition of done (a team's roster on one day, and what each player did in MLB that day), and one over each question the marts answer. dbt declares each as an exposure, and CI runs them. |
 | The [docs site](https://nick-socci.github.io/front-office/) | Every model's description, columns, SQL and tests, and the graph of what feeds what. Built by CI from the fixtures. |
 
