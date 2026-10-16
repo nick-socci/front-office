@@ -34,11 +34,13 @@ CODE_SPAN = re.compile(r"`([^`]+)`")
 # and a code span inside a link's label is part of the link.
 TOKEN = re.compile(f"{LINK.pattern}|{CODE_SPAN.pattern}")
 # A link's destination in a README: inline (bare or in angle brackets), a reference
-# definition, or an HTML href.
+# definition, or an HTML href. Code is removed first: link syntax in it renders as text.
 README_LINK = re.compile(
-    r"\]\(\s*<?([^)>\s]+)>?[^)]*\)|^ {0,3}\[[^\]]+\]:\s*<?([^>\s]+)>?|href=[\"']([^\"']+)[\"']",
-    re.MULTILINE,
+    r"\]\(\s*<?([^)>\s]+)>?[^)]*\)|^ {0,3}\[[^\]]+\]:\s*<?([^>\s]+)>?"
+    r"|href\s*=\s*[\"']([^\"']+)[\"']",
+    re.MULTILINE | re.IGNORECASE,
 )
+CODE_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,}).*?^ {0,3}\1[^\n]*$", re.MULTILINE | re.DOTALL)
 # A clause of a Status line that names what this ADR amends or supersedes, up to the next `;`.
 NAMING_CLAUSE = re.compile(r"(?:^|[;,])\s*(?:amends|supersedes)\b([^;]*)")
 
@@ -231,7 +233,8 @@ def _check_amendments(adrs: list[Adr]) -> None:
 def readme_links(path: Path) -> list[str]:
     """The `NNNN-*.md` link targets a README holds (it should hold none)."""
     names = []
-    for match in README_LINK.finditer(path.read_text(encoding="utf-8")):
+    text = CODE_SPAN.sub("", CODE_FENCE.sub("", path.read_text(encoding="utf-8")))
+    for match in README_LINK.finditer(text):
         target = next(group for group in match.groups() if group is not None)
         name = posixpath.basename(target.split("#", 1)[0])
         if fnmatch(name, ADR_FILE):

@@ -360,6 +360,29 @@ def test_a_readme_naming_an_adr_file_without_linking_it_is_clean(tmp_path):
     assert adr_index.readme_links(readme) == []
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Write a row as `[0001](0001-x.md)`.",
+        "Like this:\n\n```markdown\n| [0001](0001-x.md) | A title |\n```\n",
+        "Like this:\n\n~~~\n[1]: 0001-x.md\n~~~\n",
+    ],
+)
+def test_link_syntax_in_readme_code_is_not_a_link(tmp_path, text):
+    """Catches an example in a code span or fence, which renders as text, failing R3.2."""
+    readme = tmp_path / "README.md"
+    readme.write_text(text)
+    assert adr_index.readme_links(readme) == []
+
+
+@pytest.mark.parametrize("anchor", ['<a HREF="0001-x.md">', "<a href = '0001-x.md'>"])
+def test_an_html_link_in_any_case_or_spacing_is_caught(tmp_path, anchor):
+    """Catches an HTML link to an ADR slipping past R3.2 by case or spacing."""
+    readme = tmp_path / "README.md"
+    readme.write_text(f"{anchor}0001</a>\n")
+    assert adr_index.readme_links(readme) == ["0001-x.md"]
+
+
 def test_the_real_readme_lists_no_adr():
     """Catches the hand-kept table coming back."""
     assert adr_index.readme_links(REPO / "docs" / "adr" / "README.md") == []
