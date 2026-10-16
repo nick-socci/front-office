@@ -322,44 +322,21 @@ def test_only_the_fields_that_are_not_json_are_read_back() -> None:
     assert [f.name for f in cmp.fields_read_back(schema)] == ["source", "season_start"]
 
 
-# -- the raw responses' mirror is held to the endpoints that were uploaded -------------------
+# -- the capture views are left out (spec 0150) ------------------------------------------
 
 
-def test_the_raw_mirror_is_compared_over_the_uploaded_endpoints_only(
-    con: duckdb.DuckDBPyConnection,
-) -> None:
-    """Catches stg_raw__season_responses failing on rows BigQuery is never given: only the
-    endpoints of spike_load_bigquery.UPLOADED leave the machine (ADR 0054, 0061), so DuckDB's
-    view holds captures (espn/teams, with members' names) that BigQuery's cannot. And
-    catches the filter hiding a real difference in an uploaded endpoint."""
-    ddl = "(source varchar, endpoint varchar, request_key varchar, season_start date)"
-    con.execute(f"create table local.{RELATION} {ddl}")
-    con.execute(f"create table bq.{RELATION} {ddl}")
-    con.execute(
-        f"insert into local.{RELATION} values "
-        "('espn', 'roster', 'a', date '2026-01-01'), ('espn', 'teams', 'b', date '2026-01-01')"
-    )
-    con.execute(f"insert into bq.{RELATION} values ('espn', 'roster', 'a', date '2026-01-01')")
-    assert not compare(con).passed
-
-    result = compare(con, left_where=cmp.uploaded_endpoints_only())
-    assert result.passed and (result.left_rows, result.right_rows) == (1, 1)
-
-    con.execute(f"update bq.{RELATION} set season_start = date '2025-01-01'")
-    assert not compare(con, left_where=cmp.uploaded_endpoints_only()).passed
-
-
-def test_only_the_raw_mirror_is_held_to_the_uploaded_endpoints() -> None:
-    """Catches the filter reaching a model, where a missing row is a real difference."""
-    assert cmp.left_filter("staging.stg_raw__season_responses", bq_against_bq=False) == (
-        cmp.uploaded_endpoints_only()
-    )
-    assert cmp.left_filter("staging.stg_espn__roster_entries", bq_against_bq=False) is None
-    assert cmp.left_filter("staging.stg_raw__season_responses", bq_against_bq=True) is None
-    assert "('espn', 'roster')" in cmp.uploaded_endpoints_only()
-    assert "('espn', 'matchup_days')" in cmp.uploaded_endpoints_only()
-    assert "('espn', 'transactions')" in cmp.uploaded_endpoints_only()
-    assert "teams" not in cmp.uploaded_endpoints_only()
+def test_the_capture_views_are_left_out_and_named_and_nothing_else_is() -> None:
+    """Catches a capture view being read back from BigQuery, which would bill its endpoint's
+    payloads whole, and catches the rule reaching a model, which must be compared."""
+    relations = [
+        ("staging", "stg_raw__espn_roster", None),
+        ("staging", "stg_espn__roster_entries", ["league_id"]),
+        ("marts", "fct_matchup_results", None),
+        ("staging", "stg_raw__mlb_boxscore", None),
+    ]
+    kept, left_out = cmp.without_capture_views(relations)
+    assert kept == [relations[1], relations[2]]
+    assert left_out == ["staging.stg_raw__espn_roster", "staging.stg_raw__mlb_boxscore"]
 
 
 def test_json_columns_are_held_to_the_same_schema_whichever_side_has_them(

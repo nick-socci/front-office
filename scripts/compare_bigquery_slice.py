@@ -24,13 +24,14 @@ Usage:  uv run --group bigquery python scripts/compare_bigquery_slice.py \\
    For each column the count of exactly equal values and the largest differences are
    printed.
 
-6. A JSON column is neither read back nor compared, and is printed as such: it is the raw
-   payload (stg_raw__season_responses, spec 0143), which is billed whole when queried and
-   whose text BigQuery rewrites.
-7. `stg_raw__season_responses` is the raw table under another name, and BigQuery's raw
-   table is given only the endpoints of `spike_load_bigquery.UPLOADED`: ADR 0054's seven
-   allowlisted ones whole and ADR 0061's two projected ones. DuckDB's
-   side of that one relation is held to those endpoints, and the line says so.
+6. A JSON column is neither read back nor compared, and is printed as such: a JSON value
+   is billed whole when queried, and BigQuery rewrites its text.
+7. The capture views (`stg_raw__*`, spec 0150) are not compared, and are listed as such.
+   On BigQuery each is a view over the uploaded payloads, so reading one back would bill
+   its endpoint's payloads whole; their fields are nested values the two warehouses spell
+   differently; and BigQuery holds only the endpoints of `spike_load_bigquery.UPLOADED`,
+   two of them projected (ADRs 0054, 0061). What they give is held by the staging models
+   built on them, which are compared exactly.
 
 Exit 0 only if every relation passes. One line per relation either way.
 
@@ -52,7 +53,6 @@ from typing import Any
 
 import duckdb
 
-from spike_load_bigquery import UPLOADED
 from warehouse_diff import (
     columns,
     count_except,
@@ -69,23 +69,19 @@ ABSOLUTE_TOLERANCE = 1e-12
 NEAR_ZERO = 1e-3
 MAXIMUM_BYTES_BILLED = 10_000_000_000
 DBT_ROOT = Path(__file__).resolve().parents[1] / "dbt"
-# The relations that mirror raw.api_responses row for row.
-RAW_MIRRORS = frozenset({"staging.stg_raw__season_responses"})
+# The capture views: read through the staging models built on them, never compared (7.).
+CAPTURE_VIEW_PREFIX = "stg_raw__"
 
 
-def uploaded_endpoints_only() -> str:
-    """A WHERE clause keeping the captures that are uploaded to BigQuery: the nine endpoints
-    of spike_load_bigquery.UPLOADED (ADR 0054's seven and ADR 0061's two projected ones)."""
-    pairs = ", ".join(f"('{source}', '{endpoint}')" for source, endpoint in UPLOADED)
-    return f"(source, endpoint) in ({pairs})"
-
-
-def left_filter(relation: str, *, bq_against_bq: bool) -> str | None:
-    """What DuckDB's side of a relation is held to: the uploaded endpoints for a mirror of
-    the raw table, nothing otherwise. Two BigQuery builds read the same raw table."""
-    if relation in RAW_MIRRORS and not bq_against_bq:
-        return uploaded_endpoints_only()
-    return None
+def without_capture_views(
+    relations: list[tuple[str, str, list[str] | None]],
+) -> tuple[list[tuple[str, str, list[str] | None]], list[str]]:
+    """The relations to compare, and the `schema.name` of the capture views left out."""
+    kept = [r for r in relations if not r[1].startswith(CAPTURE_VIEW_PREFIX)]
+    left_out = [
+        f"{schema}.{name}" for schema, name, _ in relations if name.startswith(CAPTURE_VIEW_PREFIX)
+    ]
+    return kept, left_out
 
 
 _KINDS = {
@@ -170,7 +166,7 @@ def compare_relation(
     right_name: str = "BigQuery",
 ) -> Result:
     """Compare one relation held in two attached catalogs; `left` is DuckDB's build.
-    `left_where` holds the left side to some of its rows (see `left_filter`).
+    `left_where` holds the left side to some of its rows.
     `left_unread` and `right_unread` name the JSON columns a side has in BigQuery and that
     were not read back: such a column is present on that side, though not in the catalog."""
     left_unread, right_unread = left_unread or set(), right_unread or set()
@@ -390,7 +386,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     with tempfile.TemporaryDirectory() as scratch:
-        relations = slice_relations(Path(scratch) / "dbt_target")
+        relations, left_out = without_capture_views(slice_relations(Path(scratch) / "dbt_target"))
+        print(
+            "not compared, capture views (read through their staging models): "
+            + ", ".join(left_out)
+        )
         con = duckdb.connect()
         con.execute(f"attach '{Path(scratch) / 'bq.duckdb'}' as bq")
         unread = read_back(con, args.project, "bq", relations)
@@ -407,7 +407,6 @@ def main(argv: list[str] | None = None) -> int:
             right, names = "bq", ("DuckDB", "BigQuery")
         failed = total_rows = 0
         for schema, name, key in relations:
-            where = left_filter(f"{schema}.{name}", bq_against_bq=bool(args.bq_against_bq))
             result = compare_relation(
                 con,
                 left,
@@ -415,15 +414,12 @@ def main(argv: list[str] | None = None) -> int:
                 f"{schema}.{name}",
                 key,
                 exact_floats=bool(args.bq_against_bq),
-                left_where=where,
                 left_unread=left_unread.get(f"{schema}.{name}"),
                 right_unread=unread.get(f"{schema}.{name}"),
                 left_name=names[0],
                 right_name=names[1],
             )
             print("\n".join(describe(result, *names)))
-            if where:
-                print(f"       {names[0]} held to the endpoints uploaded to BigQuery (ADR 0054)")
             failed += not result.passed
             total_rows += result.left_rows
         print(
