@@ -341,4 +341,89 @@ a nested type. The two unit tests of `stg_raw__season_responses` go with it.
 
 ## Amendments
 
-<Dated entries if the approved design changes during build. Empty until then.>
+- **2026-10-15, `scripts/verify_migration.py` is left unchanged.** *Detailed design* listed
+  it among the readers of the old table. It verifies spec 0029's landing-layout migration,
+  which is finished, by comparing two warehouses of the old shape; those keep
+  `raw.api_responses`, so it has nothing to read in `raw.captures`. Its test builds its own
+  old-shape warehouses instead of using the loader. Within the goals and no-goes.
+- **2026-10-15, the capture views are tested by `test_capture_glob.py` and a data test, not
+  by dbt unit tests.** Task 5 asked for unit tests per capture view. A dbt unit test
+  replaces a view's `ref()` and `source()` inputs, and the file read is neither: that is
+  why ADR 0068 puts the read in a view at all. R3.2 and R3.3 are held instead by
+  `ingestion/tests/test_capture_glob.py` (the whole-document read gives one row for an
+  array; a declared structure, map included, gives its typed fields and drops the rest),
+  and a new data test, `stg_raw__capture_views_cover_the_manifest`, checks on every build
+  that each view has exactly one row per manifest row of its endpoint, which is what
+  would catch a listed capture the glob misses. On the eight seasons: 27,417 captures,
+  every endpoint equal, 5 s.
+- **2026-10-15, a structure stops where its model already reads element by element.** The
+  roster's game-line `stats`, a matchup's two sides and a boxscore's team batting totals
+  and players stay `JSON` in the structures (the players as a map of JSON), and the models
+  keep the `fo_json_*` reads they make of those elements today. So a model's expressions,
+  and their semantics (`fo_json_exists` true for a JSON null, `fo_json_text` turning `''`
+  into null), do not change; only the megabyte document is no longer a value. The probes
+  that typed those elements fully (C7, C20) were within the same memory.
+- **2026-10-15, R3.6 binds the two shared latest-capture macros, not the small endpoints'
+  own dedups.** R3.6 says the newest capture is chosen on the manifest's columns, never by
+  ranking parsed rows. `fo_espn_latest` and `fo_latest_boxscore_responses`, which every
+  heavy endpoint's model reads through, now do exactly that (`fo_capture_keys()`, a
+  semi-join on `file_path`). Five models of small endpoints (`stg_espn__transactions`,
+  `stg_espn__transaction_logs`, `stg_mlb__games`, `stg_mlb__players`, `stg_idmap__players`)
+  dedupe their own rows with their own rules today; they keep those rules over their
+  capture view, ranking rows whose payloads are small (those eight endpoints are 0.13 GB
+  in all, C1). Rewriting their dedups would risk their rows for no memory gain.
+- **2026-10-15, `stg_raw__espn_matchup_days` also declares `scoringPeriodId`.** The view
+  table above lists `league_id`, `season` and `schedule`; the test
+  `stg_espn__matchup_days_answer_the_period_asked` reads the payload's own
+  `scoringPeriodId` (that the marker answers the period asked), so the structure gains it.
+- **2026-10-15, spec 0130's pinned slice counts move.** `test_bigquery_slice.py` and
+  `test_dbt_portable_sql_rule.py` pin the BigQuery slice's size. The slice selects parents,
+  so it now holds nine capture views and no longer `stg_raw__season_responses`: 43 models,
+  materializations (24, 0, 18, 1), tests (228, 198, 30), 81 unit tests. The pins exist to
+  catch an unintended change to the slice; this one is the design's.
+- **2026-10-15, a boxscore player is a struct of small JSON parts, not one JSON value.**
+  The amendment above kept each boxscore player as one JSON value. On the eight seasons the
+  first build from empty with the committed profile was killed by the kernel at a 15.8 GB
+  peak, and `stg_mlb__batting_game_logs` alone peaked at 15 GB uncapped and needed 4 GB
+  under a cap: a player's JSON holds his season stats and fielding, most of a boxscore.
+  `stg_raw__mlb_boxscore` now declares a player as `person`, `position`, `battingOrder`,
+  `gameStatus` and `stats.batting` / `stats.pitching`, each a JSON value, and drops the rest
+  while reading; the two game-log models read the same fields with the same `fo_json_*`
+  accessors, from a shorter path (`fo_json_int('player.stats.batting', '$.hits')` for
+  `fo_json_int('player', '$.stats.batting.hits')`), so their semantics do not change. The
+  shape alone reads every capture under a 1 GB limit (5.6 s); the models, with their window,
+  pass just above it. The rebuild from empty then passed with the committed profile:
+  load 21 s, `dbt build` 179 s at a 9.2 GB peak.
+- **2026-10-15, three models reshaped after the first ladder, and a tie-break stated.** The
+  first ladder (R6.2) passed 2026 alone at 2 GB and eight seasons only at 8 GB. Measured
+  alone (16 DuckDB threads, one dbt thread), two shapes held data that grows with the
+  seasons:
+  - the two game-log models ranked their rows with each player's JSON still attached; they
+    now extract their columns in a `lines` CTE and dedupe those narrow rows (the
+    deduplication key stays the raw text of the id, `person_key`);
+  - `stg_espn__matchup_days` read its matchups twice, one branch per side, so DuckDB held
+    every matchup with both rosters; it now reads them once, `home or away`, and keeps the
+    same `distinct`.
+  Per model, eight seasons against 2026: matchup days 2 GB / 2 GB (was 3 / 2), player game
+  stats 1 / 1, the two game-log models 3 / 2. Two further changes were tried and reverted
+  as no better or worse (each side of a boxscore in its own subquery; the capture view's
+  join written as a left join from the files). The full ladder after the change: 2026 at
+  2 GB, eight seasons at 8 GB, where 4 GB fails only because the heavy models that dbt's
+  four threads build at once share one limit (`stg_espn__player_game_stats` alone passes
+  eight seasons at 1 GB). R6.2 is therefore not met. Reported to the owner, who decided
+  on 2026-10-15 to ship without it rather than be held up by the historical seasons; the
+  remaining growth is #156. The rest of ADR 0065's bar (the committed profile builds
+  every season from empty) holds.
+- **2026-10-15, the game-log dedup's tie-break (owner's decision).** Game 746942 lists player
+  643376 on both sides (a suspended game resumed after he changed teams); both rows have
+  one fetched_at, so the dedup's order was left to row order (rule 5) and a reshaped query
+  kept the other row. The owner chose: most plate appearances (batters faced, for
+  pitching), then side. That keeps the line where he played, `main`'s row: 58 of 58
+  relations identical to the baseline again.
+- **2026-10-15, the BigQuery slice comparison compares the capture views on their scalar
+  columns (PR #157 review, F2).** A JSON or nested column (struct, list, map; BigQuery's
+  RECORD and REPEATED) is neither read back nor compared, as JSON was before; the rest of
+  a capture view, the manifest's key and path and the payload fields read as plain values,
+  is compared like any relation. Selecting those from a BigQuery view leaves the payload
+  unread (about 10 MB billed per view). On 2026: 42 of 42 relations pass, the nine capture
+  views among them.

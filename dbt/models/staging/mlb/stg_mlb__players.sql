@@ -23,10 +23,7 @@ with responses as (
         payload,
         request_key,
         fetched_at
-    from {{ source('raw', 'api_responses') }}
-    where
-        source = 'mlb'
-        and endpoint = 'players'
+    from {{ ref('stg_raw__mlb_players') }}
 
 ),
 

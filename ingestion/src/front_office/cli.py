@@ -40,7 +40,13 @@ from front_office.landing import (
     NotMigrated,
     SweepTooLarge,
 )
-from front_office.load import RawKeyCollision, RawSchemaOutdated, connect, load_landing_zone
+from front_office.load import (
+    CaptureStampInvalid,
+    RawKeyCollision,
+    RawSchemaOutdated,
+    connect,
+    load_landing_zone,
+)
 from front_office.mlb import boxscore as mlb_boxscore
 from front_office.mlb import players as mlb_players
 from front_office.mlb import schedule as mlb_schedule
@@ -499,16 +505,16 @@ def repair(
 
 @app.command("load")
 def load(raw_root: RawRoot = DEFAULT_RAW_ROOT, db: DbPath = DEFAULT_DB) -> None:
-    """Load landed JSON into raw.api_responses (safe to rerun)."""
+    """List committed captures in raw.captures, reading no payload (safe to rerun)."""
     zone = LandingZone(root=raw_root)
     warn_if_writing(zone)
     with connect(db) as con:
         try:
             inserted = load_landing_zone(con, zone)
-        except (RawKeyCollision, RawSchemaOutdated) as error:
+        except (CaptureStampInvalid, RawKeyCollision, RawSchemaOutdated) as error:
             typer.echo(str(error), err=True)
             raise typer.Exit(code=1) from None
-    typer.echo(f"loaded {inserted} new response(s) into {db}")
+    typer.echo(f"listed {inserted} new capture(s) in {db}")
 
 
 @app.command("audit")

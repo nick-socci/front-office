@@ -6,7 +6,8 @@
 -- This starts from the newest capture of each scoring period, so the first case is
 -- visible, and returns each one for which the model has no row, or more than one.
 --
--- `payload` is projected away in `header` and the model is joined on the small columns.
+-- The capture view's `schedule` is projected away in `header` and the model is joined on
+-- the small columns.
 
 with latest as (
 

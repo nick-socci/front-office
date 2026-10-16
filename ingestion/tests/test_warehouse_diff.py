@@ -491,3 +491,59 @@ def test_compare_warehouses_says_which_json_columns_it_did_not_compare(tmp_path,
     out = capsys.readouterr().out
     assert "marts.t: JSON columns not compared: payload" in out
     assert "1 identical, 0 differ" in out
+
+
+def test_an_excluded_relation_missing_from_new_is_not_a_failure(tmp_path, capsys):
+    """Catches `--exclude` not taking a relation a change removes on purpose out of the
+    comparison (spec 0150, R6.3: stg_raw__season_responses goes with batching)."""
+    import compare_warehouses
+
+    build(
+        tmp_path / "old_wh.duckdb",
+        ["create table marts.t as select 1 as a", "create table marts.gone as select 1 as a"],
+    )
+    build(tmp_path / "new_wh.duckdb", ["create table marts.t as select 1 as a"])
+    old, new = str(tmp_path / "old_wh.duckdb"), str(tmp_path / "new_wh.duckdb")
+    assert compare_warehouses.main([old, new, "--strict-columns"]) == 1
+    capsys.readouterr()
+    code = compare_warehouses.main([old, new, "--strict-columns", "--exclude", "marts.gone"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "excluded (relation): marts.gone, matching 1 relation(s)" in out
+
+
+def test_an_excluded_column_is_not_a_failure_and_another_column_still_is(tmp_path, capsys):
+    """Catches `--exclude SCHEMA.RELATION:COLUMN` excusing more than the column it names:
+    the six batched models lose season_start and nothing else (spec 0150, R6.3)."""
+    import compare_warehouses
+
+    build(tmp_path / "old_wh.duckdb", ["create table marts.t as select 1 as a, 2 as b, 3 as c"])
+    build(tmp_path / "new_wh.duckdb", ["create table marts.t as select 1 as a, 2 as b"])
+    old, new = str(tmp_path / "old_wh.duckdb"), str(tmp_path / "new_wh.duckdb")
+    assert compare_warehouses.main([old, new, "--strict-columns", "--exclude", "marts.t:c"]) == 0
+    capsys.readouterr()
+    build(tmp_path / "newer_wh.duckdb", ["create table marts.t as select 1 as a"])
+    newer = str(tmp_path / "newer_wh.duckdb")
+    assert compare_warehouses.main([old, newer, "--strict-columns", "--exclude", "marts.t:c"]) == 1
+    assert "columns only in OLD: b" in capsys.readouterr().out
+
+
+def test_exclusions_take_wildcards_and_leave_other_missing_relations_failing(tmp_path, capsys):
+    """Catches a wildcard exclusion swallowing a relation it does not match: new capture
+    views are excused by `staging.stg_raw__*`, a relation lost by mistake is not."""
+    import compare_warehouses
+
+    build(
+        tmp_path / "old_wh.duckdb",
+        ["create table marts.t as select 1 as a", "create table marts.kept as select 1 as a"],
+    )
+    build(
+        tmp_path / "new_wh.duckdb",
+        ["create table marts.t as select 1 as a", "create table marts.stg_raw__x as select 1 as a"],
+    )
+    old, new = str(tmp_path / "old_wh.duckdb"), str(tmp_path / "new_wh.duckdb")
+    code = compare_warehouses.main([old, new, "--strict-columns", "--exclude", "marts.stg_raw__*"])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "MISSING from NEW: marts.kept" in out
+    assert "stg_raw__x" not in out.replace("marts.stg_raw__*", "")

@@ -7,10 +7,7 @@ with game_lists as (
 
     -- the payload is left behind before the unnest (AGENTS.md rule 1)
     select {{ fo_json_array('payload', '$.dates[*].games[*]') }} as games
-    from {{ source('raw', 'api_responses') }}
-    where
-        source = 'mlb'
-        and endpoint = 'schedule'
+    from {{ ref('stg_raw__mlb_schedule') }}
 
 ),
 

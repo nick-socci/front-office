@@ -1,6 +1,6 @@
 # 0069. Staging models are built whole, not a season at a time
 
-- Status: proposed; supersedes [0058](0058-a-model-that-parses-a-payload-per-game-or-day-is-built-a-season-at-a-time.md), [0059](0059-every-build-rebuilds-every-season.md), [0060](0060-batched-models-are-plain-tables-on-bigquery.md)
+- Status: accepted; supersedes [0058](0058-a-model-that-parses-a-payload-per-game-or-day-is-built-a-season-at-a-time.md), [0059](0059-every-build-rebuilds-every-season.md), [0060](0060-batched-models-are-plain-tables-on-bigquery.md)
 - Date: 2026-10-14
 - Spec: [0150-staging-reads-payload-files](../specs/0150-staging-reads-payload-files/design.md) · Issue: #150
 

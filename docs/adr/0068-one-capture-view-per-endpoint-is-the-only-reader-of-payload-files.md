@@ -1,6 +1,6 @@
 # 0068. One capture view per endpoint is the only reader of payload files
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-14
 - Spec: [0150-staging-reads-payload-files](../specs/0150-staging-reads-payload-files/design.md) · Issue: #150
 

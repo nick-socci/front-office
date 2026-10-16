@@ -15,64 +15,28 @@
 -- on a roster in that period, which is every started player.
 --
 -- Same memory rules as stg_espn__roster_entries, and for the same reason -- each payload
--- is ~2.3 MB of embedded stats: parse with an explicit schema, and drop the payload
--- before any unnest. The stats object is left as JSON, and its keys and values are
--- unnested together to rows.
+-- is ~2.3 MB of embedded stats: it is read from the roster capture view, which keeps only
+-- the declared fields, and everything else is computed before any unnest. The stats
+-- object is left as JSON, and its keys and values are unnested together to rows.
 --
--- Built a season at a time. DuckDB holds every parsed payload of a run at once, and two
--- seasons took the build to its memory limit, so dbt runs this model once per calendar
--- year (microbatch), reading one season's captures through stg_raw__season_responses.
--- Every build redoes every season. On BigQuery it is a plain table (spec 0143, ADRs 0058
--- to 0060).
+-- A plain table: it reads every capture at once, as the view streams them (spec 0150).
 
-{{ config(
-    materialized=('incremental' if target.type == 'duckdb' else 'table'),
-    incremental_strategy=('microbatch' if target.type == 'duckdb' else none),
-    event_time='season_start',
-    batch_size='year',
-    begin=var('first_season_start'),
-    lookback=fo_batches_back_to_first_season(),
-    concurrent_batches=false,
-    on_schema_change='fail'
-) }}
-
-{% set roster_stats_schema %}
-[{
-  "id": "BIGINT",
-  "roster": {"entries": [{
-    "playerId": "BIGINT",
-    "playerPoolEntry": {"player": {
-      "stats": [{
-        "scoringPeriodId": "BIGINT",
-        "statSourceId": "BIGINT",
-        "statSplitTypeId": "BIGINT",
-        "externalId": "VARCHAR",
-        "stats": "JSON"
-      }]
-    }}
-  }]}
-}]
-{% endset %}
+{{ config(materialized='table') }}
 
 with latest as (
 
-    {{ fo_espn_latest(
-        'roster',
-        extra_partition='scoringPeriodId',
-        relation=ref('stg_raw__season_responses')
-    ) }}
+    {{ fo_espn_latest('roster', extra_partition='scoringPeriodId') }}
 
 ),
 
 header as (
 
     select
-        {{ fo_json_text('payload', '$.id') }} as league_id,
-        {{ fo_json_int('payload', '$.seasonId') }} as season,
+        id as league_id,
+        seasonId as season,
         {{ fo_request_param('request_key', 'scoringPeriodId') }} as scoring_period,
         fetched_at,
-        season_start,
-        {{ fo_json_parse('payload', '$.teams', roster_stats_schema) }} as teams_list
+        teams as teams_list
     from latest
 
 ),
@@ -86,7 +50,6 @@ teams as (
         season,
         scoring_period,
         fetched_at,
-        season_start,
         team.id as team_id,
         team.roster.entries as roster_entries
     from header
@@ -101,7 +64,6 @@ entries as (
         season,
         scoring_period,
         fetched_at,
-        season_start,
         team_id,
         entry.playerId as espn_player_id,
         entry.playerPoolEntry.player.stats as player_lines
@@ -117,7 +79,6 @@ lines as (
         season,
         scoring_period,
         fetched_at,
-        season_start,
         team_id,
         espn_player_id,
         line
@@ -133,7 +94,6 @@ game_lines as (
         season,
         scoring_period,
         fetched_at,
-        season_start,
         team_id,
         espn_player_id,
         line.externalId as espn_game_id,
@@ -155,7 +115,6 @@ stat_rows as (
         game_lines.season,
         game_lines.scoring_period,
         game_lines.fetched_at,
-        game_lines.season_start,
         game_lines.team_id,
         game_lines.espn_player_id,
         game_lines.espn_game_id,
@@ -178,6 +137,5 @@ select
     espn_game_id,
     cast(stat_key as bigint) as stat_id,
     {{ fo_safe_cast(fo_json_string('stat_value', '$'), fo_type_float()) }} as stat_value,
-    {{ fo_parse_fetched_at() }} as fetched_at,
-    season_start
+    {{ fo_parse_fetched_at() }} as fetched_at
 from stat_rows

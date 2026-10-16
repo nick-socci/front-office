@@ -57,11 +57,7 @@ MULTI_ROOT = REPO_ROOT / "fixtures/landing_multi"
 # tests instead (R4.1 of spec 0060), which this script runs in every single build and the
 # combined build runs too.
 #
-# stg_raw__season_responses is the raw table under another name plus a date (spec 0143): it
-# holds every league's captures, and each build's file_path column names its own temporary
-# landing directory, so no single build's rows can equal the combined build's. The raw table
-# itself is not compared either. What it carries into the models is compared there.
-EXEMPT_FROM_ROW_COMPARISON = frozenset({"dim_players", "stg_raw__season_responses"})
+EXEMPT_FROM_ROW_COMPARISON = frozenset({"dim_players"})
 
 LEAGUE_SEASONS = [
     ("111111", 2026),
@@ -79,16 +75,6 @@ DBT_VARS = [
     "{anonymize: true, fantasy_scale_prior_matchups: 2}",
 ]
 OWN_TESTS = ["--select", "dim_players", "dim_player_league_seasons"]
-# The staging models built a season at a time (spec 0143) get batches only up to the year
-# the run is made in, and these fixtures hold a season after it (2027). So `build` and `run`
-# are given the window of the fixtures' seasons: from the first of January of the earliest
-# to the first of January of the year after the latest. `seed` and `test` take no window.
-EVENT_TIME_WINDOW = [
-    "--event-time-start",
-    f"{min(season for _, season in LEAGUE_SEASONS)}-01-01",
-    "--event-time-end",
-    f"{max(season for _, season in LEAGUE_SEASONS) + 1}-01-01",
-]
 
 
 class Run:
@@ -100,8 +86,16 @@ class Run:
         self.started = time.monotonic()
         self.count = 0
 
-    def dbt(self, label: str, args: list[str], db: Path) -> None:
+    def dbt(self, label: str, args: list[str], db: Path, landing_root: Path | None = None) -> None:
+        """Run dbt on the warehouse `db`, which was loaded from `landing_root`.
+
+        The capture views read the payload files of the landing root the warehouse's
+        manifest lists (spec 0150), so dbt is told that root, as an absolute path: it runs
+        from dbt/, and a relative one would mean another directory.
+        """
         env = {**os.environ, "DBT_PROFILES_DIR": ".", "FO_CI_DUCKDB_PATH": str(db)}
+        if landing_root is not None:
+            env["FO_CI_LANDING_ROOT"] = str(landing_root.resolve())
         self.count += 1
         log = self.workdir / f"dbt_{self.count:02d}_{label}.log"
         t0 = time.monotonic()
@@ -210,7 +204,7 @@ def check(workdir: Path) -> int:
 
     combined = workdir / "combined.duckdb"
     print(f"combined: loaded {load(MULTI_ROOT, combined)} captures")
-    run.dbt("combined_build", ["build", *DBT_VARS, *EVENT_TIME_WINDOW], combined)
+    run.dbt("combined_build", ["build", *DBT_VARS], combined, MULTI_ROOT)
 
     singles: dict[tuple[str, int], Path] = {}
     for league, season in LEAGUE_SEASONS:
@@ -220,9 +214,9 @@ def check(workdir: Path) -> int:
         db = workdir / f"{stem}.duckdb"
         print(f"{stem}: loaded {load(root, db)} captures")
         # Seeds first: `dbt run` builds models only, and the models read two seeds.
-        run.dbt(f"{stem}_seed", ["seed", *DBT_VARS], db)
-        run.dbt(f"{stem}_run", ["run", *DBT_VARS, *EVENT_TIME_WINDOW], db)
-        run.dbt(f"{stem}_test", ["test", *DBT_VARS, *OWN_TESTS], db)
+        run.dbt(f"{stem}_seed", ["seed", *DBT_VARS], db, root)
+        run.dbt(f"{stem}_run", ["run", *DBT_VARS], db, root)
+        run.dbt(f"{stem}_test", ["test", *DBT_VARS, *OWN_TESTS], db, root)
         singles[(league, season)] = db
 
     differing = compare(combined, singles)

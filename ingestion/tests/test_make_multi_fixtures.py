@@ -133,7 +133,7 @@ def test_combined_tree_loads_with_no_collision_and_every_capture():
         load_landing_zone(con, LandingZone(COMMITTED))
     except RawKeyCollision as err:  # pragma: no cover - failure path
         pytest.fail(str(err))
-    rows = con.execute("select count(*) from raw.api_responses").fetchone()[0]
+    rows = con.execute("select count(*) from raw.captures").fetchone()[0]
     assert rows == len(sidecars(COMMITTED))
 
 

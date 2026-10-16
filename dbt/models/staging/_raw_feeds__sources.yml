@@ -2,9 +2,9 @@ version: 2
 
 # One declaration per feed, for source freshness and nothing else (spec 0114, ADR 0050).
 #
-# raw.api_responses holds three feeds. dbt gives one age per declared table, so the table
-# is declared once per feed here: `identifier` points each name at the same relation, and
-# `freshness.filter` is the where clause dbt adds to the freshness query.
+# raw.captures, the manifest of captures, lists three feeds. dbt gives one age per declared
+# table, so the table is declared once per feed here: `identifier` points each name at the
+# same relation, and `freshness.filter` is the where clause dbt adds to the freshness query.
 #
 # Each filter selects the feed's run marker: the first call of a run that fetches the
 # feed's league or season data. An age over every row of a feed would be refreshed by a
@@ -19,7 +19,7 @@ version: 2
 # not a model. It is the one place outside the fo_json_* macros where that syntax lives,
 # and is to be rewritten with them for BigQuery.
 #
-# No model reads these. Models read source('raw', 'api_responses').
+# No model reads these. Models read the payload files, listed in this table.
 #
 # Still dormant: nothing runs `dbt source freshness`, and no gate or CI job may, because
 # the fixtures' newest capture is months old by design. It wakes with the 2027 daily
@@ -35,12 +35,12 @@ version: 2
 sources:
   - name: raw_feeds
     description: >
-      raw.api_responses, declared once per feed so that source freshness gives one age
+      raw.captures, declared once per feed so that source freshness gives one age
       per feed: the age of the feed's last run. Freshness only: no model reads these.
     schema: raw
     tables:
       - name: mlb_runs
-        identifier: api_responses
+        identifier: captures
         description: >
           The schedule captures of the mlb feed. Every full run lands one first; a run
           limited to the player list or the boxscores does not.
@@ -52,12 +52,12 @@ sources:
             source = 'mlb' and endpoint = 'schedule'
             and json_extract_string(partitions, '$.season') = (
               select max(json_extract_string(partitions, '$.season'))
-              from raw.api_responses
+              from raw.captures
               where source = 'mlb' and endpoint = 'schedule'
             )
 
       - name: espn_runs
-        identifier: api_responses
+        identifier: captures
         description: >
           The settings captures of the espn feed: the first call of a run that needs the
           login. The pro schedule lands before it, without one, and does not count.
@@ -69,12 +69,12 @@ sources:
             source = 'espn' and endpoint = 'settings'
             and json_extract_string(partitions, '$.season') = (
               select max(json_extract_string(partitions, '$.season'))
-              from raw.api_responses
+              from raw.captures
               where source = 'espn' and endpoint = 'settings'
             )
 
       - name: idmap_runs
-        identifier: api_responses
+        identifier: captures
         description: >
           The idmap feed's one endpoint. Not fetched daily by design, so it warns late
           and never errors.

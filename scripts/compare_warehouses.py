@@ -1,6 +1,7 @@
 """Compare two warehouse files, relation by relation (spec 0028, R6.1).
 
 Usage:  uv run python scripts/compare_warehouses.py OLD NEW [--round-doubles N] [--strict-columns]
+            [--exclude SCHEMA.RELATION | --exclude SCHEMA.RELATION:COLUMN ...]
 
 First the relation names (tables and views of staging, intermediate, marts and
 reconciliation); then for every relation in both, row counts, EXCEPT ALL both ways over the
@@ -19,6 +20,12 @@ columns: a column on only one side of a relation, and a relation only in NEW, ar
 or relation is printed and passed over, which suits a change that is meant to alter them; use
 it where none should change.
 
+--exclude names what a change removes or adds on purpose, so that everything else can be held
+to --strict-columns: `staging.stg_raw__season_responses` leaves that relation out on both
+sides, `staging.stg_mlb__batting_game_logs:season_start` that column. Patterns take fnmatch
+wildcards (`staging.stg_raw__*`). Each exclusion is printed, with how many relations or
+columns it matched, so one that matches nothing is seen (spec 0150, R6.3).
+
 A JSON column is not compared and is printed as such under its relation: the raw payloads
 of stg_raw__season_responses are gigabytes (spec 0143). It is not a difference, with or
 without --strict-columns.
@@ -34,6 +41,7 @@ run stops with exit 2 and compares nothing.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import sys
 import tempfile
 from pathlib import Path
@@ -60,6 +68,13 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="the two warehouses must hold the same relations with the same columns",
     )
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="SCHEMA.RELATION[:COLUMN]",
+        help="leave a relation, or one column of it, out of the comparison (repeatable)",
+    )
     args = parser.parse_args(argv)
     for path in (args.old, args.new):
         try:
@@ -78,8 +93,29 @@ def main(argv: list[str] | None = None) -> int:
         return compare(con, "old_wh", "new_wh", args)
 
 
+def excluded_relation(name: str, patterns: list[str]) -> bool:
+    return any(":" not in pattern and fnmatch.fnmatchcase(name, pattern) for pattern in patterns)
+
+
+def excluded_column(relation: str, column: str, patterns: list[str]) -> bool:
+    return any(
+        ":" in pattern
+        and fnmatch.fnmatchcase(relation, pattern.split(":", 1)[0])
+        and fnmatch.fnmatchcase(column, pattern.split(":", 1)[1])
+        for pattern in patterns
+    )
+
+
 def compare(con: duckdb.DuckDBPyConnection, old: str, new: str, args: argparse.Namespace) -> int:
-    old_names, new_names = list_relations(con, old), list_relations(con, new)
+    patterns: list[str] = getattr(args, "exclude", None) or []
+    all_names = list_relations(con, old) | list_relations(con, new)
+    for pattern in patterns:
+        relation_part = pattern.split(":", 1)[0]
+        matched = sorted(name for name in all_names if fnmatch.fnmatchcase(name, relation_part))
+        what = "column of" if ":" in pattern else "relation"
+        print(f"excluded ({what}): {pattern}, matching {len(matched)} relation(s)")
+    old_names = {n for n in list_relations(con, old) if not excluded_relation(n, patterns)}
+    new_names = {n for n in list_relations(con, new) if not excluded_relation(n, patterns)}
     failed = False
     only_new = 0
 
@@ -98,11 +134,13 @@ def compare(con: duckdb.DuckDBPyConnection, old: str, new: str, args: argparse.N
     for name in sorted(old_names & new_names):
         compared += 1
         diff = compare_relation(con, old, new, name)
+        left_only = [c for c in diff.left_only_columns if not excluded_column(name, c, patterns)]
+        right_only = [c for c in diff.right_only_columns if not excluded_column(name, c, patterns)]
         notes = []
-        if diff.left_only_columns:
-            notes.append(f"columns only in OLD: {', '.join(diff.left_only_columns)}")
-        if diff.right_only_columns:
-            notes.append(f"columns only in NEW: {', '.join(diff.right_only_columns)}")
+        if left_only:
+            notes.append(f"columns only in OLD: {', '.join(left_only)}")
+        if right_only:
+            notes.append(f"columns only in NEW: {', '.join(right_only)}")
         if diff.differs:
             line = f"DIFFERS {name}: {describe(diff)}"
             still_differs = True

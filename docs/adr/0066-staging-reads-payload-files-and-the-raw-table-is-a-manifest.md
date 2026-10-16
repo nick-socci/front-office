@@ -1,6 +1,6 @@
 # 0066. Staging reads payload files with a declared structure, and the raw table is a manifest with no payloads
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-14
 - Spec: [0150-staging-reads-payload-files](../specs/0150-staging-reads-payload-files/design.md) · Issue: #150
 

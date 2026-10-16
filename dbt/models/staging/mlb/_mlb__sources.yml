@@ -9,8 +9,36 @@ sources:
       curly braces here would be executed rather than displayed.
     schema: raw
     tables:
+      - name: captures
+        description: >-
+          The loader's manifest, on DuckDB: one row per committed capture of the landing
+          zone, append-only, with its key and its payload's path and no payload (spec 0150,
+          ADR 0066). The payloads are read from their files by the capture views
+          (stg_raw__*), which are the only readers of this table.
+        columns:
+          - name: source
+            description: mlb / espn / idmap.
+          - name: endpoint
+            description: Which endpoint produced the response, e.g. schedule, boxscore.
+          - name: request_path
+            description: URL path of the request, no host or query string; part of the key.
+          - name: request_key
+            description: Canonical (sorted) request parameters.
+          - name: fetched_at
+            description: UTC stamp, matching the landing directory, always ending in Z.
+          - name: partitions
+            description: >-
+              Landing partitions as JSON, e.g. league_id and season for ESPN; staging
+              reads league and season from here.
+          - name: file_path
+            description: >-
+              The payload's path relative to the landing root, e.g.
+              mlb/boxscore/season=2026/game_pk=1/fetched_at=…Z/payload.json.
+
       - name: api_responses
-        description: Append-only landing-zone mirror; payload holds the untouched JSON.
+        description: >-
+          On BigQuery only: the uploaded responses, payloads included (ADR 0070). The
+          capture views read it there; on DuckDB the payloads stay in their files.
         # Source freshness is declared per feed in _raw_feeds__sources.yml, not here: one
         # age for this table would be the age of whichever feed ran last (spec 0114, ADR 0050).
         columns:

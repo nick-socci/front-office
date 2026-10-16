@@ -27,8 +27,9 @@ Every model belongs to one layer, and its name starts with the layer's prefix.
 | Marts | `fct_`, `dim_` | Shaped like a question: who won each category, what a player was worth, what a team left on its bench. These are the tables to query. |
 | Reconciliation | `rec_` | Our numbers beside the platform's own, and every difference between them, explained or not. Nothing reads from here; it exists to be checked. |
 
-Under all of them is one source, `raw.api_responses`: every API response exactly as it
-was fetched, one row each. Ingestion saves; it never interprets. Everything that needs
+Under all of them is the landing zone: every API response exactly as it was fetched, one
+file each, listed by the loader in one source table, `raw.captures`, and read from its file
+by one capture view per endpoint (`stg_raw__…`). Ingestion saves; it never interprets. Everything that needs
 to know what the data means happens in the models on this site.
 
 ## What you are looking at
