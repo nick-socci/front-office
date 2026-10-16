@@ -11,6 +11,7 @@ Standard library only: it runs in the docs-site assembler and in the pytest step
 import re
 from dataclasses import dataclass
 from datetime import date as _date
+from fnmatch import fnmatch
 from pathlib import Path
 
 STATUS_WORDS = ("proposed", "accepted", "superseded")
@@ -161,7 +162,47 @@ def read_all(adr_dir: Path) -> list[Adr]:
                 adr_dir, f"number {number} is used by both {seen[number].name} and {file.name}"
             )
         seen[number] = file
-    return [read_adr(file) for file in files]
+    adrs = [read_adr(file) for file in files]
+    _check_amendments(adrs)
+    return adrs
+
+
+def _file_targets(text: str) -> list[str]:
+    """The `NNNN-*.md` files, in the same directory, that the links in `text` point to."""
+    names = []
+    for _text, target in LINK.findall(text):
+        file_part = target.split("#", 1)[0]
+        if "/" not in file_part and fnmatch(file_part, ADR_FILE):
+            names.append(file_part)
+    return names
+
+
+def _named(adr: Adr) -> list[str]:
+    """The ADR files an accepted ADR amends or supersedes, by its lines or Status clauses."""
+    if adr.status_word != "accepted":
+        return []
+    names: list[str] = []
+    for line in (adr.amends, adr.supersedes):
+        if line is not None:
+            names.extend(_file_targets(line))
+    for clause in adr.status.split(";"):
+        clause = clause.lstrip()
+        if clause.startswith(("amends", "supersedes")):
+            names.extend(_file_targets(clause))
+    return names
+
+
+def _check_amendments(adrs: list[Adr]) -> None:
+    """An accepted ADR that amends or supersedes another must be linked from that one's Status."""
+    by_name = {adr.path.name: adr for adr in adrs}
+    for adr in adrs:
+        for name in dict.fromkeys(_named(adr)):
+            named = by_name.get(name)
+            if named is not None and adr.path.name not in _file_targets(named.status):
+                raise AdrError(
+                    named.path,
+                    f"the Status line does not link {adr.path.name}, which amends or supersedes it",
+                )
 
 
 def readme_links(path: Path) -> list[str]:

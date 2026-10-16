@@ -200,6 +200,76 @@ def test_a_directory_with_only_a_readme_fails_naming_it(tmp_path):
     assert str(tmp_path) in str(exc.value)
 
 
+def two_adrs(tmp_path: Path, naming_lines: list[str], named_status: str) -> Path:
+    """ADR 0002 carries `naming_lines`; ADR 0001 carries `named_status`. Returns the dir."""
+    write_adr(tmp_path, number="0001", slug="a", lines=with_status(named_status))
+    write_adr(tmp_path, number="0002", slug="b", lines=naming_lines)
+    return tmp_path / "docs" / "adr"
+
+
+def naming(status: str, extra: str | None = None) -> list[str]:
+    lines = with_status(status)
+    return [*lines, extra] if extra else lines
+
+
+def fails_all(adr_dir: Path, *reason: str) -> None:
+    with pytest.raises(adr_index.AdrError) as exc:
+        adr_index.read_all(adr_dir)
+    for part in reason:
+        assert part in str(exc.value)
+
+
+@pytest.mark.parametrize("key", ["Amends", "Supersedes"])
+def test_an_accepted_line_naming_an_adr_needs_a_back_link(tmp_path, key):
+    """Catches an accepted Amends or Supersedes line the named ADR does not carry back."""
+    adr_dir = two_adrs(tmp_path, naming("accepted", f"- {key}: [0001](0001-a.md)"), "accepted")
+    fails_all(adr_dir, "0001-a.md", "0002-b.md")
+
+
+@pytest.mark.parametrize("key", ["Amends", "Supersedes"])
+def test_an_accepted_line_naming_an_adr_passes_with_the_back_link(tmp_path, key):
+    """Catches a back-link being required in a form the named ADR already satisfies."""
+    adr_dir = two_adrs(
+        tmp_path,
+        naming("accepted", f"- {key}: [0001](0001-a.md)"),
+        "accepted; amended by [0002](0002-b.md)",
+    )
+    assert len(adr_index.read_all(adr_dir)) == 2
+
+
+def test_a_status_clause_that_supersedes_needs_a_back_link(tmp_path):
+    """Catches a `supersedes [X]` clause in Status being left one-way."""
+    adr_dir = two_adrs(tmp_path, naming("accepted; supersedes [0001](0001-a.md)"), "accepted")
+    fails_all(adr_dir, "0001-a.md", "0002-b.md")
+
+
+def test_a_status_clause_naming_two_adrs_checks_both(tmp_path):
+    """Catches only the first link of a clause being checked."""
+    write_adr(tmp_path, number="0001", slug="a", lines=with_status("accepted; [0002](0002-b.md)"))
+    write_adr(tmp_path, number="0003", slug="c", lines=with_status("accepted"))
+    write_adr(
+        tmp_path,
+        number="0002",
+        slug="b",
+        lines=naming("accepted; supersedes [0001](0001-a.md), [0003](0003-c.md)"),
+    )
+    fails_all(tmp_path / "docs" / "adr", "0003-c.md", "0002-b.md")
+
+
+def test_a_clause_that_is_superseded_by_names_nothing(tmp_path):
+    """Catches `superseded by [X]` or `amended by [X]` in Status being read as naming X."""
+    adr_dir = two_adrs(
+        tmp_path, naming("accepted; its denominator is superseded by [0001](0001-a.md)"), "accepted"
+    )
+    assert len(adr_index.read_all(adr_dir)) == 2
+
+
+def test_a_proposed_adr_naming_another_is_not_checked(tmp_path):
+    """Catches a proposed amendment failing before it is accepted."""
+    adr_dir = two_adrs(tmp_path, naming("proposed", "- Amends: [0001](0001-a.md)"), "accepted")
+    assert len(adr_index.read_all(adr_dir)) == 2
+
+
 def test_the_real_adr_files_all_read():
     """Catches an ADR merged with a header the generator would misread."""
     adr_dir = REPO / "docs" / "adr"
