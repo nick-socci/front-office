@@ -1,6 +1,6 @@
 # 0025. Fixture rosters are taken from the MLB fixture days, with ESPN's game lines
 
-- Status: accepted
+- Status: accepted, amended by [0030](0030-the-fixture-season-runs-from-a-starters-earlier-start.md)
 - Date: 2026-10-07
 - Spec: [0074-roster-fixtures-with-game-lines](../specs/0074-roster-fixtures-with-game-lines/design.md) · Issue: #74
 

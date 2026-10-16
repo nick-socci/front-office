@@ -1,16 +1,19 @@
-"""Assemble the public dbt docs site from exactly three files, or refuse to.
+"""Assemble the public dbt docs site from exactly four files, or refuse to.
 
-Spec 0013 R1.3, R1.4. The dbt docs site is public and the ESPN league is private, so the
-site is built by copying `index.html`, `manifest.json` and `catalog.json` out of dbt's
-target directory by name (never a directory copy: target/ also holds run results and
-compiled SQL), then checking the copies:
+Spec 0013 R1.3, R1.4; spec 0133 R1.6 to R1.10. The dbt docs site is public and the ESPN
+league is private, so the site is built by copying `index.html`, `manifest.json` and
+`catalog.json` out of dbt's target directory by name (never a directory copy: target/ also
+holds run results and compiled SQL), and by writing a fourth file, `decisions.html`, which
+is generated from the ADR files and never copied from anywhere. The ADRs are read first:
+one with a header the page would misread stops the run before anything is created. Then
+the files are checked:
 
-- the output holds exactly those three files;
+- the output holds exactly those four files;
 - every catalog node and source says it came from the `ci` database (fixtures), not the
   real-season warehouse;
 - no JSON key in the manifest or catalog is one of privacy.FORBIDDEN_KEYS;
-- privacy.GUID matches nothing in index.html, nor in any key or string of the two JSON
-  files other than `metadata.invocation_id` and `metadata.user_id`, dbt's own ids. The
+- privacy.GUID matches nothing in index.html or decisions.html, nor in any key or string of
+  the two JSON files other than `metadata.invocation_id` and `metadata.user_id`, dbt's own ids. The
   exemption is by location, not by value. A match is printed truncated, never whole;
 - no object in the two JSON files repeats a key: parsing keeps only the last value of a
   repeated key, so an earlier one would be published unchecked.
@@ -29,9 +32,13 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import adr_index
 from front_office.privacy import FORBIDDEN_KEYS, GUID, walk
 
-FILES = ("index.html", "manifest.json", "catalog.json")
+COPIED = ("index.html", "manifest.json", "catalog.json")
+GENERATED = ("decisions.html",)
+FILES = COPIED + GENERATED
+ADR_DIR = Path(__file__).resolve().parents[1] / "docs" / "adr"
 
 
 # The only places a GUID may stand: dbt's own ids for the run and the installation.
@@ -77,7 +84,7 @@ def check_site(out_dir: Path) -> list[str]:
     problems: list[str] = []
     listing = {p.name for p in out_dir.iterdir()}
     for extra in sorted(listing - set(FILES)):
-        problems.append(f"{extra}: not one of the three files the site may hold")
+        problems.append(f"{extra}: not one of the four files the site may hold")
     for missing in sorted(set(FILES) - listing):
         problems.append(f"{missing}: missing from the site")
     if problems:
@@ -104,7 +111,7 @@ def check_site(out_dir: Path) -> list[str]:
                 problems.append(f"{name}: forbidden key {key} at {path}")
 
     # The page itself is text, and nothing in it is exempt.
-    found = {"index.html": set(GUID.findall(texts["index.html"]))}
+    found = {name: set(GUID.findall(texts[name])) for name in ("index.html", "decisions.html")}
     found.update({name: _guids(document) for name, document in parsed.items()})
     for name in FILES:
         for match in sorted(found[name]):
@@ -125,20 +132,26 @@ def _counts(manifest: dict[str, Any]) -> str:
     )
 
 
-def assemble(target_dir: Path, out_dir: Path) -> int:
-    """Copy the three files and check them; returns the exit code."""
+def assemble(target_dir: Path, out_dir: Path, adr_dir: Path = ADR_DIR) -> int:
+    """Copy the three files, write the fourth and check them; returns the exit code."""
     if out_dir.exists() and any(out_dir.iterdir()):
         print(f"{out_dir} exists and is not empty; name a new or empty directory")
         return 1
-    missing = [name for name in FILES if not (target_dir / name).is_file()]
+    missing = [name for name in COPIED if not (target_dir / name).is_file()]
     if missing:
         print(f"missing from {target_dir}: {', '.join(missing)}")
+        return 1
+    try:
+        decisions = adr_index.render(adr_index.read_all(adr_dir))
+    except adr_index.AdrError as error:
+        print(error)
         return 1
 
     created = not out_dir.exists()
     out_dir.mkdir(parents=True, exist_ok=True)
-    for name in FILES:
+    for name in COPIED:
         shutil.copyfile(target_dir / name, out_dir / name)
+    (out_dir / "decisions.html").write_text(decisions, encoding="utf-8")
 
     problems = check_site(out_dir)
     if problems:
@@ -159,8 +172,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--target-dir", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--adr-dir", type=Path, default=ADR_DIR)
     args = parser.parse_args(argv)
-    return assemble(args.target_dir, args.out)
+    return assemble(args.target_dir, args.out, args.adr_dir)
 
 
 if __name__ == "__main__":

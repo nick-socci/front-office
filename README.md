@@ -243,7 +243,8 @@ schedule, fetched early, would move the season that counts.
 repo, so staging never selects member names or account GUIDs, `var('anonymize')` aliases
 team names in CI, and committed fixtures are rebuilt from an allowlist of fields rather
 than scrubbed. The fixture privacy tests and a pre-commit hook enforce it, and the docs
-site is assembled from three named files that are checked before upload.
+site is assembled from dbt's three named files and a page generated from the ADRs, all
+checked before upload.
 
 **Player ids, not names.** ESPN strips accents where MLB does not, and three names in
 2026 belong to two different major leaguers each (including two Max Muncys). The SFBB
@@ -260,7 +261,8 @@ Written with Claude Code, deliberately and openly. What that meant in practice:
   fixtures). Since October every unit of work has a spec in
   [`docs/specs/`](docs/specs/) that I approve before anything is built, and each
   decision a reasonable engineer could have made differently has a record in
-  [`docs/adr/`](docs/adr/README.md).
+  [`docs/adr/`](docs/adr/README.md), listed with its status on the docs site's
+  [decisions](https://nick-socci.github.io/front-office/decisions.html) page.
 - **I verified against reality, not against the model's claims.** Every milestone was
   checked against the real season: summed player stats reconciled to the payload's own
   team totals for all 4,806 team-sides, pitcher runs allowed reconciled to opponent runs

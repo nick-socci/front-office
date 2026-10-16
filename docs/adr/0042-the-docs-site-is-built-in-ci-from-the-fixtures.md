@@ -1,6 +1,6 @@
 # 0042. The docs site is built in CI from the fixtures, and deployed by the Pages actions
 
-- Status: accepted
+- Status: accepted, amended by [0062](0062-the-adr-index-is-a-page-of-the-docs-site.md)
 - Date: 2026-10-09
 - Spec: [0013-docs-lint-exposures](../specs/0013-docs-lint-exposures/design.md) · Issue: #13
 

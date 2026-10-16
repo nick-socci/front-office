@@ -1,6 +1,6 @@
 # 0062. The ADR index is a page of the docs site, generated from the ADR files
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-12
 - Spec: [0133-generated-adr-index](../specs/0133-generated-adr-index/design.md) · Issue: #133
 - Amends: [0042](0042-the-docs-site-is-built-in-ci-from-the-fixtures.md), for how many files the site holds
@@ -44,9 +44,11 @@ Option 2 keeps the table on GitHub but gives CI `contents: write` and puts a sec
 commit on `main` after every merge that adds an ADR. Option 3 leaves the conflict in
 place and only makes it quicker to resolve.
 
-The page's title and status cells are the file's heading and `Status` line, whole. The
-site assembler holds four files where ADR 0042 and spec 0013 R1.3 said three; the fourth
-is generated from committed files and is checked for account GUIDs like the others.
+The page's title and status cells are the file's heading and `Status` line, whole; the
+status cell also shows the file's `Amends` and `Supersedes` lines (spec 0133, *Amendments*,
+2026-10-15). The site assembler holds four files where ADR 0042 and spec 0013 R1.3 said
+three; the fourth is generated from committed files and is checked for account GUIDs like
+the others.
 
 ## Consequences
 
