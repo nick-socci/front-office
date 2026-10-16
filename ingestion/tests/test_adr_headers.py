@@ -73,7 +73,7 @@ def test_a_well_formed_header_reads_every_field(tmp_path):
 
 def test_a_heading_not_in_the_form_fails(tmp_path):
     """Catches a file that does not open with `# NNNN. <title>` being read anyway."""
-    fails(write_adr(tmp_path, heading="# ADR 1: a title"), "heading")
+    fails(write_adr(tmp_path, heading="# ADR 1: a title"), "does not open with a heading")
 
 
 def test_a_heading_number_differing_from_the_filename_fails(tmp_path):
@@ -85,7 +85,7 @@ def test_a_heading_number_differing_from_the_filename_fails(tmp_path):
 def test_a_missing_header_line_fails(tmp_path, key):
     """Catches a header without Status, Date or Spec publishing a blank cell."""
     lines = [ln for ln in with_status("accepted") if not ln.startswith(f"- {key}:")]
-    fails(write_adr(tmp_path, lines=lines), key)
+    fails(write_adr(tmp_path, lines=lines), f"no {key} line")
 
 
 @pytest.mark.parametrize("key", ["Status", "Date", "Spec"])
@@ -96,7 +96,9 @@ def test_a_repeated_header_line_fails(tmp_path, key):
     fails(write_adr(tmp_path, lines=[*lines, extra]), key, "more than once")
 
 
-@pytest.mark.parametrize("date", ["2026-1-5", "12/10/2026", "2026-10-12T00:00", "2026-13-45"])
+@pytest.mark.parametrize(
+    "date", ["2026-1-5", "12/10/2026", "2026-10-12T00:00", "2026-13-45", "20261012"]
+)
 def test_a_date_not_iso_fails(tmp_path, date):
     """Catches a date that is not a real YYYY-MM-DD."""
     lines = ["- Status: accepted", f"- Date: {date}", f"- Spec: {SPEC_LINK}"]
@@ -190,6 +192,7 @@ def test_a_missing_directory_fails_naming_it(tmp_path):
     with pytest.raises(adr_index.AdrError) as exc:
         adr_index.read_all(missing)
     assert str(missing) in str(exc.value)
+    assert "does not exist" in str(exc.value)
 
 
 def test_a_directory_with_only_a_readme_fails_naming_it(tmp_path):
