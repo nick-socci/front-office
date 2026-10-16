@@ -24,10 +24,17 @@ HEADING = re.compile(r"^# (\d{4})\. (.+)$")
 STATUS_WORD = re.compile(r"^([a-z]+)(?=[ ,;]|$)")
 ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 LINK = re.compile(r"\[([^\]]*)\]\(([^)\s]+)\)")
-URL_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+URL_SCHEME = re.compile(r"^([A-Za-z][A-Za-z0-9+.-]*):")
+# The only schemes a header link may use: the page publishes every link, and any other
+# scheme (`javascript:`, `data:`) could run script from it.
+WEB_SCHEMES = ("http", "https")
 ADR_FILE = "[0-9][0-9][0-9][0-9]-*.md"
 CODE_SPAN = re.compile(r"`([^`]+)`")
-ADR_LINK = re.compile(r"\]\(([^)\s#]*?/)?([0-9]{4}-[^)\s#/]*\.md)")
+# An ADR filename anywhere in a text, in whatever markdown form links it: inline, in angle
+# brackets, or as a reference definition.
+ADR_NAME = re.compile(r"(?<![\w-])[0-9]{4}-[\w.-]*?\.md(?![\w-])")
+# A clause of a Status line that names what this ADR amends or supersedes, up to the next `;`.
+NAMING_CLAUSE = re.compile(r"(?:^|[;,])\s*(?:amends|supersedes)\b([^;]*)")
 
 
 class AdrError(Exception):
@@ -80,7 +87,10 @@ def _required(path: Path, header: list[str], key: str) -> str:
 
 def _check_links(path: Path, key: str, line: str) -> None:
     for _text, target in LINK.findall(line):
-        if URL_SCHEME.match(target):
+        scheme = URL_SCHEME.match(target)
+        if scheme:
+            if scheme.group(1).lower() not in WEB_SCHEMES:
+                raise AdrError(path, f"the {key} line links {target!r}; only http and https may be")
             continue
         file_part = target.split("#", 1)[0]
         if file_part and not (path.parent / file_part).exists():
@@ -175,7 +185,7 @@ def _file_targets(text: str) -> list[str]:
     """The `NNNN-*.md` files, in the same directory, that the links in `text` point to."""
     names = []
     for _text, target in LINK.findall(text):
-        file_part = target.split("#", 1)[0]
+        file_part = posixpath.normpath(target.split("#", 1)[0])
         if "/" not in file_part and fnmatch(file_part, ADR_FILE):
             names.append(file_part)
     return names
@@ -189,10 +199,8 @@ def _named(adr: Adr) -> list[str]:
     for line in (adr.amends, adr.supersedes):
         if line is not None:
             names.extend(_file_targets(line))
-    for clause in adr.status.split(";"):
-        clause = clause.lstrip()
-        if clause.startswith(("amends", "supersedes")):
-            names.extend(_file_targets(clause))
+    for clause in NAMING_CLAUSE.findall(adr.status):
+        names.extend(_file_targets(clause))
     return names
 
 
@@ -211,8 +219,7 @@ def _check_amendments(adrs: list[Adr]) -> None:
 
 def readme_links(path: Path) -> list[str]:
     """The `NNNN-*.md` link targets a README holds (it should hold none)."""
-    text = path.read_text(encoding="utf-8")
-    return [f"{prefix or ''}{name}" for prefix, name in ADR_LINK.findall(text)]
+    return ADR_NAME.findall(path.read_text(encoding="utf-8"))
 
 
 CSS = """\
@@ -236,10 +243,20 @@ def _href(target: str, repo_url: str) -> str:
 
 
 def _status_cell(text: str, repo_url: str) -> str:
-    """Escaped text with `code` and [text](target) turned into HTML."""
-    escaped = html.escape(text)
-    escaped = CODE_SPAN.sub(r"<code>\1</code>", escaped)
-    return LINK.sub(lambda m: f'<a href="{_href(m.group(2), repo_url)}">{m.group(1)}</a>', escaped)
+    """Escaped text with `code` and, outside code spans, [text](target) turned into HTML."""
+    parts = CODE_SPAN.split(text)  # odd indices are the insides of code spans
+    out = []
+    for i, part in enumerate(parts):
+        escaped = html.escape(part)
+        if i % 2:
+            out.append(f"<code>{escaped}</code>")
+        else:
+            out.append(
+                LINK.sub(
+                    lambda m: f'<a href="{_href(m.group(2), repo_url)}">{m.group(1)}</a>', escaped
+                )
+            )
+    return "".join(out)
 
 
 def _row(adr: Adr, repo_url: str) -> str:

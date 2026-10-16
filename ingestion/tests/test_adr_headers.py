@@ -179,6 +179,15 @@ def test_an_absolute_link_is_not_checked(tmp_path):
     assert adr_index.read_adr(write_adr(tmp_path, lines=lines)).status_word == "accepted"
 
 
+@pytest.mark.parametrize(
+    "target", ["javascript:alert(1)", "JavaScript:alert(1)", "data:text/html,x", "vbscript:x"]
+)
+def test_a_link_with_a_scheme_other_than_http_fails(tmp_path, target):
+    """Catches a header link that would run script from the published page."""
+    lines = with_status(f"accepted; see [x]({target})")
+    fails(write_adr(tmp_path, lines=lines), "Status", "http")
+
+
 def test_a_link_fragment_is_stripped_before_the_check(tmp_path):
     """Catches `file.md#section` being looked up as a file with that name."""
     path = write_adr(tmp_path, lines=with_status("accepted; see [x](0002-y.md#why)"))
@@ -273,6 +282,26 @@ def test_a_proposed_adr_naming_another_is_not_checked(tmp_path):
     assert len(adr_index.read_all(adr_dir)) == 2
 
 
+def test_a_comma_clause_that_supersedes_needs_a_back_link(tmp_path):
+    """Catches `accepted, supersedes [X]` being missed because the clause opens after a comma."""
+    adr_dir = two_adrs(tmp_path, naming("accepted, supersedes [0001](0001-a.md)"), "accepted")
+    fails_all(adr_dir, "0001-a.md", "0002-b.md")
+
+
+def test_a_dot_slash_link_names_an_adr_and_counts_as_a_back_link(tmp_path):
+    """Catches `./NNNN-*.md` being skipped, on either end of an amendment."""
+    one_way = two_adrs(
+        tmp_path / "a", naming("accepted", "- Amends: [0001](./0001-a.md)"), "accepted"
+    )
+    fails_all(one_way, "0001-a.md", "0002-b.md")
+    both = two_adrs(
+        tmp_path / "b",
+        naming("accepted", "- Amends: [0001](./0001-a.md)"),
+        "accepted, amended by [0002](./0002-b.md)",
+    )
+    assert len(adr_index.read_all(both)) == 2
+
+
 def test_the_real_adr_files_all_read():
     """Catches an ADR merged with a header the generator would misread."""
     adr_dir = REPO / "docs" / "adr"
@@ -296,8 +325,19 @@ def test_a_readme_without_adr_links_is_clean(tmp_path):
     assert adr_index.readme_links(readme) == []
 
 
+@pytest.mark.parametrize(
+    "text",
+    ["[0001](<0001-x.md>)", "[0001][1]\n\n[1]: 0001-x.md", "[0001](./0001-x.md#why)"],
+)
+def test_a_readme_linking_an_adr_in_another_markdown_form_is_caught(tmp_path, text):
+    """Catches an angle-bracket, reference-style or ./ link to an ADR slipping past R3.2."""
+    readme = tmp_path / "README.md"
+    readme.write_text(text + "\n")
+    assert adr_index.readme_links(readme) == ["0001-x.md"]
+
+
 def test_the_real_readme_lists_no_adr():
-    """Catches the hand-kept table coming back (fails until the table is removed, task 6)."""
+    """Catches the hand-kept table coming back."""
     assert adr_index.readme_links(REPO / "docs" / "adr" / "README.md") == []
 
 
@@ -376,6 +416,14 @@ def test_render_escapes_markup_in_the_status_cell(tmp_path):
     page = adr_index.render([adr_index.read_adr(path)])
     assert "<b>" not in page
     assert "<code>&lt;i&gt;</code>" in page
+
+
+def test_render_keeps_link_syntax_inside_a_code_span_as_code(tmp_path):
+    """Catches `[a](b)` inside backticks being turned into a link."""
+    path = write_adr(tmp_path, lines=with_status("accepted; `[a](https://example.com/b)` stays"))
+    page = adr_index.render([adr_index.read_adr(path)])
+    assert "<code>[a](https://example.com/b)</code>" in page
+    assert '<a href="https://example.com/b"' not in page
 
 
 def test_the_real_adrs_render():
