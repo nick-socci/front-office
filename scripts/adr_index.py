@@ -8,12 +8,15 @@ header that would be misread fails here, loudly, rather than publishing a wrong 
 Standard library only: it runs in the docs-site assembler and in the pytest step.
 """
 
+import html
+import posixpath
 import re
 from dataclasses import dataclass
 from datetime import date as _date
 from fnmatch import fnmatch
 from pathlib import Path
 
+REPO_URL = "https://github.com/nick-socci/front-office"
 STATUS_WORDS = ("proposed", "accepted", "superseded")
 LINK_KEYS = ("Status", "Spec", "Amends", "Supersedes")
 
@@ -23,6 +26,7 @@ ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 LINK = re.compile(r"\[([^\]]*)\]\(([^)\s]+)\)")
 URL_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 ADR_FILE = "[0-9][0-9][0-9][0-9]-*.md"
+CODE_SPAN = re.compile(r"`([^`]+)`")
 ADR_LINK = re.compile(r"\]\(([^)\s#]*?/)?([0-9]{4}-[^)\s#/]*\.md)")
 
 
@@ -209,3 +213,63 @@ def readme_links(path: Path) -> list[str]:
     """The `NNNN-*.md` link targets a README holds (it should hold none)."""
     text = path.read_text(encoding="utf-8")
     return [f"{prefix or ''}{name}" for prefix, name in ADR_LINK.findall(text)]
+
+
+CSS = """\
+body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 70rem; padding: 0 1rem; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border-bottom: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left;
+  vertical-align: top; }
+th { background: #f4f4f4; }
+code { background: #f4f4f4; padding: 0 0.2rem; }
+"""
+
+
+def _href(target: str, repo_url: str) -> str:
+    """A link target made absolute: relative to docs/adr/, it becomes a repository blob URL."""
+    if URL_SCHEME.match(target):
+        return target
+    file_part, hash_, fragment = target.partition("#")
+    path = posixpath.normpath(posixpath.join("docs/adr", file_part))
+    return f"{repo_url}/blob/main/{path}{hash_}{fragment}"
+
+
+def _status_cell(text: str, repo_url: str) -> str:
+    """Escaped text with `code` and [text](target) turned into HTML."""
+    escaped = html.escape(text)
+    escaped = CODE_SPAN.sub(r"<code>\1</code>", escaped)
+    return LINK.sub(lambda m: f'<a href="{_href(m.group(2), repo_url)}">{m.group(1)}</a>', escaped)
+
+
+def _row(adr: Adr, repo_url: str) -> str:
+    status = _status_cell(adr.status, repo_url)
+    for key, line in (("Amends", adr.amends), ("Supersedes", adr.supersedes)):
+        if line is not None:
+            status += f"<br>{key}: {_status_cell(line, repo_url)}"
+    number = (
+        f'<a href="{repo_url}/blob/main/docs/adr/{html.escape(adr.path.name)}">{adr.number}</a>'
+    )
+    spec = (
+        f'<a href="{html.escape(_href(adr.spec_target, repo_url))}">'
+        f"{html.escape(adr.spec_text)}</a>"
+    )
+    cells = (number, html.escape(adr.title), status, html.escape(adr.date), spec)
+    return "<tr>" + "".join(f"<td>{cell}</td>" for cell in cells) + "</tr>"
+
+
+def render(adrs: list[Adr], repo_url: str = REPO_URL) -> str:
+    """The whole decisions page as one HTML document, rows in the order given."""
+    counts = ", ".join(
+        f"{sum(1 for a in adrs if a.status_word == word)} {word}" for word in STATUS_WORDS
+    )
+    head = "".join(f"<th>{name}</th>" for name in ("#", "Decision", "Status", "Date", "Spec"))
+    rows = "\n".join(_row(adr, repo_url) for adr in adrs)
+    return (
+        "<!doctype html>\n"
+        '<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        f"<title>Architecture decisions</title>\n<style>\n{CSS}</style>\n</head>\n<body>\n"
+        "<h1>Architecture decisions</h1>\n"
+        f"<p>{len(adrs)} decisions: {counts}</p>\n"
+        f"<table>\n<tr>{head}</tr>\n{rows}\n</table>\n</body>\n</html>\n"
+    )

@@ -296,3 +296,87 @@ def test_a_readme_without_adr_links_is_clean(tmp_path):
 def test_the_real_readme_lists_no_adr():
     """Catches the hand-kept table coming back (fails until the table is removed, task 6)."""
     assert adr_index.readme_links(REPO / "docs" / "adr" / "README.md") == []
+
+
+def three_adrs(tmp_path: Path) -> list[adr_index.Adr]:
+    write_adr(tmp_path, number="0002", slug="b", lines=with_status("proposed"))
+    write_adr(tmp_path, number="0001", slug="a")
+    write_adr(tmp_path, number="0003", slug="c")
+    return adr_index.read_all(tmp_path / "docs" / "adr")
+
+
+def test_render_makes_a_page_of_rows_in_order_with_links_and_counts(tmp_path):
+    """Catches a row missing or out of order, a wrong link, or a count wrong or omitted."""
+    page = adr_index.render(three_adrs(tmp_path), repo_url="https://example.com/r")
+    assert page.startswith("<!doctype html>")
+    assert '<meta charset="utf-8">' in page
+    assert "<title>Architecture decisions</title>" in page
+    assert "3 decisions: 1 proposed, 2 accepted, 0 superseded" in page
+    assert page.count("<tr>") == 4  # the header row and three ADRs
+    links = [
+        f'<a href="https://example.com/r/blob/main/docs/adr/000{n}-{s}.md">000{n}</a>'
+        for n, s in ((1, "a"), (2, "b"), (3, "c"))
+    ]
+    positions = [page.index(link) for link in links]
+    assert positions == sorted(positions)
+    assert (
+        '<a href="https://example.com/r/blob/main/docs/specs/0001-x/design.md">0001-x</a>' in page
+    )
+
+
+def test_render_turns_a_status_link_and_code_span_into_html(tmp_path):
+    """Catches markdown left in the status cell, or a link or code span not rendered."""
+    path = write_adr(
+        tmp_path,
+        lines=with_status("accepted; see [0002](0002-y.md#why) and `x_y`"),
+    )
+    (path.parent / "0002-y.md").write_text("x")
+    page = adr_index.render([adr_index.read_adr(path)], repo_url="https://example.com/r")
+    assert '<a href="https://example.com/r/blob/main/docs/adr/0002-y.md#why">0002</a>' in page
+    assert "<code>x_y</code>" in page
+    assert "](" not in page
+    assert "`" not in page
+
+
+def test_render_shows_an_amends_line_under_its_key_with_the_link_resolved(tmp_path):
+    """Catches an Amends line dropped from the status cell, or its link left relative."""
+    path = write_adr(
+        tmp_path,
+        lines=[*with_status("accepted"), "- Amends: [0002](../specs/0001-x/design.md)"],
+    )
+    page = adr_index.render([adr_index.read_adr(path)], repo_url="https://example.com/r")
+    assert (
+        "<br>Amends: "
+        '<a href="https://example.com/r/blob/main/docs/specs/0001-x/design.md">0002</a>' in page
+    )
+    assert "Supersedes:" not in page
+
+
+def test_render_keeps_an_absolute_link_as_it_is(tmp_path):
+    """Catches a URL being joined onto the repository path."""
+    path = write_adr(tmp_path, lines=with_status("accepted; [x](https://example.com/a.md)"))
+    page = adr_index.render([adr_index.read_adr(path)], repo_url="https://example.com/r")
+    assert '<a href="https://example.com/a.md">x</a>' in page
+
+
+def test_render_escapes_the_title(tmp_path):
+    """Catches ADR text reaching the page as markup."""
+    path = write_adr(tmp_path, heading="# 0001. <script>alert(1)</script> & more")
+    page = adr_index.render([adr_index.read_adr(path)])
+    assert "<script>" not in page
+    assert "&lt;script&gt;alert(1)&lt;/script&gt; &amp; more" in page
+
+
+def test_render_escapes_markup_in_the_status_cell(tmp_path):
+    """Catches the status cell, which gets links and code, letting raw markup through."""
+    path = write_adr(tmp_path, lines=with_status("accepted; <b>bold</b> `<i>`"))
+    page = adr_index.render([adr_index.read_adr(path)])
+    assert "<b>" not in page
+    assert "<code>&lt;i&gt;</code>" in page
+
+
+def test_the_real_adrs_render():
+    """Catches a real ADR the page cannot be built from."""
+    adrs = adr_index.read_all(REPO / "docs" / "adr")
+    page = adr_index.render(adrs)
+    assert f"{len(adrs)} decisions:" in page
