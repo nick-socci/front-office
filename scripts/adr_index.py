@@ -221,6 +221,7 @@ table { border-collapse: collapse; width: 100%; }
 th, td { border-bottom: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left;
   vertical-align: top; }
 th { background: #f4f4f4; }
+td:nth-child(4) { white-space: nowrap; }
 code { background: #f4f4f4; padding: 0 0.2rem; }
 """
 
