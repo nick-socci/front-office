@@ -401,7 +401,7 @@ def test_an_unloaded_capture_is_an_error(zone):
     load_landing_zone(con, zone)
     land_boxscore(zone, 1, "20260420T160000Z")
     findings = run_audit(zone, con, season=SEASON, as_of=AS_OF)
-    assert "1 committed capture(s) not in raw.api_responses" in details(findings, Severity.ERROR)
+    assert "1 committed capture(s) not in raw.captures" in details(findings, Severity.ERROR)
 
 
 def test_a_warehouse_without_the_raw_table_is_an_error(zone):
@@ -431,7 +431,7 @@ def test_a_capture_is_not_loaded_because_another_leagues_row_has_its_old_key(zon
     load_landing_zone(con, zone)
     land_settings_at(zone, league="3")
     findings = run_audit(zone, con, season=SEASON, as_of=AS_OF)
-    assert "1 committed capture(s) not in raw.api_responses" in details(findings, Severity.ERROR)
+    assert "1 committed capture(s) not in raw.captures" in details(findings, Severity.ERROR)
 
 
 def land_settings_at(zone, *, league):
@@ -450,8 +450,8 @@ def test_an_old_shape_raw_table_is_an_error_not_a_crash(zone):
     """Catches a SQL error when the audit meets a table with no request_path (R1.6)."""
     con = duckdb.connect()
     con.execute(
-        "create schema raw; create table raw.api_responses (source varchar, endpoint varchar, "
-        "request_key varchar, fetched_at varchar, payload json, file_path varchar)"
+        "create schema raw; create table raw.captures (source varchar, endpoint varchar, "
+        "request_key varchar, fetched_at varchar, file_path varchar)"
     )
     findings = run_audit(zone, con, season=SEASON, as_of=AS_OF)
     errors = details(findings, Severity.ERROR)
@@ -592,7 +592,7 @@ def test_a_game_with_no_readable_start_is_reported_as_such_and_never_settled(zon
 def test_a_capture_whose_stamp_is_not_a_utc_stamp_is_reported_and_not_counted(zone):
     """Catches one odd fetched_at crashing the audit, or counting as the settling capture."""
     only_boxscores(zone, "20260326T160000Z", "2026-04-20")
-    findings = audit(zone, as_of=LATER)
+    findings = audit(zone, load=False, as_of=LATER)  # the loader refuses such a stamp
     warning = details(findings, Severity.WARN)
     assert "1 boxscore capture(s) with a fetched_at that is not a UTC stamp" in warning
     assert "1 game(s) not captured after their settle window closed" in warning
@@ -601,7 +601,9 @@ def test_a_capture_whose_stamp_is_not_a_utc_stamp_is_reported_and_not_counted(zo
 def test_a_game_whose_every_stamp_is_unreadable_is_not_called_captured_before_its_start(zone):
     """Catches a comparison with the start claimed for a game that has no readable stamp."""
     only_boxscores(zone, "2026-04-20")
-    warning = details(audit(zone, as_of=LATER), Severity.WARN)
+    warning = details(
+        audit(zone, load=False, as_of=LATER), Severity.WARN
+    )  # loader refuses the stamp
     assert "1 boxscore capture(s) with a fetched_at that is not a UTC stamp" in warning
     assert "1 game(s) have no other capture, so cannot settle; e.g. 1" in warning
     assert "before their last scheduled start" not in warning
@@ -612,7 +614,9 @@ def test_an_unreadable_start_and_unreadable_stamps_are_both_reported(zone):
     """Catches one fault hiding the other when a game has neither a start nor a stamp."""
     land_schedule(zone, [schedule_game(1, "2026-03-25", gameDate=None)])
     only_boxscores(zone, "2026-04-20")
-    warning = details(audit(zone, as_of=LATER), Severity.WARN)
+    warning = details(
+        audit(zone, load=False, as_of=LATER), Severity.WARN
+    )  # loader refuses the stamp
     assert "1 game(s) with an unreadable gameDate in the schedule" in warning
     assert "1 game(s) have no other capture, so cannot settle; e.g. 1" in warning
     assert "before their last scheduled start" not in warning

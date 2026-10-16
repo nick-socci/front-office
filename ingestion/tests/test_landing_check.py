@@ -9,7 +9,7 @@ import duckdb
 import pytest
 
 from front_office.espn import rosters
-from front_office.landing import LandingZone, PayloadNotJson
+from front_office.landing import LandingZone
 from front_office.load import load_landing_zone
 from front_office.mlb import boxscore
 
@@ -357,16 +357,14 @@ def test_deep_reports_what_shallow_does_not(zone):
     assert "SHA-256" in zone.check(flipped, deep=True)
 
 
-def test_the_loader_fails_naming_a_committed_capture_whose_payload_is_not_json(zone, con):
-    """Catches a silently skipped capture (R2.7), and a partial insert before the failure."""
+def test_the_loader_does_not_read_a_payload_that_is_not_json(zone, con):
+    """Catches the loader parsing payloads again: a manifest lists the capture, and the
+    deep check (`front-office audit`) is what finds the corruption (spec 0150, R1.3)."""
     land(zone, stamp="20260901T000000Z")
     bad = land(zone, stamp="20260902T000000Z")
     size = (bad / "payload.json").stat().st_size
     (bad / "payload.json").write_bytes(b"x" * size)
-    with pytest.raises(PayloadNotJson) as excinfo:
-        load_landing_zone(con, zone)
-    assert str(bad / "payload.json") in str(excinfo.value)
-    assert con.execute("select count(*) from raw.api_responses").fetchone()[0] == 0
+    assert load_landing_zone(con, zone) == 2
 
 
 # -- R2.8 -------------------------------------------------------------------------------

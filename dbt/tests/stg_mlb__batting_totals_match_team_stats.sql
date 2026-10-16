@@ -24,15 +24,16 @@ with latest_responses as (
 
 claimed as (
 
-    -- One branch per side, so every JSON path is a constant.
+    -- One branch per side, so every field name is a constant. The team totals are the
+    -- JSON block `teamStats.batting` of the boxscore capture view.
     {% for side in ['home', 'away'] %}
+    {%- set totals = 'latest_responses.teams.' ~ side ~ '.teamStats.batting' %}
     select
         {{ fo_request_param('request_key', 'gamePk') }} as game_pk,
         '{{ side }}' as side,
-        {{ fo_json_int('payload', '$.teams.' ~ side ~ '.teamStats.batting.hits') }} as team_hits,
-        {{ fo_json_int('payload', '$.teams.' ~ side ~ '.teamStats.batting.runs') }} as team_runs,
-        {{ fo_json_int('payload', '$.teams.' ~ side ~ '.teamStats.batting.atBats') }}
-            as team_at_bats
+        {{ fo_json_int(totals, '$.hits') }} as team_hits,
+        {{ fo_json_int(totals, '$.runs') }} as team_runs,
+        {{ fo_json_int(totals, '$.atBats') }} as team_at_bats
     from latest_responses
     {{ 'union all' if not loop.last }}
     {% endfor %}

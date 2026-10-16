@@ -2,18 +2,22 @@
 R3; ADR 0054).
 
 Nothing here talks to BigQuery. The privacy check and the row comparison are pure
-functions over rows; the reading of the local warehouse is tested on a small DuckDB file.
+functions over rows; the reading of the manifest and the landing zone is tested on a small
+landing root and DuckDB file.
 """
 
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import duckdb
 import pytest
 
 import spike_load_bigquery as loader
+from front_office.landing import LandingZone
+from front_office.load import load_landing_zone
 
 GUID = "{272E019C-48D5-42F3-B289-C48A1B163E19}"
 
@@ -122,25 +126,37 @@ def test_a_ballplayers_own_name_is_allowed_and_nothing_else_in_that_object() -> 
     ]
 
 
+def _landing(
+    tmp_path: Path, captures: list[tuple[str, str, str, object]], *, load: bool = True
+) -> tuple[Path, Path]:
+    """A landing root of committed captures and a warehouse whose raw.captures lists them
+    (made by the real loader). Each capture is (source, endpoint, key, payload)."""
+    zone = LandingZone(tmp_path / "raw")
+    for number, (source, endpoint, key, payload) in enumerate(captures):
+        stamp = f"20260926T1623{number:02d}Z"
+        zone.write(
+            source=source,
+            endpoint=endpoint,
+            partitions={"season": 2025},
+            name=f"fetched_at={stamp}",
+            payload=payload,  # type: ignore[arg-type]
+            request={"url": f"https://x.test/{key}", "params": {"k": key}},
+            fetched_at=stamp,
+        )
+    db = tmp_path / "w.duckdb"
+    con = duckdb.connect(str(db))
+    if load:
+        load_landing_zone(con, zone)
+    con.close()
+    return db, zone.root
+
+
 def test_only_the_seven_endpoints_are_read(tmp_path: Path) -> None:
     """Catches teams, transactions or MLB's player list being read for upload, and a row of
     an allowed endpoint being left behind."""
-    db = tmp_path / "w.duckdb"
-    con = duckdb.connect(str(db))
-    con.execute("create schema raw")
-    con.execute(
-        "create table raw.api_responses (source varchar, endpoint varchar, request_path "
-        "varchar, request_key varchar, fetched_at varchar, partitions json, payload json, "
-        "file_path varchar)"
-    )
     pairs = [*loader.ALLOWLIST, ("espn", "teams"), ("mlb", "players")]
-    for number, (source, endpoint) in enumerate(pairs):
-        con.execute(
-            "insert into raw.api_responses values (?, ?, '/p', ?, 't', '{}', '{\"n\": 1}', 'f')",
-            [source, endpoint, f"k={number}"],
-        )
-    con.close()
-    rows = list(loader.read_rows(db))
+    db, root = _landing(tmp_path, [(s, e, f"k{n}", {"n": 1}) for n, (s, e) in enumerate(pairs)])
+    rows = list(loader.read_rows(db, root))
     assert sorted({(r.source, r.endpoint) for r in rows}) == sorted(loader.ALLOWLIST)
     assert len(rows) == 7
     assert set(loader.ALLOWLIST) == {
@@ -343,38 +359,20 @@ def test_a_transactions_capture_goes_up_with_no_payload() -> None:
     assert loader.project_transactions({"topics": [{"author": GUID}]}) == {}
 
 
-def _warehouse(tmp_path: Path, rows: list[tuple[str, str, str, object]]) -> Path:
-    db = tmp_path / "w.duckdb"
-    con = duckdb.connect(str(db))
-    con.execute("create schema raw")
-    con.execute(
-        "create table raw.api_responses (source varchar, endpoint varchar, request_path "
-        "varchar, request_key varchar, fetched_at varchar, partitions json, payload json, "
-        "file_path varchar)"
-    )
-    for source, endpoint, key, payload in rows:
-        con.execute(
-            "insert into raw.api_responses values (?, ?, '/p', ?, 't', ?, ?, 'f')",
-            [source, endpoint, key, '{"season": 2025}', json.dumps(payload)],
-        )
-    con.close()
-    return db
-
-
 def test_the_two_endpoints_are_read_already_projected_and_pass_the_check(tmp_path: Path) -> None:
     """Catches the raw payload of either endpoint reaching the check, the export or the
     read-back comparison: what is read for upload is the projection, so every later step
     sees only that."""
-    db = _warehouse(
+    db, root = _landing(
         tmp_path,
         [
-            ("espn", "transactions", "k=1", {"topics": [{"author": GUID, "messages": []}]}),
+            ("espn", "transactions", "k1", {"topics": [{"author": GUID, "messages": []}]}),
             ("espn", "matchup_days", "scoringPeriodId=12", MATCHUP_DAY),
-            ("espn", "settings", "k=3", {"n": 1}),
-            ("espn", "teams", "k=4", {"teams": []}),
+            ("espn", "settings", "k3", {"n": 1}),
+            ("espn", "teams", "k4", {"teams": []}),
         ],
     )
-    rows = {(r.source, r.endpoint): r for r in loader.read_rows(db)}
+    rows = {(r.source, r.endpoint): r for r in loader.read_rows(db, root)}
     assert sorted(rows) == [
         ("espn", "matchup_days"),
         ("espn", "settings"),
@@ -386,12 +384,67 @@ def test_the_two_endpoints_are_read_already_projected_and_pass_the_check(tmp_pat
     )
     assert json.loads(rows[("espn", "settings")].payload) == {"n": 1}
     assert json.loads(rows[("espn", "transactions")].partitions) == {"season": 2025}
-    assert loader.check(loader.read_rows(db)) == {
+    assert loader.check(loader.read_rows(db, root)) == {
         ("espn", "matchup_days"): 1,
         ("espn", "settings"): 1,
         ("espn", "transactions"): 1,
     }
     assert set(loader.PROJECTIONS) == {("espn", "transactions"), ("espn", "matchup_days")}
+
+
+# -- the manifest and the landing zone must agree (spec 0150, R5.2) ---------------------------
+
+
+def test_the_uploaded_file_path_is_the_manifests_relative_path(tmp_path: Path) -> None:
+    """Catches an absolute or cwd-dependent path being uploaded: the BigQuery capture views
+    must tie-break on the same file_path text as the DuckDB ones."""
+    db, root = _landing(tmp_path, [("espn", "settings", "k1", {"n": 1})])
+    (found,) = loader.read_rows(db, root)
+    con = duckdb.connect(str(db), read_only=True)
+    (recorded,) = con.execute("select file_path from raw.captures").fetchone() or ("",)
+    con.close()
+    assert found.file_path == recorded
+    assert found.file_path.startswith("espn/settings/season=2025/")
+    assert found.file_path.endswith("/fetched_at=20260926T162300Z/payload.json")
+    assert not Path(found.file_path).is_absolute()
+
+
+def test_the_rows_can_be_read_more_than_once_in_key_order(tmp_path: Path) -> None:
+    """Catches a single-use iterator: the check reads the rows, then the export does."""
+    db, root = _landing(
+        tmp_path,
+        [("mlb", "schedule", "b", {"n": 2}), ("mlb", "schedule", "a", {"n": 1})],
+    )
+    rows = loader.read_rows(db, root)
+    first = [r.request_key for r in rows]
+    assert first == sorted(first) and len(first) == 2
+    assert [r.request_key for r in rows] == first
+
+
+def test_a_manifest_row_with_no_committed_capture_stops_the_upload(tmp_path: Path) -> None:
+    """Catches an upload that skips a capture dbt would read."""
+    db, root = _landing(tmp_path, [("espn", "settings", "k1", {"n": 1})])
+    shutil.rmtree(next(root.glob("espn/settings/*/*")))
+    with pytest.raises(loader.ManifestDisagrees) as raised:
+        loader.check(loader.read_rows(db, root))
+    assert "in raw.captures, not committed: espn/settings/" in str(raised.value)
+
+
+def test_a_committed_capture_not_in_the_manifest_stops_the_upload(tmp_path: Path) -> None:
+    """Catches an upload of a capture dbt would not read."""
+    db, root = _landing(tmp_path, [("espn", "settings", "k1", {"n": 1})])
+    LandingZone(root).write(
+        source="espn",
+        endpoint="settings",
+        partitions={"season": 2025},
+        name="fetched_at=20270101T000000Z",
+        payload={"n": 2},
+        request={"url": "https://x.test/k2", "params": {"k": "k2"}},
+        fetched_at="20270101T000000Z",
+    )
+    with pytest.raises(loader.ManifestDisagrees) as raised:
+        loader.check(loader.read_rows(db, root))
+    assert "committed, not in raw.captures: espn/settings/" in str(raised.value)
 
 
 def test_a_row_of_a_projected_endpoint_that_was_not_projected_stops_the_upload() -> None:

@@ -4,12 +4,14 @@ Spec 0130, R3; ADRs 0052 and 0054. For the spike only: the table is replaced on 
 and the production loader is another sub-project's.
 
 Usage:  uv run --group bigquery python scripts/spike_load_bigquery.py \\
-            --db data/warehouse.duckdb --project "$FO_BQ_PROJECT" [--dry-run]
+            --db data/warehouse.duckdb --raw-root data/raw --project "$FO_BQ_PROJECT" [--dry-run]
 
 What it does, in order:
 
-1. Reads `raw.api_responses` from the local warehouse, read-only, for nine endpoints and no
-   others: the seven of the constant ALLOWLIST whole, and two as projections (ADR 0061).
+1. Reads the keys of `raw.captures` from the local warehouse, read-only, and each payload
+   from the landing zone (`--raw-root`) through `LandingZone`, for nine endpoints and no
+   others, and stops if the manifest and the zone do not name the same captures. Seven of
+   the constant ALLOWLIST are read whole, and two as projections (ADR 0061).
    `espn/transactions` carries members' names and account ids, and `espn/matchup_days`
    carries `teams` and `settings`: of the first nothing of the payload is uploaded, of the
    second the five things the marker model reads, rebuilt from a list of wanted fields.
@@ -34,8 +36,9 @@ What it does, in order:
 `--dry-run` does steps 1 and 2, prints what it would upload, and stops. It needs neither
 credentials nor the `bigquery` dependency group.
 
-The rows come from the local warehouse and not from the landing zone, so that both builds
-read the same rows by construction.
+The rows come from the manifest and the landing zone, and the capture views dbt reads on
+either warehouse read exactly the manifest's files, so both builds read the same captures
+by construction. `file_path` is the manifest's, relative to the landing root.
 """
 
 from __future__ import annotations
@@ -52,6 +55,7 @@ from typing import Any
 import duckdb
 
 from front_office import privacy
+from front_office.landing import LandedResponse, LandingZone
 
 # The only endpoints that may leave the machine (ADR 0054). Not configurable.
 ALLOWLIST: tuple[tuple[str, str], ...] = (
@@ -81,7 +85,7 @@ EXPORT_DIR = Path("data/bigquery_export")
 
 @dataclass(frozen=True)
 class RawRow:
-    """One row of raw.api_responses; `partitions` and `payload` are JSON text."""
+    """One row of the upload; `partitions` and `payload` are JSON text."""
 
     source: str
     endpoint: str
@@ -146,38 +150,79 @@ PROJECTIONS: dict[tuple[str, str], Any] = {
 UPLOADED: tuple[tuple[str, str], ...] = (*ALLOWLIST, *PROJECTIONS)
 
 
-class WarehouseRows:
-    """The rows of a local warehouse that are uploaded, the two projected endpoints already
-    projected. Iterable more than once: each pass opens the file read-only and streams, so
-    the 1.5 GB of payloads is never held at once."""
+class ManifestDisagrees(Exception):
+    """raw.captures and the landing zone do not name the same captures. Nothing was written.
 
-    def __init__(self, db: Path) -> None:
+    dbt reads exactly the manifest's captures, so an upload of any other set would not be the
+    set the models read."""
+
+
+class ManifestRows:
+    """The rows that are uploaded: the keys from the manifest `raw.captures`, each payload
+    read from its file through `LandingZone`, the two projected endpoints already projected.
+
+    Iterable more than once. Each pass reads the manifest's narrow rows of one endpoint, in
+    key order, and then reads one payload at a time as it yields the row; a sort of the
+    payload-carrying rows ran out of memory on eight seasons (#83), and none is made here.
+    Raises ManifestDisagrees, before yielding a row of an endpoint, if the manifest holds a
+    capture the landing zone has not committed, or the zone holds one the manifest lacks."""
+
+    def __init__(self, db: Path, raw_root: Path) -> None:
         self.db = db
+        self.zone = LandingZone(raw_root)
 
-    def __iter__(self) -> Iterator[RawRow]:
-        pairs = ", ".join(f"('{source}', '{endpoint}')" for source, endpoint in UPLOADED)
+    def _manifest(self, source: str, endpoint: str) -> list[tuple[str, ...]]:
         con = duckdb.connect(str(self.db), read_only=True)
         try:
-            cursor = con.execute(
-                f"select {', '.join(KEY_COLUMNS)}, file_path, "
-                "cast(partitions as varchar), cast(payload as varchar) "
-                f"from raw.api_responses where (source, endpoint) in ({pairs}) "
-                f"order by {', '.join(KEY_COLUMNS)}"
-            )
-            while batch := cursor.fetchmany(50):
-                for values in batch:
-                    row = RawRow(*values)
-                    project = PROJECTIONS.get((row.source, row.endpoint))
-                    if project is not None:
-                        payload = json.dumps(project(json.loads(row.payload)))
-                        row = RawRow(*values[:-1], payload)
-                    yield row
+            return con.execute(
+                f"select {', '.join(KEY_COLUMNS)}, file_path, cast(partitions as varchar) "
+                "from raw.captures where source = ? and endpoint = ? "
+                f"order by {', '.join(KEY_COLUMNS)}",
+                [source, endpoint],
+            ).fetchall()
         finally:
             con.close()
 
+    def _landed(self, source: str, endpoint: str) -> dict[str, LandedResponse]:
+        """The endpoint's committed captures by path relative to the root. A capture's
+        payload is read only when asked for."""
+        return {
+            landed.path.relative_to(self.zone.root).as_posix(): landed
+            for landed in self.zone.iter_landed(source=source, endpoint=endpoint)
+        }
 
-def read_rows(db: Path) -> WarehouseRows:
-    return WarehouseRows(db)
+    def __iter__(self) -> Iterator[RawRow]:
+        for source, endpoint in sorted(UPLOADED):
+            manifest = self._manifest(source, endpoint)
+            landed = self._landed(source, endpoint)
+            listed = {values[5] for values in manifest}
+            missing = sorted(listed - landed.keys())
+            unlisted = sorted(landed.keys() - listed)
+            if missing or unlisted:
+                raise ManifestDisagrees(
+                    "\n".join(
+                        [
+                            f"{source}/{endpoint}: in raw.captures, not committed: {path}"
+                            for path in missing[:5]
+                        ]
+                        + [
+                            f"{source}/{endpoint}: committed, not in raw.captures: {path}"
+                            for path in unlisted[:5]
+                        ]
+                    )
+                    + f"\n{source}/{endpoint}: {len(missing)} in the manifest only, "
+                    f"{len(unlisted)} in the landing zone only"
+                )
+            project = PROJECTIONS.get((source, endpoint))
+            for *key, file_path, partitions in manifest:
+                payload = landed[file_path].payload
+                if project is not None:
+                    payload = project(payload)
+                yield RawRow(*key, file_path, partitions, json.dumps(payload))
+
+
+def read_rows(db: Path, raw_root: Path) -> ManifestRows:
+    return ManifestRows(db, raw_root)
 
 
 # -- the privacy check ---------------------------------------------------------------------
@@ -409,13 +454,16 @@ def loaded_rows(project: str) -> Iterator[dict[str, Any]]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--db", type=Path, required=True, help="the local warehouse")
+    parser.add_argument(
+        "--raw-root", type=Path, default=Path("data/raw"), help="the landing zone's root"
+    )
     parser.add_argument("--project", help="the BigQuery project id; not needed for --dry-run")
     parser.add_argument("--export-dir", type=Path, default=EXPORT_DIR)
     parser.add_argument(
         "--dry-run", action="store_true", help="check the rows and say what would be uploaded"
     )
     args = parser.parse_args(argv)
-    rows = read_rows(args.db)
+    rows = read_rows(args.db, args.raw_root)
     try:
         if args.dry_run:
             counts = check(rows)
@@ -423,6 +471,10 @@ def main(argv: list[str] | None = None) -> int:
             if not args.project:
                 parser.error("--project is required unless --dry-run")
             counts, files = checked_export(rows, args.export_dir)
+    except ManifestDisagrees as stopped:
+        print(stopped)
+        print("raw.captures and the landing zone disagree. Nothing was written or uploaded.")
+        return 1
     except PrivacyHit as stopped:
         print("\n".join(stopped.hits))
         print(f"{len(stopped.hits)} privacy hit(s). Nothing was written or uploaded.")

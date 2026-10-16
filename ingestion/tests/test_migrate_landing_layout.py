@@ -22,7 +22,6 @@ import verify_migration as verify
 from front_office.cli import app
 from front_office.http_client import HttpClient, SourceLimits
 from front_office.landing import JOURNAL_FILE, LandingZone, NotMigrated
-from front_office.load import CREATE_SQL, load_landing_zone
 
 runner = CliRunner()
 
@@ -548,6 +547,41 @@ def test_verify_files_fails_when_the_journal_is_not_finished(tmp_path, monkeypat
 
 OLD_PREFIX = "data/raw"
 
+# verify_migration compares two warehouses of the shape the loader had when spec 0029's
+# migration ran, with the payload in the table; the loader no longer writes that table
+# (spec 0150), so the test builds both by hand.
+CREATE_SQL = """
+create schema if not exists raw;
+create table if not exists raw.api_responses (
+    source varchar not null,
+    endpoint varchar not null,
+    request_path varchar not null,
+    request_key varchar not null,
+    fetched_at varchar not null,
+    partitions json not null,
+    payload json not null,
+    file_path varchar not null,
+    primary key (source, endpoint, request_path, request_key, fetched_at)
+);
+"""
+
+
+def new_rows(zone):
+    """What the migrated landing zone's old-shape rows hold: file_path as the loader gave it."""
+    return [
+        (
+            landed.meta["source"],
+            landed.meta["endpoint"],
+            LandingZone.request_path(landed.meta["url"]),
+            landed.meta["request_key"],
+            landed.meta["fetched_at"],
+            json.dumps(landed.meta["partitions"]),
+            json.dumps(landed.payload),
+            str(landed.path),
+        )
+        for landed in zone.iter_landed()
+    ]
+
 
 def old_rows(root):
     """What the pre-migration loader stored: payload text, and file_path as given."""
@@ -579,7 +613,10 @@ def warehouses(tmp_path, root, zone):
         )
     assert run(root) == 0
     with duckdb.connect(str(new_db)) as con:
-        assert load_landing_zone(con, zone) == 5
+        con.execute(CREATE_SQL)
+        rows = new_rows(zone)
+        assert len(rows) == 5
+        con.executemany("insert into raw.api_responses values (?, ?, ?, ?, ?, ?, ?, ?)", rows)
     return old_db, new_db, zone.migration_dir / JOURNAL_FILE
 
 

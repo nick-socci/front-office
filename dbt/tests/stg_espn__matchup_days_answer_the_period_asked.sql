@@ -5,6 +5,9 @@
 -- example by ignoring `scoringPeriodId` and returning the current one), the marker
 -- would be filed under the wrong day and nothing else would notice. Returns each newest
 -- capture whose payload `scoringPeriodId` differs from the request's.
+--
+-- Read from the matchup_days capture view, which declares that field beside the schedule;
+-- the schedule, with the rosters in it, is not selected.
 
 with latest as (
 
@@ -18,7 +21,7 @@ header as (
         league_id,
         season,
         {{ fo_request_param('request_key', 'scoringPeriodId') }} as requested_scoring_period,
-        {{ fo_json_int('payload', '$.scoringPeriodId') }} as answered_scoring_period
+        scoringPeriodId as answered_scoring_period
     from latest
 
 )

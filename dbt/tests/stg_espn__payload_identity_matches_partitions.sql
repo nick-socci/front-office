@@ -7,22 +7,32 @@
 -- the model, and nothing else would notice: both are well-formed. This returns every such
 -- response.
 --
--- Each payload-derived field is computed in its own CTE before the comparison, and
--- `payload` is not carried past it (rule 1: these payloads are megabytes).
+-- Read from the endpoints' capture views. The roster view gives `id` and `seasonId` as
+-- fields of their own, and this reads nothing else of it: its `teams` never cross the
+-- query (rule 1: these payloads are megabytes). The other three endpoints are small, and
+-- their payload is read for the two keys.
 
 with responses as (
 
     -- Every landed response of these endpoints, not only the latest of each league-season:
     -- a misfiled capture is wrong whether or not a newer one hides it (R2.3).
     select
-        endpoint,
-        payload,
-        {{ fo_json_text('partitions', '$.league_id') }} as league_id,
-        cast({{ fo_json_int('partitions', '$.season') }} as integer) as season
-    from {{ source('raw', 'api_responses') }}
-    where
-        source = 'espn'
-        and endpoint in ('settings', 'teams', 'roster', 'matchups')
+        'roster' as endpoint,
+        partitions,
+        id as payload_league_id,
+        seasonId as payload_season
+    from {{ ref('stg_raw__espn_roster') }}
+
+    {% for endpoint in ['settings', 'teams', 'matchups'] %}
+    union all
+
+    select
+        '{{ endpoint }}' as endpoint,
+        partitions,
+        {{ fo_json_text('payload', '$.id') }} as payload_league_id,
+        {{ fo_json_int('payload', '$.seasonId') }} as payload_season
+    from {{ ref('stg_raw__espn_' ~ endpoint) }}
+    {% endfor %}
 
 ),
 
@@ -30,10 +40,10 @@ header as (
 
     select
         endpoint,
-        league_id as partition_league_id,
-        season as partition_season,
-        {{ fo_json_text('payload', '$.id') }} as payload_league_id,
-        {{ fo_json_int('payload', '$.seasonId') }} as payload_season
+        {{ fo_json_text('partitions', '$.league_id') }} as partition_league_id,
+        cast({{ fo_json_int('partitions', '$.season') }} as integer) as partition_season,
+        payload_league_id,
+        payload_season
     from responses
 
 )

@@ -16,62 +16,34 @@
 -- but a "could have started" reading of 2026 would allow moves that were not legal on
 -- the day. Only a capture made on the day itself (#27) can carry that day's eligibility.
 --
--- Parsed from the raw payload rather than derived from stg_espn__roster_entries, so that
--- model keeps its one-row-per-player grain instead of carrying an array column. Both
+-- Read from the roster capture view rather than derived from stg_espn__roster_entries, so
+-- that model keeps its one-row-per-player grain instead of carrying an array column. Both
 -- models select the same response via fo_espn_latest, so they cannot disagree about
 -- which snapshot they read; a relationships test enforces that they agree about rows.
 --
--- The schema below is deliberately smaller than the one in stg_espn__roster_entries: the
--- fewer fields declared, the less of each 2.3 MB payload DuckDB has to materialise. The
--- payload is projected away in `header` before any unnest, for the reason documented at
--- length in stg_espn__roster_entries.
+-- The view's structure (stg_raw__espn_roster) holds the fields all the roster models
+-- read, this one's eligibleSlots among them; the rest of each 2.3 MB payload is dropped
+-- as the file is read. The `header` CTE computes everything else before any unnest, for
+-- the reason documented at length in stg_espn__roster_entries.
 --
--- Built a season at a time. DuckDB holds every parsed payload of a run at once, and two
--- seasons took the build to its memory limit, so dbt runs this model once per calendar
--- year (microbatch), reading one season's captures through stg_raw__season_responses.
--- Every build redoes every season. On BigQuery it is a plain table (spec 0143, ADRs 0058
--- to 0060).
+-- A plain table: it reads every capture at once, as the view streams them (spec 0150).
 
-{{ config(
-    materialized=('incremental' if target.type == 'duckdb' else 'table'),
-    incremental_strategy=('microbatch' if target.type == 'duckdb' else none),
-    event_time='season_start',
-    batch_size='year',
-    begin=var('first_season_start'),
-    lookback=fo_batches_back_to_first_season(),
-    concurrent_batches=false,
-    on_schema_change='fail'
-) }}
-
-{% set slots_schema %}
-[{
-  "id": "BIGINT",
-  "roster": {"entries": [{
-    "playerId": "BIGINT",
-    "playerPoolEntry": {"player": {"eligibleSlots": ["BIGINT"]}}
-  }]}
-}]
-{% endset %}
+{{ config(materialized='table') }}
 
 with latest as (
 
-    {{ fo_espn_latest(
-        'roster',
-        extra_partition='scoringPeriodId',
-        relation=ref('stg_raw__season_responses')
-    ) }}
+    {{ fo_espn_latest('roster', extra_partition='scoringPeriodId') }}
 
 ),
 
 header as (
 
     select
-        {{ fo_json_text('payload', '$.id') }} as league_id,
-        {{ fo_json_int('payload', '$.seasonId') }} as season,
+        id as league_id,
+        seasonId as season,
         {{ fo_request_param('request_key', 'scoringPeriodId') }} as scoring_period,
         fetched_at,
-        season_start,
-        {{ fo_json_parse('payload', '$.teams', slots_schema) }} as teams_list
+        teams as teams_list
     from latest
 
 ),
@@ -83,7 +55,6 @@ teams as (
         season,
         scoring_period,
         fetched_at,
-        season_start,
         unnest(teams_list) as team
     from header
 
@@ -96,7 +67,6 @@ entries as (
         season,
         scoring_period,
         fetched_at,
-        season_start,
         team.id as team_id,
         unnest(team.roster.entries) as entry
     from teams
@@ -110,7 +80,6 @@ eligible as (
         season,
         scoring_period,
         fetched_at,
-        season_start,
         team_id,
         entry.playerId as espn_player_id,
         unnest(entry.playerPoolEntry.player.eligibleSlots) as lineup_slot_id
@@ -127,8 +96,7 @@ select
     eligible.lineup_slot_id,
     slots.slot_abbrev as lineup_slot,
     slots.is_starting_slot,
-    {{ fo_parse_fetched_at('eligible.fetched_at') }} as fetched_at,
-    eligible.season_start
+    {{ fo_parse_fetched_at('eligible.fetched_at') }} as fetched_at
 from eligible
 -- Only slots the league-season has. ESPN lists eligibility for slot ids a league may
 -- not use at all: two 2025 call-ups carry slot 22, which no season's settings hold and

@@ -1,0 +1,53 @@
+version: 2
+
+# The capture views (spec 0150, ADR 0068): the only readers of payload files and of
+# raw.captures. dbt unit tests cannot replace the file read (read_json is a table
+# function), so these are covered by ingestion/tests/test_capture_glob.py, which compiles
+# fo_captures and runs it on a landing root built for each case, and by the data test
+# stg_raw__capture_views_cover_the_manifest.
+
+models:
+  - name: stg_raw__espn_roster
+    description: >-
+      One row per committed capture of espn/roster that the loader has listed in
+      raw.captures, with the manifest's columns. Rosters, one scoring period of one league-season each, parsed into the fields the three roster models read.
+  - name: stg_raw__espn_matchup_days
+    description: >-
+      One row per committed capture of espn/matchup_days that the loader has listed in
+      raw.captures, with the manifest's columns. Matchup-day markers, one scoring period each; each matchup's sides stay JSON.
+  - name: stg_raw__mlb_boxscore
+    description: >-
+      One row per committed capture of mlb/boxscore that the loader has listed in
+      raw.captures, with the manifest's columns. Boxscores, one game each: per side the team id, team batting totals and players (a map of JSON).
+  - name: stg_raw__espn_settings
+    description: >-
+      One row per committed capture of espn/settings that the loader has listed in
+      raw.captures, with the manifest's columns. League settings, whole.
+  - name: stg_raw__espn_teams
+    description: >-
+      One row per committed capture of espn/teams that the loader has listed in
+      raw.captures, with the manifest's columns. Teams, whole.
+  - name: stg_raw__espn_matchups
+    description: >-
+      One row per committed capture of espn/matchups that the loader has listed in
+      raw.captures, with the manifest's columns. Matchups, whole.
+  - name: stg_raw__espn_pro_schedule
+    description: >-
+      One row per committed capture of espn/pro_schedule that the loader has listed in
+      raw.captures, with the manifest's columns. ESPN's pro schedule, whole.
+  - name: stg_raw__espn_transactions
+    description: >-
+      One row per committed capture of espn/transactions that the loader has listed in
+      raw.captures, with the manifest's columns. Transaction log pages, whole.
+  - name: stg_raw__mlb_schedule
+    description: >-
+      One row per committed capture of mlb/schedule that the loader has listed in
+      raw.captures, with the manifest's columns. MLB schedules, whole.
+  - name: stg_raw__mlb_players
+    description: >-
+      One row per committed capture of mlb/players that the loader has listed in
+      raw.captures, with the manifest's columns. MLB player lists, whole.
+  - name: stg_raw__idmap_player_id_map
+    description: >-
+      One row per committed capture of idmap/player_id_map that the loader has listed in
+      raw.captures, with the manifest's columns. The id crosswalk, whole (one row even though the document is an array).
