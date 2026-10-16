@@ -63,8 +63,10 @@ matchups as (
 
 marked as (
 
-    -- One branch per side, so every field name is a constant.
-    {% for side in ['home', 'away'] %}
+    -- A matchup marks the scoring period if either side carries the roster for it. One pass
+    -- over the matchups, not one branch per side: two branches read the matchups twice,
+    -- and DuckDB then held every matchup of every season, both rosters included (spec
+    -- 0150, Amendments). The `distinct` below keeps one row however many matchups mark it.
     select
         league_id,
         season,
@@ -72,9 +74,9 @@ marked as (
         fetched_at,
         matchup.matchupPeriodId as matchup_period
     from matchups
-    where {{ fo_json_exists('matchup.' ~ side, '$.rosterForCurrentScoringPeriod') }}
-    {{ 'union all' if not loop.last }}
-    {% endfor %}
+    where
+        {{ fo_json_exists('matchup.home', '$.rosterForCurrentScoringPeriod') }}
+        or {{ fo_json_exists('matchup.away', '$.rosterForCurrentScoringPeriod') }}
 
 )
 

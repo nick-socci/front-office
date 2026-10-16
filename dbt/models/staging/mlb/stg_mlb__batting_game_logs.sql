@@ -14,43 +14,87 @@ with players as (
 
     {{ fo_boxscore_players() }}
 
+),
+
+lines as (
+
+    -- The columns first, and the dedup over these narrow rows below: a window holds every
+    -- row it ranks, and ranked with the player's JSON still attached it held every player
+    -- of every season (spec 0150, Amendments). person_key is the raw text of the id, the
+    -- deduplication key fo_json_string exists for.
+    select
+        game_pk,
+        {{ fo_json_int('player.person', '$.id') }} as mlbam_player_id,
+        side,
+        team_id,
+        {{ fo_json_text('player.person', '$.fullName') }} as player_name,
+        {{ fo_json_text('player.position', '$.abbreviation') }} as position,
+        {{ fo_json_text('player.battingOrder', '$') }} as batting_order,
+        {{ fo_json_bool('player.gameStatus', '$.isSubstitute') }} as is_substitute,
+
+        {{ fo_json_int('player.stats.batting', '$.plateAppearances') }} as plate_appearances,
+        {{ fo_json_int('player.stats.batting', '$.atBats') }} as at_bats,
+        {{ fo_json_int('player.stats.batting', '$.hits') }} as hits,
+        {{ fo_json_int('player.stats.batting', '$.doubles') }} as doubles,
+        {{ fo_json_int('player.stats.batting', '$.triples') }} as triples,
+        {{ fo_json_int('player.stats.batting', '$.homeRuns') }} as home_runs,
+        {{ fo_json_int('player.stats.batting', '$.runs') }} as runs,
+        {{ fo_json_int('player.stats.batting', '$.rbi') }} as runs_batted_in,
+        {{ fo_json_int('player.stats.batting', '$.baseOnBalls') }} as walks,
+        {{ fo_json_int('player.stats.batting', '$.intentionalWalks') }} as intentional_walks,
+        {{ fo_json_int('player.stats.batting', '$.strikeOuts') }} as strikeouts,
+        {{ fo_json_int('player.stats.batting', '$.stolenBases') }} as stolen_bases,
+        {{ fo_json_int('player.stats.batting', '$.caughtStealing') }} as caught_stealing,
+        {{ fo_json_int('player.stats.batting', '$.hitByPitch') }} as hit_by_pitch,
+        {{ fo_json_int('player.stats.batting', '$.sacFlies') }} as sacrifice_flies,
+        {{ fo_json_int('player.stats.batting', '$.sacBunts') }} as sacrifice_bunts,
+        {{ fo_json_int('player.stats.batting', '$.totalBases') }} as total_bases,
+        {{ fo_json_int('player.stats.batting', '$.groundIntoDoublePlay') }}
+            as grounded_into_double_play,
+        {{ fo_json_int('player.stats.batting', '$.catchersInterference') }} as catchers_interference,
+
+        {{ fo_parse_fetched_at() }} as fetched_at,
+        {{ fo_json_string('player.person', '$.id') | trim }} as person_key
+    from players
+    -- Bench players carry an empty batting block; gamesPlayed = 1 marks an appearance. A
+    -- pinch runner has 0 plate appearances but can still steal a base, so filtering on
+    -- plate_appearances would lose real events.
+    where {{ fo_json_int('player.stats.batting', '$.gamesPlayed') }} = 1
+
 )
 
 select
     game_pk,
-    {{ fo_json_int('player.person', '$.id') }} as mlbam_player_id,
+    mlbam_player_id,
     side,
     team_id,
-    {{ fo_json_text('player.person', '$.fullName') }} as player_name,
-    {{ fo_json_text('player.position', '$.abbreviation') }} as position,
-    {{ fo_json_text('player.battingOrder', '$') }} as batting_order,
-    {{ fo_json_bool('player.gameStatus', '$.isSubstitute') }} as is_substitute,
-
-    {{ fo_json_int('player.stats.batting', '$.plateAppearances') }} as plate_appearances,
-    {{ fo_json_int('player.stats.batting', '$.atBats') }} as at_bats,
-    {{ fo_json_int('player.stats.batting', '$.hits') }} as hits,
-    {{ fo_json_int('player.stats.batting', '$.doubles') }} as doubles,
-    {{ fo_json_int('player.stats.batting', '$.triples') }} as triples,
-    {{ fo_json_int('player.stats.batting', '$.homeRuns') }} as home_runs,
-    {{ fo_json_int('player.stats.batting', '$.runs') }} as runs,
-    {{ fo_json_int('player.stats.batting', '$.rbi') }} as runs_batted_in,
-    {{ fo_json_int('player.stats.batting', '$.baseOnBalls') }} as walks,
-    {{ fo_json_int('player.stats.batting', '$.intentionalWalks') }} as intentional_walks,
-    {{ fo_json_int('player.stats.batting', '$.strikeOuts') }} as strikeouts,
-    {{ fo_json_int('player.stats.batting', '$.stolenBases') }} as stolen_bases,
-    {{ fo_json_int('player.stats.batting', '$.caughtStealing') }} as caught_stealing,
-    {{ fo_json_int('player.stats.batting', '$.hitByPitch') }} as hit_by_pitch,
-    {{ fo_json_int('player.stats.batting', '$.sacFlies') }} as sacrifice_flies,
-    {{ fo_json_int('player.stats.batting', '$.sacBunts') }} as sacrifice_bunts,
-    {{ fo_json_int('player.stats.batting', '$.totalBases') }} as total_bases,
-    {{ fo_json_int('player.stats.batting', '$.groundIntoDoublePlay') }}
-        as grounded_into_double_play,
-    {{ fo_json_int('player.stats.batting', '$.catchersInterference') }} as catchers_interference,
-
-    {{ fo_parse_fetched_at() }} as fetched_at
-from players
--- Bench players carry an empty batting block; gamesPlayed = 1 marks an appearance. A
--- pinch runner has 0 plate appearances but can still steal a base, so filtering on
--- plate_appearances would lose real events.
-where {{ fo_json_int('player.stats.batting', '$.gamesPlayed') }} = 1
-{{ fo_latest_by_entity(['game_pk', fo_json_string('player.person', '$.id') | trim]) }}
+    player_name,
+    position,
+    batting_order,
+    is_substitute,
+    plate_appearances,
+    at_bats,
+    hits,
+    doubles,
+    triples,
+    home_runs,
+    runs,
+    runs_batted_in,
+    walks,
+    intentional_walks,
+    strikeouts,
+    stolen_bases,
+    caught_stealing,
+    hit_by_pitch,
+    sacrifice_flies,
+    sacrifice_bunts,
+    total_bases,
+    grounded_into_double_play,
+    catchers_interference,
+    fetched_at
+from lines
+-- A player listed on both sides of one game (game 746942: a suspended game resumed after
+-- he changed teams) ties on fetched_at, since both sides are one capture. The line with
+-- the most plate appearances is kept, the one where he played, then the side, so the choice
+-- is stated and not left to row order (rule 5; the owner's decision, 2026-10-15).
+{{ fo_latest_by_entity(['game_pk', 'person_key'], order_by='fetched_at desc, plate_appearances desc, side') }}

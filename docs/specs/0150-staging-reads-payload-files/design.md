@@ -394,3 +394,26 @@ a nested type. The two unit tests of `stg_raw__season_responses` go with it.
   shape alone reads every capture under a 1 GB limit (5.6 s); the models, with their window,
   pass just above it. The rebuild from empty then passed with the committed profile:
   load 21 s, `dbt build` 179 s at a 9.2 GB peak.
+- **2026-10-15, three models reshaped after the first ladder, and a tie-break stated.** The
+  first ladder (R6.2) passed 2026 alone at 2 GB and eight seasons only at 8 GB. Measured
+  alone (16 DuckDB threads, one dbt thread), two shapes held data that grows with the
+  seasons:
+  - the two game-log models ranked their rows with each player's JSON still attached; they
+    now extract their columns in a `lines` CTE and dedupe those narrow rows (the
+    deduplication key stays the raw text of the id, `person_key`);
+  - `stg_espn__matchup_days` read its matchups twice, one branch per side, so DuckDB held
+    every matchup with both rosters; it now reads them once, `home or away`, and keeps the
+    same `distinct`.
+  Per model, eight seasons against 2026: matchup days 2 GB / 2 GB (was 3 / 2), player game
+  stats 1 / 1, the two game-log models 3 / 2. Two further changes were tried and reverted
+  as no better or worse (each side of a boxscore in its own subquery; the capture view's
+  join written as a left join from the files). The full ladder after the change: 2026 at
+  2 GB, eight seasons at 8 GB, where 4 GB fails only because the heavy models that dbt's
+  four threads build at once share one limit (`stg_espn__player_game_stats` alone passes
+  eight seasons at 1 GB). R6.2 is therefore not met; this is reported to the owner.
+- **2026-10-15, the game-log dedup's tie-break (owner's decision).** Game 746942 lists player
+  643376 on both sides (a suspended game resumed after he changed teams); both rows have
+  one fetched_at, so the dedup's order was left to row order (rule 5) and a reshaped query
+  kept the other row. The owner chose: most plate appearances (batters faced, for
+  pitching), then side. That keeps the line where he played, `main`'s row: 58 of 58
+  relations identical to the baseline again.
