@@ -1,6 +1,6 @@
 # 0062. The ADR index is a page of the docs site, generated from the ADR files
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-12
 - Spec: [0133-generated-adr-index](../specs/0133-generated-adr-index/design.md) · Issue: #133
 - Amends: [0042](0042-the-docs-site-is-built-in-ci-from-the-fixtures.md), for how many files the site holds
