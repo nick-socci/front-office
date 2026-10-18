@@ -21,7 +21,9 @@
 -- guess. On a side with unverified inputs that is expected -- a missing boxscore can
 -- leave a side with no outs -- and has_unverified_inputs already says so. On a verified
 -- side it would mean a rule ESPN has never shown us, so the not_null test on result
--- stops the build there. 2026 has no such side.
+-- stops the build there; no season so far has such a side. The exception is a bound
+-- category where a side is below the pitching minimum: the minimum decides it before the
+-- null rule, so a side with no outs loses its rates instead of leaving them null (R2.5).
 --
 -- A full rebuild, not incremental. Roster, boxscore and id-map corrections can change
 -- closed periods, and nothing yet proves an incremental build equals a full one or

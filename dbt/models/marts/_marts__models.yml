@@ -40,10 +40,16 @@ models:
           arguments:
             combination_of_columns: [platform, league_id, season, matchup_id, fantasy_team_id, category_key]
       # Both sides of every category have a value; a missing one would be a dropped side.
+      # The one exception is a value the pitching minimum makes irrelevant: a side with no
+      # outs has no rate, and a side below the minimum loses a bound category whatever its
+      # value (R2.5, spec 0160). Such a row passes only with a result; any other null value
+      # on a verified row still fails here.
       - dbt_utils.expression_is_true:
           name: fct_matchup_category_scores_values_have_a_side
           arguments:
-            expression: "team_value is not null and opponent_value is not null"
+            expression: >-
+              (team_value is not null and opponent_value is not null)
+              or ((is_below_minimum or is_opponent_below_minimum) and result is not null)
             config:
               where: "not has_unverified_inputs"
 
