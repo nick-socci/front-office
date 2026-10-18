@@ -145,11 +145,11 @@ down.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0074](../../adr/0074-a-count-espns-own-matchup-lines-account-for-is-explained.md) | A count whose value, less its game-line difference, equals ESPN's matchup lines while ESPN's total differs is `explained_by_matchup_lines`, with no register row; 2026's register rows stay | proposed |
-| [0075](../../adr/0075-a-count-of-several-components-takes-their-game-line-differences.md) | A count built from several components (SVHD) has as its game-line difference the sum of its components' | proposed |
-| [0076](../../adr/0076-a-rate-part-espn-does-not-report-is-recovered-from-its-rate.md) | A rate part ESPN's totals do not report is recovered from ESPN's rate when it is whole, and then explained like a reported component. Amends 0063 | proposed |
-| [0077](../../adr/0077-a-player-day-difference-is-accounted-for-when-espns-matchup-lines-carry-it.md) | A player-day key is accounted for by a register row of its size, or when ESPN's matchup lines differ from ours by its sum. Amends 0064 | proposed |
-| [0078](../../adr/0078-a-winner-that-flips-only-through-explained-category-results-is-explained.md) | A winner that differs is explained when every category result of the matchup that differs is `explained` | proposed |
+| [0074](../../adr/0074-a-count-espns-own-matchup-lines-account-for-is-explained.md) | A count whose value, less its game-line difference, equals ESPN's matchup lines while ESPN's total differs is `explained_by_matchup_lines`, with no register row; 2026's register rows stay | accepted |
+| [0075](../../adr/0075-a-count-of-several-components-takes-their-game-line-differences.md) | A count built from several components (SVHD) has as its game-line difference the sum of its components' | accepted |
+| [0076](../../adr/0076-a-rate-part-espn-does-not-report-is-recovered-from-its-rate.md) | A rate part ESPN's totals do not report is recovered from ESPN's rate when it is whole, and then explained like a reported component. Amends 0063 | accepted |
+| [0077](../../adr/0077-a-player-day-difference-is-accounted-for-when-espns-matchup-lines-carry-it.md) | A player-day key is accounted for by a register row of its size, or when ESPN's matchup lines differ from ours by its sum. Amends 0064 | accepted |
+| [0078](../../adr/0078-a-winner-that-flips-only-through-explained-category-results-is-explained.md) | A winner that differs is explained when every category result of the matchup that differs is `explained` | accepted |
 
 ## Detailed design
 
@@ -349,3 +349,11 @@ Each new test is seen to fail against the code it covers before the build's PR o
 | design-review | F4: the build-cost baseline had no ledger row | Changed: C21, from #150's run evidence |
 
 ## Amendments
+
+- **2026-10-18 — a wrong-sized register row still fails when the lines carry the key
+  (owner, PR #169 review F1).** R5.1 read as if either form of evidence accounted for a
+  key, while this design, ADR 0077 ("`wrong_size` is unchanged") and the unit test kept
+  `wrong_size`. The owner chose the design's reading: a register row is a hand-kept claim
+  of a specific size, and a wrong one means the register is stale, whatever the lines
+  say. R5.1 and R5.2 are reworded to say so; the code is unchanged. No real key has this
+  shape (all 464 are accounted for).

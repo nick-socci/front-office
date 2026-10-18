@@ -1,6 +1,6 @@
 # 0076. A rate part ESPN's totals do not report is recovered from ESPN's rate
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-16
 - Spec: [0147-espn-matchup-lines](../specs/0147-espn-matchup-lines/design.md) · Issue: #147
 - Amends: [0063](0063-a-rate-espn-gives-no-components-for-is-compared-directly.md)

@@ -124,6 +124,18 @@
     json_extract({{ column }}, '{{ path }}') is not null
 {%- endmacro %}
 
+{#
+  Whether the value at a path is a JSON number. A string that looks like one ("12") is
+  not: a model that must leave out a value that is not a number (spec 0147, R1.5) asks
+  this before it casts.
+#}
+{% macro fo_json_is_number(column, path) %}
+    {{- return(adapter.dispatch('fo_json_is_number')(column, path)) -}}
+{% endmacro %}
+{% macro duckdb__fo_json_is_number(column, path) %}
+    coalesce(json_type({{ column }}, '{{ path }}') in ('BIGINT', 'UBIGINT', 'DOUBLE'), false)
+{%- endmacro %}
+
 
 {#
   The BigQuery forms. `column` is of type JSON (ADR 0052).
@@ -159,6 +171,9 @@
 
 {% macro bigquery__fo_json_exists(column, path) %}
     json_query({{ column }}, '{{ path }}') is not null
+{%- endmacro %}
+{% macro bigquery__fo_json_is_number(column, path) %}
+    coalesce(json_type(json_query({{ column }}, '{{ path }}')) = 'number', false)
 {%- endmacro %}
 
 {% macro bigquery__fo_json_keys(column, path) %}

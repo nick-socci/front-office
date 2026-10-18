@@ -16,8 +16,14 @@ selectors:
           value: int_fantasy__category_scales
           parents: true
           indirect_selection: cautious
-        # `cautious` is applied to each member of a union on its own, so a test whose
-        # parents lie in two members is in neither. This is the one such test; a pytest
-        # (test_bigquery_slice.py) fails if another appears.
+        # A child of the slice's models, not a parent of one: the winner rule that
+        # fct_matchup_results_match_espn reads (spec 0147, ADR 0078). Its parents include
+        # rec_espn__category_result_differences, so the singular test, which reads both,
+        # lies wholly inside this member and is taken with it. Before it, that test had to be
+        # named as a member of its own: `cautious` is applied to each member of a union on
+        # its own, so a test whose parents lie in two members is in neither. A pytest
+        # (test_bigquery_slice.py) fails if one appears.
         - method: fqn
-          value: fct_matchup_results_match_espn
+          value: rec_espn__winner_differences
+          parents: true
+          indirect_selection: cautious

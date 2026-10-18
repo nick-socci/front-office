@@ -1,10 +1,13 @@
--- Every player-day difference is accounted for by the register of known residuals.
--- Returns each (matchup, side, stat) with a verified difference that the register does not
--- account for, with why: no register row, or a register row of another size.
+-- Every player-day difference is accounted for: by the register of known residuals, or by
+-- ESPN's own matchup lines when they differ from ours by the same amount (ADR 0077).
+-- Returns each (matchup, side, stat) with a verified difference that neither accounts for,
+-- with why: no register row and not carried by the lines, or a register row of another size.
 --
--- Catches a scoring change nobody registered, including differences that cancel on a side
--- and so leave its total matching; a register row of the wrong size; and a difference
--- in one league-season excused by another league-season's register row.
+-- Catches a scoring change nobody registered and the lines do not carry, including
+-- differences that cancel on a side and so leave its total matching; a register row of the
+-- wrong size; a difference in one league-season excused by another league-season's register
+-- row; and a player-day ESPN credited differently from us, which its matchup lines leave
+-- out (a start past the games-started limit, #152).
 --
 -- In CI this judges nothing: no fixture row is a difference (every fixture started
 -- player-day is missing_boxscore, so every row is unverified). Its rule is exercised there

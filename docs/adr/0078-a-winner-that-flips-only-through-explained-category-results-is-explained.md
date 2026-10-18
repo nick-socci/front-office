@@ -1,6 +1,6 @@
 # 0078. A winner that flips only through explained category results is explained
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-16
 - Spec: [0147-espn-matchup-lines](../specs/0147-espn-matchup-lines/design.md) · Issue: #147
 

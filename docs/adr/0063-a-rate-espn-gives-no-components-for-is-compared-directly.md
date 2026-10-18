@@ -1,6 +1,6 @@
 # 0063. A rate ESPN gives no components for is compared with ESPN's rate directly
 
-- Status: proposed
+- Status: accepted, amended by [0076](0076-a-rate-part-espn-does-not-report-is-recovered-from-its-rate.md)
 - Date: 2026-10-13
 - Spec: [0083-past-season-rosters](../specs/0083-past-season-rosters/design.md) · Issue: #83
 

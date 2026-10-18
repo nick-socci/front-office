@@ -1,6 +1,6 @@
 # 0074. A count that ESPN's own matchup lines account for is explained without a register row
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-16
 - Spec: [0147-espn-matchup-lines](../specs/0147-espn-matchup-lines/design.md) · Issue: #147
 

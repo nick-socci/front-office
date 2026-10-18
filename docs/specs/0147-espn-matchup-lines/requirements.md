@@ -134,11 +134,14 @@ captures already landed.
 ### R5. A player-day difference is accounted for by ESPN's matchup lines
 
 - R5.1 THE SYSTEM SHALL count a key (league-season, matchup, side, stat) with player-day
-  differences as accounted for when it has a register row of its size, or when our side
-  value of that stat's component less the key's difference sum equals, within 1e-9,
-  ESPN's matchup-line sum for that side and stat (ADR 0077).
+  differences as accounted for when it has a register row of its size, or, when it has
+  no register row, when our side value of that stat's component less the key's
+  difference sum equals, within 1e-9, ESPN's matchup-line sum for that side and stat
+  (ADR 0077). A key with a register row is judged by that row alone (amended
+  2026-10-18, design.md *Amendments*).
 - R5.2 IF a key has neither THEN THE SYSTEM SHALL report it as `unregistered` (no
-  register row) or `wrong_size` (a register row of another size), as today.
+  register row, not carried by the lines) or `wrong_size` (a register row of another
+  size, whatever the lines say), as today.
 - R5.3 THE SYSTEM SHALL judge a key on a stat that no scored stat of its league-season
   is built from by the same rule as any other.
 

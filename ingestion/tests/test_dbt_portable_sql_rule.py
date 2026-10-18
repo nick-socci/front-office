@@ -196,7 +196,9 @@ def test_the_slice_and_the_macros_it_reaches_hold_no_sql_bigquery_refuses(
     macros = [label for label in slice_sources if label.startswith("macros/")]
     # 34 models of spec 0130, the nine capture views they read (spec 0150), and the two
     # games-started limit models (spec 0152).
-    assert len(models) == 45, "the slice's models were not all found"
+    # Spec 0147 adds stg_espn__matchup_player_lines, rec_espn__matchup_line_totals and
+    # rec_espn__winner_differences.
+    assert len(models) == 48, "the slice's models were not all found"
     assert any("boxscore_players.sql" in label for label in macros), "macros are not followed"
     assert any("json.sql::bigquery__" in label for label in macros), "bigquery forms not reached"
     assert not any("::duckdb__" in label for label in slice_sources)
