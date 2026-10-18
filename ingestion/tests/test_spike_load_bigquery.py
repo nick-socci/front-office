@@ -292,11 +292,48 @@ MATCHUP_DAY = {
                 "rosterForCurrentScoringPeriod": {
                     "entries": [{"playerId": 9, "playerPoolEntry": {"player": {"firstName": "B"}}}]
                 },
+                "rosterForMatchupPeriod": {
+                    "entries": [
+                        {
+                            "playerId": 9,
+                            "lineupSlotId": 0,
+                            "injuryStatus": "ACTIVE",
+                            "playerPoolEntry": {
+                                "id": 9,
+                                "onTeamId": 1,
+                                "player": {
+                                    "id": 9,
+                                    "firstName": "B",
+                                    "lastName": "Ballplayer",
+                                    "fullName": "B Ballplayer",
+                                    "displayName": "B",
+                                    "stats": [
+                                        {
+                                            "id": "05null",
+                                            "seasonId": 2025,
+                                            "statSourceId": 0,
+                                            "statSplitTypeId": 5,
+                                            "scoringPeriodId": 0,
+                                            "stats": {"1": 3.0, "2": "n/a"},
+                                        },
+                                        {
+                                            "statSourceId": 1,
+                                            "statSplitTypeId": 5,
+                                            "scoringPeriodId": 0,
+                                            "stats": {"1": 9.0, "nested": {"owners": [GUID]}},
+                                        },
+                                    ],
+                                },
+                            },
+                        }
+                    ]
+                },
             },
             "away": {
                 "teamId": 2,
                 "totalPoints": 4,
                 "rosterForCurrentScoringPeriod": {"entries": []},
+                "rosterForMatchupPeriod": {"entries": []},
             },
         },
         {"id": 8, "matchupPeriodId": 3, "home": {"teamId": 3}},
@@ -305,24 +342,82 @@ MATCHUP_DAY = {
 }
 
 
-def test_a_matchup_day_goes_up_as_the_five_things_the_marker_model_reads() -> None:
+PROJECTED_FIRST_MATCHUP = {
+    "id": 7,
+    "matchupPeriodId": 2,
+    "home": {
+        "teamId": 1,
+        "rosterForCurrentScoringPeriod": {},
+        "rosterForMatchupPeriod": {
+            "entries": [
+                {
+                    "playerId": 9,
+                    "playerPoolEntry": {
+                        "player": {
+                            "stats": [
+                                {
+                                    "statSourceId": 0,
+                                    "statSplitTypeId": 5,
+                                    "scoringPeriodId": 0,
+                                    "stats": {"1": 3.0, "2": "n/a"},
+                                },
+                                {
+                                    "statSourceId": 1,
+                                    "statSplitTypeId": 5,
+                                    "scoringPeriodId": 0,
+                                    "stats": {"1": 9.0},
+                                },
+                            ]
+                        }
+                    },
+                }
+            ]
+        },
+    },
+    "away": {
+        "teamId": 2,
+        "rosterForCurrentScoringPeriod": {},
+        "rosterForMatchupPeriod": {"entries": []},
+    },
+}
+
+
+def test_a_matchup_day_goes_up_as_the_fields_its_models_read() -> None:
     """Catches a field outside ADR 0061's list being uploaded (the response holds `teams`,
-    `members` and `settings`), and one of the five being lost: the ids, each matchup's
-    period, and the marker's presence on each side, as an empty object."""
-    assert loader.project_matchup_day(MATCHUP_DAY) == {
+    `members` and `settings`), and one it lists being lost: the ids, each matchup's id and
+    period, the marker's presence on each side as an empty object, and (spec 0147) the
+    side's team and ESPN's matchup lines: each entry's player id and its stat lines' four
+    fields. Also a matchup's `id` being dropped, which stg_espn__matchup_player_lines
+    needs to say which matchup a line belongs to."""
+    projected = loader.project_matchup_day(MATCHUP_DAY)
+    assert projected == {
         "id": 73677,
         "seasonId": 2025,
         "scoringPeriodId": 12,
         "schedule": [
-            {
-                "matchupPeriodId": 2,
-                "home": {"rosterForCurrentScoringPeriod": {}},
-                "away": {"rosterForCurrentScoringPeriod": {}},
-            },
-            {"matchupPeriodId": 3},
-            {"matchupPeriodId": 1},
+            PROJECTED_FIRST_MATCHUP,
+            {"id": 8, "matchupPeriodId": 3},
+            {"id": 9, "matchupPeriodId": 1},
         ],
     }
+    assert [m["id"] for m in projected["schedule"]] == [7, 8, 9]
+
+
+def test_a_projected_matchup_day_holds_no_name_and_no_member_key() -> None:
+    """Catches a name or a member key reaching BigQuery through the matchup lines (spec
+    0147, R1.4): the player objects carry `firstName`, `lastName`, `fullName` and
+    `displayName`, and the response holds `members`, `owners` and an account id. Walks
+    every key of the projection for the patterns of front_office/privacy.py, as the
+    upload's check does, and for the other name keys and `lineupSlotId` the projection
+    does not list."""
+    from front_office import privacy
+
+    text = json.dumps(loader.project_matchup_day(MATCHUP_DAY))
+    keys = {key for _, key, _ in privacy.walk(json.loads(text))}
+    assert not keys & privacy.FORBIDDEN_KEYS
+    assert not keys & {"fullName", "lineupSlotId", "injuryStatus", "teams", "settings", "nested"}
+    assert not privacy.GUID.search(text)
+    assert loader.privacy_hits(row("espn", "matchup_days", json.loads(text))) == []
 
 
 def test_a_projection_is_built_from_wanted_fields_so_an_unknown_one_is_dropped() -> None:
@@ -332,13 +427,7 @@ def test_a_projection_is_built_from_wanted_fields_so_an_unknown_one_is_dropped()
     grown["schedule"] = [{**MATCHUP_DAY["schedule"][0], "alsoNew": GUID}]  # type: ignore[dict-item]
     projected = loader.project_matchup_day(grown)
     assert GUID not in json.dumps(projected) and "newThing" not in projected
-    assert projected["schedule"] == [
-        {
-            "matchupPeriodId": 2,
-            "home": {"rosterForCurrentScoringPeriod": {}},
-            "away": {"rosterForCurrentScoringPeriod": {}},
-        }
-    ]
+    assert projected["schedule"] == [PROJECTED_FIRST_MATCHUP]
 
 
 def test_a_payload_of_an_unexpected_shape_projects_to_what_it_can() -> None:

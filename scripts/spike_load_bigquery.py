@@ -14,7 +14,8 @@ What it does, in order:
    the constant ALLOWLIST are read whole, and two as projections (ADR 0061).
    `espn/transactions` carries members' names and account ids, and `espn/matchup_days`
    carries `teams` and `settings`: of the first nothing of the payload is uploaded, of the
-   second the five things the marker model reads, rebuilt from a list of wanted fields.
+   second the ids, the marker's presence and ESPN's matchup lines (spec 0147) that its
+   models read, rebuilt from a list of wanted fields.
    There is no option to widen either list. `espn/teams` is never read here.
 2. Checks every row before anything is written. A key that names a person
    (`privacy.FORBIDDEN_KEYS`) is a hit in any row; the one exception is `firstName` and
@@ -71,6 +72,10 @@ ALLOWLIST: tuple[tuple[str, str], ...] = (
 # of wanted fields, made before the check and never by removing unwanted ones (ADR 0061).
 # The functions are defined below; PROJECTIONS maps each endpoint to its own.
 MARKER = "rosterForCurrentScoringPeriod"
+# ESPN's own record of what each player was credited with in a matchup (spec 0147), and the
+# ids of one of its stat lines that are uploaded beside its `stats`.
+MATCHUP_LINES = "rosterForMatchupPeriod"
+LINE_IDS = ("statSourceId", "statSplitTypeId", "scoringPeriodId")
 KEY_COLUMNS = ("source", "endpoint", "request_path", "request_key", "fetched_at")
 JSON_COLUMNS = ("partitions", "payload")
 COLUMNS = (*KEY_COLUMNS, "file_path", *JSON_COLUMNS)
@@ -111,10 +116,66 @@ def _whole_number(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+def _project_stat_line(line: Any) -> dict[str, Any]:
+    """One stat line of a matchup entry: its three ids, only as whole numbers, and its
+    `stats`: stat id to a number or text, nothing nested."""
+    kept: dict[str, Any] = {}
+    if isinstance(line, dict):
+        for name in LINE_IDS:
+            if _whole_number(line.get(name)):
+                kept[name] = line[name]
+        stats = line.get("stats")
+        if isinstance(stats, dict):
+            kept["stats"] = {
+                key: value
+                for key, value in stats.items()
+                if isinstance(value, (int, float, str)) and not isinstance(value, bool)
+            }
+    return kept
+
+
+def _project_matchup_entries(roster: Any) -> list[dict[str, Any]]:
+    """ESPN's matchup lines of one side: for each entry its player id and its stat lines,
+    in the nesting the capture view declares. No name, no slot, nothing else."""
+    entries = roster.get("entries") if isinstance(roster, dict) else None
+    kept = []
+    for entry in entries if isinstance(entries, list) else []:
+        out: dict[str, Any] = {}
+        if isinstance(entry, dict):
+            if _whole_number(entry.get("playerId")):
+                out["playerId"] = entry["playerId"]
+            pool = entry.get("playerPoolEntry")
+            player = pool.get("player") if isinstance(pool, dict) else None
+            lines = player.get("stats") if isinstance(player, dict) else None
+            if isinstance(lines, list):
+                out["playerPoolEntry"] = {
+                    "player": {"stats": [_project_stat_line(line) for line in lines]}
+                }
+        kept.append(out)
+    return kept
+
+
+def _project_matchup_side(side: Any) -> dict[str, Any] | None:
+    """A side of a matchup, or None when it has neither of the two keys the models read
+    (a playoff bye's empty `away`): its team, the marker as its presence, and ESPN's matchup
+    lines."""
+    if not isinstance(side, dict) or not (MARKER in side or MATCHUP_LINES in side):
+        return None
+    kept: dict[str, Any] = {}
+    if _whole_number(side.get("teamId")):
+        kept["teamId"] = side["teamId"]
+    if MARKER in side:
+        kept[MARKER] = {}
+    if MATCHUP_LINES in side:
+        kept[MATCHUP_LINES] = {"entries": _project_matchup_entries(side[MATCHUP_LINES])}
+    return kept
+
+
 def project_matchup_day(payload: Any) -> dict[str, Any]:
-    """What of a `matchup_days` response is uploaded: the five things
-    stg_espn__matchup_days and its tests read, and nothing else. The ids only as whole
-    numbers; the marker only as its presence, an empty object."""
+    """What of a `matchup_days` response is uploaded: what stg_espn__matchup_days and
+    stg_espn__matchup_player_lines and their tests read, and nothing else (ADR 0061, spec
+    0147). The ids only as whole numbers; the marker only as its presence, an empty object;
+    the matchup lines as player ids and stat lines, with no name."""
     if not isinstance(payload, dict):
         return {"schedule": []}
     projected: dict[str, Any] = {
@@ -127,11 +188,13 @@ def project_matchup_day(payload: Any) -> dict[str, Any]:
     for matchup in schedule if isinstance(schedule, list) else []:
         kept: dict[str, Any] = {}
         if isinstance(matchup, dict):
-            if _whole_number(matchup.get("matchupPeriodId")):
-                kept["matchupPeriodId"] = matchup["matchupPeriodId"]
+            for name in ("id", "matchupPeriodId"):
+                if _whole_number(matchup.get(name)):
+                    kept[name] = matchup[name]
             for side in ("home", "away"):
-                if isinstance(matchup.get(side), dict) and MARKER in matchup[side]:
-                    kept[side] = {MARKER: {}}
+                projected_side = _project_matchup_side(matchup.get(side))
+                if projected_side is not None:
+                    kept[side] = projected_side
         projected["schedule"].append(kept)
     return projected
 
