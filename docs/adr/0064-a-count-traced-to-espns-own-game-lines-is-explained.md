@@ -1,6 +1,6 @@
 # 0064. A count whose difference is traced to ESPN's own game lines is explained without a register row
 
-- Status: proposed
+- Status: accepted, amended by [0077](0077-a-player-day-difference-is-accounted-for-when-espns-matchup-lines-carry-it.md)
 - Date: 2026-10-13
 - Spec: [0083-past-season-rosters](../specs/0083-past-season-rosters/design.md) · Issue: #83
 

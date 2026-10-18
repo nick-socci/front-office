@@ -1,6 +1,6 @@
 # 0077. A player-day difference is accounted for when ESPN's matchup lines carry it
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-16
 - Spec: [0147-espn-matchup-lines](../specs/0147-espn-matchup-lines/design.md) · Issue: #147
 - Amends: [0064](0064-a-count-traced-to-espns-own-game-lines-is-explained.md)

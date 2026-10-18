@@ -1,6 +1,6 @@
 # 0075. A count of several components takes the sum of their game-line differences
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-16
 - Spec: [0147-espn-matchup-lines](../specs/0147-espn-matchup-lines/design.md) · Issue: #147
 
