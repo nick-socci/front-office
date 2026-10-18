@@ -40,12 +40,15 @@ models:
   - name: fct_matchup_results
     description: >
       One row per head-to-head matchup: category wins for each side, ties, and the
-      winner (HOME, AWAY or TIE) by more categories won.
+      winner (HOME, AWAY or TIE).
     columns:
       - name: matchup_id
         data_tests: [not_null]
       - name: winner
-        description: Null when any category is undecided, which needs unverified inputs.
+        description: >
+          Who advanced: the side that won more categories. A level playoff matchup goes to
+          HOME, the higher seed (ADRs 0080, 0081); a level regular-season matchup is a TIE.
+          Null when any category is undecided, which needs unverified inputs.
         data_tests:
           - not_null:
               config:
@@ -53,6 +56,12 @@ models:
           - accepted_values:
               arguments:
                 values: [HOME, AWAY, TIE]
+      - name: is_decided_by_tiebreak
+        description: >
+          True when the categories were level and the matchup is a playoff matchup, so
+          the higher seed (HOME) advanced. False otherwise, including when a category is
+          undecided.
+        data_tests: [not_null]
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -525,7 +534,7 @@ unit_tests:
   - name: matchup_results_winner_is_more_categories_won
     description: >
       Matchup 7: home wins 2, loses 1, ties 1 -> HOME. Matchup 8: 1 win each and 2 ties
-      -> TIE. Matchup 9: home leads but one category is undecided -> no winner. One row
+      in a playoff matchup -> HOME, the higher seed (spec 0159; it was TIE). Matchup 9: home leads but one category is undecided -> no winner. One row
       per matchup, from the home side's view.
     model: fct_matchup_results
     given:
@@ -553,9 +562,45 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 5, playoff_tier: NONE}
     expect:
       rows:
-        - {matchup_id: 7, home_team_id: 1, away_team_id: 2, scored_categories: 4, home_category_wins: 2, away_category_wins: 1, category_ties: 1, categories_undecided: 0, winner: HOME, has_unverified_inputs: false, playoff_tier: NONE}
-        - {matchup_id: 8, home_team_id: 3, away_team_id: 4, scored_categories: 4, home_category_wins: 1, away_category_wins: 1, category_ties: 2, categories_undecided: 0, winner: TIE, has_unverified_inputs: true, playoff_tier: WINNERS_BRACKET}
-        - {matchup_id: 9, home_team_id: 5, away_team_id: 6, scored_categories: 2, home_category_wins: 1, away_category_wins: 0, category_ties: 0, categories_undecided: 1, winner: null, has_unverified_inputs: true, playoff_tier: NONE}
+        - {matchup_id: 7, home_team_id: 1, away_team_id: 2, scored_categories: 4, home_category_wins: 2, away_category_wins: 1, category_ties: 1, categories_undecided: 0, winner: HOME, is_decided_by_tiebreak: false, has_unverified_inputs: false, playoff_tier: NONE}
+        - {matchup_id: 8, home_team_id: 3, away_team_id: 4, scored_categories: 4, home_category_wins: 1, away_category_wins: 1, category_ties: 2, categories_undecided: 0, winner: HOME, is_decided_by_tiebreak: true, has_unverified_inputs: true, playoff_tier: WINNERS_BRACKET}
+        - {matchup_id: 9, home_team_id: 5, away_team_id: 6, scored_categories: 2, home_category_wins: 1, away_category_wins: 0, category_ties: 0, categories_undecided: 1, winner: null, is_decided_by_tiebreak: false, has_unverified_inputs: true, playoff_tier: NONE}
+
+  - name: matchup_results_a_level_playoff_matchup_goes_to_the_home_side
+    description: >
+      Spec 0159, ADRs 0080 and 0081. Matchup 1 is a playoff matchup level at one category
+      each: the higher seed advances, and ESPN seats it at home, so HOME and
+      is_decided_by_tiebreak. Matchup 2 is the same tally in the regular season: still TIE,
+      and not a tiebreak. Matchup 3 is a playoff matchup the away side wins on categories:
+      AWAY, and not a tiebreak. Matchup 4 is a level playoff matchup with an undecided
+      category: no winner, and not a tiebreak. Catches the tiebreak missing, applied in
+      the regular season, overriding a real result, or deciding an undecided matchup.
+    model: fct_matchup_results
+    given:
+      - input: ref('fct_matchup_category_scores')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, fantasy_team_id: 1, opponent_team_id: 2, is_home: true, result: WIN, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, fantasy_team_id: 1, opponent_team_id: 2, is_home: true, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, fantasy_team_id: 3, opponent_team_id: 4, is_home: true, result: WIN, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, fantasy_team_id: 3, opponent_team_id: 4, is_home: true, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 3, fantasy_team_id: 5, opponent_team_id: 6, is_home: true, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 3, fantasy_team_id: 5, opponent_team_id: 6, is_home: true, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 3, fantasy_team_id: 5, opponent_team_id: 6, is_home: true, result: WIN, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 4, fantasy_team_id: 7, opponent_team_id: 8, is_home: true, result: WIN, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 4, fantasy_team_id: 7, opponent_team_id: 8, is_home: true, result: LOSS, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 4, fantasy_team_id: 7, opponent_team_id: 8, is_home: true, result: null, has_unverified_inputs: false}
+      - input: ref('int_fantasy__matchup_sides')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, fantasy_team_id: 1, playoff_tier: WINNERS_BRACKET}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, fantasy_team_id: 3, playoff_tier: NONE}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 3, fantasy_team_id: 5, playoff_tier: WINNERS_BRACKET}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 4, fantasy_team_id: 7, playoff_tier: WINNERS_BRACKET}
+    expect:
+      rows:
+        - {matchup_id: 1, winner: HOME, is_decided_by_tiebreak: true}
+        - {matchup_id: 2, winner: TIE, is_decided_by_tiebreak: false}
+        - {matchup_id: 3, winner: AWAY, is_decided_by_tiebreak: false}
+        - {matchup_id: 4, winner: null, is_decided_by_tiebreak: false}
 
 # -----------------------------------------------------------------------------
 # dim_player_league_seasons unit tests (#11, moved from dim_players by #28).
