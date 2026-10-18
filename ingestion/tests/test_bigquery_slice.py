@@ -203,7 +203,10 @@ def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) ->
     # spec 0159: +1 singular test, stg_espn__league_settings_tie_rules_are_understood. Both its
     # parents are in the slice, so it is selected and is written to the two-warehouse rule.
     # spec 0159: +1 generic test, not_null on fct_matchup_results.is_decided_by_tiebreak.
-    assert (len(tests), len(generic), len(tests) - len(generic)) == (255, 221, 34)
+    # spec 0160: +1 singular test, stg_espn__league_settings_qualification_is_understood.
+    # Both its parents are in the slice, so it is selected and is written to the two-warehouse
+    # rule.
+    assert (len(tests), len(generic), len(tests) - len(generic)) == (256, 221, 35)
     # spec 0152: 3 + 3 + 1 + 1. Spec 0147 adds 9: two for matchup_player_lines, one for
     # matchup_line_totals, four for matchup_stat_differences, one each for
     # category_result_differences and winner_differences.
