@@ -1,8 +1,8 @@
 # Front Office — rules for agents
 
-These rules apply to every agent working on this repo. The implementer builds against them
-and the reviewer judges against them, so a project rule belongs here, not in one tool's
-config.
+These rules apply to every agent working on this repo, including subagents they start.
+The implementer builds against them and the reviewer judges against them, so a project
+rule belongs here, not in one tool's config.
 
 Front Office is a code-first analytics engineering project: real MLB and ESPN fantasy data,
 landed as raw JSON, transformed with dbt, stored in DuckDB (BigQuery planned). **The repo is
@@ -129,9 +129,11 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
   hold; columns are `snake_case`.
 - Correct against fixtures is not correct. Anything that produces numbers is also built
   against the real season, and the numbers are checked against the spec's acceptance
-  criteria. An agent without the local real season must report its work as awaiting that
-  check, with the exact command and expected values to verify; do not mark the work
-  merge-ready until the real-season result is recorded on the issue.
+  criteria. The real season's data (`data/`) is local and gitignored. If a passing result
+  for that check is not already on the issue, an agent without the data posts the exact
+  pending command and expected values there and reports the work as awaiting the check.
+  The owner or an agent with the data runs it and records the result on the issue. Do not
+  mark the work merge-ready until the recorded result matches the acceptance criteria.
 - Commit messages say what changed in the imperative and reference the issue, e.g.
   `Credit started production by slot role, as ESPN does (#10)`. One PR per unit of work;
   a person merges, never an agent.
