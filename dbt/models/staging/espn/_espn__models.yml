@@ -217,6 +217,33 @@ models:
             config:
               where: "slot_count > 0"
 
+  - name: stg_espn__lineup_slot_stat_limits
+    description: >
+      One row per (league, season, lineup slot) that ESPN puts a limit on a stat for, read
+      from the newest settings capture's lineupSlotStatLimits. Not stg_espn__lineup_slot_limits,
+      which says how many players fill each slot: this says how much of one stat a slot may
+      credit. The key is the slot id as ESPN files it and is not interpreted; stat_id 33 is
+      games started. limit_value is as ESPN gives it: a per-day rate in a head-to-head
+      league-season, a season total in a rotisserie one (ADR 0071). A league-season with no
+      limits has no row.
+    columns:
+      - name: league_id
+        data_tests: [not_null]
+      - name: season
+        data_tests: [not_null]
+      - name: lineup_slot_id
+        data_tests: [not_null]
+      - name: stat_id
+        data_tests: [not_null]
+      - name: limit_value
+        data_tests: [not_null]
+      - name: fetched_at
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [league_id, season, lineup_slot_id]
+
   - name: stg_espn__matchup_category_results
     description: >
       One row per (matchup, team, stat). Includes the component stats ESPN reports
@@ -894,6 +921,63 @@ unit_tests:
       rows:
         - {season: 2026, espn_game_id: "100", scoring_period: 2, game_start_at_utc: "2026-04-01 17:05:00", game_date: "2026-04-01", home_pro_team_id: 12, away_pro_team_id: 5, fetched_at: "2026-09-30 00:00:00"}
         - {season: 2027, espn_game_id: "200", scoring_period: 1, game_start_at_utc: "2027-04-01 23:05:00", game_date: "2027-04-01", home_pro_team_id: 12, away_pro_team_id: 5, fetched_at: "2026-09-29 00:00:00"}
+
+  - name: lineup_slot_stat_limits_keep_one_entry
+    description: >
+      A settings capture with one limit entry, slot 22 on stat 33 at 1.857... a day. Catches
+      an entry dropped, or a field read from the wrong place (stat_id and limit_value are
+      the entry's statId and limitValue, lineup_slot_id its key).
+    model: stg_espn__lineup_slot_stat_limits
+    given:
+      - input: source('raw', 'captures')
+        rows:
+          - {source: espn, endpoint: settings, request_path: /a, request_key: view=mSettings, fetched_at: "20260901T000000Z", partitions: '{"season": 2026, "league_id": "1"}', file_path: a1}
+      - input: ref('stg_raw__espn_settings')
+        format: dict
+        rows:
+          - {source: espn, endpoint: settings, request_path: /a, request_key: view=mSettings, fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2026, "league_id": "1"}', payload: '{"id": 1, "seasonId": 2026, "settings": {"rosterSettings": {"lineupSlotStatLimits": {"22": {"statId": 33, "limitValue": 1.8571428571428572}}}}}'}
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, lineup_slot_id: 22, stat_id: 33, limit_value: 1.8571428571428572, fetched_at: "2026-09-01 00:00:00"}
+
+  - name: lineup_slot_stat_limits_pair_each_key_with_its_own_value
+    description: >
+      A rotisserie-shaped capture with two entries, slot 21 on stat 81 at 545.0 and slot 22
+      on stat 33 at 78.0. Catches keys and values unnested apart (a cross product of four
+      rows, or slot 21 carrying stat 33), and an entry dropped.
+    model: stg_espn__lineup_slot_stat_limits
+    given:
+      - input: source('raw', 'captures')
+        rows:
+          - {source: espn, endpoint: settings, request_path: /a, request_key: view=mSettings, fetched_at: "20260901T000000Z", partitions: '{"season": 2020, "league_id": "1"}', file_path: a1}
+      - input: ref('stg_raw__espn_settings')
+        format: dict
+        rows:
+          - {source: espn, endpoint: settings, request_path: /a, request_key: view=mSettings, fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2020, "league_id": "1"}', payload: '{"id": 1, "seasonId": 2020, "settings": {"rosterSettings": {"lineupSlotStatLimits": {"21": {"statId": 81, "limitValue": 545.0}, "22": {"statId": 33, "limitValue": 78.0}}}}}'}
+    expect:
+      rows:
+        - {league_id: "1", season: 2020, lineup_slot_id: 21, stat_id: 81, limit_value: 545.0, fetched_at: "2026-09-01 00:00:00"}
+        - {league_id: "1", season: 2020, lineup_slot_id: 22, stat_id: 33, limit_value: 78.0, fetched_at: "2026-09-01 00:00:00"}
+
+  - name: lineup_slot_stat_limits_have_no_row_for_an_empty_object
+    description: >
+      A settings capture whose lineupSlotStatLimits is {} (2021's), beside one with an
+      entry. Catches a row of nulls for the empty object, and the league-season without
+      limits taking the other one's.
+    model: stg_espn__lineup_slot_stat_limits
+    given:
+      - input: source('raw', 'captures')
+        rows:
+          - {source: espn, endpoint: settings, request_path: /a, request_key: view=mSettings, fetched_at: "20260901T000000Z", partitions: '{"season": 2021, "league_id": "1"}', file_path: a1}
+          - {source: espn, endpoint: settings, request_path: /b, request_key: view=mSettings, fetched_at: "20260901T000000Z", partitions: '{"season": 2022, "league_id": "1"}', file_path: b1}
+      - input: ref('stg_raw__espn_settings')
+        format: dict
+        rows:
+          - {source: espn, endpoint: settings, request_path: /a, request_key: view=mSettings, fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2021, "league_id": "1"}', payload: '{"id": 1, "seasonId": 2021, "settings": {"rosterSettings": {"lineupSlotStatLimits": {}}}}'}
+          - {source: espn, endpoint: settings, request_path: /b, request_key: view=mSettings, fetched_at: "20260901T000000Z", file_path: b1, partitions: '{"season": 2022, "league_id": "1"}', payload: '{"id": 1, "seasonId": 2022, "settings": {"rosterSettings": {"lineupSlotStatLimits": {"22": {"statId": 33, "limitValue": 1.8571428571428572}}}}}'}
+    expect:
+      rows:
+        - {league_id: "1", season: 2022, lineup_slot_id: 22, stat_id: 33, limit_value: 1.8571428571428572, fetched_at: "2026-09-01 00:00:00"}
 
 seeds:
   - name: espn_stat_ids
