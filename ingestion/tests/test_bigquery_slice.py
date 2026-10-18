@@ -185,7 +185,7 @@ def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) ->
     # Spec 0152 adds 9 generic tests (its two models and is_over_start_limit) and the
     # singular int_fantasy__start_limits_are_understood.
     assert (len(tests), len(generic), len(tests) - len(generic)) == (238, 207, 31)
-    assert len(names(selected, "unit_test")) == 88  # spec 0152: 3 + 3 + 1
+    assert len(names(selected, "unit_test")) == 89  # spec 0152: 3 + 3 + 1 + 1
 
 
 def test_no_selected_test_reads_a_relation_outside_the_slice(

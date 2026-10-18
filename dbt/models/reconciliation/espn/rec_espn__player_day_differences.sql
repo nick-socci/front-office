@@ -21,6 +21,13 @@
 -- completeness is reported by int_fantasy__started_player_days_inputs_all_verified and
 -- rec_espn__every_side_is_verified, not by the absence of rows here (ADR 0032).
 --
+-- A start left uncredited because the team was past its games-started limit
+-- (is_over_start_limit, ADR 0071, 0072) is left out. Its credited columns are zero by
+-- design, while ESPN's game line for that day still holds the start; ESPN's side total
+-- does not, and the side-level reconciliation (rec_espn__matchup_stat_differences)
+-- already sees the start's absence. Comparing the day would report the start as a
+-- difference of its whole line.
+--
 -- On the 2026 data every row here is a difference, an official scoring change ESPN never
 -- applied (MLB's boxscore, fetched later, has the corrected call).
 
@@ -70,6 +77,7 @@ credited as (
     where
         platform = 'espn'
         and slot_role = '{{ role }}'
+        and not is_over_start_limit
     {{ 'union all' if not loop.last }}
     {%- endfor %}
 
