@@ -40,9 +40,15 @@
 -- number: the same on every build and on every version of the engine. Components are
 -- drawn independently, so a draw is not a realistic box score; it does not need to be.
 --
+-- THE PITCHING MINIMUM. The category results, actual and rescored, are decided by
+-- fo_category_result (ADR 0084), so the league-season's minimum applies as it does in the
+-- fact. The rescored side is judged on its swapped outs: a swap that takes a side below the
+-- minimum loses its bound categories (ADR 0083), however good the swapped values are.
+--
 -- A NULL LEVEL (an empty pool) for a kind of day the pair played in such a matchup makes
 -- both measures null for the pair, as the value facts give it a null value, and the row
--- stays. A category undefined for the swapped side in a draw is left out of that draw.
+-- stays. A category undefined for the swapped side in a draw is left out of that draw,
+-- unless the minimum decides it.
 --
 -- matchup_wins_added uses the league's rule as fct_matchup_results has it: more categories
 -- won than lost is a win. Equal is a tie in the regular season, counted one half, and in a
@@ -306,6 +312,7 @@ scored_rules as (
         categories.season,
         categories.category_key,
         categories.is_lower_better,
+        categories.is_bound_by_minimum,
         rules.part,
         rules.component,
         rules.weight
@@ -327,6 +334,7 @@ swapped_values as (
         swapped.draw,
         scored_rules.category_key,
         scored_rules.is_lower_better,
+        scored_rules.is_bound_by_minimum,
         case
             when count(*) filter (where scored_rules.part = 'denominator') = 0
                 then
@@ -353,7 +361,23 @@ swapped_values as (
         {%- endfor %}
         swapped.draw,
         scored_rules.category_key,
-        scored_rules.is_lower_better
+        scored_rules.is_lower_better,
+        scored_rules.is_bound_by_minimum
+
+),
+
+-- The outs the swapped side records in each draw, for the pitching minimum. Every pair has
+-- an outs_recorded row in swapped_components: it is one of the pitching columns.
+swapped_outs as (
+
+    select
+        {%- for key in pair_keys %}
+        {{ key }},
+        {%- endfor %}
+        draw,
+        swapped_total as swapped_outs
+    from swapped_components
+    where component = 'outs_recorded'
 
 ),
 
@@ -372,8 +396,11 @@ actual_values as (
 
 ),
 
--- The category's result with the pair and with replacement, against the same opponent.
-category_results as (
+-- The category's result with the pair and with replacement, against the same opponent,
+-- by fo_category_result: the pitching minimum first, each side's outs against it (the
+-- swapped side's from swapped_outs), then the values. A result is null where the category
+-- is undefined and the minimum does not decide it.
+decided_results as (
 
     select
         {%- for key in pair_keys %}
@@ -381,21 +408,43 @@ category_results as (
         {%- endfor %}
         swapped.draw,
         swapped.category_key,
-        case
-            when team.stat_value = opponent.stat_value then 'TIE'
-            when (team.stat_value < opponent.stat_value) = swapped.is_lower_better then 'WIN'
-            else 'LOSS'
-        end as actual_result,
-        case
-            when round(swapped.swapped_value, 9) = opponent.stat_value then 'TIE'
-            when
-                (round(swapped.swapped_value, 9) < opponent.stat_value) = swapped.is_lower_better
-                then 'WIN'
-            else 'LOSS'
-        end as swapped_result,
+        {{ fo_category_result(
+            'team.stat_value',
+            'opponent.stat_value',
+            'swapped.is_lower_better',
+            'swapped.is_bound_by_minimum',
+            'coalesce(team_totals.outs_recorded < seasons.pitching_minimum_outs, false)',
+            'coalesce(opponent_totals.outs_recorded < seasons.pitching_minimum_outs, false)'
+        ) }} as actual_result,
+        {{ fo_category_result(
+            'swapped.swapped_value',
+            'opponent.stat_value',
+            'swapped.is_lower_better',
+            'swapped.is_bound_by_minimum',
+            'coalesce(swapped_outs.swapped_outs < seasons.pitching_minimum_outs, false)',
+            'coalesce(opponent_totals.outs_recorded < seasons.pitching_minimum_outs, false)'
+        ) }} as swapped_result,
         side.is_home,
         side.is_playoff
     from swapped_values as swapped
+    inner join swapped_outs
+        on swapped_outs.platform = swapped.platform
+        and swapped_outs.league_id = swapped.league_id
+        and swapped_outs.season = swapped.season
+        and swapped_outs.matchup_id = swapped.matchup_id
+        and swapped_outs.fantasy_team_id = swapped.fantasy_team_id
+        and swapped_outs.platform_player_id = swapped.platform_player_id
+        and swapped_outs.draw = swapped.draw
+    left join {{ ref('int_fantasy__league_seasons') }} as seasons
+        on seasons.platform = swapped.platform
+        and seasons.league_id = swapped.league_id
+        and seasons.season = swapped.season
+    inner join {{ ref('int_fantasy__matchup_side_totals') }} as team_totals
+        on team_totals.platform = swapped.platform
+        and team_totals.league_id = swapped.league_id
+        and team_totals.season = swapped.season
+        and team_totals.matchup_id = swapped.matchup_id
+        and team_totals.fantasy_team_id = swapped.fantasy_team_id
     inner join rescorable_sides as side
         on side.platform = swapped.platform
         and side.league_id = swapped.league_id
@@ -416,11 +465,25 @@ category_results as (
         and opponent.matchup_id = team.matchup_id
         and opponent.fantasy_team_id = team.opponent_team_id
         and opponent.category_key = team.category_key
-    -- Undefined on any of the three sides: left out of this draw.
+    inner join {{ ref('int_fantasy__matchup_side_totals') }} as opponent_totals
+        on opponent_totals.platform = team.platform
+        and opponent_totals.league_id = team.league_id
+        and opponent_totals.season = team.season
+        and opponent_totals.matchup_id = team.matchup_id
+        and opponent_totals.fantasy_team_id = team.opponent_team_id
+
+),
+
+-- Undefined on any of the three sides, and not decided by the minimum: left out of this
+-- draw. With no minimum that is a null value on any side; with one, a bound category the
+-- minimum decides is kept even when a value is null.
+category_results as (
+
+    select *
+    from decided_results
     where
-        swapped.swapped_value is not null
-        and team.stat_value is not null
-        and opponent.stat_value is not null
+        actual_result is not null
+        and swapped_result is not null
 
 ),
 
