@@ -1112,6 +1112,12 @@ models:
           Numerator over denominator, or the numerator for a count; null over a zero
           denominator, as in int_fantasy__matchup_stat_values. Deliberately not tested
           not_null.
+      - name: outs_recorded
+        description: >
+          The side's outs recorded under this lineup, repeated on each category row, carried so
+          the lineup mart can judge the optimal lineup against the pitching minimum (spec 0160).
+          Null on an optimal row of a side with an unvalued team-day, like the figures above.
+          Deliberately not tested not_null.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:

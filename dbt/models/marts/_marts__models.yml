@@ -2749,9 +2749,16 @@ unit_tests:
       - input: ref('int_fantasy__lineup_category_totals')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: actual, category_value: 8}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: optimal, category_value: 12}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: optimal, category_value: 12, outs_recorded: 60}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 2, lineup: actual, category_value: 0.25}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 2, lineup: optimal, category_value: 0.35}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 2, lineup: optimal, category_value: 0.35, outs_recorded: 60}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, is_bound_by_minimum: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 2, is_bound_by_minimum: false}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: null}
       - input: ref('fct_lineup_decisions')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-01", has_unverified_inputs: false}
@@ -2775,9 +2782,16 @@ unit_tests:
       - input: ref('int_fantasy__lineup_category_totals')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 47, lineup: actual, category_value: 4.5}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 47, lineup: optimal, category_value: 3.0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 47, lineup: optimal, category_value: 3.0, outs_recorded: 60}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 41, lineup: actual, category_value: 1.0}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 41, lineup: optimal, category_value: 1.5}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 41, lineup: optimal, category_value: 1.5, outs_recorded: 60}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, is_bound_by_minimum: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 41, is_bound_by_minimum: false}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: null}
       - input: ref('fct_lineup_decisions')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-01", has_unverified_inputs: false}
@@ -2803,11 +2817,19 @@ unit_tests:
       - input: ref('int_fantasy__lineup_category_totals')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 3, lineup: actual, category_value: 0.3}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 3, lineup: optimal, category_value: 0.30000000000000004}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 3, lineup: optimal, category_value: 0.30000000000000004, outs_recorded: 60}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 9, lineup: actual, category_value: 0.1}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 9, lineup: optimal, category_value: 0.10000001}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 9, lineup: optimal, category_value: 0.10000001, outs_recorded: 60}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 47, lineup: actual, category_value: 4.5}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 47, lineup: optimal, category_value: 4.0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 47, lineup: optimal, category_value: 4.0, outs_recorded: 60}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 3, is_bound_by_minimum: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 9, is_bound_by_minimum: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, is_bound_by_minimum: false}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: null}
       - input: ref('fct_lineup_decisions')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-01", has_unverified_inputs: false}
@@ -2831,7 +2853,13 @@ unit_tests:
       - input: ref('int_fantasy__lineup_category_totals')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: actual, category_value: 8}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: optimal, category_value: null}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: optimal, category_value: null, outs_recorded: null}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, is_bound_by_minimum: false}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: null}
       - input: ref('fct_lineup_decisions')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-01", has_unverified_inputs: false}
@@ -2854,9 +2882,16 @@ unit_tests:
       - input: ref('int_fantasy__lineup_category_totals')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: actual, category_value: 0}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: optimal, category_value: 0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: optimal, category_value: 0, outs_recorded: 0}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 2, lineup: actual, category_value: 0.3}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 2, lineup: optimal, category_value: 0.3}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 2, lineup: optimal, category_value: 0.3, outs_recorded: 0}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, is_bound_by_minimum: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 2, is_bound_by_minimum: false}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: null}
       - input: ref('fct_lineup_decisions')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-01", has_unverified_inputs: false}
@@ -2865,6 +2900,50 @@ unit_tests:
       rows:
         - {category_key: 5, optimal_value: 0, optimal_result: LOSS}
         - {category_key: 2, optimal_value: 0.3, optimal_result: TIE}
+
+  - name: optimal_result_judges_the_optimal_lineup_against_the_minimum
+    description: >
+      Minimum 30 outs. Team 1's actual lineup recorded 40 outs (not below, the fact's
+      is_below_minimum false) and its optimal lineup 27 (below); the opponent recorded 171.
+      WHIP (bound by the minimum): the optimal value 1.0 beats the opponent's 1.2, yet the
+      optimal lineup is below the minimum and loses it, while actual_result is the fact's WIN,
+      copied. K (not bound): decided by value, a WIN with 10 against 9 though the lineup is
+      below. ERA (bound), on an unvalued optimal row (value and outs null): optimal_result is
+      null, not a loss, so the minimum never decides a lineup that has no totals. Catches the
+      optimal result judged by value alone, or by the actual lineup's outs (which would give a
+      WIN), a minimum applied to an unbound category, and an unvalued lineup decided by the
+      minimum.
+    model: fct_lineup_decision_categories
+    given:
+      - input: ref('fct_matchup_category_scores')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 41, category_label: WHIP, is_lower_better: true, team_value: 1.1, opponent_value: 1.2, result: WIN, is_below_minimum: false, is_opponent_below_minimum: false, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 48, category_label: K, is_lower_better: false, team_value: 8, opponent_value: 9, result: LOSS, is_below_minimum: false, is_opponent_below_minimum: false, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 47, category_label: ERA, is_lower_better: true, team_value: 3.0, opponent_value: 4.0, result: WIN, is_below_minimum: false, is_opponent_below_minimum: false, has_unverified_inputs: false}
+      - input: ref('int_fantasy__lineup_category_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 41, lineup: actual, category_value: 1.1, outs_recorded: 40}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 41, lineup: optimal, category_value: 1.0, outs_recorded: 27}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 48, lineup: actual, category_value: 8, outs_recorded: 40}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 48, lineup: optimal, category_value: 10, outs_recorded: 27}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 47, lineup: actual, category_value: 3.0, outs_recorded: 40}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 47, lineup: optimal, category_value: null, outs_recorded: null}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 41, is_bound_by_minimum: true}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 48, is_bound_by_minimum: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, is_bound_by_minimum: true}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: 30.0}
+      - input: ref('fct_lineup_decisions')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-01", has_unverified_inputs: false}
+    expect:
+      rows:
+        - {category_key: 41, actual_result: WIN, optimal_value: 1.0, optimal_result: LOSS}
+        - {category_key: 48, actual_result: LOSS, optimal_value: 10, optimal_result: WIN}
+        - {category_key: 47, actual_result: WIN, optimal_value: null, optimal_result: null}
 
   - name: lineup_decision_categories_flag_an_unverified_day_of_the_sides_own_period
     description: >
@@ -2886,12 +2965,18 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, matchup_period: 3, fantasy_team_id: 6, opponent_team_id: 5, category_key: 5, category_label: HR, is_lower_better: false, team_value: 10, opponent_value: 8, result: WIN, has_unverified_inputs: false}
       - input: ref('int_fantasy__lineup_category_totals')
         rows:
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: optimal, category_value: 9}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, category_key: 5, lineup: optimal, category_value: 9}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 3, category_key: 5, lineup: optimal, category_value: 9}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 4, category_key: 5, lineup: optimal, category_value: 9}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 5, category_key: 5, lineup: optimal, category_value: 9}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 6, category_key: 5, lineup: optimal, category_value: 9}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 5, lineup: optimal, category_value: 9, outs_recorded: 60}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, category_key: 5, lineup: optimal, category_value: 9, outs_recorded: 60}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 3, category_key: 5, lineup: optimal, category_value: 9, outs_recorded: 60}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 4, category_key: 5, lineup: optimal, category_value: 9, outs_recorded: 60}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 5, category_key: 5, lineup: optimal, category_value: 9, outs_recorded: 60}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 6, category_key: 5, lineup: optimal, category_value: 9, outs_recorded: 60}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, is_bound_by_minimum: false}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: null}
       - input: ref('fct_lineup_decisions')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-01", has_unverified_inputs: false}
