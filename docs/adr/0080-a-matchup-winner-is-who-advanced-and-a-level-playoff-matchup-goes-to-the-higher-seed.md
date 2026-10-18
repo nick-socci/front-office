@@ -1,6 +1,6 @@
 # 0080. A matchup's winner is who advanced, and a level playoff matchup goes to the higher seed
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-18
 - Spec: [0159-playoff-tiebreak](../specs/0159-playoff-tiebreak/design.md) · Issue: #159
 

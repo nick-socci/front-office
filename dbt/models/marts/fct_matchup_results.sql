@@ -1,10 +1,16 @@
 -- One row per head-to-head matchup: category wins, losses and ties for each side, and
 -- the winner they imply.
 --
--- The winner is the side that won more categories; equal wins is a tie. That is ESPN's
--- rule as observed in 2026: 7 regular-season matchups tied. No playoff matchup tied, so
--- how ESPN breaks a playoff tie (seeding is H2H record) is unobserved. A playoff tie is
--- emitted as TIE and the reconciliation would flag it, rather than guessing here.
+-- The winner is who advanced (ADR 0080). The side that won more categories wins. When the
+-- categories are level, a regular-season matchup is a tie (47 of them in the real league,
+-- as ESPN records them), and a playoff matchup goes to the higher seed. That is ESPN's
+-- default, the setting "NONE" for playoffMatchupTieRule, and
+-- stg_espn__league_settings_tie_rules_are_understood fails the build on any other value.
+-- The higher seed is the home side, because ESPN seats it there (ADR 0081): the model reads
+-- no seeds, so it stays in the BigQuery slice, and
+-- fct_matchup_results_home_is_the_better_seed fails the build if a lower seed is ever at
+-- home. is_decided_by_tiebreak marks those matchups, so the category tie is not hidden.
+-- A matchup with an undecided category is never decided by the tiebreak.
 --
 -- scored_categories is carried so a test can check the tally adds up. A category with
 -- no result (a null rate, only possible with unverified inputs) is counted as
@@ -61,8 +67,14 @@ select
         when home.categories_undecided > 0 then null
         when home.category_wins > home.category_losses then 'HOME'
         when home.category_wins < home.category_losses then 'AWAY'
+        when sides.playoff_tier != 'NONE' then 'HOME'
         else 'TIE'
     end as winner,
+    (
+        home.categories_undecided = 0
+        and home.category_wins = home.category_losses
+        and sides.playoff_tier != 'NONE'
+    ) as is_decided_by_tiebreak,
     home.has_unverified_inputs
 from tallies as home
 inner join {{ ref('int_fantasy__matchup_sides') }} as sides

@@ -1,6 +1,6 @@
 # 0082. A tie rule the models do not know fails the build
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-18
 - Spec: [0159-playoff-tiebreak](../specs/0159-playoff-tiebreak/design.md) · Issue: #159
 

@@ -41,7 +41,10 @@ models:
           played has no replacement level.
         data_type: double
       - name: matchup_wins_added
-        description: The same for the matchup, won by more categories won than lost.
+        description: >
+          The same for the matchup, won by more categories won than lost. A level
+          matchup counts one half in the regular season, and in a playoff matchup 1 for
+          the home side and 0 for the away side, as the league settles it (ADR 0080).
         data_type: double
     data_tests:
       - dbt_utils.unique_combination_of_columns:
@@ -265,6 +268,100 @@ unit_tests:
     expect:
       rows:
         - {platform_player_id: 11, fantasy_team_id: 1, matchups_rescored: 1, category_wins_added: -0.1, matchup_wins_added: -0.1}
+
+  - name: matchup_wins_added_scores_a_level_playoff_matchup_for_the_home_side
+    description: >
+      Spec 0159, ADR 0080. One category, hits. Matchup 20 is a playoff matchup level at 6
+      hits; team 1 is at home and advanced. Player 11 (team 1) had 3 hits in a day, and
+      replacement is 1: the side drops to 4 and loses the category. The actual matchup
+      counts 1.0 for the home side and the swapped one 0, so matchup_wins_added is 1, where
+      a tie counted a half would give 0.5. Player 21 (team 2, away) loses the same way, but
+      the actual matchup counts 0 and the swapped one 0: nothing added, where a half would
+      give 0.5. Matchup 21 is level in the regular season and is still a half for the home
+      pair (player 31) and the away pair (player 41): 0.5 each. category_wins_added is the
+      tie to a loss, 0.5, for all four. Matchups 22 and 23 are playoff matchups that are
+      level only after the swap. In 22 the home team 5 leads 7 to 6 and advanced; player 51
+      had 2 hits in a day, so its side drops to 6, level: actual 1, swapped 1, and
+      matchup_wins_added is 0. In 23 the away team 8 leads 7 to 6 and won; player 81 is
+      the same, 6 and level: actual 1, swapped 0 (the away side does not advance), and
+      matchup_wins_added is 1. A half would give 0.5 for both; category_wins_added is the
+      win to a tie, 0.5. Catches a level playoff matchup still counted a half, a rescored
+      level playoff matchup counted a half, the home and away sides swapped, and the rule
+      leaking into the regular season or into category results.
+    model: rec_fantasy__category_wins_added
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted, hits]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded]
+    given:
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 1, part: numerator, component: hits, weight: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 1, is_lower_better: false}
+      - input: ref('fct_matchup_results')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 20, home_team_id: 1, away_team_id: 2, playoff_tier: WINNERS_BRACKET, winner: HOME, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 21, home_team_id: 3, away_team_id: 4, playoff_tier: NONE, winner: TIE, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 22, home_team_id: 5, away_team_id: 6, playoff_tier: WINNERS_BRACKET, winner: HOME, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 23, home_team_id: 7, away_team_id: 8, playoff_tier: WINNERS_BRACKET, winner: AWAY, has_unverified_inputs: false}
+      - input: ref('int_fantasy__matchup_sides')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 20, matchup_period: 1, fantasy_team_id: 1, opponent_team_id: 2}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 20, matchup_period: 1, fantasy_team_id: 2, opponent_team_id: 1}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 21, matchup_period: 2, fantasy_team_id: 3, opponent_team_id: 4}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 21, matchup_period: 2, fantasy_team_id: 4, opponent_team_id: 3}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 22, matchup_period: 3, fantasy_team_id: 5, opponent_team_id: 6}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 22, matchup_period: 3, fantasy_team_id: 6, opponent_team_id: 5}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 23, matchup_period: 4, fantasy_team_id: 7, opponent_team_id: 8}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 23, matchup_period: 4, fantasy_team_id: 8, opponent_team_id: 7}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-08"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 3, scoring_date: "2026-06-15"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 4, scoring_date: "2026-06-22"}
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 11, slot_role: hitter, games_batted: 1, hits: 3, games_pitched: 0, games_started: 0, outs_recorded: 0}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 2, platform_player_id: 21, slot_role: hitter, games_batted: 1, hits: 3, games_pitched: 0, games_started: 0, outs_recorded: 0}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-08", fantasy_team_id: 3, platform_player_id: 31, slot_role: hitter, games_batted: 1, hits: 3, games_pitched: 0, games_started: 0, outs_recorded: 0}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-08", fantasy_team_id: 4, platform_player_id: 41, slot_role: hitter, games_batted: 1, hits: 3, games_pitched: 0, games_started: 0, outs_recorded: 0}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-15", fantasy_team_id: 5, platform_player_id: 51, slot_role: hitter, games_batted: 1, hits: 2, games_pitched: 0, games_started: 0, outs_recorded: 0}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-22", fantasy_team_id: 8, platform_player_id: 81, slot_role: hitter, games_batted: 1, hits: 2, games_pitched: 0, games_started: 0, outs_recorded: 0}
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 20, fantasy_team_id: 1, games_batted: 9, hits: 6, games_pitched: 0, games_started: 0, outs_recorded: 0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 20, fantasy_team_id: 2, games_batted: 9, hits: 6, games_pitched: 0, games_started: 0, outs_recorded: 0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 21, fantasy_team_id: 3, games_batted: 9, hits: 6, games_pitched: 0, games_started: 0, outs_recorded: 0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 21, fantasy_team_id: 4, games_batted: 9, hits: 6, games_pitched: 0, games_started: 0, outs_recorded: 0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 22, fantasy_team_id: 5, games_batted: 9, hits: 7, games_pitched: 0, games_started: 0, outs_recorded: 0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 22, fantasy_team_id: 6, games_batted: 9, hits: 6, games_pitched: 0, games_started: 0, outs_recorded: 0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 23, fantasy_team_id: 7, games_batted: 9, hits: 6, games_pitched: 0, games_started: 0, outs_recorded: 0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 23, fantasy_team_id: 8, games_batted: 9, hits: 7, games_pitched: 0, games_started: 0, outs_recorded: 0}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 20, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 1, stat_value: 6}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 20, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 1, stat_value: 6}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 21, fantasy_team_id: 3, opponent_team_id: 4, stat_key: 1, stat_value: 6}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 21, fantasy_team_id: 4, opponent_team_id: 3, stat_key: 1, stat_value: 6}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 22, fantasy_team_id: 5, opponent_team_id: 6, stat_key: 1, stat_value: 7}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 22, fantasy_team_id: 6, opponent_team_id: 5, stat_key: 1, stat_value: 6}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 23, fantasy_team_id: 7, opponent_team_id: 8, stat_key: 1, stat_value: 6}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 23, fantasy_team_id: 8, opponent_team_id: 7, stat_key: 1, stat_value: 7}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: hits, level_per_played_day: 1}
+    expect:
+      rows:
+        - {platform_player_id: 11, fantasy_team_id: 1, matchups_rescored: 1, category_wins_added: 0.5, matchup_wins_added: 1}
+        - {platform_player_id: 21, fantasy_team_id: 2, matchups_rescored: 1, category_wins_added: 0.5, matchup_wins_added: 0}
+        - {platform_player_id: 31, fantasy_team_id: 3, matchups_rescored: 1, category_wins_added: 0.5, matchup_wins_added: 0.5}
+        - {platform_player_id: 41, fantasy_team_id: 4, matchups_rescored: 1, category_wins_added: 0.5, matchup_wins_added: 0.5}
+        - {platform_player_id: 51, fantasy_team_id: 5, matchups_rescored: 1, category_wins_added: 0.5, matchup_wins_added: 0}
+        - {platform_player_id: 81, fantasy_team_id: 8, matchups_rescored: 1, category_wins_added: 0.5, matchup_wins_added: 1}
 
   - name: category_wins_added_are_null_where_a_kind_of_day_has_no_level
     description: >

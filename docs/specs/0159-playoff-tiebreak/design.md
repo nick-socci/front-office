@@ -101,9 +101,9 @@ quietly misapply. **B** and **C** each produce a winner the league may not have.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0080](../../adr/0080-a-matchup-winner-is-who-advanced-and-a-level-playoff-matchup-goes-to-the-higher-seed.md) | `winner` is who advanced: a level playoff matchup goes to the higher seed, flagged by `is_decided_by_tiebreak`; a level regular-season matchup stays a tie; `matchup_wins_added` counts the same way | proposed (chosen by the owner, 2026-10-18) |
-| [0081](../../adr/0081-the-higher-seed-is-found-as-the-home-side-and-a-test-holds-home-to-the-better-seed.md) | The higher seed is found as the home side; a test outside the BigQuery slice holds home to the better seed | proposed (chosen by the owner, 2026-10-18) |
-| [0082](../../adr/0082-a-tie-rule-the-models-do-not-know-fails-the-build.md) | A playoff or regular-season tie rule other than `NONE` fails the build | proposed (chosen by the owner, 2026-10-18) |
+| [0080](../../adr/0080-a-matchup-winner-is-who-advanced-and-a-level-playoff-matchup-goes-to-the-higher-seed.md) | `winner` is who advanced: a level playoff matchup goes to the higher seed, flagged by `is_decided_by_tiebreak`; a level regular-season matchup stays a tie; `matchup_wins_added` counts the same way | accepted |
+| [0081](../../adr/0081-the-higher-seed-is-found-as-the-home-side-and-a-test-holds-home-to-the-better-seed.md) | The higher seed is found as the home side; a test outside the BigQuery slice holds home to the better seed | accepted |
+| [0082](../../adr/0082-a-tie-rule-the-models-do-not-know-fails-the-build.md) | A playoff or regular-season tie rule other than `NONE` fails the build | accepted |
 
 ## Detailed design
 

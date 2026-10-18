@@ -7,6 +7,8 @@
   "size": 12,
   "scoringSettings": {
    "scoringType": "H2H_MOST_CATEGORIES",
+   "playoffMatchupTieRule": "NONE",
+   "matchupTieRule": "NONE",
    "scoringItems": [
     {
      "statId": 5,

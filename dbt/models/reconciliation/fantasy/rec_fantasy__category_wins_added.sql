@@ -45,13 +45,21 @@
 -- stays. A category undefined for the swapped side in a draw is left out of that draw.
 --
 -- matchup_wins_added uses the league's rule as fct_matchup_results has it: more categories
--- won than lost is a win, equal is a tie. A win counts 1 and a tie one half, throughout.
+-- won than lost is a win. Equal is a tie in the regular season, counted one half, and in a
+-- playoff matchup it goes to the home side, the higher seed (ADR 0080, spec 0159): 1 for the
+-- home side and 0 for the away side. The same rule scores the actual and the rescored
+-- matchup, so a playoff tie is not a half on one side of the difference. A win counts 1
+-- throughout. category_wins_added counts a tied category a half in every matchup.
 
 {{ config(materialized='table') }}
 
 {%- set draws = 20 %}
 {%- set batting_columns = fo_batting_columns() %}
 {%- set pitching_columns = fo_pitching_columns() %}
+{#- A level matchup as the league scores it, for one side: a playoff tie goes to the home side. #}
+{%- set level_matchup_score = (
+    'case when is_playoff and is_home then 1.0 when is_playoff then 0 else 0.5 end'
+) %}
 {%- set pair_keys = [
     'platform',
     'league_id',
@@ -70,7 +78,9 @@ with rescorable_sides as (
         sides.matchup_id,
         sides.matchup_period,
         sides.fantasy_team_id,
-        sides.opponent_team_id
+        sides.opponent_team_id,
+        results.home_team_id = sides.fantasy_team_id as is_home,
+        results.playoff_tier != 'NONE' as is_playoff
     from {{ ref('int_fantasy__matchup_sides') }} as sides
     inner join {{ ref('fct_matchup_results') }} as results
         on results.platform = sides.platform
@@ -382,8 +392,16 @@ category_results as (
                 (round(swapped.swapped_value, 9) < opponent.stat_value) = swapped.is_lower_better
                 then 'WIN'
             else 'LOSS'
-        end as swapped_result
+        end as swapped_result,
+        side.is_home,
+        side.is_playoff
     from swapped_values as swapped
+    inner join rescorable_sides as side
+        on side.platform = swapped.platform
+        and side.league_id = swapped.league_id
+        and side.season = swapped.season
+        and side.matchup_id = swapped.matchup_id
+        and side.fantasy_team_id = swapped.fantasy_team_id
     inner join actual_values as team
         on team.platform = swapped.platform
         and team.league_id = swapped.league_id
@@ -422,7 +440,7 @@ matchup_draws as (
                 > count(*) filter (where actual_result = 'LOSS') then 1.0
             when
                 count(*) filter (where actual_result = 'WIN')
-                = count(*) filter (where actual_result = 'LOSS') then 0.5
+                = count(*) filter (where actual_result = 'LOSS') then {{ level_matchup_score }}
             else 0
         end
         - case
@@ -431,7 +449,7 @@ matchup_draws as (
                 > count(*) filter (where swapped_result = 'LOSS') then 1.0
             when
                 count(*) filter (where swapped_result = 'WIN')
-                = count(*) filter (where swapped_result = 'LOSS') then 0.5
+                = count(*) filter (where swapped_result = 'LOSS') then {{ level_matchup_score }}
             else 0
         end as matchup_wins_added
     from category_results
@@ -439,7 +457,9 @@ matchup_draws as (
         {%- for key in pair_keys %}
         {{ key }},
         {%- endfor %}
-        draw
+        draw,
+        is_home,
+        is_playoff
 
 ),
 

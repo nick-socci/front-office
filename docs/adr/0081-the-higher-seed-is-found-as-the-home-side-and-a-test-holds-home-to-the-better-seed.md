@@ -1,6 +1,6 @@
 # 0081. The higher seed is found as the home side, and a test holds home to the better seed
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-18
 - Spec: [0159-playoff-tiebreak](../specs/0159-playoff-tiebreak/design.md) · Issue: #159
 

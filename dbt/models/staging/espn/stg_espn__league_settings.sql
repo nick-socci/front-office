@@ -14,6 +14,10 @@ select
         "'Private League'"
     ) }} as league_name,
     {{ fo_json_text('payload', '$.settings.scoringSettings.scoringType') }} as scoring_type,
+    {{ fo_json_text('payload', '$.settings.scoringSettings.playoffMatchupTieRule') }}
+        as playoff_matchup_tie_rule,
+    {{ fo_json_text('payload', '$.settings.scoringSettings.matchupTieRule') }}
+        as matchup_tie_rule,
     {{ fo_json_int('payload', '$.settings.size') }} as team_count,
     {{ fo_json_int('payload', '$.settings.scheduleSettings.playoffTeamCount') }}
         as playoff_team_count,
