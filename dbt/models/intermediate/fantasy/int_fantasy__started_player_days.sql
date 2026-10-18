@@ -42,44 +42,127 @@
 --
 -- Doubleheaders are already summed one level down, in int_mlb__player_game_days.
 -- Verified against ESPN for matchup period 15, which contains six doubleheader starts.
+--
+-- The games-started limit (ADR 0071, 0072). A league's limit on starts in a matchup period
+-- (int_fantasy__start_limits) is applied here, at the grain every credited sum is built
+-- on, so every sum follows with no change of its own. A start is not credited when the
+-- team's earlier credited starts in the period reach the limit; the day that reaches it
+-- finishes (fo_days_past_start_limit). Such a row stays, marked is_over_start_limit, with
+-- every pitching column set to 0, games_pitched and games_started included, so the marts
+-- no longer see a played started day in it. Nothing disappears: the batting columns,
+-- `played` and `input_status` are as before, and the player-day reconciliation leaves the
+-- marked row out, since ESPN's game line for that day still holds the start. Relief
+-- appearances (no game started) and hitter-slot days are credited as always, and a
+-- league-season with no limit is untouched.
 
 {{ config(materialized='table') }}
 
+with credited as (
+
+    select
+        days.platform,
+        days.league_id,
+        days.season,
+        days.scoring_date,
+        days.scoring_period,
+        days.fantasy_team_id,
+        days.platform_player_id,
+        days.mlbam_player_id,
+        days.player_name,
+        days.roster_slot,
+        days.player_resolution,
+
+        (stats.mlbam_player_id is not null) as played,
+        case
+            when days.mlbam_player_id is null then 'unresolved_player'
+            -- No row in game_dates means no MLB games that date: complete by definition.
+            when not coalesce(game_dates.is_complete, true) then 'missing_boxscore'
+            when stats.mlbam_player_id is not null then 'played'
+            else 'verified_off'
+        end as input_status,
+        days.slot_role,
+
+        {%- for column in fo_batting_columns() %}
+        case when days.slot_role = 'hitter' then coalesce(stats.{{ column }}, 0) else 0 end
+            as {{ column }},
+        {%- endfor %}
+    {%- for column in fo_pitching_columns() %}
+    case when days.slot_role = 'pitcher' then coalesce(stats.{{ column }}, 0) else 0 end
+        as {{ column }}
+    {{- ',' if not loop.last }}
+    {%- endfor %}
+    from {{ ref('int_fantasy__roster_days') }} as days
+    left join {{ ref('int_mlb__player_game_days') }} as stats
+        on stats.mlbam_player_id = days.mlbam_player_id
+        and stats.game_date = days.scoring_date
+    left join {{ ref('int_mlb__game_dates') }} as game_dates
+        on game_dates.official_date = days.scoring_date
+    where days.is_started
+
+),
+
+-- Every start in a pitcher slot, credited or not: once a day is past the limit every later
+-- day of the period is too, so the uncredited starts never change the answer.
+team_day_starts as (
+
+    select
+        platform,
+        league_id,
+        season,
+        fantasy_team_id,
+        scoring_date,
+        sum(games_started) as day_starts
+    from credited
+    where slot_role = 'pitcher'
+    group by platform, league_id, season, fantasy_team_id, scoring_date
+
+),
+
+days_past_limit as (
+
+    {{ fo_days_past_start_limit('team_day_starts') }}
+
+),
+
+-- A start (not a relief appearance) in a pitcher slot on a day past the limit.
+marked as (
+
+    select
+        credited.*,
+        coalesce(days_past_limit.is_past_start_limit, false)
+        and credited.slot_role = 'pitcher'
+        and credited.games_started > 0 as is_over_start_limit
+    from credited
+    left join days_past_limit
+        on days_past_limit.platform = credited.platform
+        and days_past_limit.league_id = credited.league_id
+        and days_past_limit.season = credited.season
+        and days_past_limit.fantasy_team_id = credited.fantasy_team_id
+        and days_past_limit.scoring_date = credited.scoring_date
+
+)
+
 select
-    days.platform,
-    days.league_id,
-    days.season,
-    days.scoring_date,
-    days.scoring_period,
-    days.fantasy_team_id,
-    days.platform_player_id,
-    days.mlbam_player_id,
-    days.player_name,
-    days.roster_slot,
-    days.player_resolution,
-
-    (stats.mlbam_player_id is not null) as played,
-    case
-        when days.mlbam_player_id is null then 'unresolved_player'
-        -- No row in game_dates means no MLB games that date: complete by definition.
-        when not coalesce(game_dates.is_complete, true) then 'missing_boxscore'
-        when stats.mlbam_player_id is not null then 'played'
-        else 'verified_off'
-    end as input_status,
-    days.slot_role,
-
+    platform,
+    league_id,
+    season,
+    scoring_date,
+    scoring_period,
+    fantasy_team_id,
+    platform_player_id,
+    mlbam_player_id,
+    player_name,
+    roster_slot,
+    player_resolution,
+    played,
+    input_status,
+    slot_role,
+    is_over_start_limit,
     {%- for column in fo_batting_columns() %}
-    case when days.slot_role = 'hitter' then coalesce(stats.{{ column }}, 0) else 0 end
-        as {{ column }},
+    {{ column }},
     {%- endfor %}
 {%- for column in fo_pitching_columns() %}
-case when days.slot_role = 'pitcher' then coalesce(stats.{{ column }}, 0) else 0 end as {{ column }}
+case when is_over_start_limit then 0 else {{ column }} end as {{ column }}
 {{- ',' if not loop.last }}
 {%- endfor %}
-from {{ ref('int_fantasy__roster_days') }} as days
-left join {{ ref('int_mlb__player_game_days') }} as stats
-    on stats.mlbam_player_id = days.mlbam_player_id
-    and stats.game_date = days.scoring_date
-left join {{ ref('int_mlb__game_dates') }} as game_dates
-    on game_dates.official_date = days.scoring_date
-where days.is_started
+from marked

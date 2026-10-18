@@ -707,7 +707,17 @@ models:
       slot credits -- batting from a hitter slot, pitching from a pitcher slot, as ESPN
       scores it (#10). A started player who did not play yields zeroes, not a missing row
       -- "started nobody" and "started someone who did nothing" are different mistakes.
+      A start past the league's games-started limit keeps its row, marked and with its
+      pitching columns zero (ADR 0071, 0072).
     columns:
+      - name: is_over_start_limit
+        description: >
+          True for a start in a pitcher slot on a day when the team's earlier credited
+          starts of the matchup period already reach the period's start limit. Every
+          pitching column of such a row is zero, games_pitched and games_started included,
+          so it is no played started day; its batting columns, played and input_status are
+          unchanged. False for every row of a league-season with no limit.
+        data_tests: [not_null]
       - name: scoring_date
         data_tests: [not_null]
       - name: fantasy_team_id
@@ -1549,6 +1559,10 @@ unit_tests:
       the whole day, not the credited part.
     model: int_fantasy__started_player_days
     given:
+      - input: ref('int_fantasy__matchup_periods')
+        rows: []
+      - input: ref('int_fantasy__start_limits')
+        rows: []
       - input: ref('int_fantasy__roster_days')
         rows:
           - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, roster_slot: UTIL, slot_role: hitter}
@@ -1583,6 +1597,10 @@ unit_tests:
       game never reaches a team's stat 62; a benched pitcher's complete game credited.
     model: int_fantasy__started_player_days
     given:
+      - input: ref('int_fantasy__matchup_periods')
+        rows: []
+      - input: ref('int_fantasy__start_limits')
+        rows: []
       - input: ref('int_fantasy__roster_days')
         rows:
           - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, roster_slot: SP, slot_role: pitcher}
@@ -1607,6 +1625,10 @@ unit_tests:
       roster-day is not a started player-day and has no row at all.
     model: int_fantasy__started_player_days
     given:
+      - input: ref('int_fantasy__matchup_periods')
+        rows: []
+      - input: ref('int_fantasy__start_limits')
+        rows: []
       - input: ref('int_fantasy__roster_days')
         rows:
           - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, slot_role: hitter}
@@ -1626,6 +1648,10 @@ unit_tests:
       No MLB games that date (the All-Star break, say) means nothing could be missing.
     model: int_fantasy__started_player_days
     given:
+      - input: ref('int_fantasy__matchup_periods')
+        rows: []
+      - input: ref('int_fantasy__start_limits')
+        rows: []
       - input: ref('int_fantasy__roster_days')
         rows:
           - {scoring_date: "2026-07-14", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, slot_role: hitter}
@@ -1644,6 +1670,10 @@ unit_tests:
       he is missing_boxscore as well, with played still true and his game 1 stats kept.
     model: int_fantasy__started_player_days
     given:
+      - input: ref('int_fantasy__matchup_periods')
+        rows: []
+      - input: ref('int_fantasy__start_limits')
+        rows: []
       - input: ref('int_fantasy__roster_days')
         rows:
           - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, slot_role: hitter}
@@ -1665,6 +1695,10 @@ unit_tests:
       more basic failure, so it outranks an incomplete date.
     model: int_fantasy__started_player_days
     given:
+      - input: ref('int_fantasy__matchup_periods')
+        rows: []
+      - input: ref('int_fantasy__start_limits')
+        rows: []
       - input: ref('int_fantasy__roster_days')
         rows:
           - {scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: null, is_started: true, slot_role: hitter}
@@ -4215,3 +4249,91 @@ unit_tests:
           - {platform: espn, league_id: "3", season: 2025, matchup_period: 1, scoring_date: "2025-06-07"}
     expect:
       rows: []
+
+# -----------------------------------------------------------------------------
+# Unit tests: the games-started limit on credited starts (#152, ADR 0071, 0072).
+# -----------------------------------------------------------------------------
+
+  - name: started_player_days_a_start_past_the_limit_is_marked_and_zeroed
+    description: >
+      League 1, team 1, matchup period 1 with a limit of 3.0 over days 1 to 4. Day 1: a
+      start, and a two-way player in a hitter slot whose MLB line holds a game started.
+      Day 2: a start (2 so far). Day 3: two starts, both credited because the earlier days
+      stand at 2, below 3, which takes the team to 4. Day 4: a start, marked and zeroed
+      in every pitching column (games_pitched and games_started included) with `played`
+      and `input_status` unchanged, and a relief appearance, credited. Day 5 is period 2:
+      a start, credited, as the count restarts. Every row stays. Catches: the day that
+      reaches the limit cut short (day 3); the hitter-slot start counted toward the limit
+      (it would put day 3 past it); relief dropped with the starts; a row dropped;
+      a count carried across periods.
+    model: int_fantasy__started_player_days
+    given:
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, roster_slot: SP, slot_role: pitcher}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 3, mlbam_player_id: 910003, is_started: true, roster_slot: UTIL, slot_role: hitter}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 910002, is_started: true, roster_slot: SP, slot_role: pitcher}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", fantasy_team_id: 1, platform_player_id: 4, mlbam_player_id: 910004, is_started: true, roster_slot: SP, slot_role: pitcher}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", fantasy_team_id: 1, platform_player_id: 5, mlbam_player_id: 910005, is_started: true, roster_slot: SP, slot_role: pitcher}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-04", fantasy_team_id: 1, platform_player_id: 6, mlbam_player_id: 910006, is_started: true, roster_slot: SP, slot_role: pitcher}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-04", fantasy_team_id: 1, platform_player_id: 7, mlbam_player_id: 910007, is_started: true, roster_slot: RP, slot_role: pitcher}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-05", fantasy_team_id: 1, platform_player_id: 8, mlbam_player_id: 910008, is_started: true, roster_slot: SP, slot_role: pitcher}
+          - {platform: espn, league_id: "2", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 11, mlbam_player_id: 910011, is_started: true, roster_slot: SP, slot_role: pitcher}
+          - {platform: espn, league_id: "2", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 12, mlbam_player_id: 910012, is_started: true, roster_slot: SP, slot_role: pitcher}
+          - {platform: espn, league_id: "2", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 13, mlbam_player_id: 910013, is_started: true, roster_slot: SP, slot_role: pitcher}
+          - {platform: espn, league_id: "2", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 14, mlbam_player_id: 910014, is_started: true, roster_slot: SP, slot_role: pitcher}
+          - {platform: espn, league_id: "2", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 15, mlbam_player_id: 910015, is_started: true, roster_slot: SP, slot_role: pitcher}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 910001, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 3}
+          - {mlbam_player_id: 910003, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 3}
+          - {mlbam_player_id: 910002, game_date: "2026-06-02", games_pitched: 1, games_started: 1, outs_recorded: 3}
+          - {mlbam_player_id: 910004, game_date: "2026-06-03", games_pitched: 1, games_started: 1, outs_recorded: 3}
+          - {mlbam_player_id: 910005, game_date: "2026-06-03", games_pitched: 1, games_started: 1, outs_recorded: 3}
+          - {mlbam_player_id: 910006, game_date: "2026-06-04", games_pitched: 1, games_started: 1, outs_recorded: 3}
+          - {mlbam_player_id: 910007, game_date: "2026-06-04", games_pitched: 1, games_started: 0, outs_recorded: 3}
+          - {mlbam_player_id: 910008, game_date: "2026-06-05", games_pitched: 1, games_started: 1, outs_recorded: 3}
+          - {mlbam_player_id: 910011, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 3}
+          - {mlbam_player_id: 910012, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 3}
+          - {mlbam_player_id: 910013, game_date: "2026-06-01", games_pitched: 1, games_started: 1, outs_recorded: 3}
+          - {mlbam_player_id: 910014, game_date: "2026-06-02", games_pitched: 1, games_started: 1, outs_recorded: 3}
+          - {mlbam_player_id: 910015, game_date: "2026-06-02", games_pitched: 1, games_started: 1, outs_recorded: 3}
+      - input: ref('int_mlb__game_dates')
+        rows:
+          - {official_date: "2026-06-01", is_complete: true}
+          - {official_date: "2026-06-02", is_complete: true}
+          - {official_date: "2026-06-03", is_complete: true}
+          - {official_date: "2026-06-04", is_complete: true}
+          - {official_date: "2026-06-05", is_complete: true}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-02"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-03"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-04"}
+          - {platform: espn, league_id: "2", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "2", season: 2026, matchup_period: 1, scoring_date: "2026-06-02"}
+          - {platform: espn, league_id: "2", season: 2026, matchup_period: 1, scoring_date: "2026-06-03"}
+          - {platform: espn, league_id: "2", season: 2026, matchup_period: 1, scoring_date: "2026-06-04"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-05"}
+      - input: ref('int_fantasy__start_limits')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, start_limit: 3.0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, start_limit: 3.0}
+          - {platform: espn, league_id: "2", season: 2026, matchup_period: 1, start_limit: null}
+    expect:
+      rows:
+        - {league_id: "1", platform_player_id: 1, input_status: played, played: true, is_over_start_limit: false, games_pitched: 1, games_started: 1, outs_recorded: 3}
+        - {league_id: "1", platform_player_id: 3, input_status: played, played: true, is_over_start_limit: false, games_pitched: 0, games_started: 0, outs_recorded: 0}
+        - {league_id: "1", platform_player_id: 2, input_status: played, played: true, is_over_start_limit: false, games_pitched: 1, games_started: 1, outs_recorded: 3}
+        - {league_id: "1", platform_player_id: 4, input_status: played, played: true, is_over_start_limit: false, games_pitched: 1, games_started: 1, outs_recorded: 3}
+        - {league_id: "1", platform_player_id: 5, input_status: played, played: true, is_over_start_limit: false, games_pitched: 1, games_started: 1, outs_recorded: 3}
+        - {league_id: "1", platform_player_id: 6, input_status: played, played: true, is_over_start_limit: true, games_pitched: 0, games_started: 0, outs_recorded: 0}
+        - {league_id: "1", platform_player_id: 7, input_status: played, played: true, is_over_start_limit: false, games_pitched: 1, games_started: 0, outs_recorded: 3}
+        - {league_id: "1", platform_player_id: 8, input_status: played, played: true, is_over_start_limit: false, games_pitched: 1, games_started: 1, outs_recorded: 3}
+        - {league_id: "2", platform_player_id: 11, input_status: played, played: true, is_over_start_limit: false, games_pitched: 1, games_started: 1, outs_recorded: 3}
+        - {league_id: "2", platform_player_id: 12, input_status: played, played: true, is_over_start_limit: false, games_pitched: 1, games_started: 1, outs_recorded: 3}
+        - {league_id: "2", platform_player_id: 13, input_status: played, played: true, is_over_start_limit: false, games_pitched: 1, games_started: 1, outs_recorded: 3}
+        - {league_id: "2", platform_player_id: 14, input_status: played, played: true, is_over_start_limit: false, games_pitched: 1, games_started: 1, outs_recorded: 3}
+        - {league_id: "2", platform_player_id: 15, input_status: played, played: true, is_over_start_limit: false, games_pitched: 1, games_started: 1, outs_recorded: 3}
+

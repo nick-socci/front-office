@@ -194,8 +194,9 @@ def test_the_slice_and_the_macros_it_reaches_hold_no_sql_bigquery_refuses(
     sitting in a shared macro one of them calls."""
     models = [label for label in slice_sources if label.startswith("models/")]
     macros = [label for label in slice_sources if label.startswith("macros/")]
-    # 34 models of spec 0130, and the nine capture views they read (spec 0150).
-    assert len(models) == 43, "the slice's models were not all found"
+    # 34 models of spec 0130, the nine capture views they read (spec 0150), and the two
+    # games-started limit models (spec 0152).
+    assert len(models) == 45, "the slice's models were not all found"
     assert any("boxscore_players.sql" in label for label in macros), "macros are not followed"
     assert any("json.sql::bigquery__" in label for label in macros), "bigquery forms not reached"
     assert not any("::duckdb__" in label for label in slice_sources)
