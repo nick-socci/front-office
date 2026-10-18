@@ -216,6 +216,10 @@ ESPN_SETTINGS_FIELDS = (
     "settings.name",
     "settings.size",
     "settings.scoringSettings.scoringType",
+    # How ESPN settles a level matchup: "NONE" is its default (a regular-season tie stays a
+    # tie; a playoff one goes to the higher seed). Read by stg_espn__league_settings.
+    "settings.scoringSettings.playoffMatchupTieRule",
+    "settings.scoringSettings.matchupTieRule",
     "settings.scheduleSettings.playoffTeamCount",
     "status.currentMatchupPeriod",
     "status.latestScoringPeriod",
