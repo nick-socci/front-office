@@ -2090,6 +2090,10 @@ unit_tests:
       player, and a missed start read from the wrong player or slot.
     model: fct_lineup_decisions
     given:
+      - input: ref('int_fantasy__start_limits')
+        rows: []
+      - input: ref('int_mlb__player_game_days')
+        rows: []
       - input: ref('int_fantasy__roster_days')
         rows:
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 5, fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 9101, roster_slot_id: 12, is_started: true, slot_role: hitter}
@@ -2137,6 +2141,10 @@ unit_tests:
       the lineup both times, and a started player counted as brought in.
     model: fct_lineup_decisions
     given:
+      - input: ref('int_fantasy__start_limits')
+        rows: []
+      - input: ref('int_mlb__player_game_days')
+        rows: []
       - input: ref('int_fantasy__roster_days')
         rows:
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 5, fantasy_team_id: 2, platform_player_id: 3, mlbam_player_id: 9103, roster_slot_id: 12, is_started: true, slot_role: hitter}
@@ -2186,6 +2194,10 @@ unit_tests:
       nobody was brought in.
     model: fct_lineup_decisions
     given:
+      - input: ref('int_fantasy__start_limits')
+        rows: []
+      - input: ref('int_mlb__player_game_days')
+        rows: []
       - input: ref('int_fantasy__roster_days')
         rows:
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 5, fantasy_team_id: 3, platform_player_id: 6, mlbam_player_id: 9106, roster_slot_id: 12, is_started: true, slot_role: hitter}
@@ -2234,6 +2246,10 @@ unit_tests:
       actual_value that skips a null option and reports a part as the whole.
     model: fct_lineup_decisions
     given:
+      - input: ref('int_fantasy__start_limits')
+        rows: []
+      - input: ref('int_mlb__player_game_days')
+        rows: []
       - input: ref('int_fantasy__roster_days')
         rows:
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 5, fantasy_team_id: 4, platform_player_id: 8, mlbam_player_id: 9108, roster_slot_id: 12, is_started: true, slot_role: hitter}
@@ -2286,6 +2302,10 @@ unit_tests:
       and a fetch time that is null or an arbitrary one of two.
     model: fct_lineup_decisions
     given:
+      - input: ref('int_fantasy__start_limits')
+        rows: []
+      - input: ref('int_mlb__player_game_days')
+        rows: []
       - input: ref('int_fantasy__roster_days')
         rows:
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 5, fantasy_team_id: 6, platform_player_id: 12, mlbam_player_id: 9112, roster_slot_id: 16, is_started: false, slot_role: bench}
@@ -2326,6 +2346,10 @@ unit_tests:
       slot, or by the highest id.
     model: fct_lineup_decisions
     given:
+      - input: ref('int_fantasy__start_limits')
+        rows: []
+      - input: ref('int_mlb__player_game_days')
+        rows: []
       - input: ref('int_fantasy__roster_days')
         rows:
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 5, fantasy_team_id: 7, platform_player_id: 13, mlbam_player_id: 9113, roster_slot_id: 12, is_started: true, slot_role: hitter}
@@ -2380,6 +2404,10 @@ unit_tests:
       taken from the actual lineup.
     model: fct_lineup_decisions
     given:
+      - input: ref('int_fantasy__start_limits')
+        rows: []
+      - input: ref('int_mlb__player_game_days')
+        rows: []
       - input: ref('int_fantasy__roster_days')
         rows:
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 5, fantasy_team_id: 8, platform_player_id: 30, mlbam_player_id: 9130, roster_slot_id: 14, is_started: true, slot_role: pitcher}
@@ -2430,6 +2458,10 @@ unit_tests:
       matchup period lost with the matchup.
     model: fct_lineup_decisions
     given:
+      - input: ref('int_fantasy__start_limits')
+        rows: []
+      - input: ref('int_mlb__player_game_days')
+        rows: []
       - input: ref('int_fantasy__roster_days')
         rows:
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 5, fantasy_team_id: 1, platform_player_id: 40, mlbam_player_id: 9140, roster_slot_id: 16, is_started: false, slot_role: bench}
@@ -2474,6 +2506,10 @@ unit_tests:
       injured-list player flagged, and a date with no games read as incomplete.
     model: fct_lineup_decisions
     given:
+      - input: ref('int_fantasy__start_limits')
+        rows: []
+      - input: ref('int_mlb__player_game_days')
+        rows: []
       - input: ref('int_fantasy__roster_days')
         rows:
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 5, fantasy_team_id: 10, platform_player_id: 50, mlbam_player_id: 9150, roster_slot_id: 16, is_started: false, slot_role: bench}
@@ -2696,3 +2732,76 @@ unit_tests:
         - {fantasy_team_id: 4, has_unverified_inputs: true}
         - {fantasy_team_id: 5, has_unverified_inputs: false}
         - {fantasy_team_id: 6, has_unverified_inputs: false}
+
+  - name: lineup_decisions_each_lineups_values_are_limited_by_its_own_starts
+    description: >
+      Games-started limit of 2.0 for the period, one team, three days. Actual lineup: a start
+      on each day (values 1, 2 and 4); two earlier starts before day 3, so day 3's counts 0
+      (actual values 1, 2, 0). Optimal lineup: two starts on day 1 (players 1 and 4, values 1
+      and 3), one on day 2 (value 2), one on day 3 (value 4); two earlier starts before day 2,
+      so days 2 and 3 count 0 (optimal values 4, 0, 0). The actual lineup's day-2 start is
+      credited and the optimal lineup's is not: on different days. The start counts are what
+      each lineup started, unlimited. Catches a lineup's value counting a start it was not
+      credited, and one lineup's starts deciding the other's limit.
+    model: fct_lineup_decisions
+    given:
+      - input: ref('int_fantasy__start_limits')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, start_limit: 2.0}
+      - input: ref('int_mlb__player_game_days')
+        rows:
+          - {mlbam_player_id: 9101, game_date: "2026-06-01", games_pitched: 1, games_started: 1}
+          - {mlbam_player_id: 9104, game_date: "2026-06-01", games_pitched: 1, games_started: 1}
+          - {mlbam_player_id: 9102, game_date: "2026-06-02", games_pitched: 1, games_started: 1}
+          - {mlbam_player_id: 9103, game_date: "2026-06-03", games_pitched: 1, games_started: 1}
+      - input: ref('int_fantasy__roster_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 9101, roster_slot_id: 14, is_started: true, slot_role: pitcher}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", scoring_period: 1, fantasy_team_id: 1, platform_player_id: 4, mlbam_player_id: 9104, roster_slot_id: 16, is_started: false, slot_role: bench}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", scoring_period: 2, fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 9102, roster_slot_id: 14, is_started: true, slot_role: pitcher}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", scoring_period: 3, fantasy_team_id: 1, platform_player_id: 3, mlbam_player_id: 9103, roster_slot_id: 14, is_started: true, slot_role: pitcher}
+      - input: ref('espn_lineup_slots')
+        rows:
+          - {lineup_slot_id: 14, is_injured_list_slot: false}
+          - {lineup_slot_id: 16, is_injured_list_slot: false}
+      - input: ref('int_fantasy__lineup_options')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 14, lineup_slot: SP, slot_role: pitcher, option_value: 1, day_kind: start, is_started: true, is_actual: true}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 4, lineup_slot_id: 14, lineup_slot: SP, slot_role: pitcher, option_value: 3, day_kind: start, is_started: false, is_actual: false}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 14, lineup_slot: SP, slot_role: pitcher, option_value: 2, day_kind: start, is_started: true, is_actual: true}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", fantasy_team_id: 1, platform_player_id: 3, lineup_slot_id: 14, lineup_slot: SP, slot_role: pitcher, option_value: 4, day_kind: start, is_started: true, is_actual: true}
+      - input: ref('int_fantasy__optimal_lineups')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 14}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 4, lineup_slot_id: 14}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 14}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", fantasy_team_id: 1, platform_player_id: 3, lineup_slot_id: 14}
+      - input: ref('stg_espn__roster_entry_slots')
+        rows:
+          - {league_id: "1", season: 2026, scoring_period: 1, team_id: 1, fetched_at: "2026-09-26 12:00:00"}
+          - {league_id: "1", season: 2026, scoring_period: 2, team_id: 1, fetched_at: "2026-09-26 12:00:00"}
+          - {league_id: "1", season: 2026, scoring_period: 3, team_id: 1, fetched_at: "2026-09-26 12:00:00"}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_period: 2, scoring_date: "2026-06-02"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_period: 3, scoring_date: "2026-06-03"}
+      - input: ref('int_fantasy__matchup_sides')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 100, matchup_period: 1, fantasy_team_id: 1}
+      - input: ref('int_mlb__game_dates')
+        rows:
+          - {official_date: "2026-06-01", is_complete: true}
+          - {official_date: "2026-06-02", is_complete: true}
+          - {official_date: "2026-06-03", is_complete: true}
+      - input: ref('dim_player_league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, mlbam_player_id: 9101}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, mlbam_player_id: 9102}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, mlbam_player_id: 9103}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 4, mlbam_player_id: 9104}
+    expect:
+      rows:
+        - {scoring_period: 1, actual_value: 1, optimal_value: 4, value_gap: 3, actual_pitcher_starts: 1, optimal_pitcher_starts: 2}
+        - {scoring_period: 2, actual_value: 2, optimal_value: 0, value_gap: -2, actual_pitcher_starts: 1, optimal_pitcher_starts: 1}
+        - {scoring_period: 3, actual_value: 0, optimal_value: 0, value_gap: 0, actual_pitcher_starts: 1, optimal_pitcher_starts: 1}
