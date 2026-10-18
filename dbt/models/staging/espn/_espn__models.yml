@@ -598,7 +598,8 @@ unit_tests:
     description: >
       R1.1, R1.5. One capture (scoring period 7) of matchup period 2. Matchup 20 has two
       sides; home has two players, the first with an actual line (statSourceId 0, split
-      5) of stats 1, 2 and 3 where stat 2 is the text "n/a", a projected line
+      5) of stats 1 to 4 where stat 2 is the text "n/a" and stat 4 the string "12" (a string
+      that looks like a number is not a number, R1.5), a projected line
       (statSourceId 1) and a season line (statSplitTypeId 1), both with stat 1 set to
       values that must not appear. Matchup 21 is a bye (home with no lines, an empty
       away). Matchup 30 belongs to matchup period 3 and carries lines, which this
@@ -621,7 +622,7 @@ unit_tests:
                 {"id": 20, "matchupPeriodId": 2,
                  "home": {"teamId": 1, "rosterForMatchupPeriod": {"entries": [
                    {"playerId": 100, "playerPoolEntry": {"player": {"stats": [
-                     {"statSourceId": 0, "statSplitTypeId": 5, "scoringPeriodId": 0, "stats": {"1": 3.0, "2": "n/a", "3": 4.5}},
+                     {"statSourceId": 0, "statSplitTypeId": 5, "scoringPeriodId": 0, "stats": {"1": 3.0, "2": "n/a", "3": 4.5, "4": "12"}},
                      {"statSourceId": 1, "statSplitTypeId": 5, "scoringPeriodId": 0, "stats": {"1": 99.0}},
                      {"statSourceId": 0, "statSplitTypeId": 1, "scoringPeriodId": 0, "stats": {"1": 77.0}}]}}},
                    {"playerId": 101, "playerPoolEntry": {"player": {"stats": [

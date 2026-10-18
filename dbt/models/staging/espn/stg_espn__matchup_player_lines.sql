@@ -220,7 +220,12 @@ numbered as (
         team_id,
         espn_player_id,
         cast(stat_key as bigint) as stat_id,
-        {{ fo_safe_cast(fo_json_string('stat_value', '$'), fo_type_float()) }} as stat_value,
+        -- A value that is not a JSON number gives null, and the row is left out (R1.5): a
+        -- string, even one that reads as a number, is not ESPN's count.
+        case
+            when {{ fo_json_is_number('stat_value', '$') }}
+                then {{ fo_safe_cast(fo_json_string('stat_value', '$'), fo_type_float()) }}
+        end as stat_value,
         scoring_period,
         {{ fo_parse_fetched_at() }} as fetched_at
     from stat_rows

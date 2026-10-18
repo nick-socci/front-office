@@ -366,6 +366,7 @@ rate_components as (
         espn.fantasy_team_id,
         rules.stat_key,
         rules.part,
+        rules.component,
         rules.weight,
         component_scores.espn_value as component_value,
         coalesce(
@@ -411,15 +412,22 @@ espn_formula as (
         matchup_id,
         fantasy_team_id,
         stat_key,
-        sum(case when part = 'numerator' then weight * component_value end)
-        / nullif(sum(case when part = 'denominator' then weight * component_value end), 0)
+        -- In component order, as every floating-point sum here is (AGENTS.md, ADR 0046).
+        {{ fo_sum_in_order(
+            "case when part = 'numerator' then weight * component_value end", 'component'
+        ) }}
+        / nullif({{ fo_sum_in_order(
+            "case when part = 'denominator' then weight * component_value end", 'component'
+        ) }}, 0)
             as espn_formula_value,
-        sum(
-            case when part = 'numerator' then weight * (component_value + component_shift) end
-        ) as implied_numerator,
-        sum(
-            case when part = 'denominator' then weight * (component_value + component_shift) end
-        ) as implied_denominator
+        {{ fo_sum_in_order(
+            "case when part = 'numerator' then weight * (component_value + component_shift) end",
+            'component'
+        ) }} as implied_numerator,
+        {{ fo_sum_in_order(
+            "case when part = 'denominator' then weight * (component_value + component_shift) end",
+            'component'
+        ) }} as implied_denominator
     from rate_components
     group by league_id, season, matchup_id, fantasy_team_id, stat_key
 
