@@ -34,7 +34,8 @@ Explicitly out of scope. Work that drifts here is escalated, not done.
 
 - The lineup solver does not enforce the limit: each team-day is still solved alone
   (ADR 0037). How the optimal lineup's *totals* are credited is decided here (R4); how
-  the lineup is *chosen* is not.
+  the lineup is *chosen* is not. (Amended 2026-10-18: the optimal lineup is not limited
+  until a solver chooses a period's lineups within the limit, #164; ADR 0079.)
 - No other row of #147 is investigated: 2018's 67 values, the other seasons' 57 and the
   2023 slope question stay on #147.
 - No new landing and no new ESPN request: every settings capture is already landed.
@@ -107,7 +108,7 @@ Places this could sink time, and the decision already taken to avoid them.
 - R3.2 THE SYSTEM SHALL compare each matchup side's credited totals, with the limit
   applied, against ESPN's `scoreByStat` as today, with no new status.
 
-### R4. The lineup totals and values are credited by the same rule
+### R4. The actual lineup's totals and values are credited by the same rule
 
 The lineup solver's inputs, the day values of `int_fantasy__candidate_day_values`, are
 unchanged: the solver still chooses each team-day alone (ADR 0037).
@@ -115,13 +116,14 @@ unchanged: the solver still chooses each team-day alone (ADR 0037).
 - R4.1 THE SYSTEM SHALL credit the actual lineup's totals in
   `int_fantasy__lineup_category_totals` by the rule of R2, so that they still equal the
   scored totals exactly (`lineup_category_totals_reproduce_the_actual_totals`).
-- R4.2 THE SYSTEM SHALL credit the optimal lineup's totals by the same rule, counting the
-  optimal lineup's own starts toward the limit; the solver that chooses the lineup is
-  unchanged (ADR 0073).
-- R4.3 THE SYSTEM SHALL count, in `fct_lineup_decisions.actual_value`, `optimal_value` and
-  `value_gap`, the day value of a start that the lineup's own starts put past the limit
-  as 0 (ADR 0073). `actual_pitcher_starts` and `optimal_pitcher_starts` stay the starts
-  the lineups made, limited or not.
+- R4.2 THE SYSTEM SHALL credit the optimal lineup's totals as the solver chose the lineup,
+  without the limit (ADR 0079, superseding 0073: amended 2026-10-18, design.md
+  *Amendments*). A limit applied after the per-day solve can leave the optimal lineup
+  below the actual one; a limit-aware optimal lineup is #164.
+- R4.3 THE SYSTEM SHALL count, in `fct_lineup_decisions.actual_value` and so `value_gap`,
+  the day value of a start that the actual lineup's own starts put past the limit as 0;
+  `optimal_value` is not limited (ADR 0079). `actual_pitcher_starts` and
+  `optimal_pitcher_starts` stay the starts the lineups made, limited or not.
 - R4.4 THE SYSTEM SHALL compare, in `candidate_day_values_add_back_to_season_value`, each
   pair's season value with the day values of its started days that are not
   `is_over_start_limit`.
@@ -145,9 +147,9 @@ build time.
 | 2023, matchup 110, team 7 | stats 33, 34, 37, 39, 48, 41, 49 match; 45 explained_by_game_lines (our 41, ESPN 42, game-line difference −1); 47 explained_by_component | the side's rows |
 | Every other side and stat | the same status and our_value as before | compare with the saved table |
 | `fct_matchup_results_match_espn` | 79 failing rows, unchanged (that matchup's category results already agree) | the test |
-| `rec_espn__player_day_differences_are_registered` | 18, unchanged | the test |
-| Optimal lineups (R4.2) | 6 starts uncredited, on 4 team-periods: 2018 1, 2019 3, 2022 1, 2023 1 | the lineup totals before and after |
-| `fct_lineup_decisions` values (R4.3) | `actual_value` changes on 1 team-day (2023-08-20, team 7); `optimal_value` on the team-days holding the 6 starts above; no other team-day changes | compare with the saved table |
+| `rec_espn__player_day_differences_are_registered` | 18 → 17: 2023 m110 t7's ER key leaves, being `explained_by_game_lines` (ADR 0064; amended 2026-10-18) | the test |
+| Optimal lineups (R4.2) | no optimal row changes (amended 2026-10-18). The optimal lineups still go over the limit by 6 starts on 4 team-periods (2018 1, 2019 3, 2022 1, 2023 1): what the gap overstates (ADR 0079) | the lineup totals before and after |
+| `fct_lineup_decisions` values (R4.3) | `actual_value` and `value_gap` change on 1 team-day (2023-08-20, team 7); `optimal_value` on none (amended 2026-10-18); `fct_lineup_decisions_are_never_worse_than_the_actual_lineup` passes | compare with the saved table |
 | `candidate_day_values_add_back_to_season_value` (R4.4) | passes | the test |
 | Settings captures | 21, and within each season every capture holds the same limits | read every capture |
 | `lineup_category_totals_reproduce_the_actual_totals` | passes | the test |
