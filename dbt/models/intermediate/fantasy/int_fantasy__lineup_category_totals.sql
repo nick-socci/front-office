@@ -36,8 +36,15 @@
 -- unvalued: it adds nothing to the sums and nulls nothing.
 --
 -- The lineup maximises summed day value over all categories, not any one of them, so an
--- optimal row can be worse than its actual row. Injured-list slots are not candidates, and
--- the league's limit on pitcher starts is not applied (ADR 0037).
+-- optimal row can be worse than its actual row. Injured-list slots are not candidates.
+--
+-- THE GAMES-STARTED LIMIT (ADR 0071, 0073, amending 0037). Both lineups' totals are credited
+-- under the league's limit by the rule of int_fantasy__started_player_days
+-- (fo_days_past_start_limit): a pitcher-slot start on a day when the lineup's own earlier
+-- starts of the matchup period reach the period's limit credits no pitching. Each lineup
+-- counts its own starts, so the actual rows still equal the scored totals exactly
+-- (lineup_category_totals_reproduce_the_actual_totals). The solver still chooses each
+-- team-day alone and ignores the limit; only how its lineup is credited follows it.
 
 {{ config(materialized='table') }}
 
@@ -87,6 +94,38 @@ with lineup_player_days as (
 
 ),
 
+team_day_starts as (
+
+    -- The games started in pitcher slots, per lineup and team-day: each lineup's own starts.
+    select
+        player_days.lineup,
+        player_days.platform,
+        player_days.league_id,
+        player_days.season,
+        player_days.fantasy_team_id,
+        player_days.scoring_date,
+        sum(stats.games_started) as day_starts
+    from lineup_player_days as player_days
+    inner join {{ ref('int_mlb__player_game_days') }} as stats
+        on stats.mlbam_player_id = player_days.mlbam_player_id
+        and stats.game_date = player_days.scoring_date
+    where player_days.slot_role = 'pitcher'
+    group by
+        player_days.lineup,
+        player_days.platform,
+        player_days.league_id,
+        player_days.season,
+        player_days.fantasy_team_id,
+        player_days.scoring_date
+
+),
+
+days_past_limit as (
+
+    {{ fo_days_past_start_limit('team_day_starts', extra_keys=['lineup']) }}
+
+),
+
 credited_days as (
 
     select
@@ -104,7 +143,14 @@ credited_days as (
         {%- endfor %}
     {%- for column in fo_pitching_columns() %}
     case
-        when player_days.slot_role = 'pitcher' then coalesce(stats.{{ column }}, 0) else 0
+        when
+            player_days.slot_role = 'pitcher'
+            and not (
+                coalesce(past_limit.is_past_start_limit, false)
+                and coalesce(stats.games_started, 0) > 0
+            )
+            then coalesce(stats.{{ column }}, 0)
+        else 0
     end
         as {{ column }}
     {{- ',' if not loop.last }}
@@ -113,6 +159,13 @@ credited_days as (
     inner join {{ ref('int_mlb__player_game_days') }} as stats
         on stats.mlbam_player_id = player_days.mlbam_player_id
         and stats.game_date = player_days.scoring_date
+    left join days_past_limit as past_limit
+        on past_limit.lineup = player_days.lineup
+        and past_limit.platform = player_days.platform
+        and past_limit.league_id = player_days.league_id
+        and past_limit.season = player_days.season
+        and past_limit.fantasy_team_id = player_days.fantasy_team_id
+        and past_limit.scoring_date = player_days.scoring_date
 
 ),
 
