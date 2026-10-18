@@ -962,6 +962,44 @@ models:
   # Matchup aggregation (#10): credited components per side, then stat values.
   # ---------------------------------------------------------------------------
 
+  - name: int_fantasy__start_limits
+    description: >
+      One row per matchup period of every league-season with rosters: how many starts a
+      team's slots may credit in it. starts_per_day is the league-season's games-started
+      limit (stat 33), a per-day rate in a head-to-head league (ADR 0071); start_limit is
+      that rate times the period's own days, a float, not rounded. Both are null where the
+      league-season has no games-started limit.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        data_type: string
+        constraints: [{type: not_null}]
+      - name: league_id
+        data_type: string
+        constraints: [{type: not_null}]
+      - name: season
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: matchup_period
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: period_days
+        description: The number of scoring dates the period covers.
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: starts_per_day
+        description: The limit_value of the league-season's stat 33 entry; null when it has none.
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
+      - name: start_limit
+        description: starts_per_day times period_days, exactly; null when starts_per_day is.
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, matchup_period]
+
   - name: int_fantasy__matchup_side_totals
     description: >
       One row per matchup side: every credited component summed over the matchup
@@ -4085,3 +4123,95 @@ unit_tests:
         - {fantasy_team_id: 3, category_key: 5, lineup: optimal, numerator: 0, denominator: null, category_value: 0}
         - {fantasy_team_id: 3, category_key: 2, lineup: actual, numerator: 0, denominator: 0, category_value: null}
         - {fantasy_team_id: 3, category_key: 2, lineup: optimal, numerator: 0, denominator: 0, category_value: null}
+
+# -----------------------------------------------------------------------------
+# Unit tests: the games-started limit per matchup period (#152).
+# -----------------------------------------------------------------------------
+
+  - name: start_limits_scale_the_per_day_rate_by_each_periods_own_days
+    description: >
+      A covered league-season with a limit of 1.8571428571428572 a day and two periods, of
+      7 and 12 days. The 7-day limit is exactly 13.0 and the 12-day one the float product.
+      Catches a limit scaled by 7 instead of the period's days (the 12-day period would
+      read 13.0), a period row missing, and a rounded limit (22.0 for 22.285714285714285).
+    model: int_fantasy__start_limits
+    given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+      - input: ref('stg_espn__lineup_slot_stat_limits')
+        rows:
+          - {league_id: "1", season: 2026, lineup_slot_id: 22, stat_id: 33, limit_value: 1.8571428571428572}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-02"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-03"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-04"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-05"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-06"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-07"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-08"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-09"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-10"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-11"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-12"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-13"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-14"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-15"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-16"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-17"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-18"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-19"}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, period_days: 7, starts_per_day: 1.8571428571428572, start_limit: 13.0}
+        - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, period_days: 12, starts_per_day: 1.8571428571428572, start_limit: 22.285714285714285}
+
+  - name: start_limits_are_null_where_the_league_season_has_no_games_started_limit
+    description: >
+      A covered league-season whose only limit entry is on stat 81, over a 3-day period.
+      The row stays with period_days 3 and both limits null. Catches a period row dropped
+      for want of a limit, a zero where null belongs (a zero limit would credit no start),
+      and a limit on another stat read as games started.
+    model: int_fantasy__start_limits
+    given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "2", season: 2026, has_rosters: true}
+      - input: ref('stg_espn__lineup_slot_stat_limits')
+        rows:
+          - {league_id: "2", season: 2026, lineup_slot_id: 21, stat_id: 81, limit_value: 545.0}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "2", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "2", season: 2026, matchup_period: 1, scoring_date: "2026-06-02"}
+          - {platform: espn, league_id: "2", season: 2026, matchup_period: 1, scoring_date: "2026-06-03"}
+    expect:
+      rows:
+        - {platform: espn, league_id: "2", season: 2026, matchup_period: 1, period_days: 3, starts_per_day: null, start_limit: null}
+
+  - name: start_limits_leave_out_a_league_season_with_no_rosters
+    description: >
+      A league-season with periods and a limit and no rosters loaded (ADR 0026) has no row.
+      Catches a limit for a season nothing was ever credited in, as a row of
+      int_fantasy__matchup_side_totals would be for it.
+    model: int_fantasy__start_limits
+    given:
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "3", season: 2025, has_rosters: false}
+      - input: ref('stg_espn__lineup_slot_stat_limits')
+        rows:
+          - {league_id: "3", season: 2025, lineup_slot_id: 22, stat_id: 33, limit_value: 1.8571428571428572}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "3", season: 2025, matchup_period: 1, scoring_date: "2025-06-01"}
+          - {platform: espn, league_id: "3", season: 2025, matchup_period: 1, scoring_date: "2025-06-02"}
+          - {platform: espn, league_id: "3", season: 2025, matchup_period: 1, scoring_date: "2025-06-03"}
+          - {platform: espn, league_id: "3", season: 2025, matchup_period: 1, scoring_date: "2025-06-04"}
+          - {platform: espn, league_id: "3", season: 2025, matchup_period: 1, scoring_date: "2025-06-05"}
+          - {platform: espn, league_id: "3", season: 2025, matchup_period: 1, scoring_date: "2025-06-06"}
+          - {platform: espn, league_id: "3", season: 2025, matchup_period: 1, scoring_date: "2025-06-07"}
+    expect:
+      rows: []

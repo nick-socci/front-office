@@ -284,3 +284,12 @@ Each new test is seen to fail against the code it covers before the build's PR o
 | spec 0147's session (#147), 2026-10-16 | reports that ESPN's own per-player matchup lines (`rosterForMatchupPeriod` in the landed matchup-day captures) for 2023, matchup 110, team 7 sum to ESPN's limited totals: GS 13, outs 255, hits allowed 76, strikeouts 71 | not rerun here, so not a ledger row; if it holds, ESPN applies the limit in its matchup lines as well as its totals, which agrees with C6 and C12 |
 
 ## Amendments
+
+- **2026-10-18 — R1.4 is shown to fail on mutated warehouses, not by a unit test.** The
+  test strategy names "a unit test feeding it a stat-81 entry and a rotisserie
+  league-season", but dbt unit tests apply to models only, and
+  `int_fantasy__start_limits_are_understood` is a singular test. Each of its three
+  conditions is instead shown to fail by running it alone against a copy of the CI
+  warehouse with the offending entry planted (a stat-81 entry; a second stat-33 entry;
+  the season's `scoring_type` set to `ROTO`), and to pass on the untouched copy; the PR's
+  *Tests shown to fail* table records the runs. No goal, no-go or meaning moves.
