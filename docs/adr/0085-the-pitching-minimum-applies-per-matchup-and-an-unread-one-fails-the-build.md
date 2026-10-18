@@ -28,9 +28,10 @@ that is not covered.
 
 ## Decision
 
-Recommended: **option 1**. It is the literal reading, it fits the one case, and it changes
-no side compared with option 2 (C6). Option 3 would quietly ignore a minimum the league
-enforces. A singular test on `stg_espn__league_settings` makes the failures.
+Chosen by the owner on 2026-10-18: **option 1**. It is the literal reading, it fits the one
+case, and it changes no side compared with option 2 (C6). Option 3 would quietly ignore a
+minimum the league enforces. A singular test on `stg_espn__league_settings` makes the
+failures.
 
 ## Consequences
 

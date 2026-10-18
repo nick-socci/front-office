@@ -92,7 +92,7 @@ Places this could sink time, and the decision already taken to avoid them.
 
 - R3.1 THE SYSTEM SHALL decide `fct_matchup_category_scores.result`, and so
   `fct_matchup_results`, by R2, with each side's actual outs, and carry
-  `is_below_minimum` (the team's side) and `opponent_below_minimum` on every row.
+  `is_below_minimum` (the team's side) and `is_opponent_below_minimum` on every row.
 - R3.2 THE SYSTEM SHALL decide `fct_lineup_decision_categories.optimal_result` by R2, with
   the optimal lineup's own outs for the team and the opponent's actual outs; its actual
   result is the fact's, as today.

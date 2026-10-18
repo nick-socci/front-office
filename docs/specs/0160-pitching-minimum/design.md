@@ -104,7 +104,7 @@ for an unknown limit).
 |---|---|---|
 | [0083](../../adr/0083-a-side-below-the-pitching-minimum-loses-its-ratio-categories.md) | A side below the minimum loses every bound category (pitching, and a rate or lower-is-better); both below is a tie | proposed (chosen by the owner, 2026-10-18) |
 | [0084](../../adr/0084-every-category-result-is-decided-by-one-macro-that-applies-the-minimum.md) | Every place that decides a category result applies the minimum, through one macro | proposed (scope chosen by the owner, 2026-10-18) |
-| [0085](../../adr/0085-the-pitching-minimum-applies-per-matchup-and-an-unread-one-fails-the-build.md) | The minimum applies per matchup as given; a minimum on another stat or outside head-to-head fails the build | proposed |
+| [0085](../../adr/0085-the-pitching-minimum-applies-per-matchup-and-an-unread-one-fails-the-build.md) | The minimum applies per matchup as given; a minimum on another stat or outside head-to-head fails the build | proposed (chosen by the owner, 2026-10-18) |
 
 ## Detailed design
 
@@ -160,7 +160,7 @@ minimum: each caller coalesces `outs < pitching_minimum_outs` to false.
 
 Each side's actual `outs_recorded` comes from `int_fantasy__matchup_side_totals`, and the
 minimum from `int_fantasy__league_seasons`. The model gains `is_below_minimum` (the team's
-side) and `opponent_below_minimum`, both booleans that are never null. `result` is
+side) and `is_opponent_below_minimum`, both booleans that are never null. `result` is
 `fo_category_result(...)`. The header gains a paragraph on the minimum (ADR 0083).
 
 ### `fct_lineup_decision_categories` (changed, R3.2)
@@ -226,5 +226,6 @@ Each new test is seen to fail against the code it covers before the build's PR o
 | design-review | F3 (P1): the macro would decide an unvalued optimal lineup through the minimum | Changed: an unvalued optimal row keeps a null result; the macro is called only on valued rows |
 | design-review | F4 (P2): "every other relation identical" contradicts the slopes moving | Changed: the expected values name `rec_fantasy__category_wins_by_group` as allowed to move, in 2021 to 2026 only |
 | design-review | F5 (P2): 2020's minimum (3,000) is missing from the expected values | Changed: 3,000 in 2020, a league-season without rosters that no model applies it to |
+| owner | ADR 0085 and the new columns' names | ADR 0085 chosen as written; `opponent_below_minimum` renamed `is_opponent_below_minimum`, to pair with `is_below_minimum` (2026-10-18) |
 
 ## Amendments
