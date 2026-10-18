@@ -15,7 +15,9 @@ models:
           WIN, LOSS or TIE for this team, applying is_lower_better, compared at 9
           decimals. Null only for a rate over a zero denominator. That is expected with
           unverified inputs and fails the build otherwise: how ESPN scores a verified
-          zero-out or zero-at-bat side is unobserved.
+          zero-out or zero-at-bat side is unobserved. A side below the league-season's
+          pitching minimum loses every category bound by it, before the null rule, so a
+          side with no outs loses rather than getting a null (ADR 0083).
         data_tests:
           - not_null:
               config:
@@ -23,6 +25,14 @@ models:
           - accepted_values:
               arguments:
                 values: [WIN, LOSS, TIE]
+      - name: is_below_minimum
+        description: >
+          Whether this team's outs recorded in the matchup are below the league-season's
+          pitching minimum. False where the league-season has no minimum. Never null.
+        data_tests: [not_null]
+      - name: is_opponent_below_minimum
+        description: Whether the opponent's outs recorded in the matchup are below the minimum, as is_below_minimum. Never null.
+        data_tests: [not_null]
       - name: has_unverified_inputs
         data_tests: [not_null]
     data_tests:
@@ -490,14 +500,17 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 0, stat_value: 90}
       - input: ref('int_fantasy__categories')
         rows:
-          - {platform: espn, league_id: "1", season: 2026, category_key: 2, category_label: AVG, is_lower_better: false}
-          - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false}
-          - {platform: espn, league_id: "1", season: 2026, category_key: 20, category_label: R, is_lower_better: false}
-          - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 2, category_label: AVG, is_lower_better: false, is_bound_by_minimum: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 5, category_label: HR, is_lower_better: false, is_bound_by_minimum: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 20, category_label: R, is_lower_better: false, is_bound_by_minimum: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true, is_bound_by_minimum: true}
       - input: ref('int_fantasy__matchup_side_totals')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, started_player_days: 10, verified_player_days: 9}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, started_player_days: 10, verified_player_days: 10}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: null}
     expect:
       rows:
         - {fantasy_team_id: 1, category_key: 2, result: TIE, has_unverified_inputs: true}
@@ -521,15 +534,134 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 47, stat_value: 3.25}
       - input: ref('int_fantasy__categories')
         rows:
-          - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, category_label: ERA, is_lower_better: true, is_bound_by_minimum: true}
       - input: ref('int_fantasy__matchup_side_totals')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, started_player_days: 10, verified_player_days: 10}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, started_player_days: 10, verified_player_days: 10}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: null}
     expect:
       rows:
         - {fantasy_team_id: 1, category_key: 47, result: null}
         - {fantasy_team_id: 2, category_key: 47, result: null}
+
+  - name: category_scores_a_side_below_the_pitching_minimum_loses_the_bound_categories
+    description: >
+      Spec 0160, ADRs 0083 and 0084. League 1 has a minimum of 30 outs; team 1 recorded
+      24, team 2 recorded 171. Team 1 leads on value in WHIP (1.25 to 1.263, lower is
+      better, a rate) and in L (1 to 4, lower is better, a count), both bound by the
+      minimum, yet loses both and its opponent wins them. K (9 to 46) and CG (0 to 0) are
+      not bound: K is decided by value, so team 1 loses it on the numbers, and CG is a
+      tie. is_below_minimum is true on team 1's rows and is_opponent_below_minimum on
+      team 2's. Catches the minimum not applied, applied to an unbound volume category,
+      a bound category decided by value, and the two flags the wrong way round.
+    model: fct_matchup_category_scores
+    given:
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 41, stat_value: 1.25}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 41, stat_value: 1.263}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 54, stat_value: 1}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 54, stat_value: 4}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 48, stat_value: 9}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 48, stat_value: 46}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 63, stat_value: 0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 63, stat_value: 0}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 41, category_label: WHIP, is_lower_better: true, is_bound_by_minimum: true}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 54, category_label: L, is_lower_better: true, is_bound_by_minimum: true}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 48, category_label: K, is_lower_better: false, is_bound_by_minimum: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 63, category_label: CG, is_lower_better: false, is_bound_by_minimum: false}
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, started_player_days: 10, verified_player_days: 10, outs_recorded: 24}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, started_player_days: 10, verified_player_days: 10, outs_recorded: 171}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: 30}
+    expect:
+      rows:
+        - {matchup_id: 7, fantasy_team_id: 1, category_key: 41, result: LOSS, is_below_minimum: true, is_opponent_below_minimum: false}
+        - {matchup_id: 7, fantasy_team_id: 2, category_key: 41, result: WIN, is_below_minimum: false, is_opponent_below_minimum: true}
+        - {matchup_id: 7, fantasy_team_id: 1, category_key: 54, result: LOSS, is_below_minimum: true, is_opponent_below_minimum: false}
+        - {matchup_id: 7, fantasy_team_id: 2, category_key: 54, result: WIN, is_below_minimum: false, is_opponent_below_minimum: true}
+        - {matchup_id: 7, fantasy_team_id: 1, category_key: 48, result: LOSS, is_below_minimum: true, is_opponent_below_minimum: false}
+        - {matchup_id: 7, fantasy_team_id: 2, category_key: 48, result: WIN, is_below_minimum: false, is_opponent_below_minimum: true}
+        - {matchup_id: 7, fantasy_team_id: 1, category_key: 63, result: TIE, is_below_minimum: true, is_opponent_below_minimum: false}
+        - {matchup_id: 7, fantasy_team_id: 2, category_key: 63, result: TIE, is_below_minimum: false, is_opponent_below_minimum: true}
+
+  - name: category_scores_minimum_binds_only_when_it_is_missed_and_exists
+    description: >
+      Spec 0160, ADRs 0083 and 0084. League 1, minimum 30 outs, WHIP bound. Matchup 8:
+      both sides below (24 and 27 outs) is a TIE whatever the values, not a loss for
+      both. Matchup 9: neither below (60 and 90 outs), the value decides. League 2 has no
+      minimum (null), and its side with 24 outs against 171 is decided by value with
+      both flags false. Catches both-below read as a loss or a win, a side at or above
+      the minimum penalised, and a missing minimum read as zero or as binding.
+    model: fct_matchup_category_scores
+    given:
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 41, stat_value: 1.2}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 41, stat_value: 1.5}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 41, stat_value: 1.2}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 41, stat_value: 1.4}
+          - {platform: espn, league_id: "2", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 41, stat_value: 1.25}
+          - {platform: espn, league_id: "2", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 41, stat_value: 1.263}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 41, category_label: WHIP, is_lower_better: true, is_bound_by_minimum: true}
+          - {platform: espn, league_id: "2", season: 2026, category_key: 41, category_label: WHIP, is_lower_better: true, is_bound_by_minimum: true}
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 1, started_player_days: 10, verified_player_days: 10, outs_recorded: 24}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 2, started_player_days: 10, verified_player_days: 10, outs_recorded: 27}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 1, started_player_days: 10, verified_player_days: 10, outs_recorded: 60}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 2, started_player_days: 10, verified_player_days: 10, outs_recorded: 90}
+          - {platform: espn, league_id: "2", season: 2026, matchup_id: 7, fantasy_team_id: 1, started_player_days: 10, verified_player_days: 10, outs_recorded: 24}
+          - {platform: espn, league_id: "2", season: 2026, matchup_id: 7, fantasy_team_id: 2, started_player_days: 10, verified_player_days: 10, outs_recorded: 171}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: 30}
+          - {platform: espn, league_id: "2", season: 2026, pitching_minimum_outs: null}
+    expect:
+      rows:
+        - {league_id: "1", matchup_id: 8, fantasy_team_id: 1, category_key: 41, result: TIE, is_below_minimum: true, is_opponent_below_minimum: true}
+        - {league_id: "1", matchup_id: 8, fantasy_team_id: 2, category_key: 41, result: TIE, is_below_minimum: true, is_opponent_below_minimum: true}
+        - {league_id: "1", matchup_id: 9, fantasy_team_id: 1, category_key: 41, result: WIN, is_below_minimum: false, is_opponent_below_minimum: false}
+        - {league_id: "1", matchup_id: 9, fantasy_team_id: 2, category_key: 41, result: LOSS, is_below_minimum: false, is_opponent_below_minimum: false}
+        - {league_id: "2", matchup_id: 7, fantasy_team_id: 1, category_key: 41, result: WIN, is_below_minimum: false, is_opponent_below_minimum: false}
+        - {league_id: "2", matchup_id: 7, fantasy_team_id: 2, category_key: 41, result: LOSS, is_below_minimum: false, is_opponent_below_minimum: false}
+
+  - name: category_scores_a_side_with_no_outs_below_the_minimum_loses_rather_than_null
+    description: >
+      Spec 0160, R2.5. Team 1 recorded no outs, so its WHIP is null, and the league's
+      minimum is 30: team 1 loses and team 2 wins, not null. Catches the null rule
+      running before the minimum, which would leave the result null and fail the
+      build on a verified side.
+    model: fct_matchup_category_scores
+    given:
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 41, stat_value: null}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 41, stat_value: 1.3}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 41, category_label: WHIP, is_lower_better: true, is_bound_by_minimum: true}
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, started_player_days: 10, verified_player_days: 10, outs_recorded: 0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, started_player_days: 10, verified_player_days: 10, outs_recorded: 90}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: 30}
+    expect:
+      rows:
+        - {matchup_id: 7, fantasy_team_id: 1, category_key: 41, result: LOSS, is_below_minimum: true, is_opponent_below_minimum: false}
+        - {matchup_id: 7, fantasy_team_id: 2, category_key: 41, result: WIN, is_below_minimum: false, is_opponent_below_minimum: true}
 
   - name: matchup_results_winner_is_more_categories_won
     description: >

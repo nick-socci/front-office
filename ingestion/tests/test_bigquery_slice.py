@@ -206,7 +206,9 @@ def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) ->
     # spec 0160: +1 singular test, stg_espn__league_settings_qualification_is_understood.
     # Both its parents are in the slice, so it is selected and is written to the two-warehouse
     # rule.
-    assert (len(tests), len(generic), len(tests) - len(generic)) == (256, 221, 35)
+    # spec 0160: +2 generic tests, not_null on fct_matchup_category_scores.is_below_minimum and
+    # is_opponent_below_minimum.
+    assert (len(tests), len(generic), len(tests) - len(generic)) == (258, 223, 35)
     # spec 0152: 3 + 3 + 1 + 1. Spec 0147 adds 9: two for matchup_player_lines, one for
     # matchup_line_totals, four for matchup_stat_differences, one each for
     # category_result_differences and winner_differences.
@@ -214,7 +216,11 @@ def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) ->
     # spec 0160: +2 unit tests, pitching_minimum_outs_is_the_minimum_on_outs_only and
     # categories_bound_by_minimum_are_pitching_rates_and_lower_is_better. The new columns carry
     # contract constraints, not generic tests, so the counts above do not move.
-    assert len(names(selected, "unit_test")) == 101
+    # spec 0160 also adds 3 unit tests on fct_matchup_category_scores:
+    # category_scores_a_side_below_the_pitching_minimum_loses_the_bound_categories,
+    # category_scores_minimum_binds_only_when_it_is_missed_and_exists and
+    # category_scores_a_side_with_no_outs_below_the_minimum_loses_rather_than_null.
+    assert len(names(selected, "unit_test")) == 104
 
 
 def test_no_selected_test_reads_a_relation_outside_the_slice(
