@@ -534,8 +534,9 @@ unit_tests:
   - name: matchup_results_winner_is_more_categories_won
     description: >
       Matchup 7: home wins 2, loses 1, ties 1 -> HOME. Matchup 8: 1 win each and 2 ties
-      in a playoff matchup -> HOME, the higher seed (spec 0159; it was TIE). Matchup 9: home leads but one category is undecided -> no winner. One row
-      per matchup, from the home side's view.
+      in a playoff matchup -> HOME, the higher seed (spec 0159; it was TIE). Matchup 9:
+      home leads but one category is undecided -> no winner. One row per matchup, from
+      the home side's view.
     model: fct_matchup_results
     given:
       - input: ref('fct_matchup_category_scores')

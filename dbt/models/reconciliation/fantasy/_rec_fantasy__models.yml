@@ -276,7 +276,7 @@ unit_tests:
       replacement is 1: the side drops to 4 and loses the category. The actual matchup
       counts 1.0 for the home side and the swapped one 0, so matchup_wins_added is 1, where
       a tie counted a half would give 0.5. Player 21 (team 2, away) loses the same way, but
-      his actual matchup counts 0 and the swapped one 0: nothing added, where a half would
+      the actual matchup counts 0 and the swapped one 0: nothing added, where a half would
       give 0.5. Matchup 21 is level in the regular season and is still a half for the home
       pair (player 31) and the away pair (player 41): 0.5 each. category_wins_added is the
       tie to a loss, 0.5, for all four. Catches a level playoff matchup still counted a
