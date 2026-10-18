@@ -179,7 +179,10 @@ def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) ->
     """Catches a test added to or lost from the slice: the counts are the spec's."""
     tests = [r for r in selected if r["resource_type"] == "test"]
     generic = [r for r in tests if r.get("test_metadata")]
-    assert (len(tests), len(generic), len(tests) - len(generic)) == (228, 198, 30)
+    # spec 0147: +1 singular test, stg_espn__matchup_player_lines_one_line_per_player. It reads
+    # only the matchup-days capture view (through fo_espn_latest), which is in the slice, so it
+    # is selected and is written to the two-warehouse rule.
+    assert (len(tests), len(generic), len(tests) - len(generic)) == (229, 198, 31)
     assert len(names(selected, "unit_test")) == 81
 
 

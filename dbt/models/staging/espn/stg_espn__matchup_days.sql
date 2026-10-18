@@ -10,7 +10,11 @@
 -- therefore maps every day.
 --
 -- Only the EXISTENCE of that key is read. The roster inside it is never selected: these
--- responses also hold `teams` and `settings`, which carry member data.
+-- responses also hold `teams` and `settings`, which carry member data. A side is a
+-- declared structure (spec 0147) and the key is its member `rosterForCurrentScoringPeriod`:
+-- a side has the day when that member is not null, as a side had it when the key was there.
+-- (A side is a struct of nulls, not an absent object, so asking the side itself whether
+-- the key exists would now always say yes.)
 --
 -- The scoring period comes from the request (`scoringPeriodId`), not from the payload:
 -- the marker only means something relative to the day that was asked for, and a test
@@ -18,9 +22,10 @@
 --
 -- Rule 1: the roster inside a side is never a value of this query. The capture view
 -- (stg_raw__espn_matchup_days, spec 0150) keeps each matchup's period id and its two
--- sides as JSON, which are asked only whether the key is there; the unnest runs beside the
--- small identifier columns only, one constant-path branch per side, as in
--- stg_espn__matchup_periods. A playoff bye has an empty `away`, which simply has no key.
+-- sides as declared structures, whose marker member is asked only whether it is there;
+-- the unnest runs beside the small identifier columns only, one constant-path branch per
+-- side, as in stg_espn__matchup_periods. A playoff bye has an empty `away`, whose marker
+-- member is null.
 -- `select distinct` gives one row however many sides and matchups carry the marker.
 --
 -- A plain table: it reads every capture at once, as the view streams them (spec 0150).
@@ -75,8 +80,8 @@ marked as (
         matchup.matchupPeriodId as matchup_period
     from matchups
     where
-        {{ fo_json_exists('matchup.home', '$.rosterForCurrentScoringPeriod') }}
-        or {{ fo_json_exists('matchup.away', '$.rosterForCurrentScoringPeriod') }}
+        matchup.home.rosterForCurrentScoringPeriod is not null
+        or matchup.away.rosterForCurrentScoringPeriod is not null
 
 )
 

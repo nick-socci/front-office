@@ -14,7 +14,7 @@ models:
   - name: stg_raw__espn_matchup_days
     description: >-
       One row per committed capture of espn/matchup_days that the loader has listed in
-      raw.captures, with the manifest's columns. Matchup-day markers, one scoring period each; each matchup's sides stay JSON.
+      raw.captures, with the manifest's columns. Matchups, one scoring period each: per side its team id, the marker roster (JSON, read for existence) and ESPN's matchup lines (player ids and stat lines); no name.
   - name: stg_raw__mlb_boxscore
     description: >-
       One row per committed capture of mlb/boxscore that the loader has listed in
