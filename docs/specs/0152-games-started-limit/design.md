@@ -121,7 +121,8 @@ the season values (C18).
 |---|---|---|
 | [0071](../../adr/0071-a-games-started-limit-is-a-per-day-rate-and-the-day-that-reaches-it-finishes.md) | In a head-to-head league-season, the games-started limit is its per-day value times the matchup period's days; a start is not credited when the team's earlier credited starts in the period reach it; the day that reaches it finishes; relief appearances still count. A limit on another stat, or in a league-season not head-to-head, fails the build | accepted |
 | [0072](../../adr/0072-a-start-past-the-limit-is-zeroed-at-the-credited-grain.md) | The limit is applied in `int_fantasy__started_player_days`: the row stays, marked, with every pitching column zero (so it is no played started day); the player-day reconciliation leaves it out | accepted |
-| [0073](../../adr/0073-both-lineups-totals-are-credited-under-the-limit.md) | The actual and the optimal lineup's totals and values are credited by the same rule, each counting its own starts; the solver and its inputs are unchanged. Amends 0037 | accepted |
+| [0073](../../adr/0073-both-lineups-totals-are-credited-under-the-limit.md) | The actual and the optimal lineup's totals and values are credited by the same rule, each counting its own starts; the solver and its inputs are unchanged. Amends 0037 | superseded by 0079 |
+| [0079](../../adr/0079-only-the-actual-lineup-is-credited-under-the-limit-until-the-optimal-one-is-solved-a-week-at-a-time.md) | Only the actual lineup's totals and values are credited under the limit; the optimal lineup's are not, until a solver chooses a matchup period's lineups together within it (#164). Supersedes 0073, amends 0037 | accepted |
 
 ## Detailed design
 
@@ -293,3 +294,27 @@ Each new test is seen to fail against the code it covers before the build's PR o
   warehouse with the offending entry planted (a stat-81 entry; a second stat-33 entry;
   the season's `scoring_type` set to `ROTO`), and to pass on the untouched copy; the PR's
   *Tests shown to fail* table records the runs. No goal, no-go or meaning moves.
+
+- **2026-10-18 — the optimal lineup is not limited (owner; ADR 0079 supersedes 0073).**
+  The real build of task 10 showed that limiting the optimal lineup by its own starts, as
+  R4.2 and R4.3 had it, can leave it below the actual lineup. In 2022, matchup period 18,
+  team 1, the per-day solver adds a start on 08-20 (+0.104), which takes the team to the
+  limit of 13 and leaves its 08-21 start uncredited (−0.299). `value_gap` that day is
+  −0.299, and `fct_lineup_decisions_are_never_worse_than_the_actual_lineup` (spec 0012,
+  R4.7) fails, with `fct_lineup_decision_categories` skipped behind it. The owner chose a
+  week-level solver that keeps the best starts within the limit, as its own spec (#164),
+  and for this one: R4.2 and R4.3 now apply to the actual lineup only. The optimal
+  lineup's totals and `optimal_value` are credited as the solver chose them. R4.1 and R4.4
+  are unchanged. Expected values that move: *Optimal lineups (R4.2)* becomes "no optimal
+  row of `int_fantasy__lineup_category_totals` changes"; *`fct_lineup_decisions` values
+  (R4.3)* becomes "`actual_value` and `value_gap` change on 1 team-day (2023-08-20,
+  team 7); `optimal_value` changes on none". The C14 count (6 optimal starts over the
+  limit, on 4 team-periods) stays true and is now what the gap overstates (ADR 0079,
+  *Consequences*).
+- **2026-10-18 — `rec_espn__player_day_differences_are_registered` falls from 18 to 17,
+  not "unchanged".** The row that leaves is 2023, matchup 110, team 7, stat 45 (earned
+  runs): an `unregistered` difference of −1. The spec's own expected values make that
+  side's earned runs `explained_by_game_lines`, and under ADR 0064 a difference the game
+  lines explain needs no register row, so `rec_espn__player_day_residuals` stops flagging
+  it. The player-day differences themselves are unchanged (none added or removed), so
+  R3.1 holds as written. The expected value was a miscount; no requirement moves.

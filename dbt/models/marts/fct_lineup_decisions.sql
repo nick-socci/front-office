@@ -15,15 +15,15 @@
 -- so a move that was not legal on the day can look legal. For the 2026 backfill that is
 -- 2026-09-26 for scoring periods 1 to 178 and 2026-10-07 for periods 179 and 180; measured
 -- there, it overstates the season's gap by at most about 8%. The league's limit on pitcher
--- starts is applied to the values but not to the solver (ADR 0071, 0073, amending 0037): an
--- option that is a start in a pitcher slot counts 0 in actual_value and optimal_value on a day
--- when the lineup's own earlier starts of the matchup period reach the period's limit
--- (fo_days_past_start_limit, the rule of int_fantasy__started_player_days), each lineup
--- counting its own starts. The solver still chooses each team-day alone, so the optimal
--- lineup can be over the limit. actual_pitcher_starts and optimal_pitcher_starts stay what
--- each lineup started, limited or not: summed by team and matchup period they show a period
--- over the limit, whatever it is. An unsolved (unvalued) team-day has no optimal lineup, and
--- so adds no optimal starts.
+-- starts is applied to the actual lineup's value only (ADR 0071, 0079, superseding 0073): an
+-- actual option that is a start in a pitcher slot counts 0 in actual_value on a day when the
+-- actual lineup's own earlier starts of the matchup period reach the period's limit
+-- (fo_days_past_start_limit, the rule of int_fantasy__started_player_days), so actual_value
+-- is what was credited. optimal_value is not limited: the solver chooses each team-day alone,
+-- and a limit applied after it can leave the optimal lineup worse than the actual one. A
+-- limit-aware optimal lineup, chosen over the week, is left to a later spec (#164).
+-- actual_pitcher_starts and optimal_pitcher_starts stay what each lineup started, limited or
+-- not: summed by team and matchup period they show a period over the limit, whatever it is.
 --
 -- The spine is the roster days, not the options, so a team-day with no option still has a
 -- row: not unvalued, both values 0, every count 0. is_unvalued is read from the options
@@ -98,7 +98,7 @@ optimal_options as (
 
 lineup_option_rows as (
 
-    -- The options of each lineup, in one list: the actual lineup's and the optimal one's.
+    -- The actual lineup's options, the only ones the limit applies to.
     select
         'actual' as lineup,
         platform,
@@ -111,24 +111,11 @@ lineup_option_rows as (
     from {{ ref('int_fantasy__lineup_options') }}
     where is_actual
 
-    union all
-
-    select
-        'optimal' as lineup,
-        platform,
-        league_id,
-        season,
-        scoring_date,
-        fantasy_team_id,
-        platform_player_id,
-        slot_role
-    from optimal_options
-
 ),
 
 team_day_starts as (
 
-    -- The games started in pitcher slots, per lineup and team-day: each lineup's own starts.
+    -- The games started in pitcher slots, per team-day of the actual lineup.
     select
         option_rows.lineup,
         option_rows.platform,
@@ -207,39 +194,20 @@ option_totals as (
 optimal_totals as (
 
     select
-        options.platform,
-        options.league_id,
-        options.season,
-        options.scoring_date,
-        options.fantasy_team_id,
+        platform,
+        league_id,
+        season,
+        scoring_date,
+        fantasy_team_id,
         count(*) as optimal_starters,
-        sum(
-            case
-                when
-                    coalesce(past_limit.is_past_start_limit, false)
-                    and options.slot_role = 'pitcher'
-                    and options.day_kind = 'start'
-                    then 0
-                else options.option_value
-            end
-            order by options.platform_player_id
-        ) as optimal_sum,
-        count(*) filter (where not options.is_started) as players_brought_in,
-        count(*) filter (where options.is_started and not options.is_actual) as players_moved,
+        sum(option_value order by platform_player_id) as optimal_sum,
+        count(*) filter (where not is_started) as players_brought_in,
+        count(*) filter (where is_started and not is_actual) as players_moved,
         count(*) filter (
-            where options.slot_role = 'pitcher' and options.day_kind = 'start'
+            where slot_role = 'pitcher' and day_kind = 'start'
         ) as optimal_pitcher_starts
-    from optimal_options as options
-    left join days_past_limit as past_limit
-        on past_limit.lineup = 'optimal'
-        and past_limit.platform = options.platform
-        and past_limit.league_id = options.league_id
-        and past_limit.season = options.season
-        and past_limit.fantasy_team_id = options.fantasy_team_id
-        and past_limit.scoring_date = options.scoring_date
-    group by
-        options.platform, options.league_id, options.season, options.scoring_date,
-        options.fantasy_team_id
+    from optimal_options
+    group by platform, league_id, season, scoring_date, fantasy_team_id
 
 ),
 

@@ -4347,15 +4347,17 @@ unit_tests:
         - {league_id: "2", platform_player_id: 14, input_status: played, played: true, is_over_start_limit: false, games_pitched: 1, games_started: 1, outs_recorded: 3}
         - {league_id: "2", platform_player_id: 15, input_status: played, played: true, is_over_start_limit: false, games_pitched: 1, games_started: 1, outs_recorded: 3}
 
-  - name: lineup_category_totals_each_lineup_is_limited_by_its_own_starts
+  - name: lineup_category_totals_only_the_actual_lineup_is_limited
     description: >
-      Games-started limit of 2.0 for the period, two days, one side. Actual lineup: player 1
-      starts on day 1 (5 strikeouts), player 3 on day 2 (7); one start before day 2, so
-      nothing is past the limit. Optimal lineup: players 1 and 2 on day 1 (5 and 3), player 3
-      on day 2; two starts before day 2, so player 3's day-2 start is not credited. Actual
-      strikeouts are 12 and optimal 8. Catches the optimal lineup credited without the limit
-      (it would read 15), either lineup limited by the other's starts (the optimal reading 15
-      or the actual reading 5), and a start counted whose lineup did not make it (ADR 0073).
+      Games-started limit of 2.0 for the period, three days, one side. Actual lineup: player
+      1 starts on day 1 (5 strikeouts), player 3 on day 2 (7), player 5 on day 3 (2); two
+      starts before day 3, so day 3's start is not credited: actual 12. Optimal lineup:
+      players 1 and 2 on day 1 (5 and 3), player 3 on day 2, player 5 on day 3; more starts
+      than the limit, and credited in full: 17 (ADR 0079). Catches the optimal lineup
+      limited (it would read 8, and a limit applied after a day-by-day solver can leave it
+      below the actual one); the actual lineup not limited (it would read 14, and
+      lineup_category_totals_reproduce_the_actual_totals would break); the actual lineup
+      limited by the optimal's starts (day 2 would be past the limit, and it would read 5).
     model: int_fantasy__lineup_category_totals
     given:
       - input: ref('int_fantasy__start_limits')
@@ -4371,6 +4373,7 @@ unit_tests:
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
           - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-02"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-03"}
       - input: ref('int_fantasy__stat_components')
         rows:
           - {platform: espn, stat_key: 48, part: numerator, component: pitcher_strikeouts, weight: 1}
@@ -4382,11 +4385,13 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, mlbam_player_id: 910001, is_started: true, slot_role: pitcher}
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, mlbam_player_id: 910002, is_started: false, slot_role: bench}
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 3, mlbam_player_id: 910003, is_started: true, slot_role: pitcher}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", fantasy_team_id: 1, platform_player_id: 5, mlbam_player_id: 910005, is_started: true, slot_role: pitcher}
       - input: ref('int_fantasy__optimal_lineups')
         rows:
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 14}
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 14}
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 3, lineup_slot_id: 14}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", fantasy_team_id: 1, platform_player_id: 5, lineup_slot_id: 14}
       - input: ref('int_fantasy__lineup_options')
         rows:
           - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 14, option_value: 1.5}
@@ -4395,7 +4400,8 @@ unit_tests:
           - {mlbam_player_id: 910001, game_date: "2026-06-01", games_pitched: 1, games_started: 1, pitcher_strikeouts: 5}
           - {mlbam_player_id: 910002, game_date: "2026-06-01", games_pitched: 1, games_started: 1, pitcher_strikeouts: 3}
           - {mlbam_player_id: 910003, game_date: "2026-06-02", games_pitched: 1, games_started: 1, pitcher_strikeouts: 7}
+          - {mlbam_player_id: 910005, game_date: "2026-06-03", games_pitched: 1, games_started: 1, pitcher_strikeouts: 2}
     expect:
       rows:
         - {fantasy_team_id: 1, category_key: 48, lineup: actual, numerator: 12, category_value: 12}
-        - {fantasy_team_id: 1, category_key: 48, lineup: optimal, numerator: 8, category_value: 8}
+        - {fantasy_team_id: 1, category_key: 48, lineup: optimal, numerator: 17, category_value: 17}

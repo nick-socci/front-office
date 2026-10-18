@@ -2733,16 +2733,16 @@ unit_tests:
         - {fantasy_team_id: 5, has_unverified_inputs: false}
         - {fantasy_team_id: 6, has_unverified_inputs: false}
 
-  - name: lineup_decisions_each_lineups_values_are_limited_by_its_own_starts
+  - name: lineup_decisions_only_the_actual_lineups_value_is_limited
     description: >
       Games-started limit of 2.0 for the period, one team, three days. Actual lineup: a start
       on each day (values 1, 2 and 4); two earlier starts before day 3, so day 3's counts 0
-      (actual values 1, 2, 0). Optimal lineup: two starts on day 1 (players 1 and 4, values 1
-      and 3), one on day 2 (value 2), one on day 3 (value 4); two earlier starts before day 2,
-      so days 2 and 3 count 0 (optimal values 4, 0, 0). The actual lineup's day-2 start is
-      credited and the optimal lineup's is not: on different days. The start counts are what
-      each lineup started, unlimited. Catches a lineup's value counting a start it was not
-      credited, and one lineup's starts deciding the other's limit.
+      (actual values 1, 2, 0). Optimal lineup: two starts on day 1 (values 1 and 3), one on
+      day 2 (2), one on day 3 (4), past the limit by its own count from day 2 and valued in
+      full (4, 2, 4, ADR 0079). The gaps are 3, 0 and 4. The start counts are what each
+      lineup started, unlimited. Catches the optimal lineup limited (a negative gap on day 2
+      or an optimal value below the actual's), the actual lineup not limited (value 4 on day
+      3), and the actual lineup limited by the optimal's starts (day 2 would count 0).
     model: fct_lineup_decisions
     given:
       - input: ref('int_fantasy__start_limits')
@@ -2803,5 +2803,5 @@ unit_tests:
     expect:
       rows:
         - {scoring_period: 1, actual_value: 1, optimal_value: 4, value_gap: 3, actual_pitcher_starts: 1, optimal_pitcher_starts: 2}
-        - {scoring_period: 2, actual_value: 2, optimal_value: 0, value_gap: -2, actual_pitcher_starts: 1, optimal_pitcher_starts: 1}
-        - {scoring_period: 3, actual_value: 0, optimal_value: 0, value_gap: 0, actual_pitcher_starts: 1, optimal_pitcher_starts: 1}
+        - {scoring_period: 2, actual_value: 2, optimal_value: 2, value_gap: 0, actual_pitcher_starts: 1, optimal_pitcher_starts: 1}
+        - {scoring_period: 3, actual_value: 0, optimal_value: 4, value_gap: 4, actual_pitcher_starts: 1, optimal_pitcher_starts: 1}
