@@ -711,6 +711,7 @@ def test_the_2025_settings_fixture_is_the_allowlist_of_the_fixture_league():
         "status.finalScoringPeriod",
         "status.isActive",
         "settings.rosterSettings.lineupSlotCounts",
+        "settings.rosterSettings.lineupSlotStatLimits",
     }
     only_allowed(payload, allowed)
     assert payload["id"] == "111111" and payload["seasonId"] == 2025
