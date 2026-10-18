@@ -31,6 +31,9 @@ ROOTS = (
     "fct_matchup_results",
     "rec_espn__category_result_differences",
     "int_fantasy__category_scales",
+    # spec 0147: a child of the slice's models, read by the singular test
+    # fct_matchup_results_match_espn, which it brings into the slice with its own tests.
+    "rec_espn__winner_differences",
 )
 
 SLICE_MODELS = {
@@ -54,10 +57,15 @@ SLICE_MODELS = {
     "rec_espn__category_result_differences",
     "rec_espn__matchup_stat_differences",
     "rec_espn__player_day_differences",
+    # spec 0147: the ephemeral sum of ESPN's matchup lines, which the two reconciliation
+    # models read, and the winner rule the singular test reads.
+    "rec_espn__matchup_line_totals",
+    "rec_espn__winner_differences",
     "stg_espn__league_settings",
     "stg_espn__lineup_slot_stat_limits",
     "stg_espn__matchup_category_results",
     "stg_espn__matchup_days",
+    "stg_espn__matchup_player_lines",  # spec 0147: ESPN's matchup lines, staged
     "stg_espn__matchup_periods",
     "stg_espn__matchups",
     "stg_espn__player_game_stats",
@@ -175,7 +183,9 @@ def test_the_slice_has_no_python_model_and_the_materializations_counted(
         kinds.count("view"),
         kinds.count("ephemeral"),
     )
-    assert counted == (25, 0, 19, 1)
+    # spec 0147: +1 table (stg_espn__matchup_player_lines), +1 view (rec_espn__winner_differences),
+    # +1 ephemeral (rec_espn__matchup_line_totals).
+    assert counted == (26, 0, 20, 2)
 
 
 def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) -> None:
@@ -187,8 +197,14 @@ def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) ->
     # spec 0147: +1 singular test, stg_espn__matchup_player_lines_one_line_per_player. It reads
     # only the matchup-days capture view (through fo_espn_latest), which is in the slice, so it
     # is selected and is written to the two-warehouse rule.
-    assert (len(tests), len(generic), len(tests) - len(generic)) == (239, 207, 32)
-    assert len(names(selected, "unit_test")) == 89  # spec 0152: 3 + 3 + 1 + 1
+    # spec 0147 also brings in the tests of stg_espn__matchup_player_lines (11 generic) and of
+    # rec_espn__winner_differences (2 generic), the singular test
+    # stg_espn__matchup_player_lines_cover_played_sides, and fct_matchup_results_match_espn.
+    assert (len(tests), len(generic), len(tests) - len(generic)) == (253, 220, 33)
+    # spec 0152: 3 + 3 + 1 + 1. Spec 0147 adds 9: two for matchup_player_lines, one for
+    # matchup_line_totals, four for matchup_stat_differences, one each for
+    # category_result_differences and winner_differences.
+    assert len(names(selected, "unit_test")) == 98
 
 
 def test_no_selected_test_reads_a_relation_outside_the_slice(
