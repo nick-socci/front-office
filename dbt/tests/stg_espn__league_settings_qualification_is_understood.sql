@@ -6,9 +6,11 @@
 -- limit, or one in a league that is not head-to-head would be applied as a guess, so the
 -- build fails here by name instead.
 --
--- Three ways to fail:
+-- Four ways to fail:
 --   - a minimum whose stat is not 34. `is distinct from` counts a null stat as a failure.
 --   - a stat with no limit.
+--   - a minimum that is present (has_qualification_minimum) but whose stat or limit did not
+--     parse, so that it stages as null and is not mistaken for no minimum.
 --   - any minimum while scoring_type is not known to be head-to-head. A null scoring_type
 --     fails too. substr, not LIKE, because `_` in 'H2H_%' is a wildcard.
 --
@@ -18,6 +20,7 @@
 select
     settings.league_id,
     settings.season,
+    settings.has_qualification_minimum,
     settings.qualification_stat_id,
     settings.qualification_minimum,
     settings.scoring_type
@@ -37,10 +40,14 @@ where
             and settings.qualification_minimum is null
         )
         or (
-            (
-                settings.qualification_minimum is not null
-                or settings.qualification_stat_id is not null
+            settings.has_qualification_minimum
+            and (
+                settings.qualification_stat_id is null
+                or settings.qualification_minimum is null
             )
+        )
+        or (
+            settings.has_qualification_minimum
             and coalesce(substr(settings.scoring_type, 1, 4) = 'H2H_', false) is not true
         )
     )

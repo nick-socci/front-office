@@ -22,6 +22,12 @@ models:
           How ESPN settles a level regular-season matchup. "NONE" is ESPN's default, under
           which the matchup stays a tie. Null means the capture lacks the setting, and is
           not read as "NONE" (ADR 0082).
+      - name: has_qualification_minimum
+        description: >
+          Whether the settings hold a statQualificationMinimum at all, so that one present
+          but unreadable (stat and limit both null) is not read as none (ADR 0085, spec 0160
+          amendment of 2026-10-18). Never null.
+        data_tests: [not_null]
       - name: qualification_stat_id
         description: >
           The stat of ESPN's statQualificationMinimum, the least a side must record in a
@@ -914,7 +920,10 @@ unit_tests:
       Catches a global "latest". League 1 was captured earlier than league 2, so selecting
       the single newest response would return league 2 alone and silently drop league 1.
       Each league-season must keep its own newest capture: league 1 has two, and only the
-      later (final period 180) may be used, not the earlier one (final period 100).
+      later (final period 180) may be used, not the earlier one (final period 100). The
+      pitching minimum (spec 0160): league 1's newest capture has one (stat 34, 30), league
+      2's none, and league 3's one whose stat and limit do not parse, so it is present
+      (has_qualification_minimum) with both fields null, not read as no minimum.
     model: stg_espn__league_settings
     given:
       - input: source('raw', 'captures')
@@ -922,16 +931,19 @@ unit_tests:
           - {source: espn, endpoint: settings, request_path: /a, request_key: view=mSettings, fetched_at: "20260901T000000Z", partitions: '{"season": 2026, "league_id": "1"}', file_path: a1}
           - {source: espn, endpoint: settings, request_path: /a, request_key: view=mSettings, fetched_at: "20260902T000000Z", partitions: '{"season": 2026, "league_id": "1"}', file_path: a2}
           - {source: espn, endpoint: settings, request_path: /b, request_key: view=mSettings, fetched_at: "20260915T000000Z", partitions: '{"season": 2026, "league_id": "2"}', file_path: b1}
+          - {source: espn, endpoint: settings, request_path: /c, request_key: view=mSettings, fetched_at: "20260916T000000Z", partitions: '{"season": 2026, "league_id": "3"}', file_path: c1}
       - input: ref('stg_raw__espn_settings')
         format: dict
         rows:
           - {source: espn, endpoint: settings, request_path: /a, request_key: view=mSettings, fetched_at: "20260901T000000Z", file_path: a1, partitions: '{"season": 2026, "league_id": "1"}', payload: '{"id": 1, "seasonId": 2026, "status": {"finalScoringPeriod": 100}}'}
           - {source: espn, endpoint: settings, request_path: /a, request_key: view=mSettings, fetched_at: "20260902T000000Z", file_path: a2, partitions: '{"season": 2026, "league_id": "1"}', payload: '{"id": 1, "seasonId": 2026, "settings": {"scoringSettings": {"playoffMatchupTieRule": "SOMETHING_ELSE", "matchupTieRule": "NONE", "statQualificationMinimum": {"statId": 34, "limitValue": 30.0}}}, "status": {"finalScoringPeriod": 180}}'}
           - {source: espn, endpoint: settings, request_path: /b, request_key: view=mSettings, fetched_at: "20260915T000000Z", file_path: b1, partitions: '{"season": 2026, "league_id": "2"}', payload: '{"id": 2, "seasonId": 2026, "settings": {"scoringSettings": {"playoffMatchupTieRule": "NONE", "matchupTieRule": "NONE"}}, "status": {"finalScoringPeriod": 150}}'}
+          - {source: espn, endpoint: settings, request_path: /c, request_key: view=mSettings, fetched_at: "20260916T000000Z", file_path: c1, partitions: '{"season": 2026, "league_id": "3"}', payload: '{"id": 3, "seasonId": 2026, "settings": {"scoringSettings": {"playoffMatchupTieRule": "NONE", "matchupTieRule": "NONE", "statQualificationMinimum": {"statId": "unknown", "limitValue": "bad"}}}, "status": {"finalScoringPeriod": 150}}'}
     expect:
       rows:
-        - {league_id: "1", season: 2026, final_scoring_period: 180, playoff_matchup_tie_rule: SOMETHING_ELSE, matchup_tie_rule: "NONE", qualification_stat_id: 34, qualification_minimum: 30.0}
-        - {league_id: "2", season: 2026, final_scoring_period: 150, playoff_matchup_tie_rule: "NONE", matchup_tie_rule: "NONE", qualification_stat_id: null, qualification_minimum: null}
+        - {league_id: "1", season: 2026, final_scoring_period: 180, playoff_matchup_tie_rule: SOMETHING_ELSE, matchup_tie_rule: "NONE", has_qualification_minimum: true, qualification_stat_id: 34, qualification_minimum: 30.0}
+        - {league_id: "2", season: 2026, final_scoring_period: 150, playoff_matchup_tie_rule: "NONE", matchup_tie_rule: "NONE", has_qualification_minimum: false, qualification_stat_id: null, qualification_minimum: null}
+        - {league_id: "3", season: 2026, final_scoring_period: 150, playoff_matchup_tie_rule: "NONE", matchup_tie_rule: "NONE", has_qualification_minimum: true, qualification_stat_id: null, qualification_minimum: null}
 
   - name: scoring_period_dates_do_not_depend_on_the_settings_capture
     description: >
