@@ -211,7 +211,10 @@ def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) ->
     # matchup_line_totals, four for matchup_stat_differences, one each for
     # category_result_differences and winner_differences.
     # spec 0159: +1 unit test, matchup_results_a_level_playoff_matchup_goes_to_the_home_side.
-    assert len(names(selected, "unit_test")) == 99
+    # spec 0160: +2 unit tests, pitching_minimum_outs_is_the_minimum_on_outs_only and
+    # categories_bound_by_minimum_are_pitching_rates_and_lower_is_better. The new columns carry
+    # contract constraints, not generic tests, so the counts above do not move.
+    assert len(names(selected, "unit_test")) == 101
 
 
 def test_no_selected_test_reads_a_relation_outside_the_slice(

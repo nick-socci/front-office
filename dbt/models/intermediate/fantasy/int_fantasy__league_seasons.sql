@@ -25,6 +25,11 @@
 -- for a landed log even when empty. It does not decide coverage: the transaction models
 -- simply hold no row where there is no log.
 --
+-- pitching_minimum_outs is the league's pitching minimum, read as outs per matchup (ADR 0085):
+-- the setting's value when it is a minimum on stat 34 (outs recorded), else null. A minimum
+-- on any other stat is null here and fails the build in
+-- stg_espn__league_settings_qualification_is_understood, so a null means no minimum.
+--
 -- A season with rosters and a missing boxscore is covered, and is reported by the input
 -- checks on int_fantasy__started_player_days (#25), not here.
 --
@@ -46,7 +51,10 @@ select
     settings.league_id,
     settings.season,
     rostered.league_id is not null as has_rosters,
-    logged.league_id is not null as has_transaction_log
+    logged.league_id is not null as has_transaction_log,
+    case
+        when settings.qualification_stat_id = 34 then settings.qualification_minimum
+    end as pitching_minimum_outs
 from {{ ref('stg_espn__league_settings') }} as settings
 left join rostered
     on rostered.league_id = settings.league_id
