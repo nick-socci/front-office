@@ -2909,7 +2909,9 @@ unit_tests:
       optimal lineup is below the minimum and loses it, while actual_result is the fact's WIN,
       copied. K (not bound): decided by value, a WIN with 10 against 9 though the lineup is
       below. ERA (bound), on an unvalued optimal row (value and outs null): optimal_result is
-      null, not a loss, so the minimum never decides a lineup that has no totals. Catches the
+      null, not a loss, so the minimum never decides a lineup that has no totals. Matchup 8:
+      team 3's optimal row is unvalued too, and its opponent recorded 24 outs, below the
+      minimum: WHIP is still null, where the minimum alone would make it a WIN. Catches the
       optimal result judged by value alone, or by the actual lineup's outs (which would give a
       WIN), a minimum applied to an unbound category, and an unvalued lineup decided by the
       minimum.
@@ -2920,6 +2922,7 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 41, category_label: WHIP, is_lower_better: true, team_value: 1.1, opponent_value: 1.2, result: WIN, is_below_minimum: false, is_opponent_below_minimum: false, has_unverified_inputs: false}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 48, category_label: K, is_lower_better: false, team_value: 8, opponent_value: 9, result: LOSS, is_below_minimum: false, is_opponent_below_minimum: false, has_unverified_inputs: false}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 3, fantasy_team_id: 1, opponent_team_id: 2, category_key: 47, category_label: ERA, is_lower_better: true, team_value: 3.0, opponent_value: 4.0, result: WIN, is_below_minimum: false, is_opponent_below_minimum: false, has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, matchup_period: 4, fantasy_team_id: 3, opponent_team_id: 4, category_key: 41, category_label: WHIP, is_lower_better: true, team_value: 1.3, opponent_value: 1.2, result: WIN, is_below_minimum: false, is_opponent_below_minimum: true, has_unverified_inputs: false}
       - input: ref('int_fantasy__lineup_category_totals')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 41, lineup: actual, category_value: 1.1, outs_recorded: 40}
@@ -2928,6 +2931,8 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 48, lineup: optimal, category_value: 10, outs_recorded: 27}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 47, lineup: actual, category_value: 3.0, outs_recorded: 40}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, category_key: 47, lineup: optimal, category_value: null, outs_recorded: null}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 3, category_key: 41, lineup: actual, category_value: 1.3, outs_recorded: 60}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 3, category_key: 41, lineup: optimal, category_value: null, outs_recorded: null}
       - input: ref('int_fantasy__categories')
         rows:
           - {platform: espn, league_id: "1", season: 2026, category_key: 41, is_bound_by_minimum: true}
@@ -2939,11 +2944,13 @@ unit_tests:
       - input: ref('fct_lineup_decisions')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, scoring_date: "2026-06-01", has_unverified_inputs: false}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 3, scoring_date: "2026-06-08", has_unverified_inputs: false}
     expect:
       rows:
-        - {category_key: 41, actual_result: WIN, optimal_value: 1.0, optimal_result: LOSS}
-        - {category_key: 48, actual_result: LOSS, optimal_value: 10, optimal_result: WIN}
-        - {category_key: 47, actual_result: WIN, optimal_value: null, optimal_result: null}
+        - {matchup_id: 7, category_key: 41, actual_result: WIN, optimal_value: 1.0, optimal_result: LOSS}
+        - {matchup_id: 7, category_key: 48, actual_result: LOSS, optimal_value: 10, optimal_result: WIN}
+        - {matchup_id: 7, category_key: 47, actual_result: WIN, optimal_value: null, optimal_result: null}
+        - {matchup_id: 8, category_key: 41, actual_result: WIN, optimal_value: null, optimal_result: null}
 
   - name: lineup_decision_categories_flag_an_unverified_day_of_the_sides_own_period
     description: >
