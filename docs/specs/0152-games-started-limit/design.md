@@ -202,6 +202,8 @@ input is what the day was worth, and whether it counted is the lineup's business
 
 ### `fct_lineup_decisions` (changed)
 
+> **Amended 2026-10-18** (see *Amendments*; ADR 0079): only the actual lineup is limited. The optimal lineup's `optimal_value` are not, until #164.
+
 `actual_value`, `optimal_value` and `value_gap` count an option at 0 when it is a start in
 a pitcher slot on a day the lineup's own earlier starts put past the period's
 `start_limit`: the actual lineup counts its starts, the optimal lineup its own (R4.3). The
@@ -210,6 +212,8 @@ the model's comment requires. `actual_pitcher_starts` and `optimal_pitcher_start
 unchanged: they are what each lineup started, the evidence a period went over.
 
 ### `int_fantasy__lineup_category_totals` (changed)
+
+> **Amended 2026-10-18** (see *Amendments*; ADR 0079): only the actual lineup is limited. The optimal lineup's totals are not, until #164.
 
 For each lineup (actual and optimal) the same rule, written the same way: per team-day
 the lineup's credited starts (`games_started` of players the lineup puts in a pitcher
@@ -237,8 +241,8 @@ the implementer's call if the two would otherwise differ.
 | R3.1 | dbt unit test of `rec_espn__player_day_differences`: a marked day with an ESPN line | a false difference on the uncredited start |
 | R3.2 | the real data: the status counts of the expected values | the side-level reconciliation moved anywhere else |
 | R4.1 | `lineup_category_totals_reproduce_the_actual_totals` (existing) | the lineup path crediting differently from the scored totals |
-| R4.2 | dbt unit test of `int_fantasy__lineup_category_totals`: an optimal lineup past the limit | the optimal lineup credited without the limit, or limited by the actual lineup's starts |
-| R4.3 | dbt unit test of `fct_lineup_decisions`: an actual and an optimal lineup each past the limit on different days | a lineup's value counting a start it was not credited, or the other lineup's starts deciding it |
+| R4.2 (amended) | dbt unit test `lineup_category_totals_only_the_actual_lineup_is_limited`: an optimal lineup over the limit, credited in full, beside an actual lineup past it | the optimal lineup limited (which can put it below the actual), the actual not limited, or limited by the optimal's starts |
+| R4.3 (amended) | dbt unit test `lineup_decisions_only_the_actual_lineups_value_is_limited`: an actual lineup past the limit, an optimal lineup over it on another day | the actual value counting a start it was not credited, the optimal value limited, or the optimal's starts deciding the actual |
 | R4.4 | `candidate_day_values_add_back_to_season_value` on the real data, where Fried's pair is the case, seen to fail with its new filter removed | the season value and the day values parting on a marked day |
 | R1.1 to R4.4 on fixtures | the fixture settings capture carries `lineupSlotStatLimits` (the fixture allowlist gains it) | the staging-to-total path never meeting the setting in CI |
 

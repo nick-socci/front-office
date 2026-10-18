@@ -148,7 +148,7 @@ build time.
 | Every other side and stat | the same status and our_value as before | compare with the saved table |
 | `fct_matchup_results_match_espn` | 79 failing rows, unchanged (that matchup's category results already agree) | the test |
 | `rec_espn__player_day_differences_are_registered` | 18 → 17: 2023 m110 t7's ER key leaves, being `explained_by_game_lines` (ADR 0064; amended 2026-10-18) | the test |
-| Optimal lineups (R4.2) | no optimal row changes (amended 2026-10-18). The optimal lineups still go over the limit by 6 starts on 4 team-periods (2018 1, 2019 3, 2022 1, 2023 1): what the gap overstates (ADR 0079) | the lineup totals before and after |
+| Optimal lineups (R4.2) | no optimal row changes (amended 2026-10-18). The optimal lineups go over the limit in 22 team-periods; on 4 of them (2018 1, 2019 3, 2022 1, 2023 1) the day-based rule would leave 6 of their starts uncredited, which is what the gap overstates (ADR 0079) | the lineup totals before and after |
 | `fct_lineup_decisions` values (R4.3) | `actual_value` and `value_gap` change on 1 team-day (2023-08-20, team 7); `optimal_value` on none (amended 2026-10-18); `fct_lineup_decisions_are_never_worse_than_the_actual_lineup` passes | compare with the saved table |
 | `candidate_day_values_add_back_to_season_value` (R4.4) | passes | the test |
 | Settings captures | 21, and within each season every capture holds the same limits | read every capture |
