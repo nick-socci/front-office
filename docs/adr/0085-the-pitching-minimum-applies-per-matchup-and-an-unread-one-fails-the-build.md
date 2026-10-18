@@ -1,6 +1,6 @@
 # 0085. The pitching minimum applies per matchup, and one the models cannot read fails the build
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-18
 - Spec: [0160-pitching-minimum](../specs/0160-pitching-minimum/design.md) · Issue: #160
 

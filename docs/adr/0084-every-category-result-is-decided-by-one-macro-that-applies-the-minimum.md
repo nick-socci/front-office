@@ -1,6 +1,6 @@
 # 0084. Every category result is decided by one macro that applies the minimum
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-18
 - Spec: [0160-pitching-minimum](../specs/0160-pitching-minimum/design.md) · Issue: #160
 

@@ -1,6 +1,6 @@
 # 0083. A side below the pitching minimum loses its ratio categories
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-18
 - Spec: [0160-pitching-minimum](../specs/0160-pitching-minimum/design.md) · Issue: #160
 

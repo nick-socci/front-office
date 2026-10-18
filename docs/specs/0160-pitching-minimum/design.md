@@ -102,9 +102,9 @@ for an unknown limit).
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0083](../../adr/0083-a-side-below-the-pitching-minimum-loses-its-ratio-categories.md) | A side below the minimum loses every bound category (pitching, and a rate or lower-is-better); both below is a tie | proposed (chosen by the owner, 2026-10-18) |
-| [0084](../../adr/0084-every-category-result-is-decided-by-one-macro-that-applies-the-minimum.md) | Every place that decides a category result applies the minimum, through one macro | proposed (scope chosen by the owner, 2026-10-18) |
-| [0085](../../adr/0085-the-pitching-minimum-applies-per-matchup-and-an-unread-one-fails-the-build.md) | The minimum applies per matchup as given; a minimum on another stat or outside head-to-head fails the build | proposed (chosen by the owner, 2026-10-18) |
+| [0083](../../adr/0083-a-side-below-the-pitching-minimum-loses-its-ratio-categories.md) | A side below the minimum loses every bound category (pitching, and a rate or lower-is-better); both below is a tie | accepted |
+| [0084](../../adr/0084-every-category-result-is-decided-by-one-macro-that-applies-the-minimum.md) | Every place that decides a category result applies the minimum, through one macro | accepted |
+| [0085](../../adr/0085-the-pitching-minimum-applies-per-matchup-and-an-unread-one-fails-the-build.md) | The minimum applies per matchup as given; a minimum on another stat or outside head-to-head fails the build | accepted |
 
 ## Detailed design
 
