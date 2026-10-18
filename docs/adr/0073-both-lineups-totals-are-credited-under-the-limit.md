@@ -1,6 +1,6 @@
 # 0073. Both lineups' totals and values are credited under the limit, and the solver still ignores it
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-16
 - Spec: [0152-games-started-limit](../specs/0152-games-started-limit/design.md) · Issue: #152
 - Amends: [0037](0037-the-optimal-lineup-replaces-a-played-starter-only-with-a-player-who-played.md), for how the lineups' totals and values are credited

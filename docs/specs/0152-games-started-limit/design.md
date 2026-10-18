@@ -119,9 +119,9 @@ the season values (C18).
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0071](../../adr/0071-a-games-started-limit-is-a-per-day-rate-and-the-day-that-reaches-it-finishes.md) | In a head-to-head league-season, the games-started limit is its per-day value times the matchup period's days; a start is not credited when the team's earlier credited starts in the period reach it; the day that reaches it finishes; relief appearances still count. A limit on another stat, or in a league-season not head-to-head, fails the build | proposed |
-| [0072](../../adr/0072-a-start-past-the-limit-is-zeroed-at-the-credited-grain.md) | The limit is applied in `int_fantasy__started_player_days`: the row stays, marked, with every pitching column zero (so it is no played started day); the player-day reconciliation leaves it out | proposed |
-| [0073](../../adr/0073-both-lineups-totals-are-credited-under-the-limit.md) | The actual and the optimal lineup's totals and values are credited by the same rule, each counting its own starts; the solver and its inputs are unchanged. Amends 0037 | proposed |
+| [0071](../../adr/0071-a-games-started-limit-is-a-per-day-rate-and-the-day-that-reaches-it-finishes.md) | In a head-to-head league-season, the games-started limit is its per-day value times the matchup period's days; a start is not credited when the team's earlier credited starts in the period reach it; the day that reaches it finishes; relief appearances still count. A limit on another stat, or in a league-season not head-to-head, fails the build | accepted |
+| [0072](../../adr/0072-a-start-past-the-limit-is-zeroed-at-the-credited-grain.md) | The limit is applied in `int_fantasy__started_player_days`: the row stays, marked, with every pitching column zero (so it is no played started day); the player-day reconciliation leaves it out | accepted |
+| [0073](../../adr/0073-both-lineups-totals-are-credited-under-the-limit.md) | The actual and the optimal lineup's totals and values are credited by the same rule, each counting its own starts; the solver and its inputs are unchanged. Amends 0037 | accepted |
 
 ## Detailed design
 
