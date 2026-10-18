@@ -597,10 +597,11 @@ unit_tests:
     description: >
       Spec 0160, ADRs 0083 and 0084. League 1, minimum 30 outs, WHIP bound. Matchup 8:
       both sides below (24 and 27 outs) is a TIE whatever the values, not a loss for
-      both. Matchup 9: neither below (60 and 90 outs), the value decides. League 2 has no
-      minimum (null), and its side with 24 outs against 171 is decided by value with
-      both flags false. Catches both-below read as a loss or a win, a side at or above
-      the minimum penalised, and a missing minimum read as zero or as binding.
+      both. Matchup 9: neither below (30 outs, exactly the minimum, and 90), the value
+      decides. League 2 has no minimum (null), and its side with 24 outs against 171 is
+      decided by value with both flags false. Catches both-below read as a loss or a win,
+      a side at or above the minimum penalised (`<=` in place of `<`), and a missing
+      minimum read as zero or as binding.
     model: fct_matchup_category_scores
     given:
       - input: ref('int_fantasy__matchup_stat_values')
@@ -619,7 +620,7 @@ unit_tests:
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 1, started_player_days: 10, verified_player_days: 10, outs_recorded: 24}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 8, fantasy_team_id: 2, started_player_days: 10, verified_player_days: 10, outs_recorded: 27}
-          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 1, started_player_days: 10, verified_player_days: 10, outs_recorded: 60}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 1, started_player_days: 10, verified_player_days: 10, outs_recorded: 30}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 9, fantasy_team_id: 2, started_player_days: 10, verified_player_days: 10, outs_recorded: 90}
           - {platform: espn, league_id: "2", season: 2026, matchup_id: 7, fantasy_team_id: 1, started_player_days: 10, verified_player_days: 10, outs_recorded: 24}
           - {platform: espn, league_id: "2", season: 2026, matchup_id: 7, fantasy_team_id: 2, started_player_days: 10, verified_player_days: 10, outs_recorded: 171}
