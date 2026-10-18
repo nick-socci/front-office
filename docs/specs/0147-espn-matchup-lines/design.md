@@ -349,3 +349,11 @@ Each new test is seen to fail against the code it covers before the build's PR o
 | design-review | F4: the build-cost baseline had no ledger row | Changed: C21, from #150's run evidence |
 
 ## Amendments
+
+- **2026-10-18 — a wrong-sized register row still fails when the lines carry the key
+  (owner, PR #169 review F1).** R5.1 read as if either form of evidence accounted for a
+  key, while this design, ADR 0077 ("`wrong_size` is unchanged") and the unit test kept
+  `wrong_size`. The owner chose the design's reading: a register row is a hand-kept claim
+  of a specific size, and a wrong one means the register is stale, whatever the lines
+  say. R5.1 and R5.2 are reworded to say so; the code is unchanged. No real key has this
+  shape (all 464 are accounted for).
