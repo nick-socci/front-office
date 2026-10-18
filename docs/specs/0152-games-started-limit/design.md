@@ -119,9 +119,10 @@ the season values (C18).
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0071](../../adr/0071-a-games-started-limit-is-a-per-day-rate-and-the-day-that-reaches-it-finishes.md) | In a head-to-head league-season, the games-started limit is its per-day value times the matchup period's days; a start is not credited when the team's earlier credited starts in the period reach it; the day that reaches it finishes; relief appearances still count. A limit on another stat, or in a league-season not head-to-head, fails the build | proposed |
-| [0072](../../adr/0072-a-start-past-the-limit-is-zeroed-at-the-credited-grain.md) | The limit is applied in `int_fantasy__started_player_days`: the row stays, marked, with every pitching column zero (so it is no played started day); the player-day reconciliation leaves it out | proposed |
-| [0073](../../adr/0073-both-lineups-totals-are-credited-under-the-limit.md) | The actual and the optimal lineup's totals and values are credited by the same rule, each counting its own starts; the solver and its inputs are unchanged. Amends 0037 | proposed |
+| [0071](../../adr/0071-a-games-started-limit-is-a-per-day-rate-and-the-day-that-reaches-it-finishes.md) | In a head-to-head league-season, the games-started limit is its per-day value times the matchup period's days; a start is not credited when the team's earlier credited starts in the period reach it; the day that reaches it finishes; relief appearances still count. A limit on another stat, or in a league-season not head-to-head, fails the build | accepted |
+| [0072](../../adr/0072-a-start-past-the-limit-is-zeroed-at-the-credited-grain.md) | The limit is applied in `int_fantasy__started_player_days`: the row stays, marked, with every pitching column zero (so it is no played started day); the player-day reconciliation leaves it out | accepted |
+| [0073](../../adr/0073-both-lineups-totals-are-credited-under-the-limit.md) | The actual and the optimal lineup's totals and values are credited by the same rule, each counting its own starts; the solver and its inputs are unchanged. Amends 0037 | superseded by 0079 |
+| [0079](../../adr/0079-only-the-actual-lineup-is-credited-under-the-limit-until-the-optimal-one-is-solved-a-week-at-a-time.md) | Only the actual lineup's totals and values are credited under the limit; the optimal lineup's are not, until a solver chooses a matchup period's lineups together within it (#164). Supersedes 0073, amends 0037 | accepted |
 
 ## Detailed design
 
@@ -201,6 +202,8 @@ input is what the day was worth, and whether it counted is the lineup's business
 
 ### `fct_lineup_decisions` (changed)
 
+> **Amended 2026-10-18** (see *Amendments*; ADR 0079): only the actual lineup is limited. The optimal lineup's `optimal_value` are not, until #164.
+
 `actual_value`, `optimal_value` and `value_gap` count an option at 0 when it is a start in
 a pitcher slot on a day the lineup's own earlier starts put past the period's
 `start_limit`: the actual lineup counts its starts, the optimal lineup its own (R4.3). The
@@ -209,6 +212,8 @@ the model's comment requires. `actual_pitcher_starts` and `optimal_pitcher_start
 unchanged: they are what each lineup started, the evidence a period went over.
 
 ### `int_fantasy__lineup_category_totals` (changed)
+
+> **Amended 2026-10-18** (see *Amendments*; ADR 0079): only the actual lineup is limited. The optimal lineup's totals are not, until #164.
 
 For each lineup (actual and optimal) the same rule, written the same way: per team-day
 the lineup's credited starts (`games_started` of players the lineup puts in a pitcher
@@ -236,8 +241,8 @@ the implementer's call if the two would otherwise differ.
 | R3.1 | dbt unit test of `rec_espn__player_day_differences`: a marked day with an ESPN line | a false difference on the uncredited start |
 | R3.2 | the real data: the status counts of the expected values | the side-level reconciliation moved anywhere else |
 | R4.1 | `lineup_category_totals_reproduce_the_actual_totals` (existing) | the lineup path crediting differently from the scored totals |
-| R4.2 | dbt unit test of `int_fantasy__lineup_category_totals`: an optimal lineup past the limit | the optimal lineup credited without the limit, or limited by the actual lineup's starts |
-| R4.3 | dbt unit test of `fct_lineup_decisions`: an actual and an optimal lineup each past the limit on different days | a lineup's value counting a start it was not credited, or the other lineup's starts deciding it |
+| R4.2 (amended) | dbt unit test `lineup_category_totals_only_the_actual_lineup_is_limited`: an optimal lineup over the limit, credited in full, beside an actual lineup past it | the optimal lineup limited (which can put it below the actual), the actual not limited, or limited by the optimal's starts |
+| R4.3 (amended) | dbt unit test `lineup_decisions_only_the_actual_lineups_value_is_limited`: an actual lineup past the limit, an optimal lineup over it on another day | the actual value counting a start it was not credited, the optimal value limited, or the optimal's starts deciding the actual |
 | R4.4 | `candidate_day_values_add_back_to_season_value` on the real data, where Fried's pair is the case, seen to fail with its new filter removed | the season value and the day values parting on a marked day |
 | R1.1 to R4.4 on fixtures | the fixture settings capture carries `lineupSlotStatLimits` (the fixture allowlist gains it) | the staging-to-total path never meeting the setting in CI |
 
@@ -284,3 +289,36 @@ Each new test is seen to fail against the code it covers before the build's PR o
 | spec 0147's session (#147), 2026-10-16 | reports that ESPN's own per-player matchup lines (`rosterForMatchupPeriod` in the landed matchup-day captures) for 2023, matchup 110, team 7 sum to ESPN's limited totals: GS 13, outs 255, hits allowed 76, strikeouts 71 | not rerun here, so not a ledger row; if it holds, ESPN applies the limit in its matchup lines as well as its totals, which agrees with C6 and C12 |
 
 ## Amendments
+
+- **2026-10-18 — R1.4 is shown to fail on mutated warehouses, not by a unit test.** The
+  test strategy names "a unit test feeding it a stat-81 entry and a rotisserie
+  league-season", but dbt unit tests apply to models only, and
+  `int_fantasy__start_limits_are_understood` is a singular test. Each of its three
+  conditions is instead shown to fail by running it alone against a copy of the CI
+  warehouse with the offending entry planted (a stat-81 entry; a second stat-33 entry;
+  the season's `scoring_type` set to `ROTO`), and to pass on the untouched copy; the PR's
+  *Tests shown to fail* table records the runs. No goal, no-go or meaning moves.
+
+- **2026-10-18 — the optimal lineup is not limited (owner; ADR 0079 supersedes 0073).**
+  The real build of task 10 showed that limiting the optimal lineup by its own starts, as
+  R4.2 and R4.3 had it, can leave it below the actual lineup. In 2022, matchup period 18,
+  team 1, the per-day solver adds a start on 08-20 (+0.104), which takes the team to the
+  limit of 13 and leaves its 08-21 start uncredited (−0.299). `value_gap` that day is
+  −0.299, and `fct_lineup_decisions_are_never_worse_than_the_actual_lineup` (spec 0012,
+  R4.7) fails, with `fct_lineup_decision_categories` skipped behind it. The owner chose a
+  week-level solver that keeps the best starts within the limit, as its own spec (#164),
+  and for this one: R4.2 and R4.3 now apply to the actual lineup only. The optimal
+  lineup's totals and `optimal_value` are credited as the solver chose them. R4.1 and R4.4
+  are unchanged. Expected values that move: *Optimal lineups (R4.2)* becomes "no optimal
+  row of `int_fantasy__lineup_category_totals` changes"; *`fct_lineup_decisions` values
+  (R4.3)* becomes "`actual_value` and `value_gap` change on 1 team-day (2023-08-20,
+  team 7); `optimal_value` changes on none". The C14 count (6 optimal starts over the
+  limit, on 4 team-periods) stays true and is now what the gap overstates (ADR 0079,
+  *Consequences*).
+- **2026-10-18 — `rec_espn__player_day_differences_are_registered` falls from 18 to 17,
+  not "unchanged".** The row that leaves is 2023, matchup 110, team 7, stat 45 (earned
+  runs): an `unregistered` difference of −1. The spec's own expected values make that
+  side's earned runs `explained_by_game_lines`, and under ADR 0064 a difference the game
+  lines explain needs no register row, so `rec_espn__player_day_residuals` stops flagging
+  it. The player-day differences themselves are unchanged (none added or removed), so
+  R3.1 holds as written. The expected value was a miscount; no requirement moves.
