@@ -220,6 +220,9 @@ ESPN_SETTINGS_FIELDS = (
     # tie; a playoff one goes to the higher seed). Read by stg_espn__league_settings.
     "settings.scoringSettings.playoffMatchupTieRule",
     "settings.scoringSettings.matchupTieRule",
+    # The league's pitching minimum, `{"statId": 34, "limitValue": 30.0}` (outs per matchup).
+    # Read by stg_espn__league_settings (spec 0160).
+    "settings.scoringSettings.statQualificationMinimum",
     "settings.scheduleSettings.playoffTeamCount",
     "status.currentMatchupPeriod",
     "status.latestScoringPeriod",

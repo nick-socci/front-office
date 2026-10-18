@@ -706,6 +706,7 @@ def test_the_2025_settings_fixture_is_the_allowlist_of_the_fixture_league():
         "settings.scoringSettings.scoringType",
         "settings.scoringSettings.playoffMatchupTieRule",
         "settings.scoringSettings.matchupTieRule",
+        "settings.scoringSettings.statQualificationMinimum",
         "settings.scoringSettings.scoringItems",
         "settings.scheduleSettings.playoffTeamCount",
         "status.currentMatchupPeriod",
