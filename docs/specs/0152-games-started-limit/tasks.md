@@ -45,12 +45,16 @@ recorded on #152 during the build, and this file is not edited to show it.
    past the limit, then apply the rule to both lineups — `impl` — R4.1, R4.2
    - Verify: the new case fails first, then passes;
      `lineup_category_totals_reproduce_the_actual_totals` passes on the fixtures.
+   - Amended 2026-10-18: the optimal lineup is not limited, only the actual one (design.md
+     *Amendments*, ADR 0079).
 8. Write the unit test of `fct_lineup_decisions` (an actual and an optimal lineup each
    past the limit on different days), then apply the rule to `actual_value`,
    `optimal_value` and `value_gap`; add the filter of R4.4 to
    `candidate_day_values_add_back_to_season_value` — `impl` — R4.3, R4.4
    - Verify: the unit test fails first, then passes; the add-back test passes on the
      fixtures.
+   - Amended 2026-10-18: the optimal lineup is not limited, only the actual one (design.md
+     *Amendments*, ADR 0079).
 9. Run `.agentic/gates` — `impl` — all
    - Verify: green.
 10. Build the real warehouse and compare it with task 1's saved relations — `judgment` —

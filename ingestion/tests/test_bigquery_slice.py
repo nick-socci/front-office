@@ -46,6 +46,7 @@ SLICE_MODELS = {
     "int_fantasy__player_crosswalk",
     "int_fantasy__reported_matchup_margins",
     "int_fantasy__roster_days",
+    "int_fantasy__start_limits",
     "int_fantasy__started_player_days",
     "int_fantasy__stat_components",
     "int_mlb__game_dates",
@@ -54,6 +55,7 @@ SLICE_MODELS = {
     "rec_espn__matchup_stat_differences",
     "rec_espn__player_day_differences",
     "stg_espn__league_settings",
+    "stg_espn__lineup_slot_stat_limits",
     "stg_espn__matchup_category_results",
     "stg_espn__matchup_days",
     "stg_espn__matchup_periods",
@@ -149,7 +151,7 @@ def names(rows: list[dict[str, object]], resource_type: str) -> set[str]:
     return {str(r["name"]) for r in rows if r["resource_type"] == resource_type}
 
 
-def test_the_slice_is_the_forty_three_models_and_six_seeds_of_the_specs(
+def test_the_slice_is_the_forty_five_models_and_six_seeds_of_the_specs(
     selected: list[dict[str, object]],
 ) -> None:
     """Catches a model or seed joining the slice through a new ref, or leaving it, unnoticed."""
@@ -165,22 +167,25 @@ def test_the_slice_has_no_python_model_and_the_materializations_counted(
     assert all(str(r["original_file_path"]).endswith(".sql") for r in models)
     kinds = sorted(r["config"]["materialized"] for r in models)  # type: ignore[index]
     # Listed on the ci target. The five models once built a season at a time are tables
-    # now (spec 0150), and the nine capture views are views.
+    # now (spec 0150), and the nine capture views are views. Spec 0152 adds a staging view
+    # and a table (the games-started limits).
     counted = (
         kinds.count("table"),
         kinds.count("incremental"),
         kinds.count("view"),
         kinds.count("ephemeral"),
     )
-    assert counted == (24, 0, 18, 1)
+    assert counted == (25, 0, 19, 1)
 
 
 def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) -> None:
     """Catches a test added to or lost from the slice: the counts are the spec's."""
     tests = [r for r in selected if r["resource_type"] == "test"]
     generic = [r for r in tests if r.get("test_metadata")]
-    assert (len(tests), len(generic), len(tests) - len(generic)) == (228, 198, 30)
-    assert len(names(selected, "unit_test")) == 81
+    # Spec 0152 adds 9 generic tests (its two models and is_over_start_limit) and the
+    # singular int_fantasy__start_limits_are_understood.
+    assert (len(tests), len(generic), len(tests) - len(generic)) == (238, 207, 31)
+    assert len(names(selected, "unit_test")) == 89  # spec 0152: 3 + 3 + 1 + 1
 
 
 def test_no_selected_test_reads_a_relation_outside_the_slice(

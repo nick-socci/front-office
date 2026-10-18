@@ -7,6 +7,12 @@
 -- total, the day model values each day, and the value is linear in the days, so any gap
 -- means one of them used a different level, scale, sign, kind or category set.
 --
+-- A start left uncredited because the team was past its games-started limit
+-- (is_over_start_limit, ADR 0071, 0072) is left out of the started days. The season value
+-- zeroes that start with the rest of the pitching line, while its day value stays the
+-- solver's unlimited input (ADR 0073): whether a day counted is the lineup's business, not
+-- the day's. Adding that day value back would part from total_value on exactly that pair.
+--
 -- A pair with no valued started day sums to 0, as the season fact says for a pair with no
 -- played day. The day sum is null if any of its day values is null, as total_value is. A
 -- row comes back when the two differ by more than 1e-9, or when exactly one is null.
@@ -21,8 +27,21 @@ with started_days as (
         fantasy_team_id,
         platform_player_id,
         case slot_role when 'hitter' then 'batting' when 'pitcher' then 'pitching' end as side
-    from {{ ref('int_fantasy__roster_days') }}
-    where is_started
+    from {{ ref('int_fantasy__roster_days') }} as days
+    where
+        is_started
+        and not exists (
+            select 1
+            from {{ ref('int_fantasy__started_player_days') }} as uncredited
+            where
+                uncredited.is_over_start_limit
+                and uncredited.platform = days.platform
+                and uncredited.league_id = days.league_id
+                and uncredited.season = days.season
+                and uncredited.scoring_date = days.scoring_date
+                and uncredited.fantasy_team_id = days.fantasy_team_id
+                and uncredited.platform_player_id = days.platform_player_id
+        )
 
 ),
 

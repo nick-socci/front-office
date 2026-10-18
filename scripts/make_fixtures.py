@@ -223,6 +223,9 @@ ESPN_SETTINGS_FIELDS = (
     "status.isActive",
     # Slot id -> roster spot count. Read by stg_espn__lineup_slot_limits.
     "settings.rosterSettings.lineupSlotCounts",
+    # Slot id -> {statId, limitValue}: a cap on a stat for one slot (games started, say).
+    # `{}` when the league sets none. Holds no league-member data.
+    "settings.rosterSettings.lineupSlotStatLimits",
 )
 ESPN_SCORING_ITEM_FIELDS = ("statId", "isReverseItem", "points")
 ESPN_TEAM_FIELDS = (

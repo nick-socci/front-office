@@ -1,6 +1,6 @@
 # 0071. A games-started limit is a per-day rate, and the day that reaches it finishes
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-16
 - Spec: [0152-games-started-limit](../specs/0152-games-started-limit/design.md) · Issue: #152
 
