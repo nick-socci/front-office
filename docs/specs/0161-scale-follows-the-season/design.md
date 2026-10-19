@@ -241,3 +241,13 @@ Each new test is seen to fail against the code it covers before the build's PR o
 | design-review | F6 (P2): prototype counts at 0.001 are estimates; new columns not listed | Changed: counts marked as estimates to be explained if they differ; slopes and 2018 checked as given; the new columns listed |
 
 ## Amendments
+
+- **2026-10-18, build: a missing team count still fails the build.** The pre-PR review (#166
+  trial) found that R1.8 names a missing team count as a case that falls back with a
+  warning. But `stg_espn__league_settings.team_count` has carried a `not_null` test since
+  the settings were first staged, so a missing team count fails the build before the scales
+  are reached. By the owner's choice, the `not_null` stays: the team count is set when a
+  league is created, and every landed capture has it (C9). R1.8's fallback and warning
+  apply to a missing matchup period count and to an M of 0 or below. A missing team count
+  fails the build as it always has. `int_fantasy__category_scales_know_the_scheduled_matchups`
+  keeps its `team_count` clause as a backstop, and its header says so.

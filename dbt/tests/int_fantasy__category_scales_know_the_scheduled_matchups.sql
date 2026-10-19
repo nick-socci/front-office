@@ -3,7 +3,9 @@
 -- Every league-season with rosters has a count of scheduled matchups M the scales can use.
 -- Returns each one whose settings give no positive M, with the two settings M comes from:
 -- matchup_period_count null, team_count null, or matchup_period_count * floor(team_count / 2)
--- not above 0.
+-- not above 0. A null team_count already fails the build at the not_null test of
+-- stg_espn__league_settings (spec 0161, amendment of 2026-10-18), so its clause here is a
+-- backstop; the case this test is for is a settings capture without the matchup period count.
 --
 -- It warns rather than fails (the owner's choice, 2026-10-18): the scales of such a
 -- league-season fall back to ADR 0027's weight, fantasy_scale_prior_matchups, so a live
