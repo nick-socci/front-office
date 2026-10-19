@@ -32,6 +32,8 @@ select
     {{ fo_json_int('payload', '$.settings.size') }} as team_count,
     {{ fo_json_int('payload', '$.settings.scheduleSettings.playoffTeamCount') }}
         as playoff_team_count,
+    {{ fo_json_int('payload', '$.settings.scheduleSettings.matchupPeriodCount') }}
+        as matchup_period_count,
     {{ fo_json_int('payload', '$.status.currentMatchupPeriod') }} as current_matchup_period,
     {{ fo_json_int('payload', '$.status.latestScoringPeriod') }} as latest_scoring_period,
     {{ fo_json_int('payload', '$.status.finalScoringPeriod') }} as final_scoring_period,
