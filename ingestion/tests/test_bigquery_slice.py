@@ -210,7 +210,10 @@ def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) ->
     # is_opponent_below_minimum.
     # spec 0160 (amendment): +1 generic test, not_null on
     # stg_espn__league_settings.has_qualification_minimum.
-    assert (len(tests), len(generic), len(tests) - len(generic)) == (259, 224, 35)
+    # spec 0161: +2 singular tests, int_fantasy__category_scales_know_the_scheduled_matchups
+    # and int_fantasy__category_scales_decided_within_the_schedule. Their parents are in the
+    # slice, so they are selected and are written to the two-warehouse rule.
+    assert (len(tests), len(generic), len(tests) - len(generic)) == (261, 224, 37)
     # spec 0152: 3 + 3 + 1 + 1. Spec 0147 adds 9: two for matchup_player_lines, one for
     # matchup_line_totals, four for matchup_stat_differences, one each for
     # category_result_differences and winner_differences.
