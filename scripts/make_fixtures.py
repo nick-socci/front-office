@@ -224,6 +224,9 @@ ESPN_SETTINGS_FIELDS = (
     # Read by stg_espn__league_settings (spec 0160).
     "settings.scoringSettings.statQualificationMinimum",
     "settings.scheduleSettings.playoffTeamCount",
+    # The number of regular-season matchup periods; times floor(team count / 2) it gives the
+    # season's scheduled regular-season matchups. Read by stg_espn__league_settings (spec 0161).
+    "settings.scheduleSettings.matchupPeriodCount",
     "status.currentMatchupPeriod",
     "status.latestScoringPeriod",
     "status.finalScoringPeriod",
