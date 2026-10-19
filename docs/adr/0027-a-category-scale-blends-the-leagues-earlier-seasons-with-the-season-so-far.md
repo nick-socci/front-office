@@ -1,6 +1,6 @@
 # 0027. A category's scale blends the league's earlier seasons with the season so far
 
-- Status: accepted
+- Status: accepted, amended by [0086](0086-history-counts-for-the-seasons-matchups-not-yet-played.md)
 - Date: 2026-10-08
 - Spec: [0057-category-scales-from-history](../specs/0057-category-scales-from-history/design.md) · Issue: #57
 - Amends: [0010](0010-category-values-are-scaled-by-the-matchup-margin.md)
