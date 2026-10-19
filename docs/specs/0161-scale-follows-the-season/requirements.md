@@ -87,7 +87,10 @@ Places this could sink time, and the decision already taken to avoid them.
 - R1.8 IF a league-season with rosters has no readable, positive M (the matchup period
   count or the team count missing, or a product of 0) THEN THE SYSTEM SHALL scale its
   categories as ADR 0027 does, with a weight of `fantasy_scale_prior_matchups`, and SHALL
-  warn, naming the league-season (owner, 2026-10-18).
+  warn, naming the league-season (owner, 2026-10-18). *Amended 2026-10-18 (design.md,
+  Amendments): a missing team count still fails the build, at the existing `not_null` test
+  of `stg_espn__league_settings.team_count`; the fallback and warning cover a missing
+  matchup period count and an M of 0 or below.*
 - R1.9 IF a league-season's decided regular-season matchups in a category exceed its M
   (the schedule was extended after the newest settings capture) THEN THE SYSTEM SHALL warn,
   naming the league-season and both counts, and SHALL scale the category with a weight of

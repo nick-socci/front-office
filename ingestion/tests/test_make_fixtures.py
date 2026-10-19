@@ -709,6 +709,7 @@ def test_the_2025_settings_fixture_is_the_allowlist_of_the_fixture_league():
         "settings.scoringSettings.statQualificationMinimum",
         "settings.scoringSettings.scoringItems",
         "settings.scheduleSettings.playoffTeamCount",
+        "settings.scheduleSettings.matchupPeriodCount",
         "status.currentMatchupPeriod",
         "status.latestScoringPeriod",
         "status.finalScoringPeriod",

@@ -1,6 +1,6 @@
 # 0086. History in a category's scale counts for the season's matchups not yet played
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-18
 - Spec: [0161-scale-follows-the-season](../specs/0161-scale-follows-the-season/design.md) · Issue: #161
 - Amends: [0027](0027-a-category-scale-blends-the-leagues-earlier-seasons-with-the-season-so-far.md)

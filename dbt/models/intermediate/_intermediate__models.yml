@@ -257,10 +257,10 @@ models:
       zero so swapping sides changes nothing) and, for a rate, the typical denominator of
       a side (side_denominator, null for a count). Both value facts divide by these (ADR
       0010). Where the league's earlier seasons hold enough matchups the two are a blend
-      of those seasons, counted as fantasy_scale_prior_matchups, and the season's own
-      decided matchups (ADR 0027); otherwise they are measured from the season alone.
-      scale_source says which. A category with nothing measured keeps a row with a null
-      scale.
+      of those seasons, counted as the season's matchups not yet played, and the season's
+      own decided matchups (ADR 0027, ADR 0086); otherwise they are measured from the
+      season alone. scale_source says which. A category with nothing measured keeps a row
+      with a null scale.
     config:
       contract:
         enforced: true
@@ -297,7 +297,10 @@ models:
         description: >
           prior_and_current_seasons when the league's earlier seasons hold at least
           fantasy_scale_prior_matchups measured matchups in the category and are blended
-          with the season's own; current_season when the scale is the season's alone.
+          with the season's own; current_season when the scale is the season's alone. A
+          blend whose history_weight is 0 is still prior_and_current_seasons: it is the
+          season's reported regular-season margins, not the current_season scale from our
+          own totals. history_weight says how much the earlier seasons counted.
         data_type: string
         constraints: [{type: not_null}]
         data_tests:
@@ -317,6 +320,19 @@ models:
           The scale of the earlier seasons alone, pooled over matchups; null under
           current_season. With margin_scale and matchups_measured it explains the blend.
         data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
+      - name: scheduled_matchups
+        description: >
+          The league-season's scheduled regular-season matchups, M: its matchup periods
+          times floor(team_count / 2), from the settings. Null where the settings do not
+          give it (spec 0161, ADR 0086).
+        data_type: bigint
+      - name: history_weight
+        description: >
+          How many matchups the earlier seasons count for in the blend: the season's
+          matchups not yet played, max(0, M - matchups_measured), or
+          fantasy_scale_prior_matchups where M is missing or not positive (ADR 0086). 0
+          once every scheduled matchup is decided. Null under current_season.
+        data_type: bigint
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -2564,6 +2580,8 @@ unit_tests:
       Two matchups with home-minus-away margins +1 and -7. The scale is sqrt(25) = 5. A standard deviation about the mean (-3) would give 4, so this catches a deviation about the mean.
     model: int_fantasy__category_scales
     given:
+      - input: ref('stg_espn__league_settings')
+        rows: []
       - input: ref('int_fantasy__league_seasons')
         rows:
           - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
@@ -2590,6 +2608,8 @@ unit_tests:
       says its matchups were looked at and found unmeasurable (ADR 0026).
     model: int_fantasy__category_scales
     given:
+      - input: ref('stg_espn__league_settings')
+        rows: []
       - input: ref('int_fantasy__league_seasons')
         rows:
           - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
@@ -2613,6 +2633,8 @@ unit_tests:
       The same two matchups as the previous test with the home and away sides swapped (margins -1 and +7). The scale is still 5. Catches a result that depends on which side is home.
     model: int_fantasy__category_scales
     given:
+      - input: ref('stg_espn__league_settings')
+        rows: []
       - input: ref('int_fantasy__league_seasons')
         rows:
           - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
@@ -2636,6 +2658,8 @@ unit_tests:
       Matchup 2 has a null value on one side, so it contributes no margin and matchups_measured is 1; the scale is the one margin, 4. Catches a null read as zero, which would count two matchups and give sqrt((16 + 25) / 2).
     model: int_fantasy__category_scales
     given:
+      - input: ref('stg_espn__league_settings')
+        rows: []
       - input: ref('int_fantasy__league_seasons')
         rows:
           - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
@@ -2659,6 +2683,8 @@ unit_tests:
       A rate (stat 47, with denominators 150 and 210 on its two sides) has the mean, 180; a count (stat 0, null denominators) has a null side_denominator. Catches a count given a denominator.
     model: int_fantasy__category_scales
     given:
+      - input: ref('stg_espn__league_settings')
+        rows: []
       - input: ref('int_fantasy__league_seasons')
         rows:
           - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
@@ -2689,6 +2715,8 @@ unit_tests:
       columns that do not order the rows (ADR 0046).
     model: int_fantasy__category_scales
     given:
+      - input: ref('stg_espn__league_settings')
+        rows: []
       - input: ref('int_fantasy__league_seasons')
         rows:
           - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
@@ -2714,6 +2742,8 @@ unit_tests:
       A rate with sides of 180 and 0 outs; the zero-out side has a null value. The mean denominator is 180, not 90, and the matchup contributes no margin. Catches an undefined rate halving the divisor and inflating every player's rate value.
     model: int_fantasy__category_scales
     given:
+      - input: ref('stg_espn__league_settings')
+        rows: []
       - input: ref('int_fantasy__league_seasons')
         rows:
           - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
@@ -2735,6 +2765,8 @@ unit_tests:
       A scored category (stat 5) with no matchup rows still has a row: matchups_measured 0 and a null scale. Catches a category vanishing from the facts through an inner join.
     model: int_fantasy__category_scales
     given:
+      - input: ref('stg_espn__league_settings')
+        rows: []
       - input: ref('int_fantasy__league_seasons')
         rows:
           - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
@@ -3150,12 +3182,16 @@ unit_tests:
       margin of 1000; league 2's 2025 margin of 1000; and our own recomputed totals for
       2026, whose margin is 100. Catches: a later season or another league in the blend;
       an unmeasured row in it; history weighted by its size and not by the variable; our
-      totals used where the host's are.
+      totals used where the host's are. (M = 4, so history counts for the 2 matchups not
+      yet played.)
     model: int_fantasy__category_scales
     overrides:
       vars:
         fantasy_scale_prior_matchups: 2
     given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026, matchup_period_count: 2, team_count: 4}
       - input: ref('int_fantasy__league_seasons')
         rows:
           - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
@@ -3178,19 +3214,24 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: false, stat_key: 1, denominator: null, stat_value: 0}
     expect:
       rows:
-        - {category_key: 1, matchups_measured: 2, margin_scale: 5, side_denominator: null, scale_source: prior_and_current_seasons, prior_matchups_measured: 2, prior_seasons_measured: 1, prior_margin_scale: 4}
+        - {category_key: 1, matchups_measured: 2, margin_scale: 5, side_denominator: null, scale_source: prior_and_current_seasons, prior_matchups_measured: 2, prior_seasons_measured: 1, prior_margin_scale: 4, scheduled_matchups: 4, history_weight: 2}
 
   - name: category_scales_fall_back_one_matchup_below_the_threshold
     description: >
       The same league with one measured 2025 margin and a threshold of 2: history is not
       used. The scale is the season's own, from our totals (10 against 6: 4), and the
-      row still says how much history there was. Catches: the threshold off by one, and
-      a thin history blended in.
+      row still says how much history there was. The season has 6 scheduled matchups and
+      a category without history is given no weight. Catches: the threshold off by one,
+      a thin history blended in, and a weight reported for a scale that does not use
+      history.
     model: int_fantasy__category_scales
     overrides:
       vars:
         fantasy_scale_prior_matchups: 2
     given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026, matchup_period_count: 3, team_count: 4}
       - input: ref('int_fantasy__league_seasons')
         rows:
           - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
@@ -3207,20 +3248,24 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: false, stat_key: 1, denominator: null, stat_value: 6}
     expect:
       rows:
-        - {category_key: 1, matchups_measured: 1, margin_scale: 4, side_denominator: null, scale_source: current_season, prior_matchups_measured: 1, prior_seasons_measured: 1, prior_margin_scale: null}
+        - {category_key: 1, matchups_measured: 1, margin_scale: 4, side_denominator: null, scale_source: current_season, prior_matchups_measured: 1, prior_seasons_measured: 1, prior_margin_scale: null, scheduled_matchups: 6, history_weight: null}
 
   - name: category_scales_pool_earlier_seasons_over_matchups_and_stand_alone_before_any_is_decided
     description: >
       2024 has one measured margin of 11 and 2025 three of 5. Pooled over matchups the
       history's scale is sqrt((121 + 75) / 4) = 7; the mean of the two seasons' scales
-      would be 8. 2026 has no decided matchup, so its scale is exactly the history's.
-      Catches: an average of season scales in place of a pooled one, and a season with
-      nothing decided left without a scale.
+      would be 8. 2026 has no decided matchup, so its scale is exactly the history's,
+      whatever the weight (here M = 6, so history counts for all 6). Catches: an average
+      of season scales in place of a pooled one, and a season with nothing decided left
+      without a scale.
     model: int_fantasy__category_scales
     overrides:
       vars:
         fantasy_scale_prior_matchups: 2
     given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026, matchup_period_count: 3, team_count: 4}
       - input: ref('int_fantasy__league_seasons')
         rows:
           - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
@@ -3237,7 +3282,7 @@ unit_tests:
         rows: []
     expect:
       rows:
-        - {category_key: 1, matchups_measured: 0, margin_scale: 7, side_denominator: null, scale_source: prior_and_current_seasons, prior_matchups_measured: 4, prior_seasons_measured: 2, prior_margin_scale: 7}
+        - {category_key: 1, matchups_measured: 0, margin_scale: 7, side_denominator: null, scale_source: prior_and_current_seasons, prior_matchups_measured: 4, prior_seasons_measured: 2, prior_margin_scale: 7, scheduled_matchups: 6, history_weight: 6}
 
   - name: category_scales_blend_a_rates_denominator_with_its_scale
     description: >
@@ -3248,12 +3293,16 @@ unit_tests:
       the first test, and the denominator (120 + 2 * 2 * 40) / (2 * 2 + 2 * 2) = 35.
       Our own totals for 2026, a denominator of 1000, are not used. Catches: a blended
       scale paired with the season's own denominator, or the reverse; a long period's
-      denominator taken at face value; sides weighted differently from matchups.
+      denominator taken at face value; sides weighted differently from matchups. (M = 4,
+      so history counts for the 2 matchups not yet played.)
     model: int_fantasy__category_scales
     overrides:
       vars:
         fantasy_scale_prior_matchups: 2
     given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026, matchup_period_count: 2, team_count: 4}
       - input: ref('int_fantasy__league_seasons')
         rows:
           - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
@@ -3272,7 +3321,7 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, is_home: false, stat_key: 2, denominator: 1000, stat_value: 0}
     expect:
       rows:
-        - {category_key: 2, matchups_measured: 2, margin_scale: 5, side_denominator: 35, scale_source: prior_and_current_seasons, prior_matchups_measured: 2, prior_seasons_measured: 1, prior_margin_scale: 4}
+        - {category_key: 2, matchups_measured: 2, margin_scale: 5, side_denominator: 35, scale_source: prior_and_current_seasons, prior_matchups_measured: 2, prior_seasons_measured: 1, prior_margin_scale: 4, scheduled_matchups: 4, history_weight: 2}
 
   - name: category_scales_fall_back_whole_for_a_rate_whose_denominator_was_never_reported
     description: >
@@ -3286,6 +3335,8 @@ unit_tests:
       vars:
         fantasy_scale_prior_matchups: 2
     given:
+      - input: ref('stg_espn__league_settings')
+        rows: []
       - input: ref('int_fantasy__league_seasons')
         rows:
           - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
@@ -3304,6 +3355,158 @@ unit_tests:
     expect:
       rows:
         - {category_key: 2, matchups_measured: 1, margin_scale: 4, side_denominator: 80, scale_source: current_season, prior_matchups_measured: 0, prior_seasons_measured: 0, prior_margin_scale: null}
+
+# -----------------------------------------------------------------------------
+# Unit tests: history counts for the season's matchups not yet played (spec 0161, ADR
+# 0086). fantasy_scale_prior_matchups is lowered to 2 for each test, as above: it is the
+# threshold for using history, and the weight only where the schedule is unknown.
+# -----------------------------------------------------------------------------
+
+  - name: category_scales_count_history_for_the_matchups_not_yet_played
+    description: >
+      Settings give 3 matchup periods for 5 teams: M = 3 * floor(5 / 2) = 6. A rate. 2025
+      (history): standard margins 4 and -4 (p = 4), with sides of 100 and 60 at relative
+      volume 2 and of 40 and 40 (q = 40). 2026: margins 16 on sides of 100 and 100 and 8
+      on sides of 200 and 200 at relative volume 2 (n = 2, S = 320, D = 400). History
+      counts for w = 6 - 2 = 4 matchups: the scale is sqrt((320 + 4 * 16) / (2 + 4)) = 8
+      and the denominator (400 + 2 * 4 * 40) / (2 * 2 + 2 * 4) = 60. Catches: the fixed
+      weight kept (w = 2 gives a scale of sqrt(88)); w = M and not M - n (sqrt(52));
+      team_count / 2 without the floor (M = 7.5); the team count or the period count
+      alone taken as M; the denominator left on the old weight (70).
+    model: int_fantasy__category_scales
+    overrides:
+      vars:
+        fantasy_scale_prior_matchups: 2
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026, matchup_period_count: 3, team_count: 5}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 2}
+      - input: ref('int_fantasy__reported_matchup_margins')
+        rows:
+          - {platform: espn, league_id: "1", season: 2025, matchup_id: 1, category_key: 2, standard_margin: 4, home_denominator: 100, away_denominator: 60, relative_volume: 2, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2025, matchup_id: 2, category_key: 2, standard_margin: -4, home_denominator: 40, away_denominator: 40, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, category_key: 2, standard_margin: 16, home_denominator: 100, away_denominator: 100, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, category_key: 2, standard_margin: 8, home_denominator: 200, away_denominator: 200, relative_volume: 2, is_measured: true}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows: []
+    expect:
+      rows:
+        - {category_key: 2, matchups_measured: 2, margin_scale: 8, side_denominator: 60, scale_source: prior_and_current_seasons, prior_matchups_measured: 2, prior_seasons_measured: 1, prior_margin_scale: 4, scheduled_matchups: 6, history_weight: 4}
+
+  - name: category_scales_are_the_seasons_own_once_its_schedule_is_played
+    description: >
+      Settings give 1 matchup period for 4 teams: M = 2, and 2 matchups are decided, so
+      w = 0. A rate. History: margins 4 and -4 on sides of 60 and 60 (p = 4, q = 60). The
+      season: margins 5 on sides of 30 and 30 and -5 on sides of 50 and 50 (n = 2, S =
+      50, D = 160). The scale is the season's own, sqrt(50 / 2) = 5, and the denominator
+      160 / 4 = 40; the row is still prior_and_current_seasons, with a history_weight of
+      0. Catches: history still weighted at the end of the season (w = 2 gives a scale of
+      sqrt(20.5) and a denominator of 50).
+    model: int_fantasy__category_scales
+    overrides:
+      vars:
+        fantasy_scale_prior_matchups: 2
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026, matchup_period_count: 1, team_count: 4}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 2}
+      - input: ref('int_fantasy__reported_matchup_margins')
+        rows:
+          - {platform: espn, league_id: "1", season: 2025, matchup_id: 1, category_key: 2, standard_margin: 4, home_denominator: 60, away_denominator: 60, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2025, matchup_id: 2, category_key: 2, standard_margin: -4, home_denominator: 60, away_denominator: 60, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, category_key: 2, standard_margin: 5, home_denominator: 30, away_denominator: 30, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, category_key: 2, standard_margin: -5, home_denominator: 50, away_denominator: 50, relative_volume: 1, is_measured: true}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows: []
+    expect:
+      rows:
+        - {category_key: 2, matchups_measured: 2, margin_scale: 5, side_denominator: 40, scale_source: prior_and_current_seasons, prior_margin_scale: 4, scheduled_matchups: 2, history_weight: 0}
+
+  - name: category_scales_clamp_the_weight_at_zero_past_the_schedule
+    description: >
+      Settings give 1 matchup period for 2 teams: M = 1, but 2 matchups are decided (a
+      schedule extended after the settings were captured). A count. History: margins 4
+      and -4; the season: 5 and -5. The weight is 0, not -1: the scale is the season's
+      own, 5. Catches: a negative weight (w = -1 gives a scale of sqrt(34)).
+    model: int_fantasy__category_scales
+    overrides:
+      vars:
+        fantasy_scale_prior_matchups: 2
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026, matchup_period_count: 1, team_count: 2}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 1}
+      - input: ref('int_fantasy__reported_matchup_margins')
+        rows:
+          - {platform: espn, league_id: "1", season: 2025, matchup_id: 1, category_key: 1, standard_margin: 4, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2025, matchup_id: 2, category_key: 1, standard_margin: -4, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, category_key: 1, standard_margin: 5, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, category_key: 1, standard_margin: -5, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows: []
+    expect:
+      rows:
+        - {category_key: 1, matchups_measured: 2, margin_scale: 5, side_denominator: null, scheduled_matchups: 1, history_weight: 0}
+
+  - name: category_scales_fall_back_to_the_fixed_weight_without_a_schedule
+    description: >
+      Two league-seasons of 12 teams, each with history margins 4 and -4 and its own 8
+      and 2. League 1's settings have no matchup period count (M is null); league 2's have
+      0 (M is 0). Neither gives a schedule, so w is the variable, 2, for both: the scale
+      is sqrt((68 + 2 * 16) / (2 + 2)) = 5, scheduled_matchups is null and 0 as given,
+      and history_weight is 2. Catches: a missing or zero M making the scale null, or
+      read as w = 0 (a scale of sqrt(34)).
+    model: int_fantasy__category_scales
+    overrides:
+      vars:
+        fantasy_scale_prior_matchups: 2
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026, matchup_period_count: null, team_count: 12}
+          - {league_id: "2", season: 2026, matchup_period_count: 0, team_count: 12}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, has_rosters: true}
+          - {platform: espn, league_id: "2", season: 2026, has_rosters: true}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 1}
+          - {platform: espn, league_id: "2", season: 2026, category_key: 1}
+      - input: ref('int_fantasy__reported_matchup_margins')
+        rows:
+          - {platform: espn, league_id: "1", season: 2025, matchup_id: 1, category_key: 1, standard_margin: 4, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2025, matchup_id: 2, category_key: 1, standard_margin: -4, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, category_key: 1, standard_margin: 8, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, category_key: 1, standard_margin: 2, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "2", season: 2025, matchup_id: 1, category_key: 1, standard_margin: 4, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "2", season: 2025, matchup_id: 2, category_key: 1, standard_margin: -4, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "2", season: 2026, matchup_id: 1, category_key: 1, standard_margin: 8, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+          - {platform: espn, league_id: "2", season: 2026, matchup_id: 2, category_key: 1, standard_margin: 2, home_denominator: null, away_denominator: null, relative_volume: 1, is_measured: true}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows: []
+    expect:
+      rows:
+        - {league_id: "1", category_key: 1, matchups_measured: 2, margin_scale: 5, scheduled_matchups: null, history_weight: 2}
+        - {league_id: "2", category_key: 1, matchups_measured: 2, margin_scale: 5, scheduled_matchups: 0, history_weight: 2}
 
 # -----------------------------------------------------------------------------
 # int_fantasy__candidate_day_values unit tests (#12, R1): the arithmetic of

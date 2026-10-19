@@ -102,7 +102,8 @@
    ]
   },
   "scheduleSettings": {
-   "playoffTeamCount": 6
+   "playoffTeamCount": 6,
+   "matchupPeriodCount": 22
   },
   "rosterSettings": {
    "lineupSlotCounts": {

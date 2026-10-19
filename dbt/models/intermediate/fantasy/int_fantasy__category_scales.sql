@@ -7,16 +7,20 @@
 -- margin of innings is wide and a margin of steals is narrow; dividing each category by
 -- its own margin puts them in one unit, "matchup margins".
 --
--- WHICH MATCHUPS THE SCALE IS MEASURED FROM (ADR 0027, amending ADR 0010). Two cases, per
+-- WHICH MATCHUPS THE SCALE IS MEASURED FROM (ADR 0027, amended by ADR 0086). Two cases, per
 -- category, decided by how much history the league has; scale_source says which.
 --
 --   prior_and_current_seasons   The league's earlier seasons hold at least
 --       fantasy_scale_prior_matchups (100) measured matchups in the category. The scale
 --       is then a blend, sqrt((S + w * p^2) / (n + w)): p is the root mean square of all
 --       those earlier margins, S and n are the sum of squares and the count of this
---       season's own decided matchups, and w is the same 100. The earlier seasons count
---       as 100 matchups however many there are: more of them make p more precise, not
---       more relevant to this season. With no matchup decided the scale is p.
+--       season's own decided matchups, and w is the season's matchups not yet played,
+--       max(0, M - n), with M its scheduled regular-season matchups (history_weight).
+--       The scale estimates the margin of the whole season being valued: n of its
+--       matchups are measured, and history predicts the M - n still to come. More earlier
+--       seasons make p more precise, not more relevant to this season. With no matchup
+--       decided the scale is p; once every scheduled matchup is decided it is the
+--       season's own.
 --
 --   current_season   No such history: a new league, or a category scored for the first
 --       time. The scale is measured from this league-season's own matchups, recomputed
@@ -24,14 +28,23 @@
 --
 -- Why blend. Measured on eight seasons, a season's first two matchup periods predict the
 -- scale of the rest of it with a 24% error and its earlier seasons with 9%; by the end
--- the season's own matchups are the better guide. The blend is as good as the better of
--- the two throughout. And a change in the game (a rule, how pitchers are used) is not in
--- the history: it can only reach the scale from the season's own matchups.
+-- the season's own matchups are the better guide. The blend leans on history early (after
+-- two periods of a 126-matchup season it counts for 114 matchups) and on the season late,
+-- and a finished season's scale is its own. A change in the game (a rule, how pitchers are
+-- used) is not in the history: it can only reach the scale from the season's own matchups.
 --
--- Why 100, twice. A scale from n near-normal margins has a relative standard error of
--- about 1 / sqrt(2n): 7% at 100, which is how much seasons differ from each other. Below
--- that, history is noisier than the thing it stands in for; at it, history and a season
--- of the same size are equally good evidence. It is a variable so that tests and the
+-- M IS READ FROM THE SETTINGS: the regular-season matchup periods times floor(team count
+-- / 2), the matchups in each (an odd team out has a bye). Where the settings give no
+-- positive M, w falls back to fantasy_scale_prior_matchups, as ADR 0027 had it, and
+-- int_fantasy__category_scales_know_the_scheduled_matchups warns. Where more matchups are
+-- decided than M (a schedule extended after the newest settings capture), w is 0 and
+-- int_fantasy__category_scales_decided_within_the_schedule warns.
+--
+-- Why 100. A scale from n near-normal margins has a relative standard error of about
+-- 1 / sqrt(2n): 7% at 100, which is how much seasons differ from each other. Below that,
+-- history is noisier than the thing it stands in for, so fantasy_scale_prior_matchups is
+-- how much history a category needs before it is used at all. It is no longer the weight
+-- (ADR 0086), except as the fallback above. It is a variable so that tests and the
 -- isolation check can lower it. It is not a method switch.
 --
 -- What is blended is the league host's reported margins, for the earlier seasons and for
@@ -65,7 +78,7 @@
 --
 -- WHAT COMES WITH READING THE SEASON'S OWN MATCHUPS (accepted by the owner: #55, then
 -- #57). Under current_season in full, under the blend damped by the weight of history
--- (the season carries 56% of it after a 126-matchup regular season):
+-- (history's weight falls to nothing as the season's matchups are played):
 --   * player value moves as matchups are decided or restated, even for a player whose
 --     own production did not change;
 --   * the players being valued are in the sides the scale is measured from;
@@ -218,6 +231,19 @@ reported_own as (
 
 ),
 
+-- The regular-season matchups each league-season schedules, M: its matchup periods times
+-- the matchups in each. The settings are ESPN's; a team count of 5 has two matchups a period.
+schedules as (
+
+    select
+        'espn' as platform,
+        league_id,
+        season,
+        cast(matchup_period_count * floor(team_count / 2) as bigint) as scheduled_matchups
+    from {{ ref('stg_espn__league_settings') }}
+
+),
+
 chosen as (
 
     select
@@ -227,7 +253,15 @@ chosen as (
         categories.category_key,
         coalesce(earlier_seasons.prior_matchups, 0)
         >= {{ var('fantasy_scale_prior_matchups') }} as uses_history,
-        {{ var('fantasy_scale_prior_matchups') }} as history_weight,
+        schedules.scheduled_matchups,
+        -- The matchups not yet played; the fixed weight where no schedule is known (ADR 0086).
+        case
+            when schedules.scheduled_matchups > 0
+                then greatest(
+                    schedules.scheduled_matchups - coalesce(reported_own.own_matchups, 0), 0
+                )
+            else {{ var('fantasy_scale_prior_matchups') }}
+        end as history_weight,
         coalesce(earlier_seasons.prior_matchups, 0) as prior_matchups,
         coalesce(earlier_seasons.prior_seasons, 0) as prior_seasons,
         earlier_seasons.prior_sum_of_squares / earlier_seasons.prior_matchups as prior_mean_square,
@@ -255,6 +289,10 @@ chosen as (
         and reported_own.league_id = categories.league_id
         and reported_own.season = categories.season
         and reported_own.category_key = categories.category_key
+    left join schedules
+        on schedules.platform = categories.platform
+        and schedules.league_id = categories.league_id
+        and schedules.season = categories.season
     left join margin_scales
         on margin_scales.platform = categories.platform
         and margin_scales.league_id = categories.league_id
@@ -293,5 +331,7 @@ select
         as scale_source,
     prior_matchups as prior_matchups_measured,
     prior_seasons as prior_seasons_measured,
-    case when uses_history then sqrt(prior_mean_square) end as prior_margin_scale
+    case when uses_history then sqrt(prior_mean_square) end as prior_margin_scale,
+    scheduled_matchups,
+    case when uses_history then history_weight end as history_weight
 from chosen
