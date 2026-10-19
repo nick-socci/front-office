@@ -140,9 +140,9 @@ unit_tests:
           - {platform: espn, stat_key: 48, part: numerator, component: pitcher_strikeouts, weight: 1}
       - input: ref('int_fantasy__categories')
         rows:
-          - {platform: espn, league_id: "1", season: 2026, category_key: 1, is_lower_better: false}
-          - {platform: espn, league_id: "1", season: 2026, category_key: 47, is_lower_better: true}
-          - {platform: espn, league_id: "1", season: 2026, category_key: 48, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 1, is_lower_better: false, is_bound_by_minimum: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, is_lower_better: true, is_bound_by_minimum: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 48, is_lower_better: false, is_bound_by_minimum: false}
       - input: ref('fct_matchup_results')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, winner: HOME, has_unverified_inputs: false}
@@ -196,6 +196,9 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 10, fantasy_team_id: 4, opponent_team_id: 3, stat_key: 1, stat_value: 6}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 10, fantasy_team_id: 4, opponent_team_id: 3, stat_key: 47, stat_value: 3.0}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 10, fantasy_team_id: 4, opponent_team_id: 3, stat_key: 48, stat_value: 10}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: null}
       - input: ref('int_fantasy__replacement_levels')
         rows:
           - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
@@ -239,7 +242,7 @@ unit_tests:
           - {platform: espn, stat_key: 1, part: numerator, component: hits, weight: 1}
       - input: ref('int_fantasy__categories')
         rows:
-          - {platform: espn, league_id: "1", season: 2026, category_key: 1, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 1, is_lower_better: false, is_bound_by_minimum: false}
       - input: ref('fct_matchup_results')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, winner: TIE, has_unverified_inputs: false}
@@ -261,6 +264,9 @@ unit_tests:
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 1, stat_value: 6}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 1, stat_value: 6}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: null}
       - input: ref('int_fantasy__replacement_levels')
         rows:
           - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
@@ -299,7 +305,7 @@ unit_tests:
           - {platform: espn, stat_key: 1, part: numerator, component: hits, weight: 1}
       - input: ref('int_fantasy__categories')
         rows:
-          - {platform: espn, league_id: "1", season: 2026, category_key: 1, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 1, is_lower_better: false, is_bound_by_minimum: false}
       - input: ref('fct_matchup_results')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 20, home_team_id: 1, away_team_id: 2, playoff_tier: WINNERS_BRACKET, winner: HOME, has_unverified_inputs: false}
@@ -350,6 +356,9 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 22, fantasy_team_id: 6, opponent_team_id: 5, stat_key: 1, stat_value: 6}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 23, fantasy_team_id: 7, opponent_team_id: 8, stat_key: 1, stat_value: 6}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 23, fantasy_team_id: 8, opponent_team_id: 7, stat_key: 1, stat_value: 7}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: null}
       - input: ref('int_fantasy__replacement_levels')
         rows:
           - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
@@ -384,9 +393,9 @@ unit_tests:
           - {platform: espn, stat_key: 48, part: numerator, component: pitcher_strikeouts, weight: 1}
       - input: ref('int_fantasy__categories')
         rows:
-          - {platform: espn, league_id: "1", season: 2026, category_key: 1, is_lower_better: false}
-          - {platform: espn, league_id: "1", season: 2026, category_key: 47, is_lower_better: true}
-          - {platform: espn, league_id: "1", season: 2026, category_key: 48, is_lower_better: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 1, is_lower_better: false, is_bound_by_minimum: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 47, is_lower_better: true, is_bound_by_minimum: false}
+          - {platform: espn, league_id: "1", season: 2026, category_key: 48, is_lower_better: false, is_bound_by_minimum: false}
       - input: ref('fct_matchup_results')
         rows:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, winner: HOME, has_unverified_inputs: false}
@@ -413,6 +422,9 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 1, stat_value: 8}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 47, stat_value: 4.0}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 48, stat_value: 25}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: null}
       - input: ref('int_fantasy__replacement_levels')
         rows:
           - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 1}
@@ -431,6 +443,69 @@ unit_tests:
       rows:
         - {platform_player_id: 12, fantasy_team_id: 1, matchups_rescored: 1, category_wins_added: 0, matchup_wins_added: 0}
         - {platform_player_id: 13, fantasy_team_id: 1, matchups_rescored: 1, category_wins_added: null, matchup_wins_added: null}
+
+  - name: category_wins_added_judges_a_swapped_side_against_the_minimum
+    description: >
+      Spec 0160, ADRs 0083 and 0084. League 1 has a minimum of 30 outs, and one category
+      bound by it: WHIP (stat 100, lower is better), hits allowed plus walks over outs.
+      Team 1 has 33 outs and a WHIP of 1.0 against team 2's 171 outs and 2.0, so it wins
+      the category and the matchup. Player 11 started once, for 6 outs and 3 hits and
+      walks; replacement is 1 out, 1 hit and no walks a start, whole numbers, so every
+      draw is the same. The swapped side has 28 outs (33 - 6 + 1), below the minimum, and
+      loses the category whatever its WHIP; that WHIP, 31 / 28 = 1.107, would still win,
+      and on the actual 33 outs the side would not be below the minimum at all. So the
+      category swings from a win to a loss, 1, and the matchup from 1 to 0, 1. Catches
+      the rescored result ignoring the minimum, and the rescored result judged on the
+      actual outs instead of the swapped ones.
+    model: rec_fantasy__category_wins_added
+    overrides:
+      macros:
+        fo_batting_columns: [games_batted]
+        fo_pitching_columns: [games_pitched, games_started, outs_recorded, hits_allowed, pitcher_walks]
+    given:
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 100, part: numerator, component: hits_allowed, weight: 1}
+          - {platform: espn, stat_key: 100, part: numerator, component: pitcher_walks, weight: 1}
+          - {platform: espn, stat_key: 100, part: denominator, component: outs_recorded, weight: 1}
+      - input: ref('int_fantasy__categories')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, category_key: 100, is_lower_better: true, is_bound_by_minimum: true}
+      - input: ref('fct_matchup_results')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, home_team_id: 1, away_team_id: 2, playoff_tier: NONE, winner: HOME, has_unverified_inputs: false}
+      - input: ref('int_fantasy__matchup_sides')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 1, fantasy_team_id: 1, opponent_team_id: 2}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, matchup_period: 1, fantasy_team_id: 2, opponent_team_id: 1}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+      - input: ref('int_fantasy__started_player_days')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 11, slot_role: pitcher, games_batted: 0, games_pitched: 1, games_started: 1, outs_recorded: 6, hits_allowed: 3, pitcher_walks: 0}
+      - input: ref('int_fantasy__matchup_side_totals')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, games_batted: 0, games_pitched: 3, games_started: 3, outs_recorded: 33, hits_allowed: 25, pitcher_walks: 8}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, games_batted: 0, games_pitched: 3, games_started: 3, outs_recorded: 171, hits_allowed: 300, pitcher_walks: 42}
+      - input: ref('int_fantasy__matchup_stat_values')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 1, opponent_team_id: 2, stat_key: 100, stat_value: 1.0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, opponent_team_id: 1, stat_key: 100, stat_value: 2.0}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: 30}
+      - input: ref('int_fantasy__replacement_levels')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, day_kind: batting, component: games_batted, level_per_played_day: 0}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_pitched, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: games_started, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: outs_recorded, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: hits_allowed, level_per_played_day: 1}
+          - {platform: espn, league_id: "1", season: 2026, day_kind: start, component: pitcher_walks, level_per_played_day: 0}
+    expect:
+      rows:
+        - {platform_player_id: 11, fantasy_team_id: 1, matchups_rescored: 1, category_wins_added: 1, matchup_wins_added: 1}
 
   - name: category_wins_by_group_measure_the_slope_over_measured_pairs
     description: >

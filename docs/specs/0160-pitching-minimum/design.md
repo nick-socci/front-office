@@ -102,9 +102,9 @@ for an unknown limit).
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0083](../../adr/0083-a-side-below-the-pitching-minimum-loses-its-ratio-categories.md) | A side below the minimum loses every bound category (pitching, and a rate or lower-is-better); both below is a tie | proposed (chosen by the owner, 2026-10-18) |
-| [0084](../../adr/0084-every-category-result-is-decided-by-one-macro-that-applies-the-minimum.md) | Every place that decides a category result applies the minimum, through one macro | proposed (scope chosen by the owner, 2026-10-18) |
-| [0085](../../adr/0085-the-pitching-minimum-applies-per-matchup-and-an-unread-one-fails-the-build.md) | The minimum applies per matchup as given; a minimum on another stat or outside head-to-head fails the build | proposed (chosen by the owner, 2026-10-18) |
+| [0083](../../adr/0083-a-side-below-the-pitching-minimum-loses-its-ratio-categories.md) | A side below the minimum loses every bound category (pitching, and a rate or lower-is-better); both below is a tie | accepted |
+| [0084](../../adr/0084-every-category-result-is-decided-by-one-macro-that-applies-the-minimum.md) | Every place that decides a category result applies the minimum, through one macro | accepted |
+| [0085](../../adr/0085-the-pitching-minimum-applies-per-matchup-and-an-unread-one-fails-the-build.md) | The minimum applies per matchup as given; a minimum on another stat or outside head-to-head fails the build | accepted |
 
 ## Detailed design
 
@@ -229,3 +229,5 @@ Each new test is seen to fail against the code it covers before the build's PR o
 | owner | ADR 0085 and the new columns' names | ADR 0085 chosen as written; `opponent_below_minimum` renamed `is_opponent_below_minimum`, to pair with `is_below_minimum` (2026-10-18) |
 
 ## Amendments
+
+- **2026-10-18, build: a present minimum that cannot be read.** The pre-PR review (#166 trial) found that a `statQualificationMinimum` present in the settings but with a `statId` and a `limitValue` that both fail to parse stages as null and null. That is the same as no minimum, so the singular test passed it and the models would apply none, against R1.2 ("cannot be read"). By the owner's choice, `stg_espn__league_settings` gains `has_qualification_minimum` (boolean: the setting is present, by `fo_json_exists`). `stg_espn__league_settings_qualification_is_understood` also fails when it is true and either field is null, and its "any minimum" branch reads it. The unit test of the model gains a capture with both fields unreadable. R1.2 is unchanged; this is the case it already named.

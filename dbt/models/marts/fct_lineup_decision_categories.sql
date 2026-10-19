@@ -16,10 +16,10 @@
 -- null where a team-day of the side's period is unvalued (R5.4); optimal_result is then
 -- null with it.
 --
--- optimal_result is decided by the rule of fct_matchup_category_scores.result, copied
--- here with optimal_value in the team's place because that rule is inline in the fact:
--- both values rounded to 9 decimals, null if either is null, a TIE if equal, else a WIN
--- when (team < opponent) = is_lower_better. If that rule changes, change it in both.
+-- optimal_result is decided by fo_category_result, the rule the fact uses (ADR 0084), with
+-- the optimal lineup's own outs for the team's side and the opponent's actual outs (R3.2),
+-- so the pitching minimum applies to it as to the fact. An unvalued optimal row has no outs
+-- either and keeps a null result: the minimum never decides a lineup that has no totals.
 --
 -- has_unverified_inputs is the fact's flag, or any team-day of the side's matchup period
 -- flagged in fct_lineup_decisions. A result on such a row rests on incomplete production.
@@ -35,7 +35,8 @@ with optimal_totals as (
         matchup_id,
         fantasy_team_id,
         category_key,
-        category_value as optimal_value
+        category_value as optimal_value,
+        outs_recorded as optimal_outs
     from {{ ref('int_fantasy__lineup_category_totals') }}
     where lineup = 'optimal'
 
@@ -61,10 +62,20 @@ compared as (
     select
         scores.*,
         optimal_totals.optimal_value,
-        round(optimal_totals.optimal_value, 9) as optimal_rounded,
-        round(scores.opponent_value, 9) as opponent_rounded,
+        optimal_totals.optimal_outs,
+        categories.is_bound_by_minimum,
+        seasons.pitching_minimum_outs,
         coalesce(unverified_days.has_unverified_day, false) as has_unverified_day
     from {{ ref('fct_matchup_category_scores') }} as scores
+    inner join {{ ref('int_fantasy__categories') }} as categories
+        on categories.platform = scores.platform
+        and categories.league_id = scores.league_id
+        and categories.season = scores.season
+        and categories.category_key = scores.category_key
+    left join {{ ref('int_fantasy__league_seasons') }} as seasons
+        on seasons.platform = scores.platform
+        and seasons.league_id = scores.league_id
+        and seasons.season = scores.season
     inner join optimal_totals
         on optimal_totals.platform = scores.platform
         and optimal_totals.league_id = scores.league_id
@@ -97,10 +108,15 @@ select
     result as actual_result,
     optimal_value,
     case
-        when optimal_rounded is null or opponent_rounded is null then null
-        when optimal_rounded = opponent_rounded then 'TIE'
-        when (optimal_rounded < opponent_rounded) = is_lower_better then 'WIN'
-        else 'LOSS'
+        when optimal_outs is null then null
+        else {{ fo_category_result(
+            'optimal_value',
+            'opponent_value',
+            'is_lower_better',
+            'is_bound_by_minimum',
+            'coalesce(optimal_outs < pitching_minimum_outs, false)',
+            'is_opponent_below_minimum'
+        ) }}
     end as optimal_result,
     (has_unverified_inputs or has_unverified_day) as has_unverified_inputs
 from compared

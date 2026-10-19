@@ -35,6 +35,10 @@
 -- reported as the whole. A day with no assigned player, or with no options at all, is not
 -- unvalued: it adds nothing to the sums and nulls nothing.
 --
+-- outs_recorded, the side's outs under the lineup, is carried (on every category row, null on
+-- an unvalued optimal row like the figures above) so the lineup mart can judge the optimal
+-- lineup against the pitching minimum (spec 0160).
+--
 -- The lineup maximises summed day value over all categories, not any one of them, so an
 -- optimal row can be worse than its actual row. Injured-list slots are not candidates.
 --
@@ -319,13 +323,25 @@ select
         when stat_values.lineup = 'optimal' and unvalued_sides.matchup_id is not null
             then null
         else stat_values.stat_value
-    end as category_value
+    end as category_value,
+    case
+        when stat_values.lineup = 'optimal' and unvalued_sides.matchup_id is not null
+            then null
+        else side_totals.outs_recorded
+    end as outs_recorded
 from stat_values
 inner join {{ ref('int_fantasy__categories') }} as categories
     on categories.platform = stat_values.platform
     and categories.league_id = stat_values.league_id
     and categories.season = stat_values.season
     and categories.category_key = stat_values.stat_key
+inner join side_totals
+    on side_totals.platform = stat_values.platform
+    and side_totals.league_id = stat_values.league_id
+    and side_totals.season = stat_values.season
+    and side_totals.matchup_id = stat_values.matchup_id
+    and side_totals.fantasy_team_id = stat_values.fantasy_team_id
+    and side_totals.lineup = stat_values.lineup
 left join unvalued_sides
     on unvalued_sides.platform = stat_values.platform
     and unvalued_sides.league_id = stat_values.league_id

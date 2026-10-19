@@ -9,6 +9,10 @@
    "scoringType": "H2H_MOST_CATEGORIES",
    "playoffMatchupTieRule": "NONE",
    "matchupTieRule": "NONE",
+   "statQualificationMinimum": {
+    "limitValue": 30.0,
+    "statId": 34
+   },
    "scoringItems": [
     {
      "statId": 5,

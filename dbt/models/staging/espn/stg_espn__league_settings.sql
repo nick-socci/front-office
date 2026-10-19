@@ -18,6 +18,17 @@ select
         as playoff_matchup_tie_rule,
     {{ fo_json_text('payload', '$.settings.scoringSettings.matchupTieRule') }}
         as matchup_tie_rule,
+    {{ fo_json_exists('payload', '$.settings.scoringSettings.statQualificationMinimum') }}
+        as has_qualification_minimum,
+    {{ fo_json_int(
+        'payload', '$.settings.scoringSettings.statQualificationMinimum.statId'
+    ) }} as qualification_stat_id,
+    {{ fo_safe_cast(
+        fo_json_string(
+            'payload', '$.settings.scoringSettings.statQualificationMinimum.limitValue'
+        ),
+        fo_type_float()
+    ) }} as qualification_minimum,
     {{ fo_json_int('payload', '$.settings.size') }} as team_count,
     {{ fo_json_int('payload', '$.settings.scheduleSettings.playoffTeamCount') }}
         as playoff_team_count,

@@ -79,6 +79,13 @@ models:
           the log of the current season only), not an empty one (ADR 0056).
         data_type: boolean
         constraints: [{type: not_null}]
+      - name: pitching_minimum_outs
+        description: >
+          The league's pitching minimum in outs per matchup (ADR 0085): the setting's value
+          when it is a minimum on outs recorded (stat 34), else null. A minimum on any other
+          stat fails the build in stg_espn__league_settings_qualification_is_understood. A
+          float, because outs are compared with it exactly.
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -113,6 +120,15 @@ models:
       - name: category_unit
         data_type: string
       - name: is_lower_better
+        data_type: boolean
+        constraints: [{type: not_null}]
+      - name: is_bound_by_minimum
+        description: >
+          True when the league's pitching minimum (ADR 0083) decides the category: every
+          component of its rule in int_fantasy__stat_components is a pitching column, and it
+          has a denominator or is lower better. A side below the minimum loses these (rates
+          and lower-is-better counts); counts such as K, W or CG are decided by value. False
+          for a batting category, and for one with no component rule.
         data_type: boolean
         constraints: [{type: not_null}]
     data_tests:
@@ -1096,6 +1112,12 @@ models:
           Numerator over denominator, or the numerator for a count; null over a zero
           denominator, as in int_fantasy__matchup_stat_values. Deliberately not tested
           not_null.
+      - name: outs_recorded
+        description: >
+          The side's outs recorded under this lineup, repeated on each category row, carried so
+          the lineup mart can judge the optimal lineup against the pitching minimum (spec 0160).
+          Null on an optimal row of a side with an unvalued team-day, like the figures above.
+          Deliberately not tested not_null.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -1277,6 +1299,62 @@ unit_tests:
         - {platform: espn, league_id: "1", season: 2025, has_rosters: false, has_transaction_log: false}
         - {platform: espn, league_id: "2", season: 2026, has_rosters: false, has_transaction_log: false}
         - {platform: espn, league_id: "2", season: 2025, has_rosters: false, has_transaction_log: true}
+
+  - name: pitching_minimum_outs_is_the_minimum_on_outs_only
+    description: >
+      R1.3. Three league-seasons: a minimum of 30 on stat 34 (outs) is 30; a minimum of 5
+      on stat 41 is null, not 5; no minimum is null. Catches a minimum on another stat
+      used as outs, and a missing minimum read as zero.
+    model: int_fantasy__league_seasons
+    given:
+      - input: ref('stg_espn__league_settings')
+        rows:
+          - {league_id: "1", season: 2026, qualification_stat_id: 34, qualification_minimum: 30.0}
+          - {league_id: "2", season: 2026, qualification_stat_id: 41, qualification_minimum: 5.0}
+          - {league_id: "3", season: 2026}
+      - input: ref('stg_espn__roster_entries')
+        rows: []
+      - input: ref('stg_espn__transaction_logs')
+        rows: []
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, pitching_minimum_outs: 30.0}
+        - {platform: espn, league_id: "2", season: 2026, pitching_minimum_outs: null}
+        - {platform: espn, league_id: "3", season: 2026, pitching_minimum_outs: null}
+
+  - name: categories_bound_by_minimum_are_pitching_rates_and_lower_is_better
+    description: >
+      R2.1. Five categories: WHIP-shaped (pitching numerator over outs, lower is better)
+      and L-shaped (pitching numerator, lower is better, no denominator) are bound; K-shaped
+      (a pitching count, higher is better), B_SO-shaped (a batting component, lower is
+      better) and an AVG-shaped batting rate are not. Catches a batting lower-is-better
+      category bound, and a pitching volume category bound.
+    model: int_fantasy__categories
+    given:
+      - input: ref('stg_espn__scoring_categories')
+        rows:
+          - {league_id: "1", season: 2026, stat_id: 1, display_label: WHIP, stat_abbrev: WHIP, is_reverse: true}
+          - {league_id: "1", season: 2026, stat_id: 2, display_label: L, stat_abbrev: L, is_reverse: true}
+          - {league_id: "1", season: 2026, stat_id: 3, display_label: K, stat_abbrev: K, is_reverse: false}
+          - {league_id: "1", season: 2026, stat_id: 4, display_label: B_SO, stat_abbrev: B_SO, is_reverse: true}
+          - {league_id: "1", season: 2026, stat_id: 5, display_label: AVG, stat_abbrev: AVG, is_reverse: false}
+      - input: ref('int_fantasy__stat_components')
+        rows:
+          - {platform: espn, stat_key: 1, part: numerator, component: hits_allowed, weight: 3}
+          - {platform: espn, stat_key: 1, part: numerator, component: pitcher_walks, weight: 3}
+          - {platform: espn, stat_key: 1, part: denominator, component: outs_recorded, weight: 1}
+          - {platform: espn, stat_key: 2, part: numerator, component: losses, weight: 1}
+          - {platform: espn, stat_key: 3, part: numerator, component: pitcher_strikeouts, weight: 1}
+          - {platform: espn, stat_key: 4, part: numerator, component: batter_strikeouts, weight: 1}
+          - {platform: espn, stat_key: 5, part: numerator, component: hits, weight: 1}
+          - {platform: espn, stat_key: 5, part: denominator, component: at_bats, weight: 1}
+    expect:
+      rows:
+        - {category_key: 1, is_bound_by_minimum: true}
+        - {category_key: 2, is_bound_by_minimum: true}
+        - {category_key: 3, is_bound_by_minimum: false}
+        - {category_key: 4, is_bound_by_minimum: false}
+        - {category_key: 5, is_bound_by_minimum: false}
 
   - name: crosswalk_one_row_per_id_named_by_the_latest_snapshot
     description: >
