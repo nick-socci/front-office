@@ -70,6 +70,10 @@ jobs:
       - name: Example queries match their exposures and run
         run: uv run python scripts/check_examples.py --db dbt/ci.duckdb
 
+      - name: Planted failures
+        # Before docs generate, which rewrites dbt/target: this reads the build's manifest.
+        run: uv run python scripts/check_plants.py --db dbt/ci.duckdb
+
       - name: dbt docs generate
         # Quoted for the same reason as dbt build above.
         run: "uv run dbt docs generate --target ci --vars '{anonymize: true}'"
