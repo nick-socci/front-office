@@ -19,6 +19,7 @@ matchup) is shown to fail here, on a copy of the CI warehouse with a row planted
 - Every file needs at least one plant that expects `fail` or `warn`: a file of only `pass`
   plants never shows its test can fail.
 - `_empty_in_ci.yml` lists relations with no row in CI: `relations:` of `relation`
-  (`schema.name`), `reason`, and `link` (an issue or ADR the reason rests on).
+  (`schema.name`), `reason`, and `link` (the issue or ADR the reason rests on, written
+  `#178` or `ADR 0040`; any other text is refused).
 - A generic test whose `where` admits no CI row needs a plant file; an empty relation needs
   an entry in `_empty_in_ci.yml`.

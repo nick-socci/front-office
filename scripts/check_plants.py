@@ -43,6 +43,7 @@ _FILE_KEYS = {"plants"}
 _REQUIRED_PLANT_KEYS = {"name", "why", "sql", "expect"}
 _PLANT_KEYS = _REQUIRED_PLANT_KEYS | {"materialize"}
 _EXEMPTION_KEYS = {"relation", "reason", "link"}
+_LINK = re.compile(r"#\d+|ADR \d{4}")
 _RELATION = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$")
 _ALLOWED = {
     duckdb.StatementType.INSERT: "INSERT",
@@ -171,11 +172,15 @@ def validate_empty_file(content: Any) -> list[str]:
             if not isinstance(entry[key], str) or not entry[key].strip():
                 problems.append(f"{label}: {key!r} must say something")
         relation = entry.get("relation")
-        if isinstance(relation, str) and not _RELATION.match(relation):
-            problems.append(f"{label}: relation must be schema.name")
-        if relation in seen:
-            problems.append(f"{label}: duplicate relation")
-        seen.add(relation)
+        if "relation" in entry and not (isinstance(relation, str) and _RELATION.match(relation)):
+            problems.append(f"{label}: 'relation' must be schema.name")
+        elif isinstance(relation, str):
+            if relation in seen:
+                problems.append(f"{label}: duplicate relation")
+            seen.add(relation)
+        link = entry.get("link")
+        if isinstance(link, str) and link.strip() and not _LINK.fullmatch(link.strip()):
+            problems.append(f"{label}: link must be an issue (#123) or an ADR (ADR 0040)")
     return problems
 
 

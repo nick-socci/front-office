@@ -191,6 +191,28 @@ def test_an_exemption_with_an_unknown_key_or_duplicate_relation_is_reported():
     assert cp.validate_empty_file({"relations": [exemption(), exemption()]}) != []
 
 
+@pytest.mark.parametrize("relation", [[], {}, 3, None])
+def test_a_non_string_relation_is_reported_not_a_crash(relation):
+    """Catches `relation: []` raising TypeError in the duplicate check."""
+    problems = cp.validate_empty_file({"relations": [exemption(relation=relation)] * 2})
+    assert any("'relation' must be schema.name" in x for x in problems)
+
+
+@pytest.mark.parametrize("link", ["#178", " #178 ", "ADR 0040", "ADR 0087"])
+def test_an_issue_or_adr_link_is_accepted(link):
+    """Catches a valid reference being refused."""
+    assert cp.validate_empty_file({"relations": [exemption(link=link)]}) == []
+
+
+@pytest.mark.parametrize(
+    "link", ["see the seed", "dbt/seeds/x.csv", "178", "#", "#12a", "ADR 40", "ADR 0040 and more"]
+)
+def test_a_link_that_is_not_an_issue_or_adr_is_reported(link):
+    """Catches any non-empty text standing as the reference a reason rests on (R1.2)."""
+    problems = cp.validate_empty_file({"relations": [exemption(link=link)]})
+    assert any("link must be an issue (#123) or an ADR (ADR 0040)" in x for x in problems)
+
+
 def test_an_exemption_with_a_blank_reason_is_reported():
     """Catches a reason that says nothing."""
     assert cp.validate_empty_file({"relations": [exemption(reason=" ")]}) != []
