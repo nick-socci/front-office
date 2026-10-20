@@ -1,0 +1,11 @@
+# not_null_fct_matchup_category_scores_result: a verified category has a result. The test is
+# restricted to verified rows and the CI fixtures hold none (spec 0174, C1), so it is shown to
+# fail on one planted.
+plants:
+  - name: verified_row_null_result
+    why: a verified category whose result was dropped
+    sql: >-
+      update marts.fct_matchup_category_scores
+      set has_unverified_inputs = false, result = null
+      where matchup_id = 1 and fantasy_team_id = 6 and category_key = 1
+    expect: {status: fail, failures: 1}

@@ -1,0 +1,44 @@
+# fct_matchup_category_scores_values_have_a_side: both sides of a verified category have a
+# value, unless the pitching minimum decides it (spec 0160, R2.5). The five cases of #173
+# round 2 (spec 0174, C5), each on category 1 of matchup 1 for team 6, made verified.
+plants:
+  - name: null_team_value_neither_side_below
+    why: a dropped side on a verified row the minimum does not decide
+    sql: >-
+      update marts.fct_matchup_category_scores
+      set has_unverified_inputs = false, is_below_minimum = false,
+          is_opponent_below_minimum = false, team_value = null
+      where matchup_id = 1 and fantasy_team_id = 6 and category_key = 1
+    expect: {status: fail, failures: 1}
+  - name: null_team_value_team_below_loses
+    why: a side below the minimum with no rate loses the bound category (R2.5)
+    sql: >-
+      update marts.fct_matchup_category_scores
+      set has_unverified_inputs = false, is_below_minimum = true,
+          is_opponent_below_minimum = false, team_value = null, result = 'LOSS'
+      where matchup_id = 1 and fantasy_team_id = 6 and category_key = 1
+    expect: pass
+  - name: null_team_value_team_below_null_result
+    why: a side below the minimum with no rate and a result still undecided
+    sql: >-
+      update marts.fct_matchup_category_scores
+      set has_unverified_inputs = false, is_below_minimum = true,
+          is_opponent_below_minimum = false, team_value = null, result = null
+      where matchup_id = 1 and fantasy_team_id = 6 and category_key = 1
+    expect: {status: fail, failures: 1}
+  - name: null_team_value_only_opponent_below
+    why: the minimum excuses the opponent's side, not the team's missing value
+    sql: >-
+      update marts.fct_matchup_category_scores
+      set has_unverified_inputs = false, is_below_minimum = false,
+          is_opponent_below_minimum = true, team_value = null, result = 'WIN'
+      where matchup_id = 1 and fantasy_team_id = 6 and category_key = 1
+    expect: {status: fail, failures: 1}
+  - name: null_opponent_value_opponent_below_wins
+    why: an opponent below the minimum with no rate hands the bound category over
+    sql: >-
+      update marts.fct_matchup_category_scores
+      set has_unverified_inputs = false, is_below_minimum = false,
+          is_opponent_below_minimum = true, opponent_value = null, result = 'WIN'
+      where matchup_id = 1 and fantasy_team_id = 6 and category_key = 1
+    expect: pass

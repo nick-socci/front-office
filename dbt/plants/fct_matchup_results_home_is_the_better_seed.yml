@@ -1,0 +1,31 @@
+# fct_matchup_results_home_is_the_better_seed: in a playoff matchup the home side is the better
+# seed (spec 0159). The fixtures hold no playoff matchup (spec 0174, C4), so one is planted:
+# matchup 1 is home 9 (seed 4) against away 6 (seed 1); matchup 2 is home 2 (seed 10) against
+# away 3 (seed 12) (C12).
+plants:
+  - name: home_is_the_worse_seed
+    why: ESPN seats a lower seed at home, so the tiebreak would go to the wrong side
+    sql: >-
+      update marts.fct_matchup_results
+      set playoff_tier = 'WINNERS_BRACKET'
+      where matchup_id = 1
+    expect: {status: fail, failures: 1}
+  - name: home_is_the_better_seed
+    why: the case the test must let through
+    sql: >-
+      update marts.fct_matchup_results
+      set playoff_tier = 'WINNERS_BRACKET'
+      where matchup_id = 2
+    expect: pass
+  - name: a_seed_is_missing
+    why: a team with no row in stg_espn__teams reads as a null seed and must be returned
+    materialize: [staging.stg_espn__teams]
+    sql:
+      - >-
+        update marts.fct_matchup_results
+        set playoff_tier = 'WINNERS_BRACKET'
+        where matchup_id = 2
+      - >-
+        delete from staging.stg_espn__teams
+        where season = 2026 and team_id = 3
+    expect: {status: fail, failures: 1}

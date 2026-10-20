@@ -1,0 +1,11 @@
+# not_null_fct_matchup_results_winner: a verified matchup has a winner. The test is restricted
+# to verified rows and the CI fixtures hold none (spec 0174, C1), so it is shown to fail on one
+# planted.
+plants:
+  - name: verified_matchup_null_winner
+    why: a verified matchup whose winner was dropped
+    sql: >-
+      update marts.fct_matchup_results
+      set has_unverified_inputs = false, winner = null
+      where matchup_id = 1
+    expect: {status: fail, failures: 1}
