@@ -110,8 +110,28 @@ def test_sql_may_be_a_string_or_a_list():
 
 
 def test_expect_pass_is_accepted():
-    """Catches the `pass` form being refused."""
-    assert problems_of(plant(expect="pass")) == []
+    """Catches the `pass` form being refused (beside a plant that fails, as a file needs)."""
+    assert problems_of(plant(), plant(name="q", expect="pass")) == []
+
+
+def test_a_file_of_only_pass_plants_is_reported():
+    """Catches a vacuous test being accounted for without ever being shown to fail (F1)."""
+    problems = problems_of(plant(expect="pass"), plant(name="q", expect="pass"))
+    assert any("no plant expects the test to fail or warn" in x for x in problems)
+
+
+def test_a_file_with_one_fail_and_one_pass_is_not_reported():
+    """Catches the rule being too strict: one fail plant is enough (F1)."""
+    assert problems_of(plant(), plant(name="q", expect="pass")) == []
+    assert problems_of(plant(expect={"status": "warn", "failures": 2})) == []
+
+
+@pytest.mark.parametrize("value", [[], {}, "", "  ", None, 3])
+@pytest.mark.parametrize("key", ["name", "why"])
+def test_name_and_why_must_be_non_empty_strings(key, value):
+    """Catches `name: []` crashing validation and empty text standing as a reason (F3)."""
+    problems = problems_of(plant(**{key: value}))
+    assert any(f"'{key}' must be a non-empty string" in x for x in problems)
 
 
 def test_expect_fail_without_failures_is_refused():
@@ -330,6 +350,48 @@ def test_a_delete_and_an_insert_pass(con):
     assert cp.run_statement(con, "delete from t where a = 1") is None
     assert cp.run_statement(con, "insert into t values (5, 5)") is None
     assert con.execute("select count(*) from t").fetchone() == (2,)
+
+
+def test_an_insert_returning_a_row_passes_the_check(con):
+    """Catches a RETURNING row being read as a count (F2)."""
+    assert cp.run_statement(con, "insert into t values (5, 5) returning a") is None
+    assert con.execute("select count(*) from t").fetchone() == (3,)
+
+
+def test_a_returned_zero_or_null_is_not_a_row_count(con):
+    """Catches the first returned value standing in for the count (F2)."""
+    assert cp.run_statement(con, "insert into t values (0, null) returning b") is None
+    assert cp.run_statement(con, "delete from t where a = 0 returning a") is None
+
+
+def test_a_delete_returning_that_matches_nothing_fails_without_raising(con):
+    """Catches a RETURNING clause crashing the run instead of failing the plant (F2)."""
+    message = cp.run_statement(con, "delete from t where a = 99 returning a, b")
+    assert message is not None and "changed no row" in message
+
+
+def test_a_delete_returning_that_matches_a_row_passes(con):
+    """Catches a real DELETE ... RETURNING being refused (F2)."""
+    assert cp.run_statement(con, "delete from t where a = 1 returning a") is None
+
+
+@pytest.mark.parametrize("target", ["t(a, b)", "t (a, b)", "main.t(a, b)", "main.t (a, b)"])
+def test_an_insert_with_a_column_list_finds_its_table(con, target):
+    """Catches the column list being read into the table name, in either spacing (F2)."""
+    assert cp.run_statement(con, f"insert into {target} values (7, 8)") is None
+
+
+def test_an_insert_or_replace_finds_its_table(con):
+    """Catches the `or <word>` form losing its table (F2)."""
+    con.execute("create table u (a integer primary key, b integer)")
+    con.execute("insert into u values (1, 1)")
+    assert cp.run_statement(con, "insert or replace into u values (1, 2)") is None
+
+
+def test_a_delete_leaves_no_before_image_behind(con):
+    """Catches the helper table leaking after a DELETE (F2)."""
+    cp.run_statement(con, "delete from t where a = 1")
+    assert con.execute("select count(*) from duckdb_tables() where not internal").fetchone() == (1,)
 
 
 def test_an_insert_that_inserts_nothing_fails(con):

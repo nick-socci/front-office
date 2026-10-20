@@ -52,7 +52,11 @@ _ALLOWED = {
 # Comments are removed (string literals are kept) so that the UPDATE's target table is found
 # even when the entry opens with a comment.
 _COMMENT = re.compile(r"(/\*.*?\*/|--[^\n]*)|'(?:[^']|'')*'", re.DOTALL)
-_UPDATE_TARGET = re.compile(r"^\s*update\s+(?:only\s+)?([A-Za-z0-9_.\"]+)", re.IGNORECASE)
+_TARGET = re.compile(
+    r"^\s*(?:update\s+(?:only\s+)?|insert\s+(?:or\s+\w+\s+)?into\s+|delete\s+from\s+)"
+    r"([A-Za-z0-9_.\"]+)",
+    re.IGNORECASE,
+)
 _BEFORE_IMAGE = "__plant_before"
 
 
@@ -105,6 +109,7 @@ def validate_plant_file(stem: str, content: Any) -> list[str]:
     if not isinstance(plants, list) or not plants:
         return [*problems, f"{stem}: `plants` must be a non-empty list"]
     seen: set[Any] = set()
+    can_fail = False
     for index, plant in enumerate(plants, start=1):
         if not isinstance(plant, dict):
             problems.append(f"{stem}: plant {index} must be a mapping")
@@ -114,12 +119,18 @@ def validate_plant_file(stem: str, content: Any) -> list[str]:
             f"{label}: missing key {k!r}" for k in sorted(_REQUIRED_PLANT_KEYS - set(plant))
         ]
         problems += [f"{label}: unknown key {k!r}" for k in sorted(set(plant) - _PLANT_KEYS)]
-        if "name" in plant:
+        for key in ("name", "why"):
+            if key in plant and not (isinstance(plant[key], str) and plant[key].strip()):
+                problems.append(f"{label}: {key!r} must be a non-empty string")
+        if isinstance(plant.get("name"), str) and plant["name"].strip():
             if plant["name"] in seen:
                 problems.append(f"{label}: duplicate plant name")
             seen.add(plant["name"])
-        if "expect" in plant and (message := _expect_problem(plant["expect"])):
-            problems.append(f"{label}: {message}")
+        if "expect" in plant:
+            if message := _expect_problem(plant["expect"]):
+                problems.append(f"{label}: {message}")
+            elif plant["expect"] != "pass":
+                can_fail = True
         if "sql" in plant:
             statements = _statements(plant["sql"])
             if statements is None:
@@ -134,6 +145,8 @@ def validate_plant_file(stem: str, content: Any) -> list[str]:
                 isinstance(v, str) and _RELATION.match(v) for v in views
             ):
                 problems.append(f"{label}: materialize must be a list of schema.relation")
+    if not can_fail:
+        problems.append(f"{stem}: no plant expects the test to fail or warn")
     return problems
 
 
@@ -249,32 +262,31 @@ def _short(sql: str) -> str:
 def run_statement(con: duckdb.DuckDBPyConnection, sql: str) -> str | None:
     """Run one plant statement; return why it changed no row, or None if it changed one.
 
-    An INSERT or DELETE is judged by DuckDB's row count. An UPDATE is not: DuckDB counts a
-    row it matched even when it set the values the row already had, so the UPDATE is judged
-    by the rows of `after EXCEPT ALL before` (R2.3).
+    Every kind is judged the same way, by the target table before and after:
+    `count(after EXCEPT ALL before) + count(before EXCEPT ALL after)` must be at least one
+    (R2.3). DuckDB counts a row an UPDATE matched even when it set the values the row
+    already had, so its row count cannot show that. The statement's own result rows are
+    never read: a RETURNING clause would turn them into something other than a count.
     """
     try:
-        kind = _ALLOWED[duckdb.extract_statements(sql)[0].type]
-        if kind != "UPDATE":
-            row = con.execute(sql).fetchone()
+        stripped = _COMMENT.sub(lambda m: " " if m.group(1) else m.group(0), sql)
+        match = _TARGET.match(stripped)
+        if match is None:
+            return f"cannot find the table of: {_short(sql)}"
+        table = match.group(1)
+        con.execute(f"create temp table {_BEFORE_IMAGE} as select * from {table}")
+        try:
+            con.execute(sql)
+            row = con.execute(
+                f"select (select count(*) from (select * from {table} "
+                f"except all select * from {_BEFORE_IMAGE})) "
+                f"+ (select count(*) from (select * from {_BEFORE_IMAGE} "
+                f"except all select * from {table}))"
+            ).fetchone()
             changed = int(row[0]) if row else 0
-        else:
-            stripped = _COMMENT.sub(lambda m: " " if m.group(1) else m.group(0), sql)
-            match = _UPDATE_TARGET.match(stripped)
-            if match is None:
-                return f"cannot find the table of: {_short(sql)}"
-            table = match.group(1)
-            con.execute(f"create temp table {_BEFORE_IMAGE} as select * from {table}")
-            try:
-                con.execute(sql)
-                row = con.execute(
-                    f"select count(*) from (select * from {table} "
-                    f"except all select * from {_BEFORE_IMAGE})"
-                ).fetchone()
-                changed = int(row[0]) if row else 0
-            finally:
-                con.execute(f"drop table if exists {_BEFORE_IMAGE}")
-    except (duckdb.Error, IndexError) as exc:
+        finally:
+            con.execute(f"drop table if exists {_BEFORE_IMAGE}")
+    except duckdb.Error as exc:
         return f"failed ({exc}): {_short(sql)}"
     if changed < 1:
         return f"changed no row: {_short(sql)}"

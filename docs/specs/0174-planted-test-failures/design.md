@@ -338,3 +338,12 @@ That is 9 plant files and 24 plants: 20 `fail` and 4 `pass`. Each branch of a `u
 - **2026-10-20, during task 3: a plant file may name any data test.** The stale-name check
   (R1.3) reads every test node of the manifest, not only the generic ones. A singular test
   is never found by detection, but it can have plants (R4.2).
+- **2026-10-20, pre-PR review F1: every plant file holds at least one `fail` or `warn`
+  plant.** A file of only `pass` plants would account for a vacuous test (R3.2) without
+  ever showing it can fail. Validation reports `<test>: no plant expects the test to fail
+  or warn`. Within the goals; no decision changes.
+- **2026-10-20, pre-PR review F2: INSERT and DELETE are judged like UPDATE.** Each
+  statement is judged by its table before and after, counting `after EXCEPT ALL before`
+  plus `before EXCEPT ALL after`, which must be at least one (R2.3). A statement's result
+  rows are never read, so a `RETURNING` clause cannot be taken for a row count. Within the
+  goals; no decision changes.

@@ -13,8 +13,11 @@ matchup) is shown to fail here, on a copy of the CI warehouse with a row planted
   exact failure count for that one test, run on the copy.
 - `materialize: [schema.view]` turns a view into a table of the same name and rows first,
   in the copy only, so that a statement can change it.
-- A plant that changes no row fails by name; an UPDATE that sets the values a row already
-  has changes nothing.
+- A plant that changes no row fails by name. Every statement is judged by its table before
+  and after (rows added plus rows removed or changed), so an UPDATE that sets the values a
+  row already has changes nothing, and a RETURNING clause is never read as a count.
+- Every file needs at least one plant that expects `fail` or `warn`: a file of only `pass`
+  plants never shows its test can fail.
 - `_empty_in_ci.yml` lists relations with no row in CI: `relations:` of `relation`
   (`schema.name`), `reason`, and `link` (an issue or ADR the reason rests on).
 - A generic test whose `where` admits no CI row needs a plant file; an empty relation needs
