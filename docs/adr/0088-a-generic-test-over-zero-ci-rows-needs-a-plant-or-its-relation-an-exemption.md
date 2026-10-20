@@ -1,6 +1,6 @@
 # 0088. A generic test over zero CI rows needs a plant, or its relation an exemption
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-20
 - Spec: [0174-planted-test-failures](../specs/0174-planted-test-failures/design.md) · Issue: #174
 

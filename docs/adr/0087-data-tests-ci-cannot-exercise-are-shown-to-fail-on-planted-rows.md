@@ -1,6 +1,6 @@
 # 0087. A data test CI cannot exercise is shown to fail on a planted row
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-20
 - Spec: [0174-planted-test-failures](../specs/0174-planted-test-failures/design.md) · Issue: #174
 
