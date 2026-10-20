@@ -1,0 +1,25 @@
+# Relations with no row in the CI warehouse (spec 0174, R1.2, ADR 0088). Each generic test
+# on one reads nothing in CI, so the relation is exempt instead of every test getting a plant.
+# The gate fails if a relation listed here has rows, so an entry cannot outlive its reason.
+relations:
+  - relation: staging.stg_espn__matchup_days
+    reason: the CI fixtures hold no espn/matchup_days capture
+    link: "#178"
+  - relation: staging.stg_espn__matchup_player_lines
+    reason: reads stg_espn__matchup_days, which is empty in CI
+    link: "#178"
+  - relation: reconciliation.rec_espn__register_rows
+    reason: the register names real leagues only; CI loads the fixture league
+    link: dbt/seeds/espn_reconciliation_residuals.csv (by design)
+  - relation: reconciliation.rec_espn__player_day_residuals
+    reason: counts player-day differences on verified sides; CI has none
+    link: ADR 0087
+  - relation: reconciliation.rec_espn__winner_differences
+    reason: reads verified results; CI has none
+    link: ADR 0087
+  - relation: reconciliation.rec_fantasy__category_wins_added
+    reason: rescores verified matchups only; CI has none
+    link: ADR 0087
+  - relation: reconciliation.rec_fantasy__category_wins_by_group
+    reason: built on rec_fantasy__category_wins_added, which is empty in CI
+    link: ADR 0087
