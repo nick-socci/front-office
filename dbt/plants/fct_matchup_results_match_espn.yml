@@ -1,0 +1,24 @@
+# fct_matchup_results_match_espn: our category results and winners equal ESPN's (#10). Every CI
+# row is unverified (spec 0174, C4), so both branches of the test's union are planted: the
+# category results and the winners.
+plants:
+  - name: unexplained_category_result
+    why: a category result that differs from ESPN's with no explained residual
+    sql: >-
+      update reconciliation.rec_espn__category_result_differences
+      set status = 'unexplained'
+      where (matchup_id, fantasy_team_id, category_key) in (
+          select matchup_id, fantasy_team_id, category_key
+          from reconciliation.rec_espn__category_result_differences
+          order by matchup_id, fantasy_team_id, category_key
+          limit 1)
+    expect: {status: fail, failures: 1}
+  - name: winner_differs
+    why: a winner that differs with a category behind it that is not explained (the second branch)
+    materialize: [reconciliation.rec_espn__winner_differences]
+    sql: >-
+      insert into reconciliation.rec_espn__winner_differences
+          (league_id, season, matchup_id, our_winner, espn_winner, differing_categories,
+           explained_categories, problem)
+      values ('111111', 2026, 1, 'HOME', 'AWAY', 1, 0, 'category_unexplained')
+    expect: {status: fail, failures: 1}

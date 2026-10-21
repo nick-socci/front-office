@@ -1,0 +1,28 @@
+# stg_espn__league_settings_tie_rules_are_understood: a league-season with rosters uses ESPN's
+# default tie rule, 'NONE' (ADR 0082). CI has only that rule (spec 0174, C13): 2026 has
+# rosters, 2025 does not.
+plants:
+  - name: playoff_rule_other_than_none
+    why: a league that sets another rule would have the models apply the default silently
+    materialize: [staging.stg_espn__league_settings]
+    sql: >-
+      update staging.stg_espn__league_settings
+      set playoff_matchup_tie_rule = 'PLANTED_RULE'
+      where season = 2026
+    expect: {status: fail, failures: 1}
+  - name: null_rule
+    why: a capture without the setting is not known to use the default
+    materialize: [staging.stg_espn__league_settings]
+    sql: >-
+      update staging.stg_espn__league_settings
+      set matchup_tie_rule = null
+      where season = 2026
+    expect: {status: fail, failures: 1}
+  - name: unknown_rule_in_a_season_without_rosters
+    why: the case the test must let through, since no model applies the rule to that season
+    materialize: [staging.stg_espn__league_settings]
+    sql: >-
+      update staging.stg_espn__league_settings
+      set playoff_matchup_tie_rule = 'PLANTED_RULE'
+      where season = 2025
+    expect: pass

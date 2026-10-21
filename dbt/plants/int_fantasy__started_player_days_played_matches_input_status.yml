@@ -1,0 +1,26 @@
+# int_fantasy__started_player_days_played_matches_input_status: `played` agrees with a settled
+# input_status. The test reads only 'played' and 'verified_off' days and every CI fixture day is
+# 'missing_boxscore' (spec 0174, C1), so each direction is planted on the first started day.
+plants:
+  - name: played_status_without_a_game
+    why: a day marked played that has no game
+    sql: >-
+      update intermediate.int_fantasy__started_player_days
+      set input_status = 'played', played = false
+      where (scoring_date, fantasy_team_id, platform_player_id) in (
+          select scoring_date, fantasy_team_id, platform_player_id
+          from intermediate.int_fantasy__started_player_days
+          order by scoring_date, fantasy_team_id, platform_player_id
+          limit 1)
+    expect: {status: fail, failures: 1}
+  - name: off_status_with_a_game
+    why: a day verified off that has a game
+    sql: >-
+      update intermediate.int_fantasy__started_player_days
+      set input_status = 'verified_off', played = true
+      where (scoring_date, fantasy_team_id, platform_player_id) in (
+          select scoring_date, fantasy_team_id, platform_player_id
+          from intermediate.int_fantasy__started_player_days
+          order by scoring_date, fantasy_team_id, platform_player_id
+          limit 1)
+    expect: {status: fail, failures: 1}

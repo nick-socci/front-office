@@ -324,4 +324,26 @@ That is 9 plant files and 24 plants: 20 `fail` and 4 `pass`. Each branch of a `u
 
 ## Amendments
 
-None.
+- **2026-10-20, during task 3: each plant's copy gets a path of its own.** The design had
+  one copy path for every plant, so that the profile would not change. But dbt-duckdb
+  (1.11.0) keeps its DuckDB environment open between in-process invocations, and builds
+  a new one only when the credentials differ (`connections.py`, `cls._ENV.creds !=
+  credentials`). With one path, the second plant's dbt read the first copy's pages, and
+  the plant was judged on the wrong file. Each plant now copies to
+  `<scratch>/plant_<n>/ci.duckdb`. It is still named `ci.duckdb`, so its views keep their
+  catalog. The changed path makes dbt-duckdb close the old environment itself, so nothing
+  private is touched. Shown on three plants in a row on one row and on two: `fail 1`,
+  `fail 2`, `fail 1`; the third repeats the first's UPDATE and still changed a row.
+  `--target-path` stays shared. Within the goals; no decision changes.
+- **2026-10-20, during task 3: a plant file may name any data test.** The stale-name check
+  (R1.3) reads every test node of the manifest, not only the generic ones. A singular test
+  is never found by detection, but it can have plants (R4.2).
+- **2026-10-20, pre-PR review F1: every plant file holds at least one `fail` or `warn`
+  plant.** A file of only `pass` plants would account for a vacuous test (R3.2) without
+  ever showing it can fail. Validation reports `<test>: no plant expects the test to fail
+  or warn`. Within the goals; no decision changes.
+- **2026-10-20, pre-PR review F2: INSERT and DELETE are judged like UPDATE.** Each
+  statement is judged by its table before and after, counting `after EXCEPT ALL before`
+  plus `before EXCEPT ALL after`, which must be at least one (R2.3). A statement's result
+  rows are never read, so a `RETURNING` clause cannot be taken for a row count. Within the
+  goals; no decision changes.

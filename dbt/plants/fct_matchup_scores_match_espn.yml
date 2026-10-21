@@ -1,0 +1,35 @@
+# fct_matchup_scores_match_espn: our matchup stats equal ESPN's scoreByStat, or differ by a
+# registered residual (#10). Every CI row is unverified (spec 0174, C4), so both branches of
+# the test's union are planted: the stat differences and the register rows.
+plants:
+  - name: unexplained_stat_difference
+    why: a stat that differs from ESPN's with no registered cause
+    sql: >-
+      update reconciliation.rec_espn__matchup_stat_differences
+      set status = 'unexplained'
+      where (matchup_id, fantasy_team_id, stat_key) in (
+          select matchup_id, fantasy_team_id, stat_key
+          from reconciliation.rec_espn__matchup_stat_differences
+          order by matchup_id, fantasy_team_id, stat_key
+          limit 1)
+    expect: {status: fail, failures: 1}
+  - name: formula_mismatch
+    why: a rate our formula cannot reproduce from ESPN's own components
+    sql: >-
+      update reconciliation.rec_espn__matchup_stat_differences
+      set status = 'formula_mismatch'
+      where (matchup_id, fantasy_team_id, stat_key) in (
+          select matchup_id, fantasy_team_id, stat_key
+          from reconciliation.rec_espn__matchup_stat_differences
+          order by matchup_id, fantasy_team_id, stat_key
+          limit 1)
+    expect: {status: fail, failures: 1}
+  - name: register_row_explains_nothing
+    why: a register row whose residual no longer exists (the test's second branch)
+    materialize: [reconciliation.rec_espn__register_rows]
+    sql: >-
+      insert into reconciliation.rec_espn__register_rows
+          (league_id, season, matchup_id, team_id, stat_id, expected_difference, cause,
+           reconciliation_status, problem)
+      values ('111111', 2026, 1, 6, 1, 1.0, 'planted', null, 'explains_nothing')
+    expect: {status: fail, failures: 1}

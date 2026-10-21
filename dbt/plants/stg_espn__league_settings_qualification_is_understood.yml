@@ -1,0 +1,37 @@
+# stg_espn__league_settings_qualification_is_understood: a league-season with rosters has no
+# pitching minimum, or one the models can apply: outs (stat 34), in a head-to-head league
+# (ADRs 0083, 0085). CI holds only that case. The four ways to fail, as proved by hand on #160
+# (spec 0174, C5), each on 2026, which has rosters (C13).
+plants:
+  - name: minimum_on_another_stat
+    why: a minimum on a stat other than outs would be applied as a guess
+    materialize: [staging.stg_espn__league_settings]
+    sql: >-
+      update staging.stg_espn__league_settings
+      set qualification_stat_id = 41
+      where season = 2026
+    expect: {status: fail, failures: 1}
+  - name: minimum_in_a_roto_league
+    why: a minimum while the scoring type is not head-to-head
+    materialize: [staging.stg_espn__league_settings]
+    sql: >-
+      update staging.stg_espn__league_settings
+      set scoring_type = 'ROTO'
+      where season = 2026
+    expect: {status: fail, failures: 1}
+  - name: minimum_with_a_null_stat
+    why: a minimum whose stat did not parse, which must not read as no minimum
+    materialize: [staging.stg_espn__league_settings]
+    sql: >-
+      update staging.stg_espn__league_settings
+      set qualification_stat_id = null
+      where season = 2026
+    expect: {status: fail, failures: 1}
+  - name: stat_with_a_null_limit
+    why: a stat with no limit
+    materialize: [staging.stg_espn__league_settings]
+    sql: >-
+      update staging.stg_espn__league_settings
+      set qualification_minimum = null
+      where season = 2026
+    expect: {status: fail, failures: 1}

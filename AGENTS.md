@@ -125,6 +125,10 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
   (`amended by`, `superseded by`); the tests fail otherwise.
 - Tests before models; say what each test is expected to catch. Never weaken a test to
   make it pass — a failing test is usually telling you something true about the data.
+- A data test whose failing case the CI fixtures can't hold gets a plant in `dbt/plants/`
+  (spec 0174). The gate finds generic ones itself; a singular one is its author's to add.
+  The plants that prove a new test can fail are committed there, not run by hand. A
+  relation empty in CI needs a reason in `dbt/plants/_empty_in_ci.yml`.
 - Every model opens with a comment block explaining *why*; CTEs are named for what they
   hold; columns are `snake_case`.
 - Correct against fixtures is not correct. Anything that produces numbers is also built
