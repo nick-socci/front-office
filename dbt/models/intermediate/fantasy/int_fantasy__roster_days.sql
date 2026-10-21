@@ -9,7 +9,7 @@
 --
 -- mlbam_player_id is left nullable even though nothing is null in 2026. The crosswalk
 -- resolves 55,315 of 55,653 roster days by id and the unambiguous-name fallback covers
--- the remaining 338, including the nine players the crosswalk test warns about -- so
+-- the remaining 338, including the players the SFBB map has no row for -- so
 -- every roster day currently resolves. Making the column NOT NULL would encode that as
 -- a guarantee, and it is not one: the SFBB map lags for late call-ups, so next season a
 -- player can appear here with no id. Keeping it nullable with player_resolution marked
