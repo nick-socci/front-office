@@ -111,7 +111,7 @@ build teaches people to stop reading warnings.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0089](../../adr/0089-the-id-map-coverage-test-fails-on-a-league-seasons-share-of-uncovered-started-players.md) | The id-map coverage test guards the map, per league-season, failing above 5% of started players, with no warning below. Chosen by the owner, 2026-10-20 | proposed (accepted on approval of this spec) |
+| [0089](../../adr/0089-the-id-map-coverage-test-fails-on-a-league-seasons-share-of-uncovered-started-players.md) | The id-map coverage test guards the map, per league-season, failing above 5% of started players, with no warning below. Chosen by the owner, 2026-10-20 | accepted |
 
 ## Detailed design
 
