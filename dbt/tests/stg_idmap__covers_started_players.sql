@@ -1,22 +1,55 @@
--- How many players who actually scored cannot be resolved to an MLBAM id.
+-- Each league-season whose started players the SFBB map has no row for, above 5%.
 --
--- Warns rather than fails, because the gap is real and outside our control: the SFBB
--- map lags for players called up late. On the 2026 season this returns 9 players out of
--- 493 rostered (99.41% of started entries resolve by id). They are genuine major
--- leaguers -- Michael Petersen pitched 64 games -- so consumers fall back to an
--- unambiguous name match (see docs/examples/roster_day_query.sql).
+-- This guards the map, not the values. The name fallback would resolve 97 to 99.8% of
+-- started players even with no map at all, so a test of unresolved players cannot see the
+-- map break; that is the job of dim_player_league_seasons_rostered_players_are_resolved.
+-- An empty or broken map is 100% here.
 --
--- It errors if the gap grows past 25 players, which would mean the map itself broke
--- rather than lagging.
+-- Each league-season is judged on its own players, so loading another season cannot move
+-- the test toward failing, and a broken season is not diluted by healthy ones.
+--
+-- The limit is 5%. The worst real share is 1.87% (9 of 481 started players, 2026). A map
+-- frozen a season earlier is put at 7 to 13% by a debut-based proxy (design C8), so 5%
+-- sits between the two. The gap that exists comes mostly from map rows with a blank ESPN
+-- id: of the 24 players, 15 have an SFBB row with a blank ESPN id, 2 a row under another
+-- ESPN id, and 7 no row at all (design C4). Each resolves by name, which marks it
+-- player_resolution = 'unambiguous_name'; this test does not warn on them.
+--
+-- ADR 0089, spec 0177.
 
-{{ config(severity='error', warn_if='>0', error_if='>25') }}
+{{ config(severity='error') }}
 
-select distinct
-    entries.espn_player_id,
-    entries.player_name
-from {{ ref('stg_espn__roster_entries') }} as entries
-left join {{ ref('stg_idmap__players') }} as crosswalk
-    on crosswalk.espn_player_id = entries.espn_player_id
-where
-    crosswalk.mlbam_player_id is null
-    and entries.lineup_slot not in ('BE', 'IL')
+with started_players as (
+
+    select distinct
+        entries.league_id,
+        entries.season,
+        entries.espn_player_id
+    from {{ ref('stg_espn__roster_entries') }} as entries
+    inner join {{ ref('espn_lineup_slots') }} as slots
+        on slots.lineup_slot_id = entries.lineup_slot_id
+    where slots.is_starting_slot
+
+),
+
+coverage as (
+
+    select
+        started_players.league_id,
+        started_players.season,
+        count(*) as started_players,
+        count(case when crosswalk.espn_player_id is null then 1 end) as uncovered_players
+    from started_players
+    left join {{ ref('stg_idmap__players') }} as crosswalk
+        on crosswalk.espn_player_id = started_players.espn_player_id
+    group by started_players.league_id, started_players.season
+
+)
+
+select
+    league_id,
+    season,
+    started_players,
+    uncovered_players
+from coverage
+where 100 * uncovered_players > 5 * started_players
