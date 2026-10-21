@@ -1,0 +1,95 @@
+# stg_idmap__covers_started_players: no league-season starts more than 5% of its players without
+# a row in the SFBB map (ADR 0089, spec 0177). CI holds 0 uncovered of 260 started players
+# (design C9), so the test never fails there on its own. Each plant deletes the map rows of a
+# number of started players computed from the fixture, chosen among started players that have a
+# map row, in espn_player_id order (design C12: the first map ids, unrestricted, hold only 12
+# started players). The map is a view, so each plant materializes it.
+plants:
+  - name: map_misses_more_than_a_twentieth
+    why: a map that lost the rows of just over 5% of a league-season's started players (14 of 260)
+    materialize: [staging.stg_idmap__players]
+    sql: >-
+      delete from staging.stg_idmap__players
+      where espn_player_id in (
+          select espn_player_id
+          from (
+              select distinct entries.espn_player_id
+              from staging.stg_espn__roster_entries as entries
+              inner join main.espn_lineup_slots as slots
+                  on slots.lineup_slot_id = entries.lineup_slot_id
+              where slots.is_starting_slot
+          ) as started
+          where espn_player_id in (select espn_player_id from staging.stg_idmap__players)
+          order by espn_player_id
+          limit (
+              select count(distinct entries.espn_player_id) * 5 // 100 + 1
+              from staging.stg_espn__roster_entries as entries
+              inner join main.espn_lineup_slots as slots
+                  on slots.lineup_slot_id = entries.lineup_slot_id
+              where slots.is_starting_slot))
+    expect: {status: fail, failures: 1}
+  - name: map_misses_exactly_a_twentieth
+    why: >-
+      a map that lost exactly 5% of a league-season's started players (13 of 260) is at the
+      limit and passes. It sits exactly at the limit only while 5% of the fixture's started
+      count is whole (it is for 260); otherwise it deletes floor(5%) and sits just under it.
+    materialize: [staging.stg_idmap__players]
+    sql: >-
+      delete from staging.stg_idmap__players
+      where espn_player_id in (
+          select espn_player_id
+          from (
+              select distinct entries.espn_player_id
+              from staging.stg_espn__roster_entries as entries
+              inner join main.espn_lineup_slots as slots
+                  on slots.lineup_slot_id = entries.lineup_slot_id
+              where slots.is_starting_slot
+          ) as started
+          where espn_player_id in (select espn_player_id from staging.stg_idmap__players)
+          order by espn_player_id
+          limit (
+              select count(distinct entries.espn_player_id) * 5 // 100
+              from staging.stg_espn__roster_entries as entries
+              inner join main.espn_lineup_slots as slots
+                  on slots.lineup_slot_id = entries.lineup_slot_id
+              where slots.is_starting_slot))
+    expect: pass
+  - name: map_is_empty
+    why: a map that broke entirely, so every started player is uncovered (100%)
+    materialize: [staging.stg_idmap__players]
+    sql: delete from staging.stg_idmap__players
+    expect: {status: fail, failures: 1}
+  - name: a_healthy_league_season_does_not_dilute_another
+    why: >-
+      a league-season over the limit still fails when another league-season is healthy. A count
+      pooled across league-seasons would see 14 of 506 (2.8%) and pass.
+    materialize: [staging.stg_idmap__players]
+    sql:
+      - >-
+        delete from staging.stg_idmap__players
+        where espn_player_id in (
+            select espn_player_id
+            from (
+                select distinct entries.espn_player_id
+                from staging.stg_espn__roster_entries as entries
+                inner join main.espn_lineup_slots as slots
+                    on slots.lineup_slot_id = entries.lineup_slot_id
+                where slots.is_starting_slot
+            ) as started
+            where espn_player_id in (select espn_player_id from staging.stg_idmap__players)
+            order by espn_player_id
+            limit (
+                select count(distinct entries.espn_player_id) * 5 // 100 + 1
+                from staging.stg_espn__roster_entries as entries
+                inner join main.espn_lineup_slots as slots
+                    on slots.lineup_slot_id = entries.lineup_slot_id
+                where slots.is_starting_slot))
+      - >-
+        insert into staging.stg_espn__roster_entries
+        select * replace ('222222' as league_id)
+        from staging.stg_espn__roster_entries
+        where league_id = '111111'
+            and lineup_slot_id in (
+                select lineup_slot_id from main.espn_lineup_slots where is_starting_slot)
+            and espn_player_id in (select espn_player_id from staging.stg_idmap__players)
+    expect: {status: fail, failures: 1}

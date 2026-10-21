@@ -192,7 +192,7 @@ fixtures are regenerated with another count. With 260 started, 5% is 13 players.
 | `map_misses_more_than_a_twentieth` | `started * 5 // 100 + 1` started players (14) | `{status: fail, failures: 1}` |
 | `map_misses_exactly_a_twentieth` | `started * 5 // 100` started players (13), and `started * 5 % 100 = 0` holds for 260 | `pass` |
 | `map_is_empty` | every row | `{status: fail, failures: 1}` |
-| `a_healthy_league_season_does_not_dilute_another` | as the first plant (14), then inserts into the materialized `staging.stg_espn__roster_entries` a copy of the fixture's started entries of still-covered players under another `league_id` | `{status: fail, failures: 1}`: only league 111111. A pooled count would see 14 of 506 (2.8%) and pass |
+| `a_healthy_league_season_does_not_dilute_another` | as the first plant (14), then inserts into `staging.stg_espn__roster_entries` a copy of the fixture's started entries of still-covered players under another `league_id` | `{status: fail, failures: 1}`: only league 111111. A pooled count would see 14 of 506 (2.8%) and pass |
 
 The rows deleted are chosen by `espn_player_id` order among started players, so the
 choice is deterministic. If the fixture's started count changes so that 5% is not a whole
@@ -254,3 +254,8 @@ name. Comment only; the model's SQL does not change.
 | design-review | F5: C7 uses today's map, so it is no evidence about early-season maps | C7 reworded; the possible early-season failure added under *Risks* |
 
 ## Amendments
+
+- **2026-10-21 (build).** `staging.stg_espn__roster_entries` is a table (`materialized='table'`),
+  not a view, so the dilution plant inserts into it directly and materializes only
+  `staging.stg_idmap__players`. The harness refuses to materialize a relation that is not a
+  view. Nothing else changes.

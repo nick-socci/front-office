@@ -8,7 +8,7 @@ recorded on #177 during the build, and this file is not edited to show it.
 1. Write `dbt/plants/stg_idmap__covers_started_players.yml` with the four plants of
    design.md (`map_misses_more_than_a_twentieth`, `map_misses_exactly_a_twentieth`,
    `map_is_empty`, `a_healthy_league_season_does_not_dilute_another`). Each materializes
-   `staging.stg_idmap__players` (the last also `staging.stg_espn__roster_entries`), and
+   `staging.stg_idmap__players` (see the design's 2026-10-21 amendment), and
    picks among started players with counts computed from the fixture — `impl` — R3.1,
    R3.2, R3.3, R3.4, R1.3
    - Verify: `uv run python scripts/check_plants.py --db dbt/ci.duckdb` after a CI build
