@@ -93,3 +93,37 @@ plants:
                 select lineup_slot_id from main.espn_lineup_slots where is_starting_slot)
             and espn_player_id in (select espn_player_id from staging.stg_idmap__players)
     expect: {status: fail, failures: 1}
+  - name: a_healthy_season_of_the_same_league_does_not_dilute_another
+    why: >-
+      a season over the limit still fails when another season of the same league is healthy. A
+      count grouped by league alone would see 14 of 506 (2.8%) and pass.
+    materialize: [staging.stg_idmap__players]
+    sql:
+      - >-
+        delete from staging.stg_idmap__players
+        where espn_player_id in (
+            select espn_player_id
+            from (
+                select distinct entries.espn_player_id
+                from staging.stg_espn__roster_entries as entries
+                inner join main.espn_lineup_slots as slots
+                    on slots.lineup_slot_id = entries.lineup_slot_id
+                where slots.is_starting_slot
+            ) as started
+            where espn_player_id in (select espn_player_id from staging.stg_idmap__players)
+            order by espn_player_id
+            limit (
+                select count(distinct entries.espn_player_id) * 5 // 100 + 1
+                from staging.stg_espn__roster_entries as entries
+                inner join main.espn_lineup_slots as slots
+                    on slots.lineup_slot_id = entries.lineup_slot_id
+                where slots.is_starting_slot))
+      - >-
+        insert into staging.stg_espn__roster_entries
+        select * replace (2025 as season)
+        from staging.stg_espn__roster_entries
+        where league_id = '111111'
+            and lineup_slot_id in (
+                select lineup_slot_id from main.espn_lineup_slots where is_starting_slot)
+            and espn_player_id in (select espn_player_id from staging.stg_idmap__players)
+    expect: {status: fail, failures: 1}
