@@ -1,0 +1,22 @@
+# fct_lineup_decisions_change_nothing_when_nothing_is_gained: a team-period whose optimal
+# lineups gain nothing changes no player (spec 0164, R4.3, ADR 0092). The fixtures hold 12
+# team-periods (league 111111, season 2026, matchup period 1, teams 1 to 12, three days each);
+# every period with a change gains, so churn on a tie is planted. Team 3 gains nothing and
+# changes nothing; team 1 gains 6.19 on 2026-04-24 and 0 on the other days.
+plants:
+  - name: churn_in_a_period_with_no_gain
+    why: a bench player of equal value swapped in for no gain is churn on a tie
+    sql: >-
+      update marts.fct_lineup_decisions
+      set value_gap = 0, players_brought_in = 1
+      where fantasy_team_id = 3 and scoring_date = '2026-04-29'
+    expect: {status: fail, failures: 1}
+  - name: churn_on_a_zero_gap_day_in_a_period_that_gains
+    why: >-
+      the period is chosen as a whole, so a day whose own gap is 0 may change a player where
+      the period gains; a test per team-day would fail here
+    sql: >-
+      update marts.fct_lineup_decisions
+      set players_brought_in = 1
+      where fantasy_team_id = 1 and scoring_date = '2026-04-29'
+    expect: pass

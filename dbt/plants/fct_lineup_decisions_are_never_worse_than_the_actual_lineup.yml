@@ -1,0 +1,22 @@
+# fct_lineup_decisions_are_never_worse_than_the_actual_lineup: the optimal lineup is never
+# worse than the actual one, judged per team-period (spec 0164, R4.1, ADR 0092). The fixtures
+# hold 12 team-periods (league 111111, season 2026, matchup period 1, teams 1 to 12, three
+# days each) and every optimal lineup gains or ties, so a negative period gap is planted.
+# Team 2 has +1.048 on 2026-04-29 and 0 on the other days.
+plants:
+  - name: the_period_sums_below_zero
+    why: an optimum below the actual lineup over the period is a wrong matrix or a wrong sum
+    sql: >-
+      update marts.fct_lineup_decisions
+      set value_gap = -1
+      where fantasy_team_id = 1
+    expect: {status: fail, failures: 1}
+  - name: one_day_below_zero_in_a_period_that_gains
+    why: >-
+      the period is chosen as a whole, so a day may lose where the period gains (-0.5 and
+      +1.048 sum above zero); a test per team-day would fail here
+    sql: >-
+      update marts.fct_lineup_decisions
+      set value_gap = -0.5
+      where fantasy_team_id = 2 and scoring_date = '2026-04-24'
+    expect: pass

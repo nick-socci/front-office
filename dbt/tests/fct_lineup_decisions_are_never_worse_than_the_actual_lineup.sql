@@ -1,13 +1,21 @@
 -- Fails when an "optimal" lineup is worse than the actual one (R4.7).
 --
 -- Two ways it can happen, labelled in broken_rule:
---   gap_below_zero      value_gap is below -1e-9 (the tolerance is for the order of a
---                       floating-point sum). The actual lineup is itself a legal lineup, so
---                       an optimum below it is a wrong matrix or a wrong sum.
+--   gap_below_zero      the value_gap of a team-period, summed over its days, is below -1e-9
+--                       (the tolerance is for the order of a floating-point sum). The actual
+--                       lineup is itself a legal lineup within the start cap, so an optimum
+--                       below it is a wrong matrix or a wrong sum. It is judged per
+--                       team-period, not per team-day (R4.1, ADR 0092): the optimal lineup
+--                       is chosen over the period, so a day's gap may be negative where the
+--                       period gains. Unvalued team-periods have no gap and are not tested.
+--                       The row has no day: scoring_date is null, and matchup_period names
+--                       the period.
 --   fewer_than_played   in a role (hitter, pitcher), fewer players are assigned than the
---                       actual lineup had starters who played on that role's side. That is
---                       R3.1's constraint; breaking it is how an unrestricted optimum
---                       would sit a played starter with nobody to replace him.
+--                       actual lineup had starters who played on that role's side, on a
+--                       team-day (R4.2). That is R3.1's constraint; breaking it is how an
+--                       unrestricted optimum would sit a played starter with nobody to
+--                       replace him. matchup_period is carried so that both branches have
+--                       the same columns.
 -- Role counts come from the options and the optimal lineups, not from the fact's columns.
 
 with actual_by_role as (
@@ -58,13 +66,16 @@ gap_below_zero as (
         platform,
         league_id,
         season,
-        scoring_date,
+        matchup_period,
+        cast(null as date) as scoring_date,
         fantasy_team_id,
         cast(null as varchar) as slot_role,
-        value_gap as measured,
+        sum(value_gap order by scoring_date) as measured,
         cast(null as bigint) as expected_at_least
     from {{ ref('fct_lineup_decisions') }}
-    where value_gap < -1e-9
+    where not is_unvalued
+    group by platform, league_id, season, matchup_period, fantasy_team_id
+    having sum(value_gap order by scoring_date) < -1e-9
 
 ),
 
@@ -75,6 +86,7 @@ fewer_than_played as (
         actual.platform,
         actual.league_id,
         actual.season,
+        decisions.matchup_period,
         actual.scoring_date,
         actual.fantasy_team_id,
         actual.slot_role,
