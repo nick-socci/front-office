@@ -1,6 +1,6 @@
 # 0089. The id-map coverage test fails on a league-season's share of uncovered started players
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-20
 - Spec: [0177-idmap-coverage-per-league-season](../specs/0177-idmap-coverage-per-league-season/design.md) · Issue: #177
 
