@@ -42,14 +42,13 @@
 -- The lineup maximises summed day value over all categories, not any one of them, so an
 -- optimal row can be worse than its actual row. Injured-list slots are not candidates.
 --
--- THE GAMES-STARTED LIMIT (ADR 0071, 0079). The actual lineup's totals are credited under the
--- league's limit by the rule of int_fantasy__started_player_days (fo_days_past_start_limit):
--- a pitcher-slot start on a day when the lineup's earlier starts of the period reach the
--- period's limit credits no pitching component. They still equal the scored totals
--- (lineup_category_totals_reproduce_the_actual_totals). The optimal lineup's totals are NOT
--- limited: the solver chooses each team-day alone, and a limit applied after it can leave the
--- "optimal" lineup worse than the actual one. A limit-aware optimal lineup, chosen over the
--- week, is left to a later spec (#164; ADR 0079, which supersedes 0073).
+-- THE GAMES-STARTED LIMIT (ADR 0071, 0090). Both lineups are credited under the league's
+-- limit by the rule of int_fantasy__started_player_days (fo_days_past_start_limit): a
+-- pitcher-slot start on a day when the lineup's own earlier starts of the period reach the
+-- period's limit credits no pitching component. The actual totals still equal the scored
+-- totals (lineup_category_totals_reproduce_the_actual_totals). The optimal lineup is chosen
+-- per matchup period within the limit (ADR 0090), so its totals are what would have been
+-- credited, each lineup counting its own starts and not the other's.
 
 {{ config(materialized='table') }}
 
@@ -101,8 +100,8 @@ with lineup_player_days as (
 
 team_day_starts as (
 
-    -- The games started in pitcher slots on each team-day of the actual lineup, the only one
-    -- the limit applies to. `lineup` stays a key so the flags join on it; no optimal row has one.
+    -- The games started in pitcher slots on each team-day of each lineup. `lineup` is a key
+    -- so each lineup's flags come from its own starts.
     select
         player_days.lineup,
         player_days.platform,
@@ -115,7 +114,7 @@ team_day_starts as (
     inner join {{ ref('int_mlb__player_game_days') }} as stats
         on stats.mlbam_player_id = player_days.mlbam_player_id
         and stats.game_date = player_days.scoring_date
-    where player_days.slot_role = 'pitcher' and player_days.lineup = 'actual'
+    where player_days.slot_role = 'pitcher'
     group by
         player_days.lineup,
         player_days.platform,

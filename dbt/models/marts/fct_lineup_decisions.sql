@@ -15,22 +15,25 @@
 -- so a move that was not legal on the day can look legal. For the 2026 backfill that is
 -- 2026-09-26 for scoring periods 1 to 178 and 2026-10-07 for periods 179 and 180; measured
 -- there, it overstates the season's gap by at most about 8%. The league's limit on pitcher
--- starts is applied to the actual lineup's value only (ADR 0071, 0079, superseding 0073): an
--- actual option that is a start in a pitcher slot counts 0 in actual_value on a day when the
--- actual lineup's own earlier starts of the matchup period reach the period's limit
--- (fo_days_past_start_limit, the rule of int_fantasy__started_player_days), so actual_value
--- is what was credited. optimal_value is not limited: the solver chooses each team-day alone,
--- and a limit applied after it can leave the optimal lineup worse than the actual one. A
--- limit-aware optimal lineup, chosen over the week, is left to a later spec (#164).
--- actual_pitcher_starts and optimal_pitcher_starts stay what each lineup started, limited or
--- not: summed by team and matchup period they show a period over the limit, whatever it is.
+-- starts credits both lineups by ESPN's rule (ADR 0071), each counting its own starts: an
+-- option that is a start in a pitcher slot counts 0 on a day when its own lineup's earlier
+-- starts of the matchup period reach the period's limit (fo_days_past_start_limit, the rule
+-- of int_fantasy__started_player_days). So actual_value is what was credited, and so is
+-- optimal_value: the optimal lineup is chosen per matchup period within the cap (ADR 0090),
+-- so its values are what would have been credited. A day's gap can therefore be negative
+-- where its period gains; never-worse is judged per team-period (ADR 0092).
+-- actual_pitcher_starts and optimal_pitcher_starts stay what each lineup started, credited
+-- or not: summed by team and matchup period they show a period over the limit, whatever it is.
 --
 -- The spine is the roster days, not the options, so a team-day with no option still has a
 -- row: not unvalued, both values 0, every count 0. is_unvalued is read from the options
 -- (R3.5), never from whether the optimal lineups have rows for the day: no rows mean
--- "nobody assigned" when it is false and "not solved" when it is true. When it is true,
--- what rests on the solver is null (R4.6). actual_value is null only when an actual option
--- has no value, since a sum would skip it and report a part as the whole.
+-- "nobody assigned" when it is false and "not solved" when it is true. It is per team-period
+-- (ADR 0092, R2.1): the optimal lineup is chosen over the whole period, so one option
+-- without a value leaves every team-day of that team's period unsolved and unvalued. When it
+-- is true, what rests on the solver is null (R4.6). actual_value is null only when an actual
+-- option has no value, since a sum would skip it and report a part as the whole; that stays
+-- per team-day.
 --
 -- A player moved is one who started and is assigned to a slot other than his own: his option
 -- there is not is_actual. A team-day in a matchup period where the team has no matchup (a
@@ -98,7 +101,8 @@ optimal_options as (
 
 lineup_option_rows as (
 
-    -- The actual lineup's options, the only ones the limit applies to.
+    -- The options of both lineups, the actual one and the optimal one, which the limit
+    -- applies to by each lineup's own starts.
     select
         'actual' as lineup,
         platform,
@@ -111,11 +115,24 @@ lineup_option_rows as (
     from {{ ref('int_fantasy__lineup_options') }}
     where is_actual
 
+    union all
+
+    select
+        'optimal' as lineup,
+        platform,
+        league_id,
+        season,
+        scoring_date,
+        fantasy_team_id,
+        platform_player_id,
+        slot_role
+    from optimal_options
+
 ),
 
 team_day_starts as (
 
-    -- The games started in pitcher slots, per team-day of the actual lineup.
+    -- The games started in pitcher slots, per team-day of each lineup.
     select
         option_rows.lineup,
         option_rows.platform,
@@ -161,7 +178,6 @@ option_totals as (
         options.scoring_date,
         options.fantasy_team_id,
         count(*) filter (where options.is_actual) as played_starters,
-        bool_or(options.option_value is null) as is_unvalued,
         bool_or(options.is_actual and options.option_value is null) as has_unvalued_actual,
         sum(
             case
@@ -191,23 +207,62 @@ option_totals as (
 
 ),
 
+unvalued_periods as (
+
+    -- A team-period with any option that has no value. The optimal lineup is chosen over the
+    -- whole period, so every team-day of it is unvalued, not only the day of the option.
+    select distinct
+        options.platform,
+        options.league_id,
+        options.season,
+        periods.matchup_period,
+        options.fantasy_team_id
+    from {{ ref('int_fantasy__lineup_options') }} as options
+    inner join {{ ref('int_fantasy__matchup_periods') }} as periods
+        on periods.platform = options.platform
+        and periods.league_id = options.league_id
+        and periods.season = options.season
+        and periods.scoring_date = options.scoring_date
+    where options.option_value is null
+
+),
+
 optimal_totals as (
 
     select
-        platform,
-        league_id,
-        season,
-        scoring_date,
-        fantasy_team_id,
+        options.platform,
+        options.league_id,
+        options.season,
+        options.scoring_date,
+        options.fantasy_team_id,
         count(*) as optimal_starters,
-        sum(option_value order by platform_player_id) as optimal_sum,
-        count(*) filter (where not is_started) as players_brought_in,
-        count(*) filter (where is_started and not is_actual) as players_moved,
+        sum(
+            case
+                when
+                    coalesce(past_limit.is_past_start_limit, false)
+                    and options.slot_role = 'pitcher'
+                    and options.day_kind = 'start'
+                    then 0
+                else options.option_value
+            end
+            order by options.platform_player_id
+        ) as optimal_sum,
+        count(*) filter (where not options.is_started) as players_brought_in,
+        count(*) filter (where options.is_started and not options.is_actual) as players_moved,
         count(*) filter (
-            where slot_role = 'pitcher' and day_kind = 'start'
+            where options.slot_role = 'pitcher' and options.day_kind = 'start'
         ) as optimal_pitcher_starts
-    from optimal_options
-    group by platform, league_id, season, scoring_date, fantasy_team_id
+    from optimal_options as options
+    left join days_past_limit as past_limit
+        on past_limit.lineup = 'optimal'
+        and past_limit.platform = options.platform
+        and past_limit.league_id = options.league_id
+        and past_limit.season = options.season
+        and past_limit.fantasy_team_id = options.fantasy_team_id
+        and past_limit.scoring_date = options.scoring_date
+    group by
+        options.platform, options.league_id, options.season, options.scoring_date,
+        options.fantasy_team_id
 
 ),
 
@@ -284,7 +339,7 @@ select
     coalesce(candidate_counts.candidates, 0) as candidates,
     coalesce(option_totals.played_starters, 0) as played_starters,
     case
-        when coalesce(option_totals.is_unvalued, false) then null
+        when (unvalued_periods.fantasy_team_id is not null) then null
         else coalesce(optimal_totals.optimal_starters, 0)
     end as optimal_starters,
 
@@ -293,11 +348,11 @@ select
         else coalesce(option_totals.actual_sum, 0)
     end as actual_value,
     case
-        when coalesce(option_totals.is_unvalued, false) then null
+        when (unvalued_periods.fantasy_team_id is not null) then null
         else coalesce(optimal_totals.optimal_sum, 0)
     end as optimal_value,
     case
-        when coalesce(option_totals.is_unvalued, false) then null
+        when (unvalued_periods.fantasy_team_id is not null) then null
         else coalesce(optimal_totals.optimal_sum, 0)
     end
     - case
@@ -306,21 +361,21 @@ select
     end as value_gap,
 
     case
-        when coalesce(option_totals.is_unvalued, false) then null
+        when (unvalued_periods.fantasy_team_id is not null) then null
         else coalesce(optimal_totals.players_brought_in, 0)
     end as players_brought_in,
     case
-        when coalesce(option_totals.is_unvalued, false) then null
+        when (unvalued_periods.fantasy_team_id is not null) then null
         else coalesce(sat_totals.players_sat, 0)
     end as players_sat,
     case
-        when coalesce(option_totals.is_unvalued, false) then null
+        when (unvalued_periods.fantasy_team_id is not null) then null
         else coalesce(optimal_totals.players_moved, 0)
     end as players_moved,
 
     coalesce(option_totals.actual_pitcher_starts, 0) as actual_pitcher_starts,
     case
-        when coalesce(option_totals.is_unvalued, false) then null
+        when (unvalued_periods.fantasy_team_id is not null) then null
         else coalesce(optimal_totals.optimal_pitcher_starts, 0)
     end as optimal_pitcher_starts,
 
@@ -330,7 +385,7 @@ select
     missed_starts.option_value as missed_start_value,
 
     roster_fetches.eligibility_fetched_at,
-    coalesce(option_totals.is_unvalued, false) as is_unvalued,
+    (unvalued_periods.fantasy_team_id is not null) as is_unvalued,
     (
         not coalesce(game_dates.is_complete, true)
         or coalesce(candidate_counts.has_unresolved_candidate, false)
@@ -381,6 +436,12 @@ left join {{ ref('int_fantasy__matchup_periods') }} as periods
     and periods.league_id = team_days.league_id
     and periods.season = team_days.season
     and periods.scoring_period = team_days.scoring_period
+left join unvalued_periods
+    on unvalued_periods.platform = team_days.platform
+    and unvalued_periods.league_id = team_days.league_id
+    and unvalued_periods.season = team_days.season
+    and unvalued_periods.matchup_period = periods.matchup_period
+    and unvalued_periods.fantasy_team_id = team_days.fantasy_team_id
 left join {{ ref('int_fantasy__matchup_sides') }} as sides
     on sides.platform = team_days.platform
     and sides.league_id = team_days.league_id
