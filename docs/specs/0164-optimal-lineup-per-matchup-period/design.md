@@ -346,3 +346,30 @@ unvalued (spec 0012, R5.4). This extends the same rule to the lineup rows.
 | owner, 2026-10-21 | Decisions 2 and 3, as recommended: enumerate + DP; judged per team-period, with an unvalued day blanking its period | ADRs 0091, 0092 |
 
 ## Amendments
+
+- **2026-10-21 — R2.1 applies in a league-season with no limit too.** R1.4 says such a
+  season returns "the same rows as today", and R2.1 that an unvalued day blanks its whole
+  team-period. Where they meet, R2.1 holds: the mart's `is_unvalued` is per team-period
+  everywhere (ADR 0092), and the category mart already nulls a side's optimal totals for
+  any unvalued day of its period (spec 0012, R5.4). R1.4 still holds on real data, which has
+  no unvalued day (C5). No goal, no-go or meaning moves.
+
+- **2026-10-21 — a team-day with no matchup period fails the build.** The design groups
+  days by matchup period and is silent on a day without one. It cannot be placed in a
+  period, so its starts could not be counted, and on real data there is none (C6). The model
+  raises, naming the team-day, instead of dropping or guessing it.
+
+- **2026-10-21 — `solve_team_day` raises `Infeasible` on a short matrix with no new
+  argument too.** Fewer players and fillers than slots, or a role minimum above the role's
+  slots, used to give a short assignment silently. Neither can happen on a day's full
+  options (the actual lineup is a solution), so today's rows do not change; the error now
+  stops a sub-problem that cannot meet the minimum, as step 3 needs.
+
+- **2026-10-21 — two unit tests of ADR 0079's rule are restated to ADR 0090's.**
+  `lineup_decisions_only_the_actual_lineups_value_is_limited` and
+  `lineup_category_totals_only_the_actual_lineup_is_limited` assert that the optimal lineup
+  is credited in full past the limit. *Detailed design* does not name them, but R3.1 and
+  R3.2 reverse what they hold. They become `…_each_lineup_is_credited_by_its_own_starts`, on
+  the same inputs: the optimal lineup's starts past the limit now count 0. Each still
+  catches a lineup credited by the other's starts. The test is not weakened: the rule it
+  holds has changed, by ADR 0090.
