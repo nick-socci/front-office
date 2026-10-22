@@ -1,6 +1,6 @@
 # 0092. A lineup decision is judged per team-period
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-21
 - Spec: [0164-optimal-lineup-per-matchup-period](../specs/0164-optimal-lineup-per-matchup-period/design.md) · Issue: #164
 

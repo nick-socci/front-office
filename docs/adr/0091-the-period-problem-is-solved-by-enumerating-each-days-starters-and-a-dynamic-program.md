@@ -1,6 +1,6 @@
 # 0091. The period problem is solved by enumerating each day's starters and a dynamic program
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-21
 - Spec: [0164-optimal-lineup-per-matchup-period](../specs/0164-optimal-lineup-per-matchup-period/design.md) · Issue: #164
 

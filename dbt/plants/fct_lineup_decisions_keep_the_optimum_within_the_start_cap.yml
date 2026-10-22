@@ -1,0 +1,39 @@
+# fct_lineup_decisions_keep_the_optimum_within_the_start_cap: a team-period's optimal lineup
+# starts no more pitchers than the cap, floor(start_limit) or the actual lineup's starts if
+# more (spec 0164, R3.4, ADR 0090). The fixtures hold 12 team-periods (league 111111, season
+# 2026, matchup period 1, teams 1 to 12, three days each) with start limit 13.0; teams 6 and
+# 11 field one start each and no other team fields any, so starts over the cap are planted on
+# team 1 on 2026-04-24.
+plants:
+  - name: one_start_over_the_cap
+    why: the limit was not honoured when the lineup was chosen
+    sql: >-
+      update marts.fct_lineup_decisions
+      set optimal_pitcher_starts = 14
+      where fantasy_team_id = 1 and scoring_date = '2026-04-24'
+    expect: {status: fail, failures: 1}
+  - name: at_the_cap
+    why: the limit allows 13 whole starts, so 13 is the case the test must let through
+    sql: >-
+      update marts.fct_lineup_decisions
+      set optimal_pitcher_starts = 13
+      where fantasy_team_id = 1 and scoring_date = '2026-04-24'
+    expect: pass
+  - name: the_cap_follows_the_actual_lineup
+    why: >-
+      the actual lineup started 14, over the limit; the optimum may match it, and a cap of
+      floor(start_limit) alone would fail here
+    sql: >-
+      update marts.fct_lineup_decisions
+      set optimal_pitcher_starts = 14, actual_pitcher_starts = 14
+      where fantasy_team_id = 1 and scoring_date = '2026-04-24'
+    expect: pass
+  - name: over_the_actual_lineups_starts
+    why: >-
+      the actual lineup started 14, and the optimum starts 15: past the cap even where the
+      cap follows the actual lineup
+    sql: >-
+      update marts.fct_lineup_decisions
+      set optimal_pitcher_starts = 15, actual_pitcher_starts = 14
+      where fantasy_team_id = 1 and scoring_date = '2026-04-24'
+    expect: {status: fail, failures: 1}

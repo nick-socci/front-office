@@ -4628,17 +4628,16 @@ unit_tests:
         - {league_id: "2", platform_player_id: 14, input_status: played, played: true, is_over_start_limit: false, games_pitched: 1, games_started: 1, outs_recorded: 3}
         - {league_id: "2", platform_player_id: 15, input_status: played, played: true, is_over_start_limit: false, games_pitched: 1, games_started: 1, outs_recorded: 3}
 
-  - name: lineup_category_totals_only_the_actual_lineup_is_limited
+  - name: lineup_category_totals_each_lineup_is_credited_by_its_own_starts
     description: >
       Games-started limit of 2.0 for the period, three days, one side. Actual lineup: player
       1 starts on day 1 (5 strikeouts), player 3 on day 2 (7), player 5 on day 3 (2); two
       starts before day 3, so day 3's start is not credited: actual 12. Optimal lineup:
-      players 1 and 2 on day 1 (5 and 3), player 3 on day 2, player 5 on day 3; more starts
-      than the limit, and credited in full: 17 (ADR 0079). Catches the optimal lineup
-      limited (it would read 8, and a limit applied after a day-by-day solver can leave it
-      below the actual one); the actual lineup not limited (it would read 14, and
-      lineup_category_totals_reproduce_the_actual_totals would break); the actual lineup
-      limited by the optimal's starts (day 2 would be past the limit, and it would read 5).
+      players 1 and 2 on day 1 (5 and 3), player 3 on day 2, player 5 on day 3; day 1's two
+      starts reach the limit, so the starts on days 2 and 3 credit nothing: 8 (ADR 0090).
+      Catches the optimal lineup not limited (it would read 17), the optimal lineup limited
+      by the actual's starts (it would read 15, day 3 only), and the actual lineup limited by
+      the optimal's starts (day 2 would be past the limit, and it would read 5).
     model: int_fantasy__lineup_category_totals
     given:
       - input: ref('int_fantasy__start_limits')
@@ -4685,4 +4684,4 @@ unit_tests:
     expect:
       rows:
         - {fantasy_team_id: 1, category_key: 48, lineup: actual, numerator: 12, category_value: 12}
-        - {fantasy_team_id: 1, category_key: 48, lineup: optimal, numerator: 17, category_value: 17}
+        - {fantasy_team_id: 1, category_key: 48, lineup: optimal, numerator: 8, category_value: 8}
