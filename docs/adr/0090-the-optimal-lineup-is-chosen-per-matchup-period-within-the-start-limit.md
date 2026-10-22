@@ -1,6 +1,6 @@
 # 0090. The optimal lineup is chosen per matchup period, within the start limit
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-21
 - Spec: [0164-optimal-lineup-per-matchup-period](../specs/0164-optimal-lineup-per-matchup-period/design.md) · Issue: #164
 - Supersedes: [0079](0079-only-the-actual-lineup-is-credited-under-the-limit-until-the-optimal-one-is-solved-a-week-at-a-time.md)

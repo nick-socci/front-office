@@ -1,6 +1,6 @@
 # 0037. The optimal lineup replaces a played starter only with a player who played
 
-- Status: accepted, amended by [0079](0079-only-the-actual-lineup-is-credited-under-the-limit-until-the-optimal-one-is-solved-a-week-at-a-time.md)
+- Status: accepted, amended by [0079](0079-only-the-actual-lineup-is-credited-under-the-limit-until-the-optimal-one-is-solved-a-week-at-a-time.md) and [0090](0090-the-optimal-lineup-is-chosen-per-matchup-period-within-the-start-limit.md)
 - Date: 2026-10-09
 - Spec: [0012-lineup-decisions](../specs/0012-lineup-decisions/design.md) · Issue: #12
 

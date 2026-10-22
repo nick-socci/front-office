@@ -1,6 +1,6 @@
 # 0079. Only the actual lineup is credited under the limit, until the optimal one is solved a week at a time
 
-- Status: accepted
+- Status: superseded by [0090](0090-the-optimal-lineup-is-chosen-per-matchup-period-within-the-start-limit.md)
 - Date: 2026-10-18
 - Spec: [0152-games-started-limit](../specs/0152-games-started-limit/design.md) · Issue: #152
 - Supersedes: [0073](0073-both-lineups-totals-are-credited-under-the-limit.md)
