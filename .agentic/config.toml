@@ -10,3 +10,4 @@ legacy_design_dir = "docs/design"  # pre-workflow design docs; historical record
 implementer = "implementer"        # user-level agent: ~/.claude/agents/implementer.md
 gates = ".agentic/gates"
 review_max_rounds = 3
+pre_pr_review = true               # one Codex review before each build PR (#166, adopted 2026-10-22)
