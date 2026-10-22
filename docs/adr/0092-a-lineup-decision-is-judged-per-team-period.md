@@ -15,8 +15,9 @@ Under ADR 0090 the days of a period are chosen together, so a day may give up va
 later one. On real data no team-day's gap is negative (spec 0164, C9), but nothing
 guarantees it.
 
-The days also share a count of starts. A day with an unknown option value (unvalued, R3.5)
-leaves the period's start count unknown. No team-day is unvalued in eight seasons (C5).
+The days also share a cap on starts. On a day with an unknown option value (unvalued,
+R3.5) the optimum cannot be chosen, so neither can its starts, nor the cap left for the
+other days. No team-day is unvalued in eight seasons (C5).
 
 ## Decision drivers
 
