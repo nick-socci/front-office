@@ -851,7 +851,7 @@ def main(argv: list[str] | None = None) -> int:
             if (capture.source, capture.endpoint) == TRANSACTIONS
         )
         print(f"exempt transaction ids checked: {sum(map(exempt_ids_checked, transactions))}")
-        print("dry run: nothing written, nothing uploaded")
+        print("dry run: nothing exported, nothing uploaded")
         return 0
     if not billing_enabled(args.project):
         print(f"billing is not enabled on {args.project}: no job is run (spec 0130, R2.7)")
