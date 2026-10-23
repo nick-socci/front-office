@@ -23,6 +23,7 @@ site/
 *.duckdb
 *.duckdb.wal
 *.duckdb.tmp/
+/data/
 data/raw/
 data/raw_quarantine/
 data/raw_migration/

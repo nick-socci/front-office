@@ -1,6 +1,6 @@
 # 0095. MLB's player list goes up whole, its people's own names allowed
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-22
 - Spec: [0136-member-endpoints-to-bigquery](../specs/0136-member-endpoints-to-bigquery/design.md) · Issue: #136
 - Amends: [0054](0054-only-endpoints-without-member-data-are-uploaded-and-whole.md)

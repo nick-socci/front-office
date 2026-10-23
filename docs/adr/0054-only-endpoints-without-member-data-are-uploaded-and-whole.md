@@ -1,6 +1,6 @@
 # 0054. Only endpoints without league members' data are uploaded, and their captures whole
 
-- Status: accepted
+- Status: accepted, amended by [0061](0061-two-endpoints-that-hold-member-data-are-uploaded-as-projections.md), [0093](0093-teams-and-transactions-go-up-as-projections-of-the-fields-staging-reads.md), [0094](0094-a-transactions-own-ids-go-up-if-none-is-a-known-account-id.md), [0095](0095-mlbs-player-list-goes-up-whole.md)
 - Date: 2026-10-11
 - Spec: [0130-bigquery-spike](../specs/0130-bigquery-spike/design.md) · Issue: #130
 
