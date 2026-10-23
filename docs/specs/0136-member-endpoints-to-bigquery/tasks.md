@@ -57,8 +57,10 @@ recorded on #136 during the build, and this file is not edited to show it.
 10. With the owner's go-ahead (credentials, billing), run the upload. Then build the three
     capture views with `--target bq` and count their rows on both warehouses, passing the
     project explicitly. — `judgment` — R5.2, R5.3
-    - Verify: the loader exits 0 with every row of 11 endpoints paired and equal. The views
-      hold 13 / 7 / 9 rows on each warehouse. Post both on #136.
+    - Verify: every load job succeeds. The three new endpoints' rows, read back, are paired
+      and equal, and every endpoint's row count on BigQuery equals the manifest's (R5.2 as
+      amended on 2026-10-23). The views hold 13 / 7 / 9 rows on each warehouse. Post both
+      on #136.
 11. (last) Check every acceptance criterion and expected value against the real season, and
     record the results on #136. — `judgment` — all
     - Verify: the *Expected values* table, row by row, in one comment on #136.

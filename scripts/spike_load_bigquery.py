@@ -633,13 +633,11 @@ def check(rows: Iterable[RawRow], accounts: frozenset[str]) -> dict[tuple[str, s
             # one of these endpoints is refused, however clean it looks.
             hits.append(f"{row.label}: not what its projection would produce")
         hits.extend(privacy_hits(row, accounts))
+        if (row.source, row.endpoint) == TRANSACTIONS and not accounts:
+            # A cross-check against nothing checks nothing (ADR 0094): each transaction row
+            # is a hit, named by its request and the place its ids sit (R2.6).
+            hits.append(f"{row.label}: no account ids were found to check the ids at $.topics")
         counts[(row.source, row.endpoint)] = counts.get((row.source, row.endpoint), 0) + 1
-    if TRANSACTIONS in counts and not accounts:
-        # A cross-check against nothing checks nothing (ADR 0094).
-        hits.append(
-            f"espn/transactions: {counts[TRANSACTIONS]} row(s), and no account ids were found "
-            "to check their ids against"
-        )
     if hits:
         raise PrivacyHit(hits)
     return counts
