@@ -20,6 +20,10 @@ from front_office.landing import LandingZone
 from front_office.load import load_landing_zone
 
 GUID = "{272E019C-48D5-42F3-B289-C48A1B163E19}"
+# Another account id, and the normal form (braces stripped, lower case) of both: the form in
+# which the check keeps the known accounts.
+OTHER_GUID = "{A1B2C3D4-0000-4000-8000-0123456789AB}"
+ACCOUNTS = frozenset({"272e019c-48d5-42f3-b289-c48a1b163e19"})
 
 
 def row(source: str, endpoint: str, payload: object, **overrides: str) -> loader.RawRow:
@@ -42,7 +46,7 @@ def row(source: str, endpoint: str, payload: object, **overrides: str) -> loader
 
 def test_a_guid_in_an_espn_row_stops_the_upload_and_the_value_is_not_reported() -> None:
     """Catches an ESPN account id going up, and the check printing the id it found."""
-    hits = loader.privacy_hits(row("espn", "roster", {"teams": [{"note": f"by {GUID}"}]}))
+    hits = loader.privacy_hits(row("espn", "roster", {"teams": [{"note": f"by {GUID}"}]}), ACCOUNTS)
     assert hits == ["espn/roster k=1: GUID at $.teams[0].note"]
     assert GUID not in "".join(hits)
 
@@ -50,10 +54,10 @@ def test_a_guid_in_an_espn_row_stops_the_upload_and_the_value_is_not_reported() 
 def test_a_guid_as_a_key_or_outside_the_payload_is_found_too() -> None:
     """Catches a GUID that is a key of an object, or in the partitions, slipping through a
     check that reads only values of the payload."""
-    as_key = loader.privacy_hits(row("espn", "settings", {"byOwner": {GUID: 1}}))
+    as_key = loader.privacy_hits(row("espn", "settings", {"byOwner": {GUID: 1}}), ACCOUNTS)
     assert as_key == ["espn/settings k=1: GUID in a key at $.byOwner"]
     in_partitions = loader.privacy_hits(
-        row("espn", "settings", {}, partitions=json.dumps({"owner": GUID}))
+        row("espn", "settings", {}, partitions=json.dumps({"owner": GUID})), ACCOUNTS
     )
     assert in_partitions == ["espn/settings k=1: GUID at partitions $.owner"]
 
@@ -63,12 +67,12 @@ def test_a_guid_in_the_request_key_is_not_printed_by_any_message_about_the_row()
     rejected for something else would print the id in every message about it (PR #142,
     review round 1)."""
     keyed = row("espn", "roster", {"members": []}, request_key=f"owner={GUID}&view=mRoster")
-    hits = loader.privacy_hits(keyed)
+    hits = loader.privacy_hits(keyed, ACCOUNTS)
     assert hits, "the row should be rejected"
     assert GUID not in "".join(hits)
     assert any("owner=<guid>&view=mRoster" in hit for hit in hits)
     with pytest.raises(loader.PrivacyHit) as raised:
-        loader.check([keyed])
+        loader.check([keyed], ACCOUNTS)
     assert GUID not in "".join(raised.value.hits) + str(raised.value)
 
 
@@ -77,7 +81,7 @@ def test_a_guid_that_is_a_key_on_the_way_to_a_hit_is_not_printed_in_the_path() -
     found under an object keyed by account id would print the id (PR #142, review round
     2)."""
     nested = row("espn", "settings", {"byOwner": {GUID: {"members": [], "note": f"x {GUID}"}}})
-    hits = loader.privacy_hits(nested)
+    hits = loader.privacy_hits(nested, ACCOUNTS)
     assert len(hits) >= 3, hits
     assert GUID not in "".join(hits)
     assert any("$.byOwner.<guid>" in hit for hit in hits)
@@ -87,18 +91,18 @@ def test_mlbs_game_guid_is_allowed() -> None:
     """Catches the GUID rule reaching MLB rows, where gameGuid is a public game id and every
     schedule row would be refused."""
     schedule = {"dates": [{"games": [{"gameGuid": "272e019c-48d5-42f3-b289-c48a1b163e19"}]}]}
-    assert loader.privacy_hits(row("mlb", "schedule", schedule)) == []
+    assert loader.privacy_hits(row("mlb", "schedule", schedule), ACCOUNTS) == []
 
 
 def test_a_members_name_stops_the_upload() -> None:
     """Catches a league member's name going up: a forbidden key is a hit in any row."""
     payload = {"members": [{"firstName": "A", "lastName": "B"}]}
-    assert loader.privacy_hits(row("espn", "settings", payload)) == [
+    assert loader.privacy_hits(row("espn", "settings", payload), ACCOUNTS) == [
         "espn/settings k=1: key members at $",
         "espn/settings k=1: key firstName at $.members[0]",
         "espn/settings k=1: key lastName at $.members[0]",
     ]
-    assert loader.privacy_hits(row("mlb", "schedule", {"displayName": "x"})) == [
+    assert loader.privacy_hits(row("mlb", "schedule", {"displayName": "x"}), ACCOUNTS) == [
         "mlb/schedule k=1: key displayName at $"
     ]
 
@@ -109,19 +113,19 @@ def test_a_ballplayers_own_name_is_allowed_and_nothing_else_in_that_object() -> 
     further in, does not."""
     player = {"firstName": "Shohei", "lastName": "Ohtani", "id": 39832}
     entry = {"teams": [{"roster": {"entries": [{"playerPoolEntry": {"player": player}}]}}]}
-    assert loader.privacy_hits(row("espn", "roster", entry)) == []
+    assert loader.privacy_hits(row("espn", "roster", entry), ACCOUNTS) == []
 
     player_with_owner = {**player, "owners": ["x"]}
     entry = {"playerPoolEntry": {"player": player_with_owner}}
-    assert loader.privacy_hits(row("espn", "roster", entry)) == [
+    assert loader.privacy_hits(row("espn", "roster", entry), ACCOUNTS) == [
         "espn/roster k=1: key owners at $.playerPoolEntry.player"
     ]
     deeper = {"playerPoolEntry": {"player": {"agent": {"firstName": "A"}}}}
-    assert loader.privacy_hits(row("espn", "roster", deeper)) == [
+    assert loader.privacy_hits(row("espn", "roster", deeper), ACCOUNTS) == [
         "espn/roster k=1: key firstName at $.playerPoolEntry.player.agent"
     ]
     elsewhere = {"player": {"firstName": "A"}}
-    assert loader.privacy_hits(row("espn", "roster", elsewhere)) == [
+    assert loader.privacy_hits(row("espn", "roster", elsewhere), ACCOUNTS) == [
         "espn/roster k=1: key firstName at $.player"
     ]
 
@@ -187,9 +191,11 @@ def test_a_row_off_the_allowlist_stops_the_upload_however_clean_it_is() -> None:
     check refuses any other row it is handed, so a caller that builds its own rows cannot
     upload `draft`."""
     with pytest.raises(loader.PrivacyHit) as raised:
-        loader.check([row("espn", "draft", {"teams": []})])
+        loader.check([row("espn", "draft", {"teams": []})], ACCOUNTS)
     assert any("not on the allowlist" in hit for hit in raised.value.hits)
-    assert loader.check([row("espn", "settings", {"teams": []})]) == {("espn", "settings"): 1}
+    assert loader.check([row("espn", "settings", {"teams": []})], ACCOUNTS) == {
+        ("espn", "settings"): 1
+    }
 
 
 def test_a_hit_anywhere_means_nothing_is_written(tmp_path: Path) -> None:
@@ -198,7 +204,7 @@ def test_a_hit_anywhere_means_nothing_is_written(tmp_path: Path) -> None:
     clean = row("mlb", "schedule", {"dates": []})
     dirty = row("espn", "settings", {"members": []}, request_key="k=2")
     with pytest.raises(loader.PrivacyHit) as raised:
-        loader.export([clean, dirty], tmp_path / "out")
+        loader.export([clean, dirty], tmp_path / "out", ACCOUNTS)
     assert raised.value.hits == ["espn/settings k=2: key members at $"]
     assert not (tmp_path / "out").exists()
 
@@ -210,7 +216,7 @@ def test_the_export_is_one_file_per_endpoint_with_json_as_json(tmp_path: Path) -
         row("mlb", "schedule", {"dates": [1.5]}),
         row("espn", "settings", {"id": 7}, request_key="k=2", partitions='{"season": 2026}'),
     ]
-    files = loader.export(rows, tmp_path / "out")
+    files = loader.export(rows, tmp_path / "out", ACCOUNTS)
     assert sorted(p.name for p in files) == ["espn__settings.ndjson", "mlb__schedule.ndjson"]
     line = json.loads((tmp_path / "out" / "espn__settings.ndjson").read_text())
     assert line["payload"] == {"id": 7} and line["partitions"] == {"season": 2026}
@@ -429,7 +435,7 @@ def test_a_projected_matchup_day_holds_no_name_and_no_member_key() -> None:
     assert not keys & privacy.FORBIDDEN_KEYS
     assert not keys & {"fullName", "lineupSlotId", "injuryStatus", "teams", "settings", "nested"}
     assert not privacy.GUID.search(text)
-    assert loader.privacy_hits(row("espn", "matchup_days", json.loads(text))) == []
+    assert loader.privacy_hits(row("espn", "matchup_days", json.loads(text)), ACCOUNTS) == []
 
 
 def test_a_projection_is_built_from_wanted_fields_so_an_unknown_one_is_dropped() -> None:
@@ -691,7 +697,7 @@ def test_a_manifest_row_with_no_committed_capture_stops_the_upload(tmp_path: Pat
     db, root = _landing(tmp_path, [("espn", "settings", "k1", {"n": 1})])
     shutil.rmtree(next(root.glob("espn/settings/*/*")))
     with pytest.raises(loader.ManifestDisagrees) as raised:
-        loader.check(loader.read_rows(db, root))
+        loader.check(loader.read_rows(db, root), ACCOUNTS)
     assert "in raw.captures, not committed: espn/settings/" in str(raised.value)
 
 
@@ -708,7 +714,7 @@ def test_a_committed_capture_not_in_the_manifest_stops_the_upload(tmp_path: Path
         fetched_at="20270101T000000Z",
     )
     with pytest.raises(loader.ManifestDisagrees) as raised:
-        loader.check(loader.read_rows(db, root))
+        loader.check(loader.read_rows(db, root), ACCOUNTS)
     assert "committed, not in raw.captures: espn/settings/" in str(raised.value)
 
 
@@ -717,10 +723,10 @@ def test_a_row_of_a_projected_endpoint_that_was_not_projected_stops_the_upload()
     one with nothing the privacy patterns know: only the projection may go up."""
     whole = row("espn", "matchup_days", {"id": 1, "schedule": [], "status": {"x": 1}})
     with pytest.raises(loader.PrivacyHit) as raised:
-        loader.check([whole])
-    assert raised.value.hits == ["espn/matchup_days k=1: not in its projected form (ADR 0061)"]
+        loader.check([whole], ACCOUNTS)
+    assert raised.value.hits == ["espn/matchup_days k=1: not what its projection would produce"]
     projected = row("espn", "matchup_days", loader.project_matchup_day(MATCHUP_DAY))
-    assert loader.check([projected]) == {("espn", "matchup_days"): 1}
+    assert loader.check([projected], ACCOUNTS) == {("espn", "matchup_days"): 1}
 
 
 def test_a_whole_teams_or_transactions_capture_is_refused() -> None:
@@ -730,15 +736,15 @@ def test_a_whole_teams_or_transactions_capture_is_refused() -> None:
     and not for being off the allowlist."""
     for endpoint, whole in (("teams", TEAMS), ("transactions", TRANSACTIONS)):
         with pytest.raises(loader.PrivacyHit) as raised:
-            loader.check([row("espn", endpoint, whole)])
-        assert any("not in its projected form" in hit for hit in raised.value.hits)
+            loader.check([row("espn", endpoint, whole)], ACCOUNTS)
+        assert any("not what its projection would produce" in hit for hit in raised.value.hits)
         assert not any("allowlist" in hit for hit in raised.value.hits)
         assert GUID not in "".join(raised.value.hits)
     # nothing the privacy patterns know, and still refused
     clean = {"id": 1, "teams": [{"id": 1, "logo": "x"}]}
     with pytest.raises(loader.PrivacyHit) as raised:
-        loader.check([row("espn", "teams", clean)])
-    assert raised.value.hits == ["espn/teams k=1: not in its projected form (ADR 0061)"]
+        loader.check([row("espn", "teams", clean)], ACCOUNTS)
+    assert raised.value.hits == ["espn/teams k=1: not what its projection would produce"]
 
 
 def test_a_guid_left_in_a_projected_row_still_stops_the_upload() -> None:
@@ -746,4 +752,320 @@ def test_a_guid_left_in_a_projected_row_still_stops_the_upload() -> None:
     request key of a projected row is found like any other."""
     dirty = row("espn", "transactions", {}, request_key=f"owner={GUID}")
     with pytest.raises(loader.PrivacyHit):
-        loader.check([dirty])
+        loader.check([dirty], ACCOUNTS)
+
+
+# -- the member-data endpoints: names in MLB's player list, transaction ids (ADRs 0094, 0095) --
+
+BARE_ACCOUNT = "272e019c-48d5-42f3-b289-c48a1b163e19"  # the account of GUID, as ESPN's ids look
+
+
+def transactions_row(topic_id: str, message_id: str = "m-1", **overrides: str) -> loader.RawRow:
+    """A transactions row in projected form, with one topic and one message."""
+    payload = {"topics": [{"id": topic_id, "messages": [{"id": message_id}]}]}
+    return row("espn", "transactions", payload, **overrides)
+
+
+def test_a_ballplayers_name_in_the_mlb_player_list_is_allowed_and_nowhere_else() -> None:
+    """Catches the name exception widening past one endpoint, one place and two keys:
+    `firstName` directly in an object of `$.people[]` of `mlb/players` passes. At
+    `$.people[0].currentTeam`, at `$.firstName`, in another MLB endpoint, in an ESPN
+    endpoint of the same name, and `displayName` in `people[0]` each stop the upload (R2.1,
+    ADR 0095)."""
+    person = {"id": 1, "fullName": "A Player", "firstName": "A", "lastName": "Player"}
+    assert loader.privacy_hits(row("mlb", "players", {"people": [person]}), ACCOUNTS) == []
+
+    def hits(source: str, endpoint: str, payload: object) -> list[str]:
+        return loader.privacy_hits(row(source, endpoint, payload), ACCOUNTS)
+
+    nested = {"people": [{"id": 1, "currentTeam": {"firstName": "A"}}]}
+    assert hits("mlb", "players", nested) == [
+        "mlb/players k=1: key firstName at $.people[0].currentTeam"
+    ]
+    assert hits("mlb", "players", {"firstName": "A", "people": []}) == [
+        "mlb/players k=1: key firstName at $"
+    ]
+    assert hits("mlb", "players", {"people": [{"displayName": "A"}]}) == [
+        "mlb/players k=1: key displayName at $.people[0]"
+    ]
+    assert hits("mlb", "players", {"people": [{"owners": ["x"]}]}) == [
+        "mlb/players k=1: key owners at $.people[0]"
+    ]
+    assert hits("mlb", "schedule", {"people": [person]}) == [
+        "mlb/schedule k=1: key firstName at $.people[0]",
+        "mlb/schedule k=1: key lastName at $.people[0]",
+    ]
+    assert len(hits("espn", "players", {"people": [person]})) == 2
+    assert len(hits("mlb", "players", {"people": {"x": person}})) == 2
+
+
+def test_a_guid_is_allowed_only_at_a_transactions_two_id_paths() -> None:
+    """Catches the GUID exemption by name only, or by endpoint only: a GUID passes at
+    `$.topics[i].id` and `$.topics[i].messages[j].id` of an `espn/transactions` payload and
+    stops the upload at a third path of the same row (`topicId`, a nested `id`), in the
+    partitions, the request path, key and file path, in another ESPN endpoint at the same
+    path, as a key, and with text around it. No hit prints the value (R2.2, R2.6)."""
+    topic, message = BARE_ACCOUNT.replace("272e", "5b1c"), BARE_ACCOUNT.replace("272e", "0e9d")
+    ok = {"topics": [{"id": topic, "messages": [{"id": message}, {"id": message}]}]}
+    assert loader.privacy_hits(row("espn", "transactions", ok), ACCOUNTS) == []
+
+    def hits(payload: object, **overrides: str) -> list[str]:
+        found = loader.privacy_hits(row("espn", "transactions", payload, **overrides), ACCOUNTS)
+        assert BARE_ACCOUNT not in "".join(found).lower() and topic not in "".join(found)
+        return found
+
+    assert hits({"topics": [{"id": "t", "topicId": topic, "messages": []}]}) == [
+        "espn/transactions k=1: GUID at $.topics[0].topicId"
+    ]
+    third = {"topics": [{"id": "t", "messages": [{"id": "m", "topicId": topic}]}]}
+    assert hits(third) == ["espn/transactions k=1: GUID at $.topics[0].messages[0].topicId"]
+    deeper = {"topics": [{"id": "t", "messages": [{"id": "m", "creationInfo": {"id": topic}}]}]}
+    assert hits(deeper) == [
+        "espn/transactions k=1: GUID at $.topics[0].messages[0].creationInfo.id"
+    ]
+    assert hits({"topics": [{"id": "t", "messages": [{"messages": [{"id": topic}]}]}]}) == [
+        "espn/transactions k=1: GUID at $.topics[0].messages[0].messages[0].id"
+    ]
+    assert hits({"id": topic, "topics": []}) == ["espn/transactions k=1: GUID at $.id"]
+    assert hits({"topics": [{"id": f"x {topic}", "messages": []}]}) == [
+        "espn/transactions k=1: GUID at $.topics[0].id"
+    ]
+    assert hits({"topics": [{"id": f"{topic} {message}", "messages": []}]}) == [
+        "espn/transactions k=1: GUID at $.topics[0].id"
+    ]
+    assert hits({"topics": [{"id": "t", "messages": [], topic: 1}]}) == [
+        "espn/transactions k=1: GUID in a key at $.topics[0]"
+    ]
+    assert hits(ok, partitions=json.dumps({"x": topic})) == [
+        "espn/transactions k=1: GUID at partitions $.x"
+    ]
+    for name in ("request_path", "request_key", "file_path"):
+        assert hits(ok, **{name: f"/{topic}"}) == [f"espn/transactions: GUID in {name}"]
+    # the same payload in another ESPN endpoint is not exempt
+    for endpoint in ("teams", "roster", "matchup_days"):
+        found = loader.privacy_hits(row("espn", endpoint, ok), ACCOUNTS)
+        assert found[0] == f"espn/{endpoint} k=1: GUID at $.topics[0].id"
+        assert len(found) == 3
+
+
+def test_an_id_equal_to_a_known_account_stops_the_upload() -> None:
+    """Catches a cross-check that compares text as written: the account is known braced and
+    upper case, the id is bare lower case (and braced, mixed case or half-braced, which the
+    GUID pattern also reads), and each equal id at either path stops the upload. A hit names
+    the path and not the value (R2.3, R2.6)."""
+    accounts = frozenset({BARE_ACCOUNT})
+    for written in (BARE_ACCOUNT, GUID, GUID.lower(), BARE_ACCOUNT.upper(), "{" + BARE_ACCOUNT):
+        topic = transactions_row(written)
+        assert loader.privacy_hits(topic, accounts) == [
+            "espn/transactions k=1: transaction id equals an account id at $.topics[0].id"
+        ]
+        message = transactions_row("t-1", written)
+        assert loader.privacy_hits(message, accounts) == [
+            "espn/transactions k=1: transaction id equals an account id at "
+            "$.topics[0].messages[0].id"
+        ]
+        with pytest.raises(loader.PrivacyHit) as raised:
+            loader.check([topic, message], accounts)
+        assert len(raised.value.hits) == 2
+        assert BARE_ACCOUNT not in "".join(raised.value.hits).lower()
+    other = transactions_row(OTHER_GUID.strip("{}").lower(), "5b1c0f3e-0a8e-4d2c-9e57-0c5f6a1b2d3e")
+    assert loader.check([other], accounts) == {("espn", "transactions"): 1}
+
+
+def test_transaction_rows_with_no_known_accounts_stop_the_upload() -> None:
+    """Catches a cross-check that silently checks nothing: with transaction rows to upload
+    and no account id found, the upload stops with one hit, however many rows there are and
+    however clean they look. With no transaction row to upload, an empty set is no reason
+    to stop (R2.4)."""
+    rows = [transactions_row("t-1"), transactions_row("t-2", request_key="k=2")]
+    with pytest.raises(loader.PrivacyHit) as raised:
+        loader.check(rows, frozenset())
+    assert raised.value.hits == ["no account ids were found to check transaction ids against"]
+    assert loader.check(rows, ACCOUNTS) == {("espn", "transactions"): 2}
+    settings = row("espn", "settings", {"n": 1})
+    assert loader.check([settings], frozenset()) == {("espn", "settings"): 1}
+
+
+def test_known_accounts_are_read_from_raw_teams_and_transactions(tmp_path: Path) -> None:
+    """Catches accounts gathered from the projected rows, which hold none, from a path the
+    spec does not list (`members[].notificationSettings[].id`, a topic's own id), from an
+    author that is not one GUID whole, or from another endpoint; and ids kept as written
+    when they are compared in their normal form (R2.3)."""
+    teams = {
+        "members": [
+            {"id": GUID, "notificationSettings": [{"id": OTHER_GUID.replace("A1B2", "FFFF")}]},
+            {"id": "not a guid"},
+        ],
+        "teams": [
+            {
+                "id": 1,
+                "owners": [OTHER_GUID, "text"],
+                "primaryOwner": "{abcdef01-0000-4000-8000-000000000001}",
+            },
+            {"id": 2, "owners": "not a list"},
+        ],
+    }
+    transactions = {
+        "topics": [
+            {
+                "id": "5b1c0f3e-0a8e-4d2c-9e57-0c5f6a1b2d3e",
+                "author": "{ABCDEF01-0000-4000-8000-000000000002}",
+                "messages": [
+                    {"author": "{ABCDEF01-0000-4000-8000-000000000003}"},
+                    {"author": "SOME_STRING"},
+                    {"author": f"x {GUID}"},
+                    {"author": 5},
+                ],
+            },
+            {"author": "abcdef01-0000-4000-8000-000000000004"},
+        ]
+    }
+    db, root = _landing(
+        tmp_path,
+        [
+            ("espn", "teams", "k1", teams),
+            ("espn", "transactions", "k2", transactions),
+            (
+                "espn",
+                "settings",
+                "k3",
+                {"members": [{"id": "{ABCDEF01-0000-4000-8000-0000000000FF}"}]},
+            ),
+        ],
+    )
+    accounts = loader.known_accounts(loader.read_rows(db, root))
+    assert accounts == {
+        BARE_ACCOUNT,
+        "a1b2c3d4-0000-4000-8000-0123456789ab",
+        "abcdef01-0000-4000-8000-000000000001",
+        "abcdef01-0000-4000-8000-000000000002",
+        "abcdef01-0000-4000-8000-000000000003",
+        "abcdef01-0000-4000-8000-000000000004",
+    }
+    assert isinstance(accounts, frozenset)
+    (tmp_path / "none").mkdir()
+    assert loader.known_accounts(loader.read_rows(*_landing(tmp_path / "none", []))) == frozenset()
+
+
+def test_the_manifest_is_read_once_and_everything_is_drawn_from_that_snapshot(
+    tmp_path: Path,
+) -> None:
+    """Catches a second query of the manifest per pass (design review F2): a capture loaded
+    after the rows were read is not in a later pass, and is not among the known accounts.
+    A manifest that disagrees with the landing zone stops the reading at construction, not
+    at the first pass (R2.7)."""
+    db, root = _landing(
+        tmp_path,
+        [
+            ("espn", "settings", "k1", {"n": 1}),
+            ("espn", "transactions", "k2", {"topics": [{"author": GUID}]}),
+        ],
+    )
+    rows = loader.read_rows(db, root)
+    before = [(r.key, r.payload) for r in rows]
+    _load_late(db, root, "espn", "settings", {"n": 2}, "20270101T000000Z")
+    _load_late(
+        db, root, "espn", "transactions", {"topics": [{"author": OTHER_GUID}]}, "20270101T000001Z"
+    )
+    assert [(r.key, r.payload) for r in rows] == before
+    assert loader.known_accounts(rows) == ACCOUNTS
+    assert len(list(loader.read_rows(db, root))) == len(before) + 2
+
+    other_db, other_root = _landing(tmp_path / "other", [("espn", "settings", "k1", {"n": 1})])
+    shutil.rmtree(next(other_root.glob("espn/settings/*/*")))
+    with pytest.raises(loader.ManifestDisagrees):
+        loader.read_rows(other_db, other_root)
+
+
+def _load_late(
+    db: Path, root: Path, source: str, endpoint: str, payload: object, stamp: str
+) -> None:
+    """A capture that lands, and is loaded into the manifest, after the rows were read."""
+    zone = LandingZone(root)
+    zone.write(
+        source=source,
+        endpoint=endpoint,
+        partitions={"season": 2025},
+        name=f"fetched_at={stamp}",
+        payload=payload,  # type: ignore[arg-type]
+        request={"url": f"https://x.test/{stamp}", "params": {"k": stamp}},
+        fetched_at=stamp,
+    )
+    con = duckdb.connect(str(db))
+    load_landing_zone(con, zone)
+    con.close()
+
+
+def test_a_capture_loaded_after_the_check_is_not_exported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catches an unchecked row reaching the export: a capture that carries an account id
+    and is loaded between the check and the write is not in the files, because the export
+    writes the rows the check read (R2.7)."""
+    db, root = _landing(tmp_path, [("espn", "settings", "k1", {"n": 1})])
+    real_check = loader.check
+
+    def check_then_load_late(rows: object, accounts: frozenset[str]) -> object:
+        counts = real_check(rows, accounts)  # type: ignore[arg-type]
+        _load_late(db, root, "espn", "settings", {"note": GUID}, "20270101T000000Z")
+        return counts
+
+    monkeypatch.setattr(loader, "check", check_then_load_late)
+    files = loader.export(loader.read_rows(db, root), tmp_path / "out", ACCOUNTS)
+    lines = [json.loads(line) for line in files[0].read_text().splitlines()]
+    assert [line["payload"] for line in lines] == [{"n": 1}]
+    assert GUID not in files[0].read_text()
+
+
+def _dry_run(tmp_path: Path, captures: list[tuple[str, str, str, object]]) -> int:
+    """The exit code of a dry run of the loader on a small landing root; it writes nothing."""
+    db, root = _landing(tmp_path, captures)
+    out = tmp_path / "out"
+    code = loader.main(
+        ["--db", str(db), "--raw-root", str(root), "--dry-run", "--export-dir", str(out)]
+    )
+    assert not out.exists()
+    return code
+
+
+def test_a_dry_run_says_how_many_accounts_and_exempt_ids_it_checked(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Catches a dry run that reports rows and no privacy hit but does not say that the
+    cross-check had accounts to check against, or how many ids it checked (Expected values:
+    17 accounts, 34,882 ids on the real season)."""
+    teams = {"members": [{"id": GUID}, {"id": OTHER_GUID}], "teams": []}
+    transactions = {
+        "topics": [
+            {
+                "id": "5b1c0f3e-0a8e-4d2c-9e57-0c5f6a1b2d3e",
+                "messages": [{"id": "0e9d8c7b-6a5f-4e3d-8c2b-1a0f9e8d7c6b"}, {"id": "m-2"}],
+            }
+        ]
+    }
+    code = _dry_run(
+        tmp_path, [("espn", "teams", "k1", teams), ("espn", "transactions", "k2", transactions)]
+    )
+    shown = capsys.readouterr().out
+    assert code == 0
+    assert "known account ids: 2" in shown
+    assert "exempt transaction ids checked: 2" in shown
+    assert "espn/transactions: 1 rows" in shown
+
+
+def test_a_dry_run_stops_on_a_transaction_id_that_equals_an_account(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Catches the cross-check being wired into `check` but not into the run: a transaction
+    whose topic id is a member's account id stops a dry run, exit 1, naming the path and
+    not the id (R2.3, R2.6)."""
+    teams = {"members": [{"id": GUID}], "teams": []}
+    transactions = {"topics": [{"id": BARE_ACCOUNT, "messages": []}]}
+    code = _dry_run(
+        tmp_path, [("espn", "teams", "k1", teams), ("espn", "transactions", "k2", transactions)]
+    )
+    shown = capsys.readouterr().out
+    assert code == 1
+    assert "transaction id equals an account id at $.topics[0].id" in shown
+    assert BARE_ACCOUNT not in shown.lower()
+    assert "Nothing was written or uploaded." in shown

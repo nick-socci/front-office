@@ -47,6 +47,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
@@ -89,6 +90,13 @@ COLUMNS = (*KEY_COLUMNS, "file_path", *JSON_COLUMNS)
 # The two keys that name a ballplayer when they sit directly in this object.
 PLAYER_OBJECT = ".playerPoolEntry.player"
 PLAYER_NAME_KEYS = frozenset({"firstName", "lastName"})
+PLAYER_LIST = ("mlb", "players")
+TEAMS = ("espn", "teams")
+TRANSACTIONS = ("espn", "transactions")
+# ... and, in MLB's player list, directly in an object of `people[]` (ADR 0095).
+PERSON_OBJECT = re.compile(r"\$\.people\[\d+\]")
+# The two places where a transaction's own id is allowed to be a GUID (ADR 0094).
+TRANSACTION_ID_PATHS = re.compile(r"\$\.topics\[\d+\]\.(messages\[\d+\]\.)?id")
 DATASET = "raw"
 TABLE = "api_responses"
 LOCATION = "US"
@@ -281,19 +289,77 @@ class ManifestDisagrees(Exception):
     set the models read."""
 
 
+@dataclass(frozen=True)
+class Capture:
+    """One capture of the snapshot: the manifest's narrow row and the committed capture it
+    names. The payload is read only when asked for, through `landed`."""
+
+    source: str
+    endpoint: str
+    key: tuple[str, ...]
+    file_path: str
+    partitions: str
+    landed: LandedResponse
+
+
 class ManifestRows:
     """The rows that are uploaded: the keys from the manifest `raw.captures`, each payload
-    read from its file through `LandingZone`, the two projected endpoints already projected.
+    read from its file through `LandingZone`, the projected endpoints already projected.
 
-    Iterable more than once. Each pass reads the manifest's narrow rows of one endpoint, in
-    key order, and then reads one payload at a time as it yields the row; a sort of the
-    payload-carrying rows ran out of memory on eight seasons (#83), and none is made here.
-    Raises ManifestDisagrees, before yielding a row of an endpoint, if the manifest holds a
-    capture the landing zone has not committed, or the zone holds one the manifest lacks."""
+    One set of captures per run (R2.7). The manifest's narrow rows of every uploaded
+    endpoint are read once, at construction, and checked against the landing zone then, so
+    the known accounts, the check, the export and the landing root are drawn from the same
+    list. Payload files are never replaced (ADR 0014), so the list gives the same rows on
+    every pass.
+
+    Iterable more than once. Each pass walks that list in key order and reads one payload at
+    a time as it yields the row; a sort of the payload-carrying rows ran out of memory on
+    eight seasons (#83), and none is made here. Raises ManifestDisagrees, from the
+    constructor, if the manifest holds a capture the landing zone has not committed, or the
+    zone holds one the manifest lacks."""
 
     def __init__(self, db: Path, raw_root: Path) -> None:
         self.db = db
         self.zone = LandingZone(raw_root)
+        self.captures: list[Capture] = []
+        for source, endpoint in sorted(UPLOADED):
+            self.captures.extend(self._snapshot(source, endpoint))
+
+    def _snapshot(self, source: str, endpoint: str) -> list[Capture]:
+        """The endpoint's captures: the manifest's rows, each tied to its committed capture."""
+        manifest = self._manifest(source, endpoint)
+        landed = self._landed(source, endpoint)
+        listed = {values[5] for values in manifest}
+        missing = sorted(listed - landed.keys())
+        unlisted = sorted(landed.keys() - listed)
+        if missing or unlisted:
+            raise ManifestDisagrees(
+                "\n".join(
+                    [
+                        f"{source}/{endpoint}: in raw.captures, not committed: {path}"
+                        for path in missing[:5]
+                    ]
+                    + [
+                        f"{source}/{endpoint}: committed, not in raw.captures: {path}"
+                        for path in unlisted[:5]
+                    ]
+                )
+                + f"\n{source}/{endpoint}: {len(missing)} in the manifest only, "
+                f"{len(unlisted)} in the landing zone only"
+            )
+        return [
+            Capture(source, endpoint, tuple(key), file_path, partitions, landed[file_path])
+            for *key, file_path, partitions in manifest
+        ]
+
+    def row(self, capture: Capture) -> RawRow:
+        """The row to upload for a capture: its payload read, and projected if the endpoint
+        has a projection."""
+        payload = capture.landed.payload
+        project = PROJECTIONS.get((capture.source, capture.endpoint))
+        if project is not None:
+            payload = project(payload)
+        return RawRow(*capture.key, capture.file_path, capture.partitions, json.dumps(payload))
 
     def _manifest(self, source: str, endpoint: str) -> list[tuple[str, ...]]:
         con = duckdb.connect(str(self.db), read_only=True)
@@ -316,33 +382,8 @@ class ManifestRows:
         }
 
     def __iter__(self) -> Iterator[RawRow]:
-        for source, endpoint in sorted(UPLOADED):
-            manifest = self._manifest(source, endpoint)
-            landed = self._landed(source, endpoint)
-            listed = {values[5] for values in manifest}
-            missing = sorted(listed - landed.keys())
-            unlisted = sorted(landed.keys() - listed)
-            if missing or unlisted:
-                raise ManifestDisagrees(
-                    "\n".join(
-                        [
-                            f"{source}/{endpoint}: in raw.captures, not committed: {path}"
-                            for path in missing[:5]
-                        ]
-                        + [
-                            f"{source}/{endpoint}: committed, not in raw.captures: {path}"
-                            for path in unlisted[:5]
-                        ]
-                    )
-                    + f"\n{source}/{endpoint}: {len(missing)} in the manifest only, "
-                    f"{len(unlisted)} in the landing zone only"
-                )
-            project = PROJECTIONS.get((source, endpoint))
-            for *key, file_path, partitions in manifest:
-                payload = landed[file_path].payload
-                if project is not None:
-                    payload = project(payload)
-                yield RawRow(*key, file_path, partitions, json.dumps(payload))
+        for capture in self.captures:
+            yield self.row(capture)
 
 
 def read_rows(db: Path, raw_root: Path) -> ManifestRows:
@@ -365,8 +406,28 @@ def _strings(node: Any, path: str = "$") -> Iterator[tuple[str, str, bool]]:
         yield path, node, False
 
 
-def privacy_hits(row: RawRow) -> list[str]:
-    """What in this row may not be uploaded: where it is, never what it is."""
+def _normal_guid(text: str) -> str | None:
+    """The normal form (braces stripped, lower case) of a string that is one GUID whole, else
+    None. A string with text around a GUID is not one."""
+    if privacy.GUID.fullmatch(text) is None:
+        return None
+    return text.strip("{}").lower()
+
+
+def _is_transaction_id(row: RawRow, prefix: str, path: str, is_key: bool) -> bool:
+    """Whether a string is a value at one of the two paths of an `espn/transactions` payload
+    where a GUID-shaped id is allowed (ADR 0094)."""
+    return (
+        (row.source, row.endpoint) == TRANSACTIONS
+        and prefix == ""
+        and not is_key
+        and TRANSACTION_ID_PATHS.fullmatch(path) is not None
+    )
+
+
+def privacy_hits(row: RawRow, accounts: frozenset[str]) -> list[str]:
+    """What in this row may not be uploaded: where it is, never what it is. `accounts` are the
+    known account ids in their normal form (see `known_accounts`)."""
     hits = []
     documents = (("", json.loads(row.payload)), ("partitions ", json.loads(row.partitions)))
     for prefix, document in documents:
@@ -375,19 +436,91 @@ def privacy_hits(row: RawRow) -> list[str]:
                 continue
             if key in PLAYER_NAME_KEYS and path.endswith(PLAYER_OBJECT):
                 continue
+            if (
+                key in PLAYER_NAME_KEYS
+                and (row.source, row.endpoint) == PLAYER_LIST
+                and prefix == ""
+                and PERSON_OBJECT.fullmatch(path) is not None
+            ):
+                continue
             hits.append(f"{row.label}: key {key} at {prefix}{path}")
     if row.source == "espn":
         for prefix, document in documents:
             for path, text, is_key in _strings(document):
-                if privacy.GUID.search(text):
-                    where = "GUID in a key at" if is_key else "GUID at"
-                    hits.append(f"{row.label}: {where} {prefix}{path}")
+                if not privacy.GUID.search(text):
+                    continue
+                if _is_transaction_id(row, prefix, path, is_key):
+                    normal = _normal_guid(text)
+                    if normal is not None:
+                        if normal in accounts:
+                            hits.append(
+                                f"{row.label}: transaction id equals an account id at {path}"
+                            )
+                        continue
+                where = "GUID in a key at" if is_key else "GUID at"
+                hits.append(f"{row.label}: {where} {prefix}{path}")
         for name in ("request_path", "request_key", "file_path"):
             if privacy.GUID.search(getattr(row, name)):
                 hits.append(f"{row.source}/{row.endpoint}: GUID in {name}")
     # A path is built from the document's own keys, and a key can be an account id: mask
     # every message whole, so no part of one can carry a value (R3.3).
     return [privacy.GUID.sub("<guid>", hit) for hit in hits]
+
+
+def exempt_ids_checked(row: RawRow) -> int:
+    """How many ids of this row passed the GUID exemption: whole GUIDs at a transaction's two
+    id paths. Counted for the dry run's report."""
+    if (row.source, row.endpoint) != TRANSACTIONS:
+        return 0
+    return sum(
+        1
+        for path, text, is_key in _strings(json.loads(row.payload))
+        if _is_transaction_id(row, "", path, is_key) and _normal_guid(text) is not None
+    )
+
+
+def _guids_whole(values: Iterable[Any]) -> set[str]:
+    """The normal form of each value that is one GUID whole."""
+    return {
+        normal
+        for value in values
+        if isinstance(value, str) and (normal := _normal_guid(value)) is not None
+    }
+
+
+def _list_of(node: Any, name: str) -> list[Any]:
+    value = node.get(name) if isinstance(node, dict) else None
+    return value if isinstance(value, list) else []
+
+
+def _value_of(node: Any, name: str) -> list[Any]:
+    return [node.get(name)] if isinstance(node, dict) else []
+
+
+def known_accounts(rows: ManifestRows) -> frozenset[str]:
+    """The account ids in the run's snapshot, in their normal form (ADR 0094). Read from the
+    raw payloads of its `espn/teams` and `espn/transactions` captures, since the projected
+    rows hold none: `members[].id`, `teams[].owners[]` and `teams[].primaryOwner` of the
+    first, `topics[].author` and `topics[].messages[].author` of the second, each kept when
+    it is one GUID whole (some authors are other strings)."""
+    found: set[str] = set()
+    for capture in rows.captures:
+        pair = (capture.source, capture.endpoint)
+        if pair not in (TEAMS, TRANSACTIONS):
+            continue
+        payload = capture.landed.payload
+        if pair == TEAMS:
+            for member in _list_of(payload, "members"):
+                found |= _guids_whole(_value_of(member, "id"))
+            for team in _list_of(payload, "teams"):
+                found |= _guids_whole(_list_of(team, "owners"))
+                found |= _guids_whole(_value_of(team, "primaryOwner"))
+        else:
+            for topic in _list_of(payload, "topics"):
+                found |= _guids_whole(_value_of(topic, "author"))
+                for message in _list_of(topic, "messages"):
+                    found |= _guids_whole(_value_of(message, "author"))
+    return frozenset(found)
 
 
 class PrivacyHit(Exception):
@@ -398,7 +531,7 @@ class PrivacyHit(Exception):
         self.hits = hits
 
 
-def check(rows: Iterable[RawRow]) -> dict[tuple[str, str], int]:
+def check(rows: Iterable[RawRow], accounts: frozenset[str]) -> dict[tuple[str, str], int]:
     """Rows per endpoint, after checking every one. Raises PrivacyHit with every hit."""
     counts: dict[tuple[str, str], int] = {}
     hits: list[str] = []
@@ -409,25 +542,28 @@ def check(rows: Iterable[RawRow]) -> dict[tuple[str, str], int]:
         elif project is not None and project(json.loads(row.payload)) != json.loads(row.payload):
             # Only what the projection itself would produce may go up: a whole capture of
             # one of these endpoints is refused, however clean it looks.
-            hits.append(f"{row.label}: not in its projected form (ADR 0061)")
-        hits.extend(privacy_hits(row))
+            hits.append(f"{row.label}: not what its projection would produce")
+        hits.extend(privacy_hits(row, accounts))
         counts[(row.source, row.endpoint)] = counts.get((row.source, row.endpoint), 0) + 1
+    if TRANSACTIONS in counts and not accounts:
+        # A cross-check against nothing checks nothing (ADR 0094).
+        hits.append("no account ids were found to check transaction ids against")
     if hits:
         raise PrivacyHit(hits)
     return counts
 
 
-def export(rows: Iterable[RawRow], out_dir: Path) -> list[Path]:
+def export(rows: Iterable[RawRow], out_dir: Path, accounts: frozenset[str]) -> list[Path]:
     """One newline-delimited JSON file per endpoint, written only if every row passes the
     check. `rows` is read twice: once to check all of it, once to write."""
-    return checked_export(rows, out_dir)[1]
+    return checked_export(rows, out_dir, accounts)[1]
 
 
 def checked_export(
-    rows: Iterable[RawRow], out_dir: Path
+    rows: Iterable[RawRow], out_dir: Path, accounts: frozenset[str]
 ) -> tuple[dict[tuple[str, str], int], list[Path]]:
     """`export`, with the rows per endpoint that the check counted."""
-    counts = check(rows)
+    counts = check(rows, accounts)
     out_dir.mkdir(parents=True, exist_ok=True)
     for stale in out_dir.glob("*.ndjson"):
         stale.unlink()
@@ -587,14 +723,15 @@ def main(argv: list[str] | None = None) -> int:
         "--dry-run", action="store_true", help="check the rows and say what would be uploaded"
     )
     args = parser.parse_args(argv)
-    rows = read_rows(args.db, args.raw_root)
     try:
+        rows = read_rows(args.db, args.raw_root)
+        accounts = known_accounts(rows)
         if args.dry_run:
-            counts = check(rows)
+            counts = check(rows, accounts)
         else:
             if not args.project:
                 parser.error("--project is required unless --dry-run")
-            counts, files = checked_export(rows, args.export_dir)
+            counts, files = checked_export(rows, args.export_dir, accounts)
     except ManifestDisagrees as stopped:
         print(stopped)
         print("raw.captures and the landing zone disagree. Nothing was written or uploaded.")
@@ -607,6 +744,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{source}/{endpoint}: {count} rows")
     print(f"{sum(counts.values())} rows in {len(counts)} endpoints")
     if args.dry_run:
+        print(f"known account ids: {len(accounts)}")
+        print(f"exempt transaction ids checked: {sum(map(exempt_ids_checked, rows))}")
         print("dry run: nothing written, nothing uploaded")
         return 0
     if not billing_enabled(args.project):
