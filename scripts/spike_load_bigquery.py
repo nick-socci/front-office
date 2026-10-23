@@ -350,13 +350,19 @@ class ManifestRows:
     def __init__(self, db: Path, raw_root: Path) -> None:
         self.db = db
         self.zone = LandingZone(raw_root)
+        # One query, so the manifest is read at one point in time: a load between two
+        # endpoints' queries could otherwise list a transaction whose account the teams
+        # captures read a moment earlier did not have (pre-PR review F2).
+        manifest = self._manifest()
         self.captures: list[Capture] = []
         for source, endpoint in sorted(UPLOADED):
-            self.captures.extend(self._snapshot(source, endpoint))
+            listed = [values for values in manifest if values[:2] == (source, endpoint)]
+            self.captures.extend(self._snapshot(source, endpoint, listed))
 
-    def _snapshot(self, source: str, endpoint: str) -> list[Capture]:
+    def _snapshot(
+        self, source: str, endpoint: str, manifest: list[tuple[str, ...]]
+    ) -> list[Capture]:
         """The endpoint's captures: the manifest's rows, each tied to its committed capture."""
-        manifest = self._manifest(source, endpoint)
         landed = self._landed(source, endpoint)
         listed = {values[5] for values in manifest}
         missing = sorted(listed - landed.keys())
@@ -390,14 +396,16 @@ class ManifestRows:
             payload = project(payload)
         return RawRow(*capture.key, capture.file_path, capture.partitions, json.dumps(payload))
 
-    def _manifest(self, source: str, endpoint: str) -> list[tuple[str, ...]]:
+    def _manifest(self) -> list[tuple[str, ...]]:
+        """The manifest's narrow rows of every uploaded endpoint, in key order."""
+        wanted = " or ".join("(source = ? and endpoint = ?)" for _ in UPLOADED)
         con = duckdb.connect(str(self.db), read_only=True)
         try:
             return con.execute(
                 f"select {', '.join(KEY_COLUMNS)}, file_path, cast(partitions as varchar) "
-                "from raw.captures where source = ? and endpoint = ? "
+                f"from raw.captures where {wanted} "
                 f"order by {', '.join(KEY_COLUMNS)}",
-                [source, endpoint],
+                [part for pair in UPLOADED for part in pair],
             ).fetchall()
         finally:
             con.close()
@@ -463,7 +471,8 @@ def privacy_hits(row: RawRow, accounts: frozenset[str]) -> list[str]:
         for path, key, _ in privacy.walk(document):
             if key not in privacy.FORBIDDEN_KEYS:
                 continue
-            if key in PLAYER_NAME_KEYS and path.endswith(PLAYER_OBJECT):
+            # In an ESPN row only (R2.1): an MLB row's names are allowed at `people[i]` alone.
+            if key in PLAYER_NAME_KEYS and row.source == "espn" and path.endswith(PLAYER_OBJECT):
                 continue
             if (
                 key in PLAYER_NAME_KEYS

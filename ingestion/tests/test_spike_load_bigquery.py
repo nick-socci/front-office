@@ -798,6 +798,11 @@ def test_a_ballplayers_name_in_the_mlb_player_list_is_allowed_and_nowhere_else()
     ]
     assert len(hits("espn", "players", {"people": [person]})) == 2
     assert len(hits("mlb", "players", {"people": {"x": person}})) == 2
+    # ESPN's ballplayer object is exempt in an ESPN row only (pre-PR review F1)
+    in_espns_shape = {"people": [{"playerPoolEntry": {"player": {"firstName": "A"}}}]}
+    assert hits("mlb", "players", in_espns_shape) == [
+        "mlb/players k=1: key firstName at $.people[0].playerPoolEntry.player"
+    ]
 
 
 def test_a_guid_is_allowed_only_at_a_transactions_two_id_paths() -> None:
@@ -976,6 +981,31 @@ def test_the_manifest_is_read_once_and_everything_is_drawn_from_that_snapshot(
     shutil.rmtree(next(other_root.glob("espn/settings/*/*")))
     with pytest.raises(loader.ManifestDisagrees):
         loader.read_rows(other_db, other_root)
+
+
+def test_the_manifest_is_read_in_one_query(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catches the snapshot being one query per endpoint (pre-PR review F2): a load between
+    the teams query and the transactions query would list a transaction whose account the
+    known accounts never saw. Every endpoint's rows come from one connection and one query."""
+    db, root = _member_landing(tmp_path)
+    connections: list[object] = []
+    real_connect = duckdb.connect
+
+    def counting_connect(*args: object, **kwargs: object) -> object:
+        con = real_connect(*args, **kwargs)  # type: ignore[arg-type]
+        connections.append(con)
+        return con
+
+    monkeypatch.setattr(loader.duckdb, "connect", counting_connect)
+    rows = loader.read_rows(db, root)
+    assert len(connections) == 1
+    assert {(c.source, c.endpoint) for c in rows.captures} == {
+        ("espn", "teams"),
+        ("espn", "transactions"),
+        ("espn", "matchup_days"),
+        ("espn", "settings"),
+        ("mlb", "players"),
+    }
 
 
 def _load_late(
