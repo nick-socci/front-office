@@ -844,7 +844,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {written} captures to {args.write_landing}")
     if args.dry_run:
         print(f"known account ids: {len(accounts)}")
-        print(f"exempt transaction ids checked: {sum(map(exempt_ids_checked, rows))}")
+        # Only the transaction captures: a pass over every row would read every payload again.
+        transactions = (
+            rows.row(capture)
+            for capture in rows.captures
+            if (capture.source, capture.endpoint) == TRANSACTIONS
+        )
+        print(f"exempt transaction ids checked: {sum(map(exempt_ids_checked, transactions))}")
         print("dry run: nothing written, nothing uploaded")
         return 0
     if not billing_enabled(args.project):
