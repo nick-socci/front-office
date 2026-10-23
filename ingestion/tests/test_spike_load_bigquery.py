@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
 import duckdb
@@ -1069,3 +1070,121 @@ def test_a_dry_run_stops_on_a_transaction_id_that_equals_an_account(
     assert "transaction id equals an account id at $.topics[0].id" in shown
     assert BARE_ACCOUNT not in shown.lower()
     assert "Nothing was written or uploaded." in shown
+
+
+# -- the projection written as a landing root (R4.1, R4.3) -------------------------------------
+
+
+def _ignored_root(tmp_path: Path) -> Path:
+    """A scratch git repository that ignores `/ignored/`, and a root under it that does not
+    exist yet. `visible/` beside it is not ignored."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    (repo / ".gitignore").write_text("/ignored/\n")
+    return repo
+
+
+def _member_landing(tmp_path: Path) -> tuple[Path, Path]:
+    """A small real-looking landing root: a teams capture whose members are the known
+    accounts, a transactions capture, a matchup day and a settings capture."""
+    return _landing(
+        tmp_path,
+        [
+            ("espn", "teams", "k1", {**TEAMS, "members": [{"id": GUID}]}),
+            ("espn", "transactions", "k2", TRANSACTIONS),
+            ("espn", "matchup_days", "scoringPeriodId=12", MATCHUP_DAY),
+            ("espn", "settings", "k4", {"n": 1}),
+            ("mlb", "players", "k5", {"people": [{"id": 1, "firstName": "A"}]}),
+        ],
+    )
+
+
+def _run(db: Path, root: Path, *extra: str) -> int:
+    return loader.main(["--db", str(db), "--raw-root", str(root), "--dry-run", *extra])
+
+
+def test_the_landing_root_written_holds_the_projected_captures_under_their_own_names(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Catches a capture written under a new stamp, partitions or request, which would change
+    the capture `fo_espn_latest` picks and so what the staging models return; a whole payload
+    written in place of the projection; and an endpoint written that is not a projected one
+    (R4.1)."""
+    repo = _ignored_root(tmp_path)
+    db, root = _member_landing(tmp_path / "src")
+    target = repo / "ignored" / "proj"
+    assert _run(db, root, "--write-landing", str(target)) == 0
+    assert "wrote 3 captures" in capsys.readouterr().out
+
+    written = {(c.meta["source"], c.meta["endpoint"]): c for c in LandingZone(target).iter_landed()}
+    assert sorted(written) == [
+        ("espn", "matchup_days"),
+        ("espn", "teams"),
+        ("espn", "transactions"),
+    ]
+    projected = {
+        ("espn", "matchup_days"): loader.project_matchup_day(MATCHUP_DAY),
+        ("espn", "teams"): PROJECTED_TEAMS,
+        ("espn", "transactions"): PROJECTED_TRANSACTIONS,
+    }
+    for original in LandingZone(root).iter_landed():
+        pair = (original.meta["source"], original.meta["endpoint"])
+        if pair not in projected:
+            continue
+        copy = written[pair]
+        assert copy.payload == projected[pair]
+        assert copy.path.relative_to(target) == original.path.relative_to(root)
+        for name in ("partitions", "url", "params", "request_key", "fetched_at"):
+            assert copy.meta[name] == original.meta[name], name
+    # the manifest of the written root names the same keys as the source's
+    out = duckdb.connect(str(tmp_path / "proj.duckdb"))
+    load_landing_zone(out, LandingZone(target))
+    src = duckdb.connect(str(db), read_only=True)
+    columns = "source, endpoint, request_path, request_key, fetched_at, file_path, partitions"
+    query = (
+        f"select {columns} from raw.captures where endpoint in ({', '.join('?' * 3)}) order by all"
+    )
+    pairs = [e for _, e in sorted(projected)]
+    assert out.execute(query, pairs).fetchall() == src.execute(query, pairs).fetchall()
+
+
+def test_nothing_is_written_to_the_landing_root_when_the_check_stops(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Catches captures written before, or in spite of, a privacy hit: a transaction whose id
+    is an account id stops the upload, and the root must not exist afterwards (R4.1)."""
+    repo = _ignored_root(tmp_path)
+    teams = {"members": [{"id": GUID}], "teams": []}
+    transactions = {"topics": [{"id": BARE_ACCOUNT, "messages": []}]}
+    db, root = _landing(
+        tmp_path / "src",
+        [("espn", "teams", "k1", teams), ("espn", "transactions", "k2", transactions)],
+    )
+    target = repo / "ignored" / "proj"
+    assert _run(db, root, "--write-landing", str(target)) == 1
+    assert "Nothing was written or uploaded." in capsys.readouterr().out
+    assert not target.exists() and not (repo / "ignored").exists()
+
+
+def test_a_landing_root_git_does_not_ignore_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Catches real captures written where a commit could take them: a root that git does not
+    ignore (in a repository, outside any, or one that already exists) is refused, nothing is
+    written there, and the run says why (R4.3, R4.1)."""
+    repo = _ignored_root(tmp_path)
+    db, root = _member_landing(tmp_path / "src")
+    existing = repo / "ignored" / "old"
+    existing.mkdir(parents=True)
+    (existing / "keep.txt").write_text("x")
+    for target in (repo / "visible" / "proj", tmp_path / "outside" / "proj", existing):
+        assert _run(db, root, "--write-landing", str(target)) == 1, target
+        shown = capsys.readouterr().out
+        assert "landing root" in shown and "refused" in shown, shown
+        assert "wrote" not in shown
+    assert not (repo / "visible").exists() and not (tmp_path / "outside").exists()
+    assert sorted(p.name for p in existing.iterdir()) == ["keep.txt"]
+    with pytest.raises(loader.LandingRootRefused):
+        loader.write_landing(loader.read_rows(db, root), repo / "visible" / "proj")
+    assert not (repo / "visible").exists()

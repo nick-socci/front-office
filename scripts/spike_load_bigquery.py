@@ -48,6 +48,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 import sys
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
@@ -523,6 +524,57 @@ def known_accounts(rows: ManifestRows) -> frozenset[str]:
     return frozenset(found)
 
 
+class LandingRootRefused(Exception):
+    """The root for `--write-landing` exists, or git does not ignore it. Nothing was written."""
+
+
+def refuse_unsafe_landing_root(root: Path) -> None:
+    """Raise LandingRootRefused unless `root` is new and ignored by git (R4.3): the captures
+    written there are projections of real ones, and a commit must not be able to take them.
+    A root git cannot judge, such as one outside any repository, is refused too."""
+    if root.exists():
+        raise LandingRootRefused(f"landing root {root} exists: refused, nothing was written")
+    anchor = root.resolve().parent
+    while not anchor.exists():
+        anchor = anchor.parent
+    ignored = subprocess.run(
+        ["git", "check-ignore", "-q", "--", str(root.resolve())],
+        cwd=anchor,
+        capture_output=True,
+        check=False,
+    )
+    if ignored.returncode != 0:
+        raise LandingRootRefused(
+            f"landing root {root} is not ignored by git: refused, nothing was written"
+        )
+
+
+def write_landing(rows: ManifestRows, root: Path) -> int:
+    """Write the rows of the projected endpoints to a new landing root, as they would be
+    uploaded, each as the capture it came from: its partitions, its name, its request and its
+    `fetched_at`, so that the capture views and `fo_espn_latest` choose the same captures as
+    on the real zone (R4.1). Returns the number written. Call it after the check has passed."""
+    refuse_unsafe_landing_root(root)
+    zone = LandingZone(root)
+    written = 0
+    for capture in rows.captures:
+        if (capture.source, capture.endpoint) not in PROJECTIONS:
+            continue
+        row = rows.row(capture)
+        meta = capture.landed.meta
+        zone.write(
+            source=capture.source,
+            endpoint=capture.endpoint,
+            partitions=meta["partitions"],
+            name=capture.landed.capture.directory.name,
+            payload=json.loads(row.payload),
+            request={"url": meta["url"], "params": meta["params"]},
+            fetched_at=row.fetched_at,
+        )
+        written += 1
+    return written
+
+
 class PrivacyHit(Exception):
     """Rows hold something that may not be uploaded. Nothing was written."""
 
@@ -722,8 +774,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--dry-run", action="store_true", help="check the rows and say what would be uploaded"
     )
+    parser.add_argument(
+        "--write-landing",
+        type=Path,
+        metavar="ROOT",
+        help="after the check, write the rows of the projected endpoints to a new landing "
+        "root that git ignores, as the captures they came from; needs no credentials",
+    )
     args = parser.parse_args(argv)
     try:
+        if args.write_landing:
+            refuse_unsafe_landing_root(args.write_landing)
         rows = read_rows(args.db, args.raw_root)
         accounts = known_accounts(rows)
         if args.dry_run:
@@ -732,6 +793,9 @@ def main(argv: list[str] | None = None) -> int:
             if not args.project:
                 parser.error("--project is required unless --dry-run")
             counts, files = checked_export(rows, args.export_dir, accounts)
+    except LandingRootRefused as stopped:
+        print(stopped)
+        return 1
     except ManifestDisagrees as stopped:
         print(stopped)
         print("raw.captures and the landing zone disagree. Nothing was written or uploaded.")
@@ -743,6 +807,13 @@ def main(argv: list[str] | None = None) -> int:
     for (source, endpoint), count in sorted(counts.items()):
         print(f"{source}/{endpoint}: {count} rows")
     print(f"{sum(counts.values())} rows in {len(counts)} endpoints")
+    if args.write_landing:
+        try:
+            written = write_landing(rows, args.write_landing)
+        except LandingRootRefused as stopped:
+            print(stopped)
+            return 1
+        print(f"wrote {written} captures to {args.write_landing}")
     if args.dry_run:
         print(f"known account ids: {len(accounts)}")
         print(f"exempt transaction ids checked: {sum(map(exempt_ids_checked, rows))}")
