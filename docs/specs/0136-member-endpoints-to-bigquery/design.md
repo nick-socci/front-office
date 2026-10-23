@@ -264,3 +264,18 @@ A procedure run once by the build, not a gate:
 | design-review | F3 (P2): task 10 set the ADR statuses after the upload, while the design sets them at approval | Changed. Task 1 sets them, first thing in the build after approval |
 
 ## Amendments
+
+**2026-10-23 — R4.2's comparison excludes the matchup-days capture view (task 9).** The
+design expected `compare_warehouses.py --strict-columns` to exit 0 over everything the
+selection builds, on the grounds that only the capture views' JSON columns differ. But
+`stg_raw__espn_matchup_days` parses a declared structure (ADR 0068), so its columns are
+compared. They differ on all 1,469 rows, and only in one place: the `teamId` of a side that
+carries neither `rosterForCurrentScoringPeriod` nor `rosterForMatchupPeriod` (207,603 home
+and 204,777 away sides of 216,473 matchups). `project_matchup_day` (ADR 0061, unchanged
+here by R1.6) drops such a side whole. Matchup ids and periods, the marker's presence, the
+matchup lines and the partitions are equal row for row, and the projection never adds a
+team the real capture lacks. No model reads a team of such a side: the five staging
+relations of R4.2 are identical. So the comparison is run with
+`--exclude staging.stg_raw__espn_matchup_days` and exits 0, and the view's difference is
+recorded on #136 with the queries that bound it. Not a change of scope: R4.2 names the five
+staging relations, and the view is not one of them.
