@@ -280,3 +280,17 @@ relations of R4.2 are identical. So the comparison is run with
 `--exclude staging.stg_raw__espn_matchup_days` and exits 0, and the view's difference is
 recorded on #136 with the queries that bound it. Not a change of scope: R4.2 names the five
 staging relations, and the view is not one of them.
+
+**2026-10-23 — R5.2's read-back is narrowed to the three new endpoints (task 10, owner's
+decision).** The upload's 11 load jobs all succeeded, but its read-back of every row
+(`list_rows`, 50 rows a page, 11 GB) was still running nearly 8 hours later and then hung:
+the machine slept, and one of its connections was left in `CLOSE-WAIT` with no read in
+progress. The owner chose to stop it and check instead:
+- the 29 rows of `espn/teams`, `espn/transactions` and `mlb/players`, the endpoints this
+  spec adds, paired and compared exactly as the loader does (`compare_rows`: `file_path` as
+  text, `partitions` and `payload` as parsed JSON);
+- every endpoint's row count on BigQuery against the manifest.
+
+The other eight endpoints are unchanged by this spec. Their rows match `main`'s dry run
+(task 8), and their contents were last compared row by row when the spike uploaded them.
+The loader's full read-back is unchanged, and still runs on every upload.
