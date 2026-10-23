@@ -1,11 +1,9 @@
 # 0061. Two endpoints that hold member data are uploaded as projections of allowlisted fields
 
-- Status: proposed
+- Status: accepted, amended by [0093](0093-teams-and-transactions-go-up-as-projections-of-the-fields-staging-reads.md)
 - Date: 2026-10-12
 - Spec: [0083-past-season-rosters](../specs/0083-past-season-rosters/design.md) · Issue: #83
-
-Amends [0054](0054-only-endpoints-without-member-data-are-uploaded-and-whole.md), which
-stays in force for the seven endpoints it lists.
+- Amends: [0054](0054-only-endpoints-without-member-data-are-uploaded-and-whole.md), which stays in force for the seven endpoints it lists
 
 ## Context
 

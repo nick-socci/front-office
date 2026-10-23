@@ -118,8 +118,11 @@ Run on the real season, with the owner's go-ahead (credentials and billing).
 
 - R5.1 WHEN the loader runs with `--dry-run` on the real season THE SYSTEM SHALL report no
   privacy hit, and row counts per endpoint as in *Expected values*.
-- R5.2 WHEN the loader runs THE SYSTEM SHALL load every row, and the read-back of every row
-  of all eleven endpoints SHALL be paired and equal (spec 0130, R3.4).
+- R5.2 WHEN the loader runs THE SYSTEM SHALL load every row. The rows of the three
+  endpoints this spec adds SHALL be read back, paired and equal to their source rows, and
+  every endpoint SHALL hold as many rows on BigQuery as the manifest lists. (Amended
+  2026-10-23 by the owner, design *Amendments*. As approved, this read back every row of
+  all eleven endpoints; that read-back hung. The loader's own read-back is unchanged.)
 - R5.3 WHEN `stg_raw__espn_teams`, `stg_raw__espn_transactions` and `stg_raw__mlb_players`
   are built with `--target bq` THE SYSTEM SHALL hold as many rows as the same views on
   DuckDB.
@@ -149,6 +152,6 @@ On the real landing zone and the manifest of `data/warehouse_main_ac0e2ac.duckdb
 | Account ids found for the cross-check | 17 distinct | a count printed by the dry run |
 | GUIDs allowed at the exempt paths | 34,882 (9,779 topic ids, 25,103 message ids), none equal to an account id | a count printed by the dry run |
 | Projected sizes | teams ≈ 0.03 MB in all, transactions ≈ 4.2 MB, against 0.52 and 17.05 MB whole | export file sizes |
-| Staging from projected captures | the 5 relations of R4.2 equal | `scripts/compare_warehouses.py --strict-columns`, exit 0 |
-| Read-back | every row of 11 endpoints paired and equal | the loader's exit 0 (R5.2) |
+| Staging from projected captures | the 5 relations of R4.2 equal | `scripts/compare_warehouses.py --strict-columns --exclude staging.stg_raw__espn_matchup_days`, exit 0 (design, amendment of 2026-10-23) |
+| Read-back (R5.2, amended 2026-10-23) | the rows of the three new endpoints paired and equal; every endpoint's row count equal to the manifest | the loader's `compare_rows` on the three endpoints; a `count(*)` per endpoint |
 | BigQuery capture views | `stg_raw__espn_teams` 13, `stg_raw__espn_transactions` 7, `stg_raw__mlb_players` 9 | `count(*)` on each warehouse (R5.3) |

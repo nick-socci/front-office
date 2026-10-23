@@ -51,13 +51,16 @@ recorded on #136 during the build, and this file is not edited to show it.
      known accounts; 34,882 exempt ids. Post the output on #136.
 9. The DuckDB comparison of the design: load `data/proj136`, build the eight relations from
    it and from a fresh load of `data/raw`, and compare. — `judgment` — R4.2
-   - Verify: `scripts/compare_warehouses.py <real> <projected> --strict-columns` exits 0.
+   - Verify: `scripts/compare_warehouses.py <real> <projected> --strict-columns
+     --exclude staging.stg_raw__espn_matchup_days` exits 0 (design, amendment of 2026-10-23).
      Post the per-relation row counts on #136.
 10. With the owner's go-ahead (credentials, billing), run the upload. Then build the three
     capture views with `--target bq` and count their rows on both warehouses, passing the
     project explicitly. — `judgment` — R5.2, R5.3
-    - Verify: the loader exits 0 with every row of 11 endpoints paired and equal. The views
-      hold 13 / 7 / 9 rows on each warehouse. Post both on #136.
+    - Verify: every load job succeeds. The three new endpoints' rows, read back, are paired
+      and equal, and every endpoint's row count on BigQuery equals the manifest's (R5.2 as
+      amended on 2026-10-23). The views hold 13 / 7 / 9 rows on each warehouse. Post both
+      on #136.
 11. (last) Check every acceptance criterion and expected value against the real season, and
     record the results on #136. — `judgment` — all
     - Verify: the *Expected values* table, row by row, in one comment on #136.

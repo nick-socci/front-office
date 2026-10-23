@@ -198,7 +198,8 @@ A procedure run once by the build, not a gate:
    `dbt run --select stg_raw__espn_teams stg_raw__espn_transactions stg_raw__espn_matchup_days stg_espn__teams stg_espn__transactions stg_espn__transaction_logs stg_espn__matchup_days stg_espn__matchup_player_lines`,
    after `dbt seed --select espn_activity_types`. The real build uses a fresh warehouse
    loaded with `front-office load` from `data/raw`, so the two differ only in the payloads.
-4. `scripts/compare_warehouses.py <real> <projected> --strict-columns`, exit 0. The capture
+4. `scripts/compare_warehouses.py <real> <projected> --strict-columns
+   --exclude staging.stg_raw__espn_matchup_days`, exit 0 (amendment of 2026-10-23). The capture
    views' JSON columns are not compared (that script's rule). The five staging relations
    are.
 
@@ -264,3 +265,32 @@ A procedure run once by the build, not a gate:
 | design-review | F3 (P2): task 10 set the ADR statuses after the upload, while the design sets them at approval | Changed. Task 1 sets them, first thing in the build after approval |
 
 ## Amendments
+
+**2026-10-23 — R4.2's comparison excludes the matchup-days capture view (task 9).** The
+design expected `compare_warehouses.py --strict-columns` to exit 0 over everything the
+selection builds, on the grounds that only the capture views' JSON columns differ. But
+`stg_raw__espn_matchup_days` parses a declared structure (ADR 0068), so its columns are
+compared. They differ on all 1,469 rows, and only in one place: the `teamId` of a side that
+carries neither `rosterForCurrentScoringPeriod` nor `rosterForMatchupPeriod` (207,603 home
+and 204,777 away sides of 216,473 matchups). `project_matchup_day` (ADR 0061, unchanged
+here by R1.6) drops such a side whole. Matchup ids and periods, the marker's presence, the
+matchup lines and the partitions are equal row for row, and the projection never adds a
+team the real capture lacks. No model reads a team of such a side: the five staging
+relations of R4.2 are identical. So the comparison is run with
+`--exclude staging.stg_raw__espn_matchup_days` and exits 0, and the view's difference is
+recorded on #136 with the queries that bound it. Not a change of scope: R4.2 names the five
+staging relations, and the view is not one of them.
+
+**2026-10-23 — R5.2's read-back is narrowed to the three new endpoints (task 10, owner's
+decision).** The upload's 11 load jobs all succeeded, but its read-back of every row
+(`list_rows`, 50 rows a page, 11 GB) was still running nearly 8 hours later and then hung:
+the machine slept, and one of its connections was left in `CLOSE-WAIT` with no read in
+progress. The owner chose to stop it and check instead:
+- the 29 rows of `espn/teams`, `espn/transactions` and `mlb/players`, the endpoints this
+  spec adds, paired and compared exactly as the loader does (`compare_rows`: `file_path` as
+  text, `partitions` and `payload` as parsed JSON);
+- every endpoint's row count on BigQuery against the manifest.
+
+The other eight endpoints are unchanged by this spec. Their rows match `main`'s dry run
+(task 8), and their contents were last compared row by row when the spike uploaded them.
+The loader's full read-back is unchanged, and still runs on every upload.

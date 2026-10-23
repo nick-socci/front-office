@@ -1,6 +1,6 @@
 # 0094. A transaction's own ids go up, at their two paths, if none is a known account id
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-22
 - Spec: [0136-member-endpoints-to-bigquery](../specs/0136-member-endpoints-to-bigquery/design.md) · Issue: #136
 - Amends: [0054](0054-only-endpoints-without-member-data-are-uploaded-and-whole.md)

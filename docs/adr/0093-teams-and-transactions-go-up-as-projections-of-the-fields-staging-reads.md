@@ -1,6 +1,6 @@
 # 0093. Teams and transactions go up as projections of the fields their staging models read
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-22
 - Spec: [0136-member-endpoints-to-bigquery](../specs/0136-member-endpoints-to-bigquery/design.md) · Issue: #136
 - Amends: [0054](0054-only-endpoints-without-member-data-are-uploaded-and-whole.md), [0061](0061-two-endpoints-that-hold-member-data-are-uploaded-as-projections.md)
