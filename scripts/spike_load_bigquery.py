@@ -1,29 +1,49 @@
 """Copy the raw rows the BigQuery slice reads into BigQuery, and prove they arrived whole.
 
-Spec 0130, R3; ADRs 0052 and 0054. For the spike only: the table is replaced on every run,
-and the production loader is another sub-project's.
+Spec 0130, R3 and spec 0136; ADRs 0052, 0054, 0061 and 0093 to 0095. For the spike only: the
+table is replaced on every run, and the production loader is another sub-project's.
 
 Usage:  uv run --group bigquery python scripts/spike_load_bigquery.py \\
-            --db data/warehouse.duckdb --raw-root data/raw --project "$FO_BQ_PROJECT" [--dry-run]
+            --db data/warehouse.duckdb --raw-root data/raw --project "$FO_BQ_PROJECT" \\
+            [--dry-run] [--write-landing ROOT]
 
 What it does, in order:
 
 1. Reads the keys of `raw.captures` from the local warehouse, read-only, and each payload
-   from the landing zone (`--raw-root`) through `LandingZone`, for nine endpoints and no
-   others, and stops if the manifest and the zone do not name the same captures. Seven of
-   the constant ALLOWLIST are read whole, and two as projections (ADR 0061).
-   `espn/transactions` carries members' names and account ids, and `espn/matchup_days`
-   carries `teams` and `settings`: of the first nothing of the payload is uploaded, of the
-   second the ids, the marker's presence and ESPN's matchup lines (spec 0147) that its
-   models read, rebuilt from a list of wanted fields.
-   There is no option to widen either list. `espn/teams` is never read here.
+   from the landing zone (`--raw-root`) through `LandingZone`, for eleven endpoints and no
+   others, and stops if the manifest and the zone do not name the same captures. The
+   manifest's captures are read once, when the run starts: the known accounts of step 2,
+   the check, the export and `--write-landing` are all drawn from that one set, so a capture
+   loaded while the run is under way is neither written unchecked nor missing from the
+   accounts. Eight of the constant ALLOWLIST are read whole (`mlb/players`, MLB's player
+   list, among them, ADR 0095), and three as projections (ADRs 0061 and 0093), each a payload
+   rebuilt from a list of wanted fields, never by removing unwanted ones, and keeping only
+   single values (string, number, boolean, null), never an object or an array:
+   - `espn/matchup_days` carries `teams` and `settings`: the ids, the marker's presence and
+     ESPN's matchup lines (spec 0147) that its models read;
+   - `espn/teams` carries `members`, owners and account ids: its `id` and `seasonId`, and per
+     team the fixtures' `ESPN_TEAM_FIELDS`;
+   - `espn/transactions` carries an author and account ids: per topic its `id` and `date`,
+     per message its `id` and the fixtures' `ESPN_TRANSACTION_MESSAGE_FIELDS`.
+   The two lists of wanted fields are imported from `scripts/make_fixtures.py`, so one list
+   per endpoint serves the fixtures and the upload. There is no option to widen any list.
 2. Checks every row before anything is written. A key that names a person
-   (`privacy.FORBIDDEN_KEYS`) is a hit in any row; the one exception is `firstName` and
-   `lastName` directly in a `playerPoolEntry.player` object, which name a ballplayer. An
-   ESPN account id (`privacy.GUID`) is a hit anywhere in a row whose source is `espn`; MLB
-   rows are not checked for it, because MLB's `gameGuid` is a public game id of the same
-   shape. On any hit it prints the endpoint, the request and the path, never the value,
-   and exits 1 having written nothing.
+   (`privacy.FORBIDDEN_KEYS`) is a hit in any row. There are two exceptions, both for
+   `firstName` and `lastName`, which name a ballplayer: directly in a
+   `playerPoolEntry.player` object, and directly in an object of `$.people[]` of an
+   `mlb/players` row. An ESPN account id (`privacy.GUID`) is a hit anywhere in a row whose
+   source is `espn`; MLB rows are not checked for it, because MLB's `gameGuid` is a public
+   game id of the same shape. The one exception is the id of a transaction's topic and
+   message, `$.topics[i].id` and `$.topics[i].messages[j].id` of an `espn/transactions`
+   row, when the whole string is one GUID (ADR 0094). Each such id is cross-checked against
+   the account ids found in the raw payloads of the snapshot's `espn/teams` captures
+   (`members[].id`, `teams[].owners[]`, `teams[].primaryOwner`) and `espn/transactions`
+   captures (`topics[].author`, `topics[].messages[].author`), compared with braces and case
+   ignored; an id equal to one is a hit. With transaction rows to upload and no account id
+   found, the upload stops, since a check against nothing checks nothing. A row of a
+   projected endpoint that is not exactly what its projection would produce is a hit too.
+   On any hit it prints the endpoint, the request and the path, never the value, and exits 1
+   having written nothing.
 3. Writes one newline-delimited JSON file per endpoint under `data/bigquery_export/`, which
    is gitignored.
 4. Confirms that billing is enabled on the project (R2.7), then loads the files into
@@ -34,8 +54,16 @@ What it does, in order:
    warehouses write the same JSON as different text. Exits 1 unless every row is paired and
    equal.
 
-`--dry-run` does steps 1 and 2, prints what it would upload, and stops. It needs neither
-credentials nor the `bigquery` dependency group.
+`--dry-run` does steps 1 and 2, prints what it would upload, with the number of known
+accounts and of transaction ids it cross-checked, and stops. It needs neither credentials
+nor the `bigquery` dependency group.
+
+`--write-landing ROOT`, with or without `--dry-run` and needing no credentials, also writes,
+once the check has passed, every row of the three projected endpoints to a new landing root
+as the capture it came from (its partitions, capture name, request and `fetched_at`), so that
+dbt's staging models can be built from the projection and compared with the real build. It
+refuses, and writes nothing, a ROOT that exists or that `git check-ignore` does not report as
+ignored.
 
 The rows come from the manifest and the landing zone, and the capture views dbt reads on
 either warehouse read exactly the manifest's files, so both builds read the same captures
