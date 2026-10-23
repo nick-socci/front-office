@@ -58,6 +58,11 @@ import duckdb
 from front_office import privacy
 from front_office.landing import LandedResponse, LandingZone
 
+# The field lists the fixtures are built from: one list per endpoint serves the fixtures and
+# the upload (ADR 0093). The module defines constants and functions and looks its roots up
+# per call, so importing it does nothing.
+from make_fixtures import ESPN_TEAM_FIELDS, ESPN_TRANSACTION_MESSAGE_FIELDS
+
 # The only endpoints that may leave the machine (ADR 0054). Not configurable.
 ALLOWLIST: tuple[tuple[str, str], ...] = (
     ("mlb", "boxscore"),
@@ -67,10 +72,12 @@ ALLOWLIST: tuple[tuple[str, str], ...] = (
     ("espn", "settings"),
     ("espn", "pro_schedule"),
     ("idmap", "player_id_map"),
+    # Whole, with ballplayers' names (ADR 0095).
+    ("mlb", "players"),
 )
 # Endpoints that hold member data and go up as a projection: a payload rebuilt from a list
-# of wanted fields, made before the check and never by removing unwanted ones (ADR 0061).
-# The functions are defined below; PROJECTIONS maps each endpoint to its own.
+# of wanted fields, made before the check and never by removing unwanted ones (ADR 0061,
+# 0093). The functions are defined below; PROJECTIONS maps each endpoint to its own.
 MARKER = "rosterForCurrentScoringPeriod"
 # ESPN's own record of what each player was credited with in a matchup (spec 0147), and the
 # ids of one of its stat lines that are uploaded beside its `stats`.
@@ -199,17 +206,71 @@ def project_matchup_day(payload: Any) -> dict[str, Any]:
     return projected
 
 
+def _single(value: Any) -> bool:
+    """A string, number, boolean or null: never an object or an array."""
+    return value is None or isinstance(value, (str, int, float, bool))
+
+
+def _rebuild(source: Any, fields: Iterable[str]) -> dict[str, Any]:
+    """A new object holding only the listed dotted paths that exist in `source` and end in a
+    single value. A value that is an object or an array is left out, since every listed field
+    is one value and anything nested under it is not a field a model reads (R1.5). Unlike
+    `make_fixtures.rebuild`, which copies whatever it finds."""
+    out: dict[str, Any] = {}
+    if not isinstance(source, dict):
+        return out
+    for dotted in fields:
+        parts = dotted.split(".")
+        node: Any = source
+        for part in parts:
+            if not isinstance(node, dict) or part not in node:
+                break
+            node = node[part]
+        else:
+            if _single(node):
+                cursor = out
+                for part in parts[:-1]:
+                    cursor = cursor.setdefault(part, {})
+                cursor[parts[-1]] = node
+    return out
+
+
+def project_teams(payload: Any) -> dict[str, Any]:
+    """What of a `teams` response is uploaded: what stg_espn__teams reads (the ids, and for
+    each team the fixtures' ESPN_TEAM_FIELDS) and nothing else, so no `members`, no
+    `owners` and no `primaryOwner` (ADR 0093)."""
+    projected = _rebuild(payload, ("id", "seasonId"))
+    teams = payload.get("teams") if isinstance(payload, dict) else None
+    projected["teams"] = [
+        _rebuild(team, ESPN_TEAM_FIELDS) for team in (teams if isinstance(teams, list) else [])
+    ]
+    return projected
+
+
 def project_transactions(payload: Any) -> dict[str, Any]:
-    """Nothing of a transaction log is uploaded: stg_espn__transaction_logs reads a
-    capture's partitions and time, never its payload."""
-    return {}
+    """What of a transaction log is uploaded: what stg_espn__transactions reads. Each topic's
+    `id` and `date`, and each message's `id` and the fixtures'
+    ESPN_TRANSACTION_MESSAGE_FIELDS; no `author`, no `creationInfo` (ADR 0093)."""
+    topics = payload.get("topics") if isinstance(payload, dict) else None
+    projected = []
+    for topic in topics if isinstance(topics, list) else []:
+        kept = _rebuild(topic, ("id", "date"))
+        messages = topic.get("messages") if isinstance(topic, dict) else None
+        kept["messages"] = [
+            _rebuild(message, ("id", *ESPN_TRANSACTION_MESSAGE_FIELDS))
+            for message in (messages if isinstance(messages, list) else [])
+        ]
+        projected.append(kept)
+    return {"topics": projected}
 
 
 PROJECTIONS: dict[tuple[str, str], Any] = {
+    ("espn", "teams"): project_teams,
     ("espn", "transactions"): project_transactions,
     ("espn", "matchup_days"): project_matchup_day,
 }
-# Everything that is read for upload: ADR 0054's seven whole, ADR 0061's two projected.
+# Everything that is read for upload: ADR 0054's seven and ADR 0095's player list whole,
+# ADR 0061's and ADR 0093's three projected.
 UPLOADED: tuple[tuple[str, str], ...] = (*ALLOWLIST, *PROJECTIONS)
 
 

@@ -151,31 +151,43 @@ def _landing(
     return db, zone.root
 
 
-def test_only_the_seven_endpoints_are_read(tmp_path: Path) -> None:
-    """Catches teams, transactions or MLB's player list being read for upload, and a row of
-    an allowed endpoint being left behind."""
-    pairs = [*loader.ALLOWLIST, ("espn", "teams"), ("mlb", "players")]
+LISTED = {
+    ("mlb", "boxscore"),
+    ("mlb", "schedule"),
+    ("mlb", "players"),
+    ("espn", "roster"),
+    ("espn", "matchups"),
+    ("espn", "settings"),
+    ("espn", "pro_schedule"),
+    ("espn", "teams"),
+    ("espn", "transactions"),
+    ("espn", "matchup_days"),
+    ("idmap", "player_id_map"),
+}
+
+
+def test_only_the_listed_endpoints_are_read(tmp_path: Path) -> None:
+    """Catches an endpoint being read that no ADR allows (here `espn/draft`), and one of the
+    eleven (ADRs 0054, 0061, 0093, 0095) being left out, in particular `mlb/players`."""
+    pairs = [*sorted(LISTED), ("espn", "draft")]
     db, root = _landing(tmp_path, [(s, e, f"k{n}", {"n": 1}) for n, (s, e) in enumerate(pairs)])
     rows = list(loader.read_rows(db, root))
-    assert sorted({(r.source, r.endpoint) for r in rows}) == sorted(loader.ALLOWLIST)
-    assert len(rows) == 7
-    assert set(loader.ALLOWLIST) == {
-        ("mlb", "boxscore"),
-        ("mlb", "schedule"),
-        ("espn", "roster"),
-        ("espn", "matchups"),
-        ("espn", "settings"),
-        ("espn", "pro_schedule"),
-        ("idmap", "player_id_map"),
+    assert sorted((r.source, r.endpoint) for r in rows) == sorted(LISTED)
+    assert len(rows) == 11
+    assert set(loader.UPLOADED) == LISTED
+    assert set(loader.ALLOWLIST) == LISTED - {
+        ("espn", "teams"),
+        ("espn", "transactions"),
+        ("espn", "matchup_days"),
     }
 
 
 def test_a_row_off_the_allowlist_stops_the_upload_however_clean_it_is() -> None:
     """Catches the second guard going: reading takes only the listed endpoints, and the
     check refuses any other row it is handed, so a caller that builds its own rows cannot
-    upload `teams`."""
+    upload `draft`."""
     with pytest.raises(loader.PrivacyHit) as raised:
-        loader.check([row("espn", "teams", {"teams": []})])
+        loader.check([row("espn", "draft", {"teams": []})])
     assert any("not on the allowlist" in hit for hit in raised.value.hits)
     assert loader.check([row("espn", "settings", {"teams": []})]) == {("espn", "settings"): 1}
 
@@ -442,43 +454,207 @@ def test_a_payload_of_an_unexpected_shape_projects_to_what_it_can() -> None:
     assert loader.project_matchup_day([GUID]) == {"schedule": []}
 
 
-def test_a_transactions_capture_goes_up_with_no_payload() -> None:
-    """Catches any part of a transaction log leaving the machine: its topics carry authors
-    and account ids, and the one model that reads these captures reads no payload."""
-    assert loader.project_transactions({"topics": [{"author": GUID}]}) == {}
+TEAMS = {
+    "id": 73677,
+    "seasonId": 2025,
+    "gameId": 1,
+    "members": [MEMBER],
+    "status": {"currentMatchupPeriod": 2},
+    "teams": [
+        {
+            "id": 1,
+            "abbrev": "ABC",
+            "name": "The Team",
+            "logo": "https://x.test/logo.png",
+            "owners": [GUID],
+            "primaryOwner": GUID,
+            "playoffSeed": 2,
+            "eliminated": False,
+            "unknownKey": {"author": GUID},
+            "record": {
+                "overall": {
+                    "wins": 10,
+                    "losses": 4,
+                    "ties": 1,
+                    "streakLength": 3,
+                    "streakType": "WIN",
+                    "pointsFor": 1234.5,
+                },
+                "home": {"wins": 5},
+            },
+        },
+        {"id": 2, "name": "Another"},
+    ],
+}
+PROJECTED_TEAMS = {
+    "id": 73677,
+    "seasonId": 2025,
+    "teams": [
+        {
+            "id": 1,
+            "abbrev": "ABC",
+            "name": "The Team",
+            "playoffSeed": 2,
+            "eliminated": False,
+            "record": {
+                "overall": {
+                    "wins": 10,
+                    "losses": 4,
+                    "ties": 1,
+                    "streakLength": 3,
+                    "streakType": "WIN",
+                }
+            },
+        },
+        {"id": 2, "name": "Another"},
+    ],
+}
+TOPIC_ID = "5b1c0f3e-0a8e-4d2c-9e57-0c5f6a1b2d3e"
+MESSAGE_ID = "0e9d8c7b-6a5f-4e3d-8c2b-1a0f9e8d7c6b"
+TRANSACTIONS = {
+    "status": {"x": 1},
+    "topics": [
+        {
+            "id": TOPIC_ID,
+            "date": 1700000000000,
+            "author": GUID,
+            "creationInfo": {"source": GUID},
+            "unknownKey": 1,
+            "messages": [
+                {
+                    "id": MESSAGE_ID,
+                    "date": 1700000000001,
+                    "messageTypeId": 178,
+                    "targetId": 39832,
+                    "to": 3,
+                    "from": 4,
+                    "for": 1,
+                    "author": GUID,
+                    "topicId": TOPIC_ID,
+                    "creationInfo": {"source": GUID},
+                    "unknownKey": GUID,
+                }
+            ],
+        }
+    ],
+}
+PROJECTED_TRANSACTIONS = {
+    "topics": [
+        {
+            "id": TOPIC_ID,
+            "date": 1700000000000,
+            "messages": [
+                {
+                    "id": MESSAGE_ID,
+                    "date": 1700000000001,
+                    "messageTypeId": 178,
+                    "targetId": 39832,
+                    "to": 3,
+                    "from": 4,
+                    "for": 1,
+                }
+            ],
+        }
+    ]
+}
 
 
-def test_the_two_endpoints_are_read_already_projected_and_pass_the_check(tmp_path: Path) -> None:
-    """Catches the raw payload of either endpoint reaching the check, the export or the
-    read-back comparison: what is read for upload is the projection, so every later step
-    sees only that."""
+def test_a_team_goes_up_as_the_fixtures_team_fields() -> None:
+    """Catches anything beyond the fixtures' ESPN_TEAM_FIELDS going up (the response holds
+    `members`, `owners`, `primaryOwner`, a logo and a key nobody listed), a wanted field
+    being lost, and the loader keeping a list of its own: the list is the fixtures' tuple
+    itself (ADR 0093, R1.4)."""
+    import make_fixtures
+
+    assert loader.ESPN_TEAM_FIELDS is make_fixtures.ESPN_TEAM_FIELDS
+    projected = loader.project_teams(TEAMS)
+    assert projected == PROJECTED_TEAMS
+    text = json.dumps(projected)
+    assert GUID not in text and "members" not in projected and "owners" not in text
+
+
+def test_a_transaction_goes_up_as_its_ids_and_message_fields() -> None:
+    """Catches `author`, `creationInfo`, `topicId` or an unlisted key going up from a
+    transaction log, and a field staging reads (a topic's id and date, a message's id and
+    the fixtures' ESPN_TRANSACTION_MESSAGE_FIELDS) being lost (ADR 0093, R1.3, R1.4)."""
+    import make_fixtures
+
+    assert loader.ESPN_TRANSACTION_MESSAGE_FIELDS is make_fixtures.ESPN_TRANSACTION_MESSAGE_FIELDS
+    projected = loader.project_transactions(TRANSACTIONS)
+    assert projected == PROJECTED_TRANSACTIONS
+    assert GUID not in json.dumps(projected)
+
+
+def test_a_nested_value_at_a_wanted_field_is_dropped() -> None:
+    """Catches an object or array smuggled in under a wanted name (`name: {firstName: …}`,
+    a `to` that is a list, `record.overall` that is an array): the projection keeps single
+    values only, where fixtures' `rebuild` copies whatever it finds (R1.5)."""
+    team = {
+        "id": 1,
+        "name": {"firstName": "A", "owners": [GUID]},
+        "abbrev": [GUID],
+        "record": {"overall": {"wins": {"x": 1}, "losses": 2}},
+    }
+    projected = loader.project_teams({"id": {"x": GUID}, "seasonId": [1], "teams": [team]})
+    assert projected == {"teams": [{"id": 1, "record": {"overall": {"losses": 2}}}]}
+
+    message = {"id": MESSAGE_ID, "to": {"author": GUID}, "from": [GUID], "for": None, "date": 5}
+    topic = {"id": {"author": GUID}, "date": [1], "messages": [message]}
+    assert loader.project_transactions({"topics": [topic]}) == {
+        "topics": [{"messages": [{"id": MESSAGE_ID, "for": None, "date": 5}]}]
+    }
+
+
+def test_a_teams_or_transactions_payload_of_an_unexpected_shape_projects_to_what_it_can() -> None:
+    """Catches the projection crashing, or passing a value through, when ESPN answers with
+    something else: no teams, teams that are not a list, no topics, messages that are not a
+    list, a payload that is not an object."""
+    assert loader.project_teams({"id": 1}) == {"id": 1, "teams": []}
+    assert loader.project_teams({"teams": GUID}) == {"teams": []}
+    assert loader.project_teams([GUID]) == {"teams": []}
+    assert loader.project_transactions({"topics": "x"}) == {"topics": []}
+    assert loader.project_transactions([GUID]) == {"topics": []}
+    assert loader.project_transactions({"topics": [{"id": TOPIC_ID, "messages": GUID}]}) == {
+        "topics": [{"id": TOPIC_ID, "messages": []}]
+    }
+
+
+def test_the_three_endpoints_are_read_already_projected_and_pass_the_check(tmp_path: Path) -> None:
+    """Catches the raw payload of any of the three endpoints reaching the check, the export
+    or the read-back comparison: what is read for upload is the projection, so every later
+    step sees only that. Also `mlb/players` being projected: it goes up whole (ADR 0095)."""
+    people = {"people": [{"id": 1, "fullName": "A Player", "firstName": "A", "extra": [1]}]}
     db, root = _landing(
         tmp_path,
         [
-            ("espn", "transactions", "k1", {"topics": [{"author": GUID, "messages": []}]}),
+            ("espn", "transactions", "k1", TRANSACTIONS),
             ("espn", "matchup_days", "scoringPeriodId=12", MATCHUP_DAY),
             ("espn", "settings", "k3", {"n": 1}),
-            ("espn", "teams", "k4", {"teams": []}),
+            ("espn", "teams", "k4", TEAMS),
+            ("mlb", "players", "k5", people),
         ],
     )
     rows = {(r.source, r.endpoint): r for r in loader.read_rows(db, root)}
     assert sorted(rows) == [
         ("espn", "matchup_days"),
         ("espn", "settings"),
+        ("espn", "teams"),
         ("espn", "transactions"),
+        ("mlb", "players"),
     ]
-    assert json.loads(rows[("espn", "transactions")].payload) == {}
+    assert json.loads(rows[("espn", "transactions")].payload) == PROJECTED_TRANSACTIONS
+    assert json.loads(rows[("espn", "teams")].payload) == PROJECTED_TEAMS
     assert json.loads(rows[("espn", "matchup_days")].payload) == loader.project_matchup_day(
         MATCHUP_DAY
     )
     assert json.loads(rows[("espn", "settings")].payload) == {"n": 1}
+    assert json.loads(rows[("mlb", "players")].payload) == people
     assert json.loads(rows[("espn", "transactions")].partitions) == {"season": 2025}
-    assert loader.check(loader.read_rows(db, root)) == {
-        ("espn", "matchup_days"): 1,
-        ("espn", "settings"): 1,
-        ("espn", "transactions"): 1,
+    assert set(loader.PROJECTIONS) == {
+        ("espn", "teams"),
+        ("espn", "transactions"),
+        ("espn", "matchup_days"),
     }
-    assert set(loader.PROJECTIONS) == {("espn", "transactions"), ("espn", "matchup_days")}
 
 
 # -- the manifest and the landing zone must agree (spec 0150, R5.2) ---------------------------
@@ -543,10 +719,26 @@ def test_a_row_of_a_projected_endpoint_that_was_not_projected_stops_the_upload()
     with pytest.raises(loader.PrivacyHit) as raised:
         loader.check([whole])
     assert raised.value.hits == ["espn/matchup_days k=1: not in its projected form (ADR 0061)"]
-    with pytest.raises(loader.PrivacyHit):
-        loader.check([row("espn", "transactions", {"topics": []})])
     projected = row("espn", "matchup_days", loader.project_matchup_day(MATCHUP_DAY))
     assert loader.check([projected]) == {("espn", "matchup_days"): 1}
+
+
+def test_a_whole_teams_or_transactions_capture_is_refused() -> None:
+    """Catches a raw capture of `espn/teams` or `espn/transactions` reaching the export when
+    a caller builds its own rows: a whole capture is refused as not in its projected form
+    (R2.5), not only by the key and GUID patterns. A teams row is refused for that reason
+    and not for being off the allowlist."""
+    for endpoint, whole in (("teams", TEAMS), ("transactions", TRANSACTIONS)):
+        with pytest.raises(loader.PrivacyHit) as raised:
+            loader.check([row("espn", endpoint, whole)])
+        assert any("not in its projected form" in hit for hit in raised.value.hits)
+        assert not any("allowlist" in hit for hit in raised.value.hits)
+        assert GUID not in "".join(raised.value.hits)
+    # nothing the privacy patterns know, and still refused
+    clean = {"id": 1, "teams": [{"id": 1, "logo": "x"}]}
+    with pytest.raises(loader.PrivacyHit) as raised:
+        loader.check([row("espn", "teams", clean)])
+    assert raised.value.hits == ["espn/teams k=1: not in its projected form (ADR 0061)"]
 
 
 def test_a_guid_left_in_a_projected_row_still_stops_the_upload() -> None:
