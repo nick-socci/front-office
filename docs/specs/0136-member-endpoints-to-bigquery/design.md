@@ -198,7 +198,8 @@ A procedure run once by the build, not a gate:
    `dbt run --select stg_raw__espn_teams stg_raw__espn_transactions stg_raw__espn_matchup_days stg_espn__teams stg_espn__transactions stg_espn__transaction_logs stg_espn__matchup_days stg_espn__matchup_player_lines`,
    after `dbt seed --select espn_activity_types`. The real build uses a fresh warehouse
    loaded with `front-office load` from `data/raw`, so the two differ only in the payloads.
-4. `scripts/compare_warehouses.py <real> <projected> --strict-columns`, exit 0. The capture
+4. `scripts/compare_warehouses.py <real> <projected> --strict-columns
+   --exclude staging.stg_raw__espn_matchup_days`, exit 0 (amendment of 2026-10-23). The capture
    views' JSON columns are not compared (that script's rule). The five staging relations
    are.
 

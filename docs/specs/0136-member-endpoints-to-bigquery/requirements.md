@@ -149,6 +149,6 @@ On the real landing zone and the manifest of `data/warehouse_main_ac0e2ac.duckdb
 | Account ids found for the cross-check | 17 distinct | a count printed by the dry run |
 | GUIDs allowed at the exempt paths | 34,882 (9,779 topic ids, 25,103 message ids), none equal to an account id | a count printed by the dry run |
 | Projected sizes | teams ≈ 0.03 MB in all, transactions ≈ 4.2 MB, against 0.52 and 17.05 MB whole | export file sizes |
-| Staging from projected captures | the 5 relations of R4.2 equal | `scripts/compare_warehouses.py --strict-columns`, exit 0 |
+| Staging from projected captures | the 5 relations of R4.2 equal | `scripts/compare_warehouses.py --strict-columns --exclude staging.stg_raw__espn_matchup_days`, exit 0 (design, amendment of 2026-10-23) |
 | Read-back | every row of 11 endpoints paired and equal | the loader's exit 0 (R5.2) |
 | BigQuery capture views | `stg_raw__espn_teams` 13, `stg_raw__espn_transactions` 7, `stg_raw__mlb_players` 9 | `count(*)` on each warehouse (R5.3) |

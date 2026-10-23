@@ -51,7 +51,8 @@ recorded on #136 during the build, and this file is not edited to show it.
      known accounts; 34,882 exempt ids. Post the output on #136.
 9. The DuckDB comparison of the design: load `data/proj136`, build the eight relations from
    it and from a fresh load of `data/raw`, and compare. — `judgment` — R4.2
-   - Verify: `scripts/compare_warehouses.py <real> <projected> --strict-columns` exits 0.
+   - Verify: `scripts/compare_warehouses.py <real> <projected> --strict-columns
+     --exclude staging.stg_raw__espn_matchup_days` exits 0 (design, amendment of 2026-10-23).
      Post the per-relation row counts on #136.
 10. With the owner's go-ahead (credentials, billing), run the upload. Then build the three
     capture views with `--target bq` and count their rows on both warehouses, passing the
