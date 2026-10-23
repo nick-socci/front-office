@@ -636,7 +636,10 @@ def check(rows: Iterable[RawRow], accounts: frozenset[str]) -> dict[tuple[str, s
         counts[(row.source, row.endpoint)] = counts.get((row.source, row.endpoint), 0) + 1
     if TRANSACTIONS in counts and not accounts:
         # A cross-check against nothing checks nothing (ADR 0094).
-        hits.append("no account ids were found to check transaction ids against")
+        hits.append(
+            f"espn/transactions: {counts[TRANSACTIONS]} row(s), and no account ids were found "
+            "to check their ids against"
+        )
     if hits:
         raise PrivacyHit(hits)
     return counts

@@ -886,7 +886,9 @@ def test_transaction_rows_with_no_known_accounts_stop_the_upload() -> None:
     rows = [transactions_row("t-1"), transactions_row("t-2", request_key="k=2")]
     with pytest.raises(loader.PrivacyHit) as raised:
         loader.check(rows, frozenset())
-    assert raised.value.hits == ["no account ids were found to check transaction ids against"]
+    assert raised.value.hits == [
+        "espn/transactions: 2 row(s), and no account ids were found to check their ids against"
+    ]
     assert loader.check(rows, ACCOUNTS) == {("espn", "transactions"): 2}
     settings = row("espn", "settings", {"n": 1})
     assert loader.check([settings], frozenset()) == {("espn", "settings"): 1}
