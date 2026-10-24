@@ -1,6 +1,6 @@
 # 0098. The CI fixtures carry matchup-days captures of their own matchups
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-23
 - Spec: [0178-matchup-days-fixture](../specs/0178-matchup-days-fixture/design.md) · Issue: #178
 
