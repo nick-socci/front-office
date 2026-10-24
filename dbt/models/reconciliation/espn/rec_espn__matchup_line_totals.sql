@@ -19,8 +19,8 @@
 -- The sum is in a fixed order, the player id, as every floating-point sum here is.
 --
 -- Ephemeral: dbt inlines it as a CTE in each model that refs it, so it adds no relation
--- to the BigQuery comparison. In CI there are no matchup-days captures, so it is empty
--- there; its logic is covered by a unit test.
+-- to the BigQuery comparison. CI holds three matchup-days captures of the fixture's
+-- matchups, so it has rows there; its logic is also covered by a unit test.
 
 {{ config(materialized='ephemeral') }}
 

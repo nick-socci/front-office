@@ -203,8 +203,9 @@ models:
       One row per (scoring period, matchup period): the matchup period ESPN marked, with
       rosterForCurrentScoringPeriod on its matchup sides, in the response it gave for that
       scoring period. The mapping for a past season, whose matchups carry no
-      pointsByScoringPeriod (ADR 0055). Empty where no matchup_days response is loaded,
-      which includes CI. scoring_period is the one asked for, not read from the payload.
+      pointsByScoringPeriod (ADR 0055). Empty where no matchup_days response is loaded;
+      in CI, three rows, from the fixture's captures of scoring periods 1, 6 and 7.
+      scoring_period is the one asked for, not read from the payload.
     columns:
       - name: league_id
         data_tests: [not_null]
@@ -229,8 +230,8 @@ models:
       value that is not a number is left out. A matchup's lines come from the newest
       capture of the last scoring period of its matchup period that has a capture, and
       scoring_period and fetched_at say which. Empty where no matchup_days response is
-      loaded, which includes CI. Staged for the reconciliation (spec 0147); no name or
-      member data is read.
+      loaded; in CI, the lines of the fixture's two matchups, from its period-7 capture.
+      Staged for the reconciliation (spec 0147); no name or member data is read.
     columns:
       - name: league_id
         data_tests: [not_null]

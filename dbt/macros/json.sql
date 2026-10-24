@@ -383,9 +383,10 @@
   does not parse fails the view and names its file either way.
 
   read_json errors on a glob that matches nothing, and an endpoint can have no captures
-  (the CI fixtures have no matchup days), so the glob is counted first, when dbt runs the
-  model, and an empty endpoint gives the same columns and no rows. hive_partitioning is
-  off: the partition levels differ in depth within one endpoint (espn/transactions).
+  (a new endpoint, or one a league has never fetched), so the glob is counted first, when
+  dbt runs the model, and an empty endpoint gives the same columns and no rows.
+  hive_partitioning is off: the partition levels differ in depth within one endpoint
+  (espn/transactions).
 #}
 {% macro duckdb__fo_captures(source_name, endpoint, structure) %}
     {%- set root = fo_landing_root() -%}

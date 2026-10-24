@@ -30,8 +30,8 @@
 --
 -- A plain table: it reads every capture at once, as the view streams them (spec 0150).
 --
--- In CI there are no matchup_days captures, so this model is empty there; its logic is
--- covered by unit tests.
+-- CI holds three matchup_days captures of the fixture's two matchups (2026, scoring periods
+-- 1, 6 and 7), so this model has three rows there; its logic is also covered by unit tests.
 
 {{ config(materialized='table') }}
 
