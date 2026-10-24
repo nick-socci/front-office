@@ -356,4 +356,19 @@ Their SQL is still run, once (R5.2):
     see this, so AGENTS.md's list of what the empty build finds names it.
   The 205 skipped nodes followed from the second: `dbt build` skips what is downstream of
   a failed test.
+- **2026-10-24, the empty build on BigQuery (task 11, rounds 2 to 4).**
+  - `int_fantasy__replacement_pool_has_played_days` (newly selected with
+    `int_fantasy__replacement_levels`) wrote `max(pool_played_days) as pool_played_days`
+    and `having max(pool_played_days)`. BigQuery reads the bare column in HAVING as the
+    alias and refuses an aggregate of an aggregate. The column is now qualified.
+  - `int_fantasy__started_days_match_the_starting_slots` fails over no rows by design: it
+    fails when there are no started days. In `dbt build` a failing test skips everything
+    downstream of its model (148 nodes here), so task 11 runs as `dbt seed`, then
+    `dbt run --empty`, then `dbt test` over the empty tables (`dbt test` has no `--empty`;
+    it reads what the run built). R4.1 asks for no error from BigQuery. A test that fails
+    over no rows because it needs rows is reported as such, not counted as an error.
+  - `rec_fantasy__category_wins_by_group` named a CTE `groups`, a word BigQuery reserves
+    and DuckDB does not. The CTE is now `group_fits`. The rule test gains a pattern for a
+    CTE named with one of the words BigQuery reserves that a model might use, with its
+    cases (R2.2).
 

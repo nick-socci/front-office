@@ -75,6 +75,15 @@ _REFUSED = (
     # to_hex(md5(...)) is refused too: on DuckDB it is the hex of the hex text.
     ("md5", re.compile(r"\bmd5\s*\(", re.IGNORECASE)),
     ("concat_ws", re.compile(r"\bconcat_ws\s*\(", re.IGNORECASE)),
+    # A CTE named with a word BigQuery reserves and DuckDB does not (spec 0135, task 11).
+    (
+        "CTE named a BigQuery reserved word",
+        re.compile(
+            r"(?:^|\bwith\b|,)\s*(?:groups|rows|range|window|lookup|rollup|cube|grouping|"
+            r"partition|struct|array|hash|merge|enum|proto|define|qualify)\s+as\s*\(",
+            re.IGNORECASE,
+        ),
+    ),
 )
 # BigQuery's own SQL may unnest, in a FROM clause; regexp_extract with two arguments is its
 # spelling too.
@@ -251,6 +260,9 @@ def test_the_slice_and_the_macros_it_reaches_hold_no_sql_bigquery_refuses(
         ("select corr(y, x order by k) from t", "corr(... order by ...)"),
         ("select md5(s) from t", "md5"),
         ("select concat_ws('|', a, b) from t", "concat_ws"),
+        ("with groups as (select 1)", "CTE named a BigQuery reserved word"),
+        ("), rows as (select 1)", "CTE named a BigQuery reserved word"),
+        ("groups as (", "CTE named a BigQuery reserved word"),
     ],
 )
 def test_each_refused_construct_is_caught_with_its_line_number(sql: str, what: str) -> None:
