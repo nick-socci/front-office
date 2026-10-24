@@ -5,7 +5,9 @@ tested directly rather than trusted. The rule: a field nobody listed cannot appe
 fixture, no matter where it sits in the payload.
 """
 
+import csv
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -795,6 +797,7 @@ def test_the_2026_fixture_season_is_untouched_by_the_past_season():
     (R3.3). Their bytes are held by git; this holds the set."""
     kinds = {(c.meta["source"], c.meta["endpoint"]) for c in committed_of_season(2026)}
     assert kinds == {
+        ("espn", "matchup_days"),
         ("espn", "matchups"),
         ("espn", "pro_schedule"),
         ("espn", "roster"),
@@ -805,6 +808,143 @@ def test_the_2026_fixture_season_is_untouched_by_the_past_season():
         ("mlb", "players"),
         ("mlb", "schedule"),
     }
+
+
+# -- the 2026 matchup-day fixtures (spec 0178, R2.2, R3.5, R3.6) -------------------------------
+
+
+def committed_matchup_days() -> dict[int, object]:
+    """The committed 2026 matchup-days captures by scoring period (read through the zone)."""
+    return {
+        c.meta["partitions"]["scoring_period"]: c
+        for c in committed_of_season(2026)
+        if c.meta["endpoint"] == "matchup_days"
+    }
+
+
+def committed_2026_matchups() -> list:
+    (capture,) = (c for c in committed_of_season(2026) if c.meta["endpoint"] == "matchups")
+    return capture.payload["schedule"]
+
+
+def list_leaf_paths(node, prefix=""):
+    """Paths down to scalars, descending into lists (an element is written `[]`). The stat-id
+    map inside a stat line is one leaf, `...stats[].stats`, and is checked on the way: keys
+    all digits, values scalar numbers or strings (ESPN writes "Infinity" for stat 82)."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            path = f"{prefix}.{key}" if prefix else key
+            if key == "stats" and prefix.endswith("stats[]"):
+                assert isinstance(value, dict), path
+                for stat_id, number in value.items():
+                    assert stat_id.isdigit(), f"{path}: key {stat_id!r}"
+                    assert isinstance(number, int | float | str), f"{path}.{stat_id}"
+                yield path
+            else:
+                yield from list_leaf_paths(value, path)
+    elif isinstance(node, list):
+        for element in node:
+            yield from list_leaf_paths(element, f"{prefix}[]")
+    else:
+        yield prefix
+
+
+def matchup_day_allowed_paths() -> set[str]:
+    allowed = {"id", "seasonId", "scoringPeriodId", "schedule[].id", "schedule[].matchupPeriodId"}
+    for side in ("home", "away"):
+        entry = f"schedule[].{side}.{make_fixtures.MATCHUP_DAY_LINES}.entries[]"
+        allowed.add(f"schedule[].{side}.teamId")
+        allowed.add(f"{entry}.playerId")
+        for field in make_fixtures.ESPN_MATCHUP_DAY_LINE_FIELDS:
+            allowed.add(f"{entry}.playerPoolEntry.player.stats[].{field}")
+    return allowed
+
+
+def test_the_matchup_days_fixtures_are_periods_one_six_and_seven_of_the_fixture_matchups():
+    """Catches a missing, extra or renumbered matchup-days capture, a wrong partition, id or
+    request, or a schedule that is not the committed matchups fixture's matchups, in the
+    same order (R2.2, R3.5)."""
+    captures = [c for c in committed_of_season(2026) if c.meta["endpoint"] == "matchup_days"]
+    assert len(captures) == 3
+    by_period = committed_matchup_days()
+    assert sorted(by_period) == [1, 6, 7]
+    expected = [
+        (m["id"], m["home"]["teamId"], m["away"]["teamId"]) for m in committed_2026_matchups()
+    ]
+    assert expected
+    for period, capture in by_period.items():
+        assert capture.meta["partitions"] == {
+            "season": 2026,
+            "league_id": "111111",
+            "scoring_period": period,
+        }
+        assert capture.meta["params"] == {
+            "view": "mMatchupScore,mScoreboard",
+            "scoringPeriodId": period,
+        }
+        payload = capture.payload
+        assert payload["id"] == "111111"
+        assert payload["scoringPeriodId"] == period
+        got = [(m["id"], m["home"]["teamId"], m["away"]["teamId"]) for m in payload["schedule"]]
+        assert got == expected
+
+
+def test_the_matchup_days_fixtures_hold_only_allowlisted_paths_and_an_empty_marker():
+    """Catches any key outside the allowlist at any depth of a list (a name added to an entry,
+    say), a non-numeric stat id, a nested stat value, or a marker that carries contents
+    instead of being `{}` (R2.2)."""
+    allowed = matchup_day_allowed_paths()
+    captures = committed_matchup_days()
+    assert len(captures) == 3
+    for capture in captures.values():
+        payload = capture.payload
+        for path in list_leaf_paths(payload):
+            assert path in allowed, path
+        for matchup in payload["schedule"]:
+            for side in ("home", "away"):
+                assert matchup[side][make_fixtures.MATCHUP_DAY_MARKER] == {}
+
+
+def test_the_period_seven_lines_add_up_to_the_matchups_fixture_totals_of_count_stats():
+    """Catches a line value changed, dropped or duplicated, or lines of another matchup or
+    period: for every count stat the matchups fixture scores, the side's actual lines
+    (source 0, split 5, numeric values) must sum to its cumulative score (R3.6)."""
+    seeds = Path(__file__).resolve().parents[2] / "dbt/seeds/espn_stat_components.csv"
+    with seeds.open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    ratio = {r["stat_id"] for r in rows if r["part"] == "denominator"}
+    count_stats = {r["stat_id"] for r in rows} - ratio
+    assert len(count_stats) == 21
+
+    totals = {
+        (m["id"], side): m[side]["cumulativeScore"]["scoreByStat"]
+        for m in committed_2026_matchups()
+        for side in ("home", "away")
+    }
+    compared = 0
+    for matchup in committed_matchup_days()[7].payload["schedule"]:
+        for side in ("home", "away"):
+            sums: dict[str, float] = {}
+            for entry in matchup[side][make_fixtures.MATCHUP_DAY_LINES]["entries"]:
+                for line in entry["playerPoolEntry"]["player"]["stats"]:
+                    if line["statSourceId"] != 0 or line["statSplitTypeId"] != 5:
+                        continue
+                    for stat_id, value in line["stats"].items():
+                        if isinstance(value, int | float) and not isinstance(value, bool):
+                            sums[stat_id] = sums.get(stat_id, 0) + value
+            score_by_stat = totals[(matchup["id"], side)]
+            for stat_id in sorted(count_stats & set(score_by_stat)):
+                want = score_by_stat[stat_id]["score"]
+                got = sums.get(stat_id, 0)
+                assert math.isclose(got, want, rel_tol=0, abs_tol=1e-9), (
+                    matchup["id"],
+                    side,
+                    stat_id,
+                    got,
+                    want,
+                )
+                compared += 1
+    assert compared == 80
 
 
 def test_the_date_check_runs_on_the_season_it_is_given(roots):
