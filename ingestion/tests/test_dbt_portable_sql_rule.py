@@ -71,14 +71,16 @@ _REFUSED = (
     ("type varchar", re.compile(r"(?<!\")\bvarchar\b(?!\")", re.IGNORECASE)),
     ("type double", re.compile(r"(?<!\")\bdouble\b(?!\")", re.IGNORECASE)),
     ("type timestamptz", re.compile(r"(?<!\")\btimestamptz\b(?!\")", re.IGNORECASE)),
-    # BigQuery's md5 returns BYTES, not hex text (fo_md5_hex). to_hex(md5(...)) is the
-    # hex text, and is what the macro's bigquery__ form says.
-    ("md5", re.compile(r"(?<!to_hex\()\bmd5\s*\(", re.IGNORECASE)),
+    # BigQuery's md5 returns BYTES, not hex text (fo_md5_hex). Outside a bigquery__ form,
+    # to_hex(md5(...)) is refused too: on DuckDB it is the hex of the hex text.
+    ("md5", re.compile(r"\bmd5\s*\(", re.IGNORECASE)),
     ("concat_ws", re.compile(r"\bconcat_ws\s*\(", re.IGNORECASE)),
 )
 # BigQuery's own SQL may unnest, in a FROM clause; regexp_extract with two arguments is its
 # spelling too.
 _ALLOWED_IN_BIGQUERY_FORM = frozenset({"unnest(", "regexp_extract"})
+# In a bigquery__ form, md5 is BigQuery's own only as the hex text DuckDB's md5 gives.
+_MD5_AS_HEX = re.compile(r"\bto_hex\s*\(\s*md5\s*\(", re.IGNORECASE)
 # An aggregate BigQuery will not take an order inside.
 _ORDERED_AGGREGATE = re.compile(r"\b(sum|avg|corr)\s*\(", re.IGNORECASE)
 _ORDER_BY = re.compile(r"\border\s+by\b", re.IGNORECASE)
@@ -99,6 +101,8 @@ def refused_constructs(sql: str, *, bigquery_form: bool = False) -> list[tuple[i
         for what, pattern in _REFUSED:
             if bigquery_form and what in _ALLOWED_IN_BIGQUERY_FORM:
                 continue
+            if bigquery_form and what == "md5":
+                line = _MD5_AS_HEX.sub("to_hex(", line)
             if pattern.search(line):
                 found.append((number, what))
     for match in _ORDERED_AGGREGATE.finditer(code):
@@ -310,6 +314,7 @@ def test_a_bigquery_form_may_unnest_and_nothing_else() -> None:
     # md5 is allowed only as to_hex(md5(...)), the hex text that DuckDB's md5 gives
     assert refused_constructs("to_hex(md5(s))", bigquery_form=True) == []
     assert refused_constructs("md5(s)", bigquery_form=True) == [(1, "md5")]
+    assert refused_constructs("to_hex(md5(s))") == [(1, "md5")]
 
 
 def test_an_order_in_a_window_or_a_nested_call_is_not_an_ordered_aggregate() -> None:
