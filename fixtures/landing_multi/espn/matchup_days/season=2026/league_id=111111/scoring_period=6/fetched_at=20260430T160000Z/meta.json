@@ -1,0 +1,16 @@
+{
+  "source": "espn",
+  "endpoint": "matchup_days",
+  "partitions": {
+    "season": 2026,
+    "league_id": "111111",
+    "scoring_period": 6
+  },
+  "url": "https://lm-api-reads.fantasy.espn.com/",
+  "params": {
+    "view": "mMatchupScore,mScoreboard",
+    "scoringPeriodId": 6
+  },
+  "request_key": "scoringPeriodId=6&view=mMatchupScore,mScoreboard",
+  "fetched_at": "20260430T160000Z"
+}

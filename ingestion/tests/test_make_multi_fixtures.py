@@ -70,7 +70,32 @@ def test_four_league_seasons_are_present():
     """Catches a missing tenant."""
     for league, season in LEAGUE_SEASONS:
         endpoints = {m["endpoint"] for m in espn_meta(COMMITTED, league, season)}
-        assert endpoints == {"settings", "teams", "roster", "matchups", "transactions"}
+        assert endpoints == {
+            "settings",
+            "teams",
+            "roster",
+            "matchups",
+            "matchup_days",
+            "transactions",
+        }
+
+
+def test_matchup_days_follow_the_length_of_each_season():
+    """Catches a 2027 league that keeps the matchup days of periods 6 and 7 (a one-period
+    season has only period 1), a 2026 league that loses one, and a capture whose payload id
+    is still the base league's."""
+    for league, season in LEAGUE_SEASONS:
+        captures = [
+            c
+            for c in LandingZone(COMMITTED).committed(source="espn", endpoint="matchup_days")
+            if c.meta["partitions"]["season"] == season
+            and c.meta["partitions"]["league_id"] == league
+        ]
+        periods = sorted(c.meta["partitions"]["scoring_period"] for c in captures)
+        assert periods == ([1] if season == 2027 else [1, 6, 7])
+        for capture in captures:
+            assert capture.payload["id"] == league
+            assert capture.payload["seasonId"] == season
 
 
 def test_leagues_of_a_season_share_every_fetch_stamp():
