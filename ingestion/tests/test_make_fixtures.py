@@ -1660,7 +1660,7 @@ def test_build_espn_matchup_days_writes_one_allowlisted_capture_per_period(roots
                 },
             }
         },
-        _real_matchup(2, 5),
+        _real_matchup(2, 5) | {"away": {}},  # a bye ESPN writes as an empty side
         _real_matchup(3, 8, 9),
     ]
     for p in make_fixtures.FIXTURE_MATCHUP_DAY_PERIODS:
