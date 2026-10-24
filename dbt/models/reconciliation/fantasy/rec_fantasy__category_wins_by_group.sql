@@ -74,20 +74,25 @@ groups as (
         season,
         replacement_group,
         count(*) as pairs,
-        count(*) filter (
-            where category_wins_added is null or total_value is null
+        count(
+            case when category_wins_added is null or total_value is null then 1 end
         ) as pairs_unmeasured,
         -- In a fixed order, as every floating-point sum here is.
-        sum(category_wins_added * total_value order by platform_player_id, fantasy_team_id)
+        {{ fo_sum_in_order(
+            'category_wins_added * total_value', 'platform_player_id, fantasy_team_id'
+        ) }}
         / nullif(
-            sum(total_value * total_value order by platform_player_id, fantasy_team_id)
-            filter (where category_wins_added is not null),
+            {{ fo_sum_in_order(
+                'case when category_wins_added is not null then total_value * total_value end',
+                'platform_player_id, fantasy_team_id'
+            ) }},
             0
         ) as slope,
         -- In the same fixed order as the sums above: corr() is a floating-point aggregate
         -- too, and its last digit follows the order of its rows (ADR 0046).
-        corr(category_wins_added, total_value order by platform_player_id, fantasy_team_id)
-            as correlation
+        {{ fo_corr_in_order(
+            'category_wins_added', 'total_value', 'platform_player_id, fantasy_team_id'
+        ) }} as correlation
     from pairs
     group by platform, league_id, season, replacement_group
 
