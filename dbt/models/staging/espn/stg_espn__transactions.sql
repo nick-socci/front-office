@@ -143,7 +143,9 @@ left join {{ ref('espn_activity_types') }} as activities
 where activities.is_transaction is distinct from false
 -- Every page of a run shares one fetched_at, so recency cannot choose between two copies
 -- of a message that straddles a page boundary: the page (request_key) and topic do.
+-- A losing copy's topic_id is untested, so its null order is stated: BigQuery's ascending
+-- default puts nulls first, DuckDB's last.
 {{ fo_latest_by_entity(
     ['league_id', 'season', fo_json_string('message', '$.id') | trim],
-    order_by='fetched_at desc, request_key, topic_id'
+    order_by='fetched_at desc, request_key, topic_id nulls last'
 ) }}
