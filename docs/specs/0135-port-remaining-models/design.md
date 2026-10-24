@@ -348,7 +348,8 @@ Their SQL is still run, once (R5.2):
     file glob. The old selector never took it, because some capture views lay outside it;
     the exclusion form takes it. It is a check of DuckDB's glob, so the selector now
     excludes it by name beside the solver, and the selector's data tests are **435**: 365
-    generic and 70 singular, where they were 365 and 71. R1.1 is read with this exclusion.
+    generic and 70 singular, where they were 365 and 71. R1.1 is read with this exclusion,
+    which the owner accepted on 2026-10-24 (PR #192, review round 1).
   - `stg_idmap__covers_started_players` (spec 0177, added after the last BigQuery build)
     names a CTE `started_players` and a `count(*) as started_players` in one SELECT, and
     BigQuery reads `started_players.league_id` in GROUP BY as a field of the count. The CTE
