@@ -108,7 +108,7 @@ Within A, two smaller choices were weighed:
   capture is always the last. {1, 6, 7}, the fixture's days of data, makes that choice
   pick 7 out of three, and gives `mark_one_period` and `answer_the_period_asked` three
   captures to judge. {1…7} adds four days that have no roster or game data, for +466 KB.
-  **{1, 6, 7} is proposed.** This is part of the ADR, and the owner may prefer {7}.
+  **{1, 6, 7}: chosen by the owner on 2026-10-23** (ADR 0098).
 - **Whose projection.** `spike_load_bigquery.project_matchup_day` already defines what of
   a matchup-days response goes up to BigQuery (ADR 0061), and the fixture could import it.
   But the fixture builder keeps its own allowlists per endpoint, as dotted tuples checked
@@ -122,7 +122,7 @@ Within A, two smaller choices were weighed:
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0098](../../adr/0098-the-ci-fixtures-carry-matchup-days-captures-of-their-own-matchups.md) | The CI fixtures carry real matchup-days captures of the fixture's own matchups, for scoring periods 1, 6 and 7 | proposed |
+| [0098](../../adr/0098-the-ci-fixtures-carry-matchup-days-captures-of-their-own-matchups.md) | The CI fixtures carry real matchup-days captures of the fixture's own matchups, for scoring periods 1, 6 and 7. Option and periods chosen by the owner, 2026-10-23 | proposed (until the spec is approved) |
 
 ## Detailed design
 
@@ -237,8 +237,8 @@ URL.
 
 ## Open questions
 
-- None that block the design. The choice of {1, 6, 7} over {7} goes to the owner with the
-  ADR.
+- None. The owner settled the three open decisions on 2026-10-23: option A (real captures
+  of the matchups' own days), scoring periods {1, 6, 7}, and tier M.
 
 ## Review log
 

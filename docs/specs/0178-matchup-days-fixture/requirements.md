@@ -1,6 +1,6 @@
 # The CI fixtures carry ESPN matchup-days captures of their own matchups — requirements
 
-Issue: #178 · Tier: M · Status: draft
+Issue: #178 · Tier: M (confirmed by the owner, 2026-10-23) · Status: draft
 
 ## Problem
 

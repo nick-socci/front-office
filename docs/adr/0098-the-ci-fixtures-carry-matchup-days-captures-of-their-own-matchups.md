@@ -43,7 +43,8 @@ Within option 1, the set of periods: {1, 6, 7}, {7} alone, or {1 … 7}.
 
 ## Decision
 
-Proposed: **option 1, with scoring periods {1, 6, 7}**. It is the only option that keeps
+Chosen by the owner on 2026-10-23, going through the spec's decisions: **option 1, with
+scoring periods {1, 6, 7}**. It is the only option that keeps
 every ESPN value as sent and also runs the models end to end in CI. Its lines agree with
 the fixture's totals (C8). The captures follow the matchups, not the rosters, so their
 period numbers need no renumbering. {1, 6, 7} are the fixture's days of data, and three
@@ -72,6 +73,10 @@ period-1 capture, as they already do for rosters.
   R1.7).
 - Bad / accepted cost: the CI build no longer runs `duckdb__fo_captures`' branch for an
   endpoint with no captures. A pytest on a temporary landing zone still holds it (C15).
+- Bad / accepted cost: the new lines describe the matchups' real days (1, 6 and 7), not
+  the rosters' (real 31, 36 and 37). So CI cannot check that a side's lines agree with its
+  rosters and game lines. And `rec_espn__matchup_stat_differences` stays all `unverified`
+  (96 rows), so its verified statuses still have no CI row (ADR 0087).
 - Follow-ups: the marker fallback of `int_fantasy__matchup_periods` stays without a CI row,
   because 2026 lists every fixture day itself. Exercising it would take a fixture season
   that has no `pointsByScoringPeriod`.
