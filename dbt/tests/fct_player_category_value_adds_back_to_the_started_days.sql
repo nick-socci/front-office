@@ -19,7 +19,7 @@ with team_components as (
         season,
         fantasy_team_id,
         '{{ column }}' as component,
-        cast(sum({{ column }}) as double) as component_total
+        cast(sum({{ column }}) as {{ fo_type_float() }}) as component_total
     from {{ ref('int_fantasy__started_player_days') }}
     group by platform, league_id, season, fantasy_team_id
     {{ 'union all' if not loop.last }}

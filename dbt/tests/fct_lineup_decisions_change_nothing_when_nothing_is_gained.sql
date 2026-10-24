@@ -17,7 +17,7 @@ select
     season,
     matchup_period,
     fantasy_team_id,
-    sum(value_gap order by scoring_date) as period_gap,
+    {{ fo_sum_in_order('value_gap', 'scoring_date') }} as period_gap,
     sum(players_brought_in) as players_brought_in,
     sum(players_sat) as players_sat,
     sum(players_moved) as players_moved
@@ -25,5 +25,5 @@ from {{ ref('fct_lineup_decisions') }}
 where not is_unvalued
 group by platform, league_id, season, matchup_period, fantasy_team_id
 having
-    sum(value_gap order by scoring_date) < 5e-10
+    {{ fo_sum_in_order('value_gap', 'scoring_date') }} < 5e-10
     and sum(players_brought_in) + sum(players_sat) + sum(players_moved) > 0

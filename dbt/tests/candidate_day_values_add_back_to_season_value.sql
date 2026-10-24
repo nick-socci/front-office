@@ -53,7 +53,7 @@ day_sums as (
         started_days.season,
         started_days.platform_player_id,
         started_days.fantasy_team_id,
-        count(*) filter (where day_values.day_value is null) as null_days,
+        count(case when day_values.day_value is null then 1 end) as null_days,
         coalesce(sum(day_values.day_value), 0) as day_total
     from started_days
     inner join {{ ref('int_fantasy__candidate_day_values') }} as day_values

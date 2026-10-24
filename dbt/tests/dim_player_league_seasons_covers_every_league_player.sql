@@ -19,7 +19,7 @@ from (
         season,
         platform_player_id
     from {{ ref('int_fantasy__roster_days') }}
-    union
+    union distinct
     select
         platform,
         league_id,

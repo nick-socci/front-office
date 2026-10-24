@@ -69,13 +69,13 @@ gap_below_zero as (
         matchup_period,
         cast(null as date) as scoring_date,
         fantasy_team_id,
-        cast(null as varchar) as slot_role,
-        sum(value_gap order by scoring_date) as measured,
+        cast(null as {{ fo_type_text() }}) as slot_role,
+        {{ fo_sum_in_order('value_gap', 'scoring_date') }} as measured,
         cast(null as bigint) as expected_at_least
     from {{ ref('fct_lineup_decisions') }}
     where not is_unvalued
     group by platform, league_id, season, matchup_period, fantasy_team_id
-    having sum(value_gap order by scoring_date) < -1e-9
+    having {{ fo_sum_in_order('value_gap', 'scoring_date') }} < -1e-9
 
 ),
 
@@ -90,7 +90,7 @@ fewer_than_played as (
         actual.scoring_date,
         actual.fantasy_team_id,
         actual.slot_role,
-        cast(coalesce(assigned.assigned_players, 0) as double) as measured,
+        cast(coalesce(assigned.assigned_players, 0) as {{ fo_type_float() }}) as measured,
         actual.played_starters as expected_at_least
     from actual_by_role as actual
     -- Unvalued team-days have no optimal lineup by design (R3.5); they are not a breach.
