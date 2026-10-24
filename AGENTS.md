@@ -79,10 +79,11 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
 
 ## dbt gotchas
 
-- A model of the BigQuery slice (`bigquery_slice` in `dbt/selectors.yml`) is written once
-  for both warehouses: SQL DuckDB and BigQuery both accept, and a dispatched `fo_*` macro
-  from `dbt/macros/portable.sql` or `json.sql` for the rest (ADR 0051). No `::`, no
-  `filter (where …)`, no `unnest` in a SELECT list, no `varchar` or `double`.
+- Every SQL model is written once for both warehouses, and `bigquery_slice` (in
+  `dbt/selectors.yml`) is what BigQuery builds: every model but the lineup solver and the
+  three models that read it. A model is SQL DuckDB and BigQuery both accept, and a
+  dispatched `fo_*` macro from `dbt/macros/portable.sql` or `json.sql` for the rest (ADR
+  0051). No `::`, no `filter (where …)`, no `unnest` in a SELECT list, no `varchar` or `double`.
   `test_dbt_portable_sql_rule.py` fails on the constructs it has a pattern for. It cannot
   see a type in YAML, date arithmetic, or a bare column in HAVING: those are found by
   `dbt run --target bq --selector bigquery_slice --empty`, which costs nothing. A ported
