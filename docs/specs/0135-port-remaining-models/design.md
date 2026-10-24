@@ -371,4 +371,14 @@ Their SQL is still run, once (R5.2):
     and DuckDB does not. The CTE is now `group_fits`. The rule test gains a pattern for a
     CTE named with one of the words BigQuery reserves that a model might use, with its
     cases (R2.2).
+- **2026-10-24, the solver readers over no rows (task 12, round 1).**
+  - `int_fantasy__lineup_category_totals` cross-joined `(values ('actual'), ('optimal'))`,
+    a table constructor BigQuery does not have. It is now a CTE `lineups` holding a
+    `union all` of two selects, which both warehouses accept and which gives the same two
+    rows. The rule test gains a pattern for a VALUES list in a FROM clause (R2.2).
+  - `fct_lineup_decisions_change_nothing_when_nothing_is_gained` summed
+    `players_brought_in` into a column of the same name and summed it again in HAVING:
+    the alias case of task 11. Its columns are now qualified.
+  The 24 "not found" errors of that round followed from the first: the model was not
+  built, and the model and the tests that read it found no table.
 

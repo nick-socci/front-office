@@ -75,6 +75,8 @@ _REFUSED = (
     # to_hex(md5(...)) is refused too: on DuckDB it is the hex of the hex text.
     ("md5", re.compile(r"\bmd5\s*\(", re.IGNORECASE)),
     ("concat_ws", re.compile(r"\bconcat_ws\s*\(", re.IGNORECASE)),
+    # A VALUES list as a table: BigQuery has no table constructor (spec 0135, task 12).
+    ("values list in from", re.compile(r"\(\s*values\s*\(", re.IGNORECASE)),
     # A CTE named with a word BigQuery reserves and DuckDB does not (spec 0135, task 11).
     (
         "CTE named a BigQuery reserved word",
@@ -261,6 +263,7 @@ def test_the_slice_and_the_macros_it_reaches_hold_no_sql_bigquery_refuses(
         ("select md5(s) from t", "md5"),
         ("select concat_ws('|', a, b) from t", "concat_ws"),
         ("with groups as (select 1)", "CTE named a BigQuery reserved word"),
+        ("cross join (values ('a'), ('b')) as t (x)", "values list in from"),
         ("), rows as (select 1)", "CTE named a BigQuery reserved word"),
         ("groups as (", "CTE named a BigQuery reserved word"),
     ],

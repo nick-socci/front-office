@@ -181,6 +181,16 @@ sides as (
 
 ),
 
+-- The two lineups each side is totalled for. A union, not a VALUES list: BigQuery has no
+-- table constructor.
+lineups as (
+
+    select 'actual' as lineup
+    union all
+    select 'optimal' as lineup
+
+),
+
 side_totals as (
 
     select
@@ -192,7 +202,7 @@ side_totals as (
         coalesce(sum(credited.{{ column }}), 0) as {{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from sides
-    cross join (values ('actual'), ('optimal')) as lineups (lineup)
+    cross join lineups
     left join {{ ref('int_fantasy__matchup_periods') }} as periods
         on periods.platform = sides.platform
         and periods.league_id = sides.league_id

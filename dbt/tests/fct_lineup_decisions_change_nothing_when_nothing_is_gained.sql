@@ -11,19 +11,29 @@
 -- team-day's own gap says nothing about whether it should. The gap is the sum of the days'
 -- gaps, in date order. Unvalued team-periods have no gap and are not tested.
 
+-- The columns are qualified: BigQuery reads a bare players_brought_in in HAVING as the
+-- output alias, an aggregate, and refuses an aggregate of it.
 select
-    platform,
-    league_id,
-    season,
-    matchup_period,
-    fantasy_team_id,
-    {{ fo_sum_in_order('value_gap', 'scoring_date') }} as period_gap,
-    sum(players_brought_in) as players_brought_in,
-    sum(players_sat) as players_sat,
-    sum(players_moved) as players_moved
-from {{ ref('fct_lineup_decisions') }}
-where not is_unvalued
-group by platform, league_id, season, matchup_period, fantasy_team_id
+    decisions.platform,
+    decisions.league_id,
+    decisions.season,
+    decisions.matchup_period,
+    decisions.fantasy_team_id,
+    {{ fo_sum_in_order('decisions.value_gap', 'decisions.scoring_date') }} as period_gap,
+    sum(decisions.players_brought_in) as players_brought_in,
+    sum(decisions.players_sat) as players_sat,
+    sum(decisions.players_moved) as players_moved
+from {{ ref('fct_lineup_decisions') }} as decisions
+where not decisions.is_unvalued
+group by
+    decisions.platform,
+    decisions.league_id,
+    decisions.season,
+    decisions.matchup_period,
+    decisions.fantasy_team_id
 having
-    {{ fo_sum_in_order('value_gap', 'scoring_date') }} < 5e-10
-    and sum(players_brought_in) + sum(players_sat) + sum(players_moved) > 0
+    {{ fo_sum_in_order('decisions.value_gap', 'decisions.scoring_date') }} < 5e-10
+    and sum(decisions.players_brought_in)
+    + sum(decisions.players_sat)
+    + sum(decisions.players_moved)
+    > 0
