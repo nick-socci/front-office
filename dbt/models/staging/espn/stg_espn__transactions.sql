@@ -106,9 +106,10 @@ select
     messages.topic_id,
     {{ fo_json_text('message', '$.id') }} as transaction_id,
     to_timestamp({{ fo_json_int('message', '$.date') }} / 1000) as transacted_at,
-    {{ fo_eastern_date(
-        'to_timestamp(' ~ fo_json_int('message', '$.date') | trim ~ ' / 1000)::timestamp'
-    ) }}
+    -- From the milliseconds, not from transacted_at: casting a timestamptz to a timestamp
+    -- gives the session's wall-clock time, so the date followed the machine's time zone
+    -- (#188, ADR 0097). fo_timestamp_from_millis gives the UTC time fo_eastern_date reads.
+    {{ fo_eastern_date(fo_timestamp_from_millis(fo_json_int('message', '$.date') | trim)) }}
         as transaction_date,
     {{ fo_json_int('message', '$.messageTypeId') }} as message_type_id,
     activities.activity,

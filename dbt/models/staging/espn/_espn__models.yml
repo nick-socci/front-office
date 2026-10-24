@@ -857,6 +857,44 @@ unit_tests:
         - {league_id: "A", season: 2025, fetched_at: "2026-09-02 00:00:00"}
         - {league_id: "B", season: 2026, fetched_at: "2026-09-03 00:00:00"}
 
+  - name: transactions_are_dated_by_the_eastern_date_of_their_instant
+    description: >
+      #188, ADR 0097. Each message's `date` is milliseconds since 1970 UTC; its
+      transaction_date is the Eastern date of that instant, whatever the session's time
+      zone. m1 is 00:15 EDT on 04-11 (04:15 UTC): catches the instant being turned into
+      a wall-clock time in the session's zone before it is read as UTC, which in New York
+      gives 04-10. CI runs in UTC, where that bug gives the right answer, so
+      test_transaction_date_time_zone.py also runs this test under America/New_York. m2 is
+      23:30 EDT on 04-11 (03:30 UTC on 04-12): catches the UTC date. m3 is 23:30 EST on
+      01-15: catches a fixed four-hour offset in place of the zone's own.
+    model: stg_espn__transactions
+    given:
+      # format: sql, so dbt needs no built parent to read column types from, and the
+      # pytest can run this test against an empty warehouse.
+      - input: ref('stg_raw__espn_transactions')
+        format: sql
+        rows: |
+          select
+              'espn' as source, 'transactions' as endpoint, '/a' as request_path,
+              'x' as request_key, '20261001T000000Z' as fetched_at,
+              '{"season": 2026, "league_id": "A"}'::JSON as partitions, 'a1' as file_path,
+              '{"topics": [{"id": "t1", "date": 1775880933000, "messages": [
+                  {"id": "m1", "date": 1775880933000, "messageTypeId": 178, "targetId": 1, "to": 3, "from": -1, "for": 0},
+                  {"id": "m2", "date": 1775964600000, "messageTypeId": 178, "targetId": 2, "to": 3, "from": -1, "for": 0},
+                  {"id": "m3", "date": 1768537800000, "messageTypeId": 178, "targetId": 3, "to": 3, "from": -1, "for": 0}
+              ]}]}'::JSON as payload
+      - input: ref('espn_activity_types')
+        format: sql
+        rows: |
+          select
+              178::BIGINT as message_type_id, 'FA ADDED' as activity, true as is_transaction,
+              'add' as movement, 'free_agent' as method, 'to' as team_field
+    expect:
+      rows:
+        - {transaction_id: m1, transaction_date: "2026-04-11"}
+        - {transaction_id: m2, transaction_date: "2026-04-11"}
+        - {transaction_id: m3, transaction_date: "2026-01-15"}
+
   - name: roster_entries_keep_only_the_newer_capture_of_a_scoring_period
     description: >
       Catches a superseded capture's rows surviving. Two captures of one league, season
