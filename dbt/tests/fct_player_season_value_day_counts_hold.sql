@@ -29,10 +29,12 @@ with recomputed as (
         platform_player_id,
         fantasy_team_id,
         count(*) as started_days,
-        count(*) filter (where input_status not in ('played', 'verified_off'))
+        count(case when input_status not in ('played', 'verified_off') then 1 end)
             as unverified_started_days,
-        count(*) filter (where slot_role = 'hitter' and games_batted > 0) as hitter_played_days,
-        count(*) filter (where slot_role = 'pitcher' and games_pitched > 0) as pitcher_played_days
+        count(case when slot_role = 'hitter' and games_batted > 0 then 1 end)
+            as hitter_played_days,
+        count(case when slot_role = 'pitcher' and games_pitched > 0 then 1 end)
+            as pitcher_played_days
     from {{ ref('int_fantasy__started_player_days') }}
     group by platform, league_id, season, platform_player_id, fantasy_team_id
 
@@ -80,7 +82,7 @@ where
     or fact.played_started_days
     is distinct from recomputed.hitter_played_days + recomputed.pitcher_played_days
 
-union
+union distinct
 
 -- A category's side comes from its components in int_fantasy__stat_components and the
 -- fo_*_columns lists, NOT from the fact row being checked: a row whose side and played

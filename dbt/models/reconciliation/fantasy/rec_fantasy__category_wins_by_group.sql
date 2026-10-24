@@ -66,7 +66,7 @@ pairs as (
 
 ),
 
-groups as (
+group_fits as (
 
     select
         platform,
@@ -74,56 +74,61 @@ groups as (
         season,
         replacement_group,
         count(*) as pairs,
-        count(*) filter (
-            where category_wins_added is null or total_value is null
+        count(
+            case when category_wins_added is null or total_value is null then 1 end
         ) as pairs_unmeasured,
         -- In a fixed order, as every floating-point sum here is.
-        sum(category_wins_added * total_value order by platform_player_id, fantasy_team_id)
+        {{ fo_sum_in_order(
+            'category_wins_added * total_value', 'platform_player_id, fantasy_team_id'
+        ) }}
         / nullif(
-            sum(total_value * total_value order by platform_player_id, fantasy_team_id)
-            filter (where category_wins_added is not null),
+            {{ fo_sum_in_order(
+                'case when category_wins_added is not null then total_value * total_value end',
+                'platform_player_id, fantasy_team_id'
+            ) }},
             0
         ) as slope,
         -- In the same fixed order as the sums above: corr() is a floating-point aggregate
         -- too, and its last digit follows the order of its rows (ADR 0046).
-        corr(category_wins_added, total_value order by platform_player_id, fantasy_team_id)
-            as correlation
+        {{ fo_corr_in_order(
+            'category_wins_added', 'total_value', 'platform_player_id, fantasy_team_id'
+        ) }} as correlation
     from pairs
     group by platform, league_id, season, replacement_group
 
 )
 
 select
-    groups.platform,
-    groups.league_id,
-    groups.season,
-    groups.replacement_group,
+    group_fits.platform,
+    group_fits.league_id,
+    group_fits.season,
+    group_fits.replacement_group,
     matchups.matchups_rescored,
-    groups.pairs,
-    groups.pairs_unmeasured,
-    groups.slope,
-    groups.correlation,
+    group_fits.pairs,
+    group_fits.pairs_unmeasured,
+    group_fits.slope,
+    group_fits.correlation,
     coalesce(
         matchups.matchups_rescored >= 100
-        and groups.pairs >= 100
-        and groups.correlation >= 0.75,
+        and group_fits.pairs >= 100
+        and group_fits.correlation >= 0.75,
         false
     ) as is_judged,
     -- What values_track_rescored_category_wins fails on, decided here so that unit tests
     -- can reach it. An unmeasured pair fails a group of 100 pairs however many matchups
     -- there were (R3.8); the slope is judged only where is_judged says there is enough.
     case
-        when groups.pairs >= 100 and groups.pairs_unmeasured > 0
+        when group_fits.pairs >= 100 and group_fits.pairs_unmeasured > 0
             then 'not checkable: a pair has no value or no wins added'
         when
             matchups.matchups_rescored >= 100
-            and groups.pairs >= 100
-            and groups.correlation >= 0.75
-            and (groups.slope < 0.34 or groups.slope > 0.47)
+            and group_fits.pairs >= 100
+            and group_fits.correlation >= 0.75
+            and (group_fits.slope < 0.34 or group_fits.slope > 0.47)
             then 'slope outside 0.34 to 0.47'
     end as problem
-from groups
+from group_fits
 inner join matchups
-    on matchups.platform = groups.platform
-    and matchups.league_id = groups.league_id
-    and matchups.season = groups.season
+    on matchups.platform = group_fits.platform
+    and matchups.league_id = group_fits.league_id
+    and matchups.season = group_fits.season

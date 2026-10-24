@@ -123,7 +123,7 @@ day_components as (
         {%- endfor %}
         day_kind,
         '{{ column }}' as component,
-        cast(coalesce({{ column }}, 0) as double) as component_total
+        cast(coalesce({{ column }}, 0) as {{ fo_type_float() }}) as component_total
     from played_sides
     where side = 'batting'
     union all
@@ -135,7 +135,7 @@ day_components as (
         {%- endfor %}
         day_kind,
         '{{ column }}' as component,
-        cast(coalesce({{ column }}, 0) as double) as component_total
+        cast(coalesce({{ column }}, 0) as {{ fo_type_float() }}) as component_total
     from played_sides
     where side = 'pitching'
     {{- '\n    union all' if not loop.last }}
@@ -155,8 +155,10 @@ day_parts as (
         rules.part,
         sum(rules.weight * components.component_total) as part_total,
         case
-            when bool_or(levels.level_per_played_day is null) then null
-            else sum(rules.weight * levels.level_per_played_day order by rules.component)
+            when {{ fo_any_true('levels.level_per_played_day is null') }} then null
+            else {{ fo_sum_in_order(
+                'rules.weight * levels.level_per_played_day', 'rules.component'
+            ) }}
         end as part_replacement
     from day_components as components
     inner join {{ ref('int_fantasy__stat_components') }} as rules
@@ -184,11 +186,11 @@ day_parts_pivoted as (
         {{ key }},
         {%- endfor %}
         category_key,
-        bool_or(part = 'denominator') as is_rate,
-        max(part_total) filter (where part = 'numerator') as numerator,
-        max(part_total) filter (where part = 'denominator') as denominator,
-        max(part_replacement) filter (where part = 'numerator') as replacement_numerator,
-        max(part_replacement) filter (where part = 'denominator') as replacement_denominator
+        {{ fo_any_true("part = 'denominator'") }} as is_rate,
+        max(case when part = 'numerator' then part_total end) as numerator,
+        max(case when part = 'denominator' then part_total end) as denominator,
+        max(case when part = 'numerator' then part_replacement end) as replacement_numerator,
+        max(case when part = 'denominator' then part_replacement end) as replacement_denominator
     from day_parts
     group by
         {%- for key in day_keys %}
@@ -234,8 +236,8 @@ day_values as (
         {{ key }},
         {%- endfor %}
         case
-            when count(*) filter (where scaled_value is null) > 0 then null
-            else sum(scaled_value order by category_key)
+            when count(case when scaled_value is null then 1 end) > 0 then null
+            else {{ fo_sum_in_order('scaled_value', 'category_key') }}
         end as day_value
     from day_category_values
     group by

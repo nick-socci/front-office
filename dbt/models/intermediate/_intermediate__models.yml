@@ -20,10 +20,10 @@ models:
         enforced: true
     columns:
       - name: platform
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: league_id
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: season
         data_type: bigint
@@ -32,9 +32,9 @@ models:
         data_type: bigint
         constraints: [{type: not_null}]
       - name: team_name
-        data_type: varchar
+        data_type: string
       - name: team_abbrev
-        data_type: varchar
+        data_type: string
       - name: playoff_seed
         data_type: bigint
       - name: wins
@@ -218,10 +218,10 @@ models:
         enforced: true
     columns:
       - name: platform
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: league_id
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: season
         data_type: bigint
@@ -235,12 +235,12 @@ models:
         constraints: [{type: not_null}]
       - name: margin_scale
         description: Root mean square of those rows' standard margins; null when none.
-        data_type: double
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
       - name: side_denominator
         description: >
           For a rate, the mean over those matchups' sides of the reported denominator
           divided by the period's relative volume; null for a count or when none.
-        data_type: double
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -541,22 +541,22 @@ models:
         enforced: true
     columns:
       - name: platform
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: league_id
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: season
         data_type: bigint
         constraints: [{type: not_null}]
       - name: transaction_id
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
         data_tests: [not_null]
       - name: topic_id
-        data_type: varchar
+        data_type: string
       - name: transacted_at
-        data_type: timestamp with time zone
+        data_type: "{{ 'timestamp' if target.type == 'bigquery' else 'timestamp with time zone' }}"
       - name: transaction_date
         data_type: date
       - name: platform_player_id
@@ -572,14 +572,14 @@ models:
           # single-column relationships test would pass for a team of another league.
           - not_null
       - name: movement
-        data_type: varchar
+        data_type: string
         data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: [add, drop]
       - name: method
-        data_type: varchar
+        data_type: string
         data_tests:
           - accepted_values:
               arguments:
@@ -588,7 +588,7 @@ models:
         description: >
           For a type-239 drop, the lineup slot the player left (message_from is a slot
           id there, not a team); null for every other row.
-        data_type: varchar
+        data_type: string
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:

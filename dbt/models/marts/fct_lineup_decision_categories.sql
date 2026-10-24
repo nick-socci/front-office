@@ -50,7 +50,7 @@ unverified_days as (
         season,
         matchup_id,
         fantasy_team_id,
-        bool_or(has_unverified_inputs) as has_unverified_day
+        {{ fo_any_true('has_unverified_inputs') }} as has_unverified_day
     from {{ ref('fct_lineup_decisions') }}
     where matchup_id is not null
     group by platform, league_id, season, matchup_id, fantasy_team_id

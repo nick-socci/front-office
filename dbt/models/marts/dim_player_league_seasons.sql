@@ -124,10 +124,10 @@ players as (
         transaction_only_players.season,
         transaction_only_players.platform_player_id,
         crosswalk.mlbam_player_id,
-        cast(null as varchar) as player_name,
+        cast(null as {{ fo_type_text() }}) as player_name,
         case when crosswalk.mlbam_player_id is not null then 'crosswalk_id' else 'unresolved' end
             as player_resolution,
-        cast(null as varchar) as default_position,
+        cast(null as {{ fo_type_text() }}) as default_position,
         cast(null as date) as first_rostered_date,
         cast(null as date) as last_rostered_date,
         true as is_transaction_only

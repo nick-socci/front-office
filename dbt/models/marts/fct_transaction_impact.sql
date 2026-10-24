@@ -120,8 +120,19 @@ windows as (
         players.mlbam_player_id,
         players.replacement_group,
         case transactions.movement
-            when 'add' then greatest(transactions.transaction_date, bounds.first_scoring_date)
-            when 'drop' then greatest(transactions.transaction_date + 1, bounds.first_scoring_date)
+            -- bounds is left-joined, so its first_scoring_date can be null. DuckDB's greatest
+            -- skips a null argument and BigQuery's returns null; the coalesce makes both
+            -- give the transaction's own date then.
+            when 'add'
+                then greatest(
+                    transactions.transaction_date,
+                    coalesce(bounds.first_scoring_date, transactions.transaction_date)
+                )
+            when 'drop'
+                then greatest(
+                    transactions.transaction_date + 1,
+                    coalesce(bounds.first_scoring_date, transactions.transaction_date + 1)
+                )
         end as window_start,
         case transactions.movement
             when 'add' then coalesce(next_team_drops.next_drop_date, bounds.last_scoring_date)
@@ -174,9 +185,9 @@ add_started as (
         windows.season,
         windows.transaction_id,
         count(*) as started_days,
-        count(*) filter (where days.slot_role = 'hitter' and days.games_batted > 0)
+        count(case when days.slot_role = 'hitter' and days.games_batted > 0 then 1 end)
             as hitter_played_days,
-        count(*) filter (where days.slot_role = 'pitcher' and days.games_pitched > 0)
+        count(case when days.slot_role = 'pitcher' and days.games_pitched > 0 then 1 end)
             as pitcher_played_days,
         {%- for column in component_columns %}
         coalesce(sum(days.{{ column }}), 0) as {{ column }}{% if not loop.last %},{% endif %}
@@ -202,12 +213,14 @@ drop_games as (
         windows.league_id,
         windows.season,
         windows.transaction_id,
-        count(*) filter (where windows.replacement_group = 'hitter' and games.games_batted > 0)
-            as hitter_played_days,
-        count(*) filter (
-            where windows.replacement_group in ('SP', 'RP') and games.games_pitched > 0
-        )
-            as pitcher_played_days,
+        count(
+            case when windows.replacement_group = 'hitter' and games.games_batted > 0 then 1 end
+        ) as hitter_played_days,
+        count(
+            case
+                when windows.replacement_group in ('SP', 'RP') and games.games_pitched > 0 then 1
+            end
+        ) as pitcher_played_days,
         {%- for column in batting_columns %}
         coalesce(sum(case when windows.replacement_group = 'hitter' then games.{{ column }} end), 0)
             as {{ column }},
@@ -439,7 +452,7 @@ kind_component_totals as (
         transaction_id,
         day_kind,
         '{{ column }}' as component,
-        cast({{ column }} as double) as component_total
+        cast({{ column }} as {{ fo_type_float() }}) as component_total
     from kind_days
     {{ 'union all' if not loop.last }}
     {%- endfor %}
@@ -461,8 +474,10 @@ kind_parts as (
         rules.part,
         sum(rules.weight * totals.component_total) as part_total,
         case
-            when bool_or(levels.level_per_played_day is null) then null
-            else sum(rules.weight * levels.level_per_played_day order by rules.component)
+            when {{ fo_any_true('levels.level_per_played_day is null') }} then null
+            else {{ fo_sum_in_order(
+                'rules.weight * levels.level_per_played_day', 'rules.component'
+            ) }}
         end as part_replacement
     from kind_component_totals as totals
     inner join {{ ref('int_fantasy__stat_components') }} as rules
@@ -497,10 +512,10 @@ kind_parts_pivoted as (
         transaction_id,
         day_kind,
         category_key,
-        max(part_total) filter (where part = 'numerator') as numerator,
-        max(part_total) filter (where part = 'denominator') as denominator,
-        max(part_replacement) filter (where part = 'numerator') as replacement_numerator,
-        max(part_replacement) filter (where part = 'denominator') as replacement_denominator
+        max(case when part = 'numerator' then part_total end) as numerator,
+        max(case when part = 'denominator' then part_total end) as denominator,
+        max(case when part = 'numerator' then part_replacement end) as replacement_numerator,
+        max(case when part = 'denominator' then part_replacement end) as replacement_denominator
     from kind_parts
     group by platform, league_id, season, transaction_id, day_kind, category_key
 
@@ -516,7 +531,7 @@ scored_categories as (
         categories.season,
         categories.category_key,
         categories.is_lower_better,
-        coalesce(bool_or(rules.part = 'denominator'), false) as is_rate
+        coalesce({{ fo_any_true("rules.part = 'denominator'") }}, false) as is_rate
     from {{ ref('int_fantasy__categories') }} as categories
     left join {{ ref('int_fantasy__stat_components') }} as rules
         on rules.stat_key = categories.category_key
@@ -567,7 +582,7 @@ summed_over_kinds as (
         category_key,
         cast(sum(played_days) as bigint) as played_days,
         case
-            when bool_or(value_over_replacement is null) then null
+            when {{ fo_any_true('value_over_replacement is null') }} then null
             else sum(value_over_replacement)
         end as value_over_replacement
     from kind_values
@@ -641,9 +656,9 @@ total_values as (
         season,
         transaction_id,
         case
-            when count(*) filter (where scaled_value is null) > 0 then null
+            when count(case when scaled_value is null then 1 end) > 0 then null
             -- in category order: a sum of doubles is only reproducible in a fixed order (#28)
-            else sum(scaled_value order by category_key)
+            else {{ fo_sum_in_order('scaled_value', 'category_key') }}
         end as total_value
     from scaled
     group by platform, league_id, season, transaction_id

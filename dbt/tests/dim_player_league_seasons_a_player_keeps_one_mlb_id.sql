@@ -13,8 +13,8 @@
 select
     platform,
     platform_player_id,
-    list(distinct mlbam_player_id order by mlbam_player_id) as mlbam_player_ids,
-    list(distinct season order by season) as seasons
+    array_agg(distinct mlbam_player_id order by mlbam_player_id) as mlbam_player_ids,
+    array_agg(distinct season order by season) as seasons
 from {{ ref('dim_player_league_seasons') }}
 where mlbam_player_id is not null
 group by platform, platform_player_id

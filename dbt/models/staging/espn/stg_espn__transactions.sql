@@ -30,7 +30,7 @@ with responses as (
         request_key,
         fetched_at,
         {{ fo_json_text('partitions', '$.league_id') }} as league_id,
-        {{ fo_json_int('partitions', '$.season') }}::integer as season
+        cast({{ fo_json_int('partitions', '$.season') }} as integer) as season
     from {{ ref('stg_raw__espn_transactions') }}
 
 ),
@@ -77,17 +77,20 @@ header as (
 topics as (
 
     select
-        league_id,
-        season,
-        fetched_at,
-        request_key,
-        unnest(topics) as topic
+        header.league_id,
+        header.season,
+        header.fetched_at,
+        header.request_key,
+        topic  -- noqa: RF02
     from header
+    {{ fo_unnest('header.topics', 'topic') }}
 
 ),
 
-messages as (
+topic_fields as (
 
+    -- A topic's id, date and messages are taken out as columns of their own here:
+    -- fo_unnest is given a column, never an expression.
     select
         league_id,
         season,
@@ -95,8 +98,23 @@ messages as (
         request_key,
         {{ fo_json_text('topic', '$.id') }} as topic_id,
         {{ fo_json_int('topic', '$.date') }} as topic_date_ms,
-        unnest({{ fo_json_array('topic', '$.messages[*]') }}) as message
+        {{ fo_json_array('topic', '$.messages[*]') }} as message_list
     from topics
+
+),
+
+messages as (
+
+    select
+        topic_fields.league_id,
+        topic_fields.season,
+        topic_fields.fetched_at,
+        topic_fields.request_key,
+        topic_fields.topic_id,
+        topic_fields.topic_date_ms,
+        message  -- noqa: RF02
+    from topic_fields
+    {{ fo_unnest('topic_fields.message_list', 'message') }}
 
 )
 
@@ -105,7 +123,7 @@ select
     messages.season,
     messages.topic_id,
     {{ fo_json_text('message', '$.id') }} as transaction_id,
-    to_timestamp({{ fo_json_int('message', '$.date') }} / 1000) as transacted_at,
+    {{ fo_instant_from_millis(fo_json_int('message', '$.date') | trim) }} as transacted_at,
     -- From the milliseconds, not from transacted_at: casting a timestamptz to a timestamp
     -- gives the session's wall-clock time, so the date followed the machine's time zone
     -- (#188, ADR 0097). fo_timestamp_from_millis gives the UTC time fo_eastern_date reads.
@@ -125,7 +143,9 @@ left join {{ ref('espn_activity_types') }} as activities
 where activities.is_transaction is distinct from false
 -- Every page of a run shares one fetched_at, so recency cannot choose between two copies
 -- of a message that straddles a page boundary: the page (request_key) and topic do.
+-- A losing copy's topic_id is untested, so its null order is stated: BigQuery's ascending
+-- default puts nulls first, DuckDB's last.
 {{ fo_latest_by_entity(
     ['league_id', 'season', fo_json_string('message', '$.id') | trim],
-    order_by='fetched_at desc, request_key, topic_id'
+    order_by='fetched_at desc, request_key, topic_id nulls last'
 ) }}

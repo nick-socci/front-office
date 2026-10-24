@@ -7,7 +7,10 @@ Nothing here talks to BigQuery.
 
 from __future__ import annotations
 
+import json
+import subprocess
 from pathlib import Path
+from typing import Any
 
 import duckdb
 import pytest
@@ -234,6 +237,60 @@ def test_the_unique_key_is_read_from_the_models_tests() -> None:
     assert cmp.unique_key(manifest, "model.front_office.one") == ["id"]
     assert cmp.unique_key(manifest, "model.front_office.two") == ["league_id", "season"]
     assert cmp.unique_key(manifest, "model.front_office.three") is None
+
+
+def test_the_selected_seeds_are_listed_with_the_models(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catches the comparison leaving the seeds out (spec 0135): dbt is asked for seeds as
+    well as models, a seed is listed with its key from its tests, and an ephemeral model,
+    which is never built, is not."""
+    rows = [
+        {
+            "unique_id": "model.front_office.one",
+            "name": "one",
+            "schema": "marts",
+            "config": {"materialized": "table"},
+        },
+        {
+            "unique_id": "model.front_office.inline",
+            "name": "inline",
+            "schema": "marts",
+            "config": {"materialized": "ephemeral"},
+        },
+        {
+            "unique_id": "seed.front_office.espn_stat_ids",
+            "name": "espn_stat_ids",
+            "schema": "seeds",
+            "config": {"materialized": "seed"},
+        },
+    ]
+    manifest = {
+        "nodes": {
+            "test.a": {
+                "resource_type": "test",
+                "test_metadata": {"name": "unique", "kwargs": {"column_name": "stat_id"}},
+                "attached_node": "seed.front_office.espn_stat_ids",
+            }
+        }
+    }
+    target = tmp_path / "dbt_target"
+    target.mkdir()
+    (target / "manifest.json").write_text(json.dumps(manifest))
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        return subprocess.CompletedProcess(
+            command, 0, stdout="\n".join(json.dumps(r) for r in rows) + "\n"
+        )
+
+    monkeypatch.setattr(cmp.subprocess, "run", fake_run)
+    assert cmp.slice_relations(target) == [
+        ("marts", "one", None),
+        ("seeds", "espn_stat_ids", ["stat_id"]),
+    ]
+    assert "seed" in commands[0] and "model" in commands[0]
 
 
 # -- JSON columns are not read back or compared (spec 0143, amendment of 2026-10-12) ---------

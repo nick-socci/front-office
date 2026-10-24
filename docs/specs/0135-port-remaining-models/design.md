@@ -328,3 +328,82 @@ Their SQL is still run, once (R5.2):
 | design-review | F5 (P2): the 5.35 GB and 256 MB figures had no ledger row | Fixed: C14, from the spike's `run_results.json` as posted on #130 |
 
 ## Amendments
+
+- **2026-10-24, counts retaken at `main` 29982b1 (R1.2).** #188 added the unit test
+  `transactions_are_dated_by_the_eastern_date_of_their_instant` on `stg_espn__transactions`,
+  a selected model. So the project has 212 unit tests and the selector takes **188**, not
+  C1's 211 and 187. Models (71), seeds (7) and data tests (436 of 488) are as C1 says.
+  `test_bigquery_slice.py` pins 188.
+- **2026-10-24, C3 corrected.** Recounted with `refused_constructs` on each file at 29982b1,
+  18 of the 26 models hold a refused construct and 8 hold none, not 14 and 12. The 8 are
+  `int_fantasy__lineup_options`, `int_fantasy__lineup_slots`,
+  `int_fantasy__replacement_levels`, `int_fantasy__teams`, `int_fantasy__transactions`,
+  `rec_espn__register_rows`, `stg_raw__espn_teams` and `stg_raw__mlb_players`. The work is
+  unchanged: the rule test names exactly the 18 and the 9 singular tests, and nothing in the
+  old slice.
+- **2026-10-24, the empty build on BigQuery (task 11, round 1).** Two tests failed there,
+  both outside the port's 26 models:
+  - `stg_raw__capture_views_cover_the_manifest` reads `raw.captures`, DuckDB's loader
+    manifest, which BigQuery does not have: its capture views read uploaded tables, not a
+    file glob. The old selector never took it, because some capture views lay outside it;
+    the exclusion form takes it. It is a check of DuckDB's glob, so the selector now
+    excludes it by name beside the solver, and the selector's data tests are **435**: 365
+    generic and 70 singular, where they were 365 and 71. R1.1 is read with this exclusion,
+    which the owner accepted on 2026-10-24 (PR #192, review round 1).
+  - `stg_idmap__covers_started_players` (spec 0177, added after the last BigQuery build)
+    names a CTE `started_players` and a `count(*) as started_players` in one SELECT, and
+    BigQuery reads `started_players.league_id` in GROUP BY as a field of the count. The CTE
+    is now read under the alias `started`; its DuckDB result is unchanged. No pattern can
+    see this, so AGENTS.md's list of what the empty build finds names it.
+  The 205 skipped nodes followed from the second: `dbt build` skips what is downstream of
+  a failed test.
+- **2026-10-24, the empty build on BigQuery (task 11, rounds 2 to 4).**
+  - `int_fantasy__replacement_pool_has_played_days` (newly selected with
+    `int_fantasy__replacement_levels`) wrote `max(pool_played_days) as pool_played_days`
+    and `having max(pool_played_days)`. BigQuery reads the bare column in HAVING as the
+    alias and refuses an aggregate of an aggregate. The column is now qualified.
+  - `int_fantasy__started_days_match_the_starting_slots` fails over no rows by design: it
+    fails when there are no started days. In `dbt build` a failing test skips everything
+    downstream of its model (148 nodes here), so task 11 runs as `dbt seed`, then
+    `dbt run --empty`, then `dbt test` over the empty tables (`dbt test` has no `--empty`;
+    it reads what the run built). R4.1 asks for no error from BigQuery. A test that fails
+    over no rows because it needs rows is reported as such, not counted as an error.
+  - `rec_fantasy__category_wins_by_group` named a CTE `groups`, a word BigQuery reserves
+    and DuckDB does not. The CTE is now `group_fits`. The rule test gains a pattern for a
+    CTE named with one of the words BigQuery reserves that a model might use, with its
+    cases (R2.2).
+- **2026-10-24, the solver readers over no rows (task 12, round 1).**
+  - `int_fantasy__lineup_category_totals` cross-joined `(values ('actual'), ('optimal'))`,
+    a table constructor BigQuery does not have. It is now a CTE `lineups` holding a
+    `union all` of two selects, which both warehouses accept and which gives the same two
+    rows. The rule test gains a pattern for a VALUES list in a FROM clause (R2.2).
+  - `fct_lineup_decisions_change_nothing_when_nothing_is_gained` summed
+    `players_brought_in` into a column of the same name and summed it again in HAVING:
+    the alias case of task 11. Its columns are now qualified.
+  The 24 "not found" errors of that round followed from the first: the model was not
+  built, and the model and the tests that read it found no table.
+- **2026-10-24, the real build on BigQuery (task 13, round 1).**
+  - Three models of the old slice, not changed by this port, ran into the bq target's
+    600 s job timeout: `stg_mlb__batting_game_logs` (stopped at 615 s, 8.46 slot-hours),
+    `stg_espn__player_game_stats` (614 s) and `stg_espn__matchup_player_lines` (606 s).
+    The spike timed `stg_mlb__batting_game_logs` at 60 s over 827 MB; the upload of #136
+    holds eight seasons, and its sibling `stg_mlb__pitching_game_logs` now bills 6.98 GB in
+    312 s. The stopped jobs billed nothing. The owner chose (2026-10-24) to raise
+    `job_execution_timeout_seconds` to 1800 on the bq target. `maximum_bytes_billed`
+    (10 GB) is unchanged and stays the cost guard.
+  - The unit tests run as `dbt test --selector bigquery_slice --resource-type unit_test`.
+    Task 13's `--selector bigquery_slice,resource_type:unit_test` is read by dbt as one
+    selector's name.
+- **2026-10-24, the real build on BigQuery (task 13, round 2).** With the longer timeout,
+  482 of 514 nodes passed, billing 29.88 GB in all, at most 6.98 GB in one query.
+  `rec_espn__player_day_differences` (a model of the old slice) stopped with "floating
+  point overflow" in SUM. ESPN writes the largest double, 1.797e308, for a rate it cannot
+  compute: WHIP (stat 41, 32 values), ERA (47, 32) and K/BB (82, 1,717) in the real
+  season. The model summed every stat per player-day before keeping the single-component
+  stats it compares. Two of those values overflow: DuckDB gives infinity, which the join
+  then drops, and BigQuery stops. `espn_days` now sums only the stats that
+  `single_component_stats` names. The join already kept only those, so the result cannot
+  change, and the real DuckDB warehouse rebuilt from it is equal to the baseline, 73 of
+  73. What ESPN's sentinel means for the models that read rate stats is a question for
+  the owner, not settled here.
+

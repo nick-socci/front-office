@@ -1,16 +1,17 @@
 """ADR 0051: a ported model holds no SQL that BigQuery refuses.
 
-A model of the BigQuery slice (spec 0130) is written once. Where DuckDB and BigQuery accept
+A model of the BigQuery slice (spec 0130, widened to the whole project by spec 0135) is
+written once. Where DuckDB and BigQuery accept
 the same spelling it is plain SQL; everything else goes through a dispatched ``fo_*`` macro
-with a ``duckdb__`` form and a ``bigquery__`` form. This scans the slice's models, its
+with a ``duckdb__`` form and a ``bigquery__`` form. This scans the project's SQL models, its
 singular tests, and every project macro they reach, directly or through another macro, for
 the constructs BigQuery is known to refuse, and fails on one found anywhere but in a
 ``duckdb__`` form.
 
-What is scanned is taken from dbt's manifest, not from a list kept here: the slice is the
-selector ``bigquery_slice``, and a macro is reached if a selected node or a reached macro
-depends on it. So a refused construct in a shared macro such as ``fo_boxscore_players`` is
-found, and a model outside the slice is not scanned at all.
+What is scanned is taken from dbt's manifest, not from a list kept here: every SQL model and
+singular test of the project (the Python model is skipped), and a macro is reached if one of
+them or a reached macro depends on it. So a refused construct in a shared macro such as
+``fo_boxscore_players`` is found.
 
 The list of constructs is what has been found, not what there is: building the slice on
 BigQuery with ``--empty`` is what shows none is left (R4.7), and each one that turns up is
@@ -46,7 +47,6 @@ from test_dbt_ordered_aggregate_rule import _arguments, _code
 REPO = Path(__file__).resolve().parents[2]
 DBT_ROOT = REPO / "dbt"
 DBT = Path(sys.executable).parent / "dbt"
-SELECTOR = "bigquery_slice"
 PROJECT = "front_office"
 
 # (what, pattern), matched against code with comments and single-quoted strings blanked.
@@ -71,10 +71,27 @@ _REFUSED = (
     ("type varchar", re.compile(r"(?<!\")\bvarchar\b(?!\")", re.IGNORECASE)),
     ("type double", re.compile(r"(?<!\")\bdouble\b(?!\")", re.IGNORECASE)),
     ("type timestamptz", re.compile(r"(?<!\")\btimestamptz\b(?!\")", re.IGNORECASE)),
+    # BigQuery's md5 returns BYTES, not hex text (fo_md5_hex). Outside a bigquery__ form,
+    # to_hex(md5(...)) is refused too: on DuckDB it is the hex of the hex text.
+    ("md5", re.compile(r"\bmd5\s*\(", re.IGNORECASE)),
+    ("concat_ws", re.compile(r"\bconcat_ws\s*\(", re.IGNORECASE)),
+    # A VALUES list as a table: BigQuery has no table constructor (spec 0135, task 12).
+    ("values list in from", re.compile(r"\(\s*values\s*\(", re.IGNORECASE)),
+    # A CTE named with a word BigQuery reserves and DuckDB does not (spec 0135, task 11).
+    (
+        "CTE named a BigQuery reserved word",
+        re.compile(
+            r"(?:^|\bwith\b|,)\s*(?:groups|rows|range|window|lookup|rollup|cube|grouping|"
+            r"partition|struct|array|hash|merge|enum|proto|define|qualify)\s+as\s*\(",
+            re.IGNORECASE,
+        ),
+    ),
 )
 # BigQuery's own SQL may unnest, in a FROM clause; regexp_extract with two arguments is its
 # spelling too.
 _ALLOWED_IN_BIGQUERY_FORM = frozenset({"unnest(", "regexp_extract"})
+# In a bigquery__ form, md5 is BigQuery's own only as the hex text DuckDB's md5 gives.
+_MD5_AS_HEX = re.compile(r"\bto_hex\s*\(\s*md5\s*\(", re.IGNORECASE)
 # An aggregate BigQuery will not take an order inside.
 _ORDERED_AGGREGATE = re.compile(r"\b(sum|avg|corr)\s*\(", re.IGNORECASE)
 _ORDER_BY = re.compile(r"\border\s+by\b", re.IGNORECASE)
@@ -95,6 +112,8 @@ def refused_constructs(sql: str, *, bigquery_form: bool = False) -> list[tuple[i
         for what, pattern in _REFUSED:
             if bigquery_form and what in _ALLOWED_IN_BIGQUERY_FORM:
                 continue
+            if bigquery_form and what == "md5":
+                line = _MD5_AS_HEX.sub("to_hex(", line)
             if pattern.search(line):
                 found.append((number, what))
     for match in _ORDERED_AGGREGATE.finditer(code):
@@ -142,9 +161,9 @@ def reached_macros(macros: dict[str, dict[str, object]], start: set[str]) -> set
     return seen
 
 
-def collect_slice_sources(target_path: Path) -> dict[str, tuple[str, bool]]:
-    """{label: (sql, is a bigquery__ form)} for every model and singular test of the slice
-    and every project macro they reach, `duckdb__` forms left out."""
+def collect_project_sources(target_path: Path) -> dict[str, tuple[str, bool]]:
+    """{label: (sql, is a bigquery__ form)} for every SQL model and singular test of the
+    project and every project macro they reach, `duckdb__` forms left out."""
     if not (DBT_ROOT / "dbt_packages" / "dbt_utils").exists():
         deps = subprocess.run(
             [str(DBT), "deps"],
@@ -155,21 +174,17 @@ def collect_slice_sources(target_path: Path) -> dict[str, tuple[str, bool]]:
             check=False,
         )
         assert deps.returncode == 0, deps.stdout + deps.stderr
-    ls = _dbt(target_path, "ls", "--selector", SELECTOR, "--output", "json", "-q")
-    assert ls.returncode == 0, ls.stdout + ls.stderr
-    selected = {
-        json.loads(line)["unique_id"] for line in ls.stdout.splitlines() if line.startswith("{")
-    }
+    parse = _dbt(target_path, "parse", "-q")
+    assert parse.returncode == 0, parse.stdout + parse.stderr
     manifest = json.loads((target_path / "manifest.json").read_text())
     sources: dict[str, tuple[str, bool]] = {}
     start: set[str] = set()
-    for unique_id in selected:
-        node = manifest["nodes"].get(unique_id)
-        if node is None:  # a unit test
-            continue
-        start.update(node["depends_on"]["macros"])
+    for node in manifest["nodes"].values():
+        if node["package_name"] != PROJECT or node.get("language", "sql") != "sql":
+            continue  # a package's node, or the Python model
         is_singular_test = node["resource_type"] == "test" and "test_metadata" not in node
         if node["resource_type"] == "model" or is_singular_test:
+            start.update(node["depends_on"]["macros"])
             path = str(node["original_file_path"])
             sources[path] = ((DBT_ROOT / path).read_text(), False)
     for name in reached_macros(manifest["macros"], start):
@@ -183,28 +198,29 @@ def collect_slice_sources(target_path: Path) -> dict[str, tuple[str, bool]]:
 
 
 @pytest.fixture(scope="module")
-def slice_sources(tmp_path_factory: pytest.TempPathFactory) -> dict[str, tuple[str, bool]]:
-    return collect_slice_sources(tmp_path_factory.mktemp("dbt_target"))
+def project_sources(tmp_path_factory: pytest.TempPathFactory) -> dict[str, tuple[str, bool]]:
+    return collect_project_sources(tmp_path_factory.mktemp("dbt_target"))
 
 
 def test_the_slice_and_the_macros_it_reaches_hold_no_sql_bigquery_refuses(
-    slice_sources: dict[str, tuple[str, bool]],
+    project_sources: dict[str, tuple[str, bool]],
 ) -> None:
     """Catches a refused construct coming back into a ported model or singular test, or
     sitting in a shared macro one of them calls."""
-    models = [label for label in slice_sources if label.startswith("models/")]
-    macros = [label for label in slice_sources if label.startswith("macros/")]
-    # 34 models of spec 0130, the nine capture views they read (spec 0150), and the two
-    # games-started limit models (spec 0152).
-    # Spec 0147 adds stg_espn__matchup_player_lines, rec_espn__matchup_line_totals and
-    # rec_espn__winner_differences.
-    assert len(models) == 48, "the slice's models were not all found"
+    models = [label for label in project_sources if label.startswith("models/")]
+    macros = [label for label in project_sources if label.startswith("macros/")]
+    # Every SQL model of the project (spec 0135): 74, the Python model left out. Of these,
+    # 34 are the models of spec 0130, nine the capture views they read (spec 0150), two the
+    # games-started limit models (spec 0152), three added by spec 0147
+    # (stg_espn__matchup_player_lines, rec_espn__matchup_line_totals and
+    # rec_espn__winner_differences), and the 26 others are ported by spec 0135.
+    assert len(models) == 74, "the project's SQL models were not all found"
     assert any("boxscore_players.sql" in label for label in macros), "macros are not followed"
     assert any("json.sql::bigquery__" in label for label in macros), "bigquery forms not reached"
-    assert not any("::duckdb__" in label for label in slice_sources)
+    assert not any("::duckdb__" in label for label in project_sources)
     problems = [
         f"dbt/{label}:{number}: {what}"
-        for label, (sql, bigquery_form) in sorted(slice_sources.items())
+        for label, (sql, bigquery_form) in sorted(project_sources.items())
         for number, what in refused_constructs(sql, bigquery_form=bigquery_form)
     ]
     assert not problems, (
@@ -244,6 +260,12 @@ def test_the_slice_and_the_macros_it_reaches_hold_no_sql_bigquery_refuses(
         ("select sum(x order by k) from t", "sum(... order by ...)"),
         ("select avg(x\n order by k) from t", "avg(... order by ...)"),
         ("select corr(y, x order by k) from t", "corr(... order by ...)"),
+        ("select md5(s) from t", "md5"),
+        ("select concat_ws('|', a, b) from t", "concat_ws"),
+        ("with groups as (select 1)", "CTE named a BigQuery reserved word"),
+        ("cross join (values ('a'), ('b')) as t (x)", "values list in from"),
+        ("), rows as (select 1)", "CTE named a BigQuery reserved word"),
+        ("groups as (", "CTE named a BigQuery reserved word"),
     ],
 )
 def test_each_refused_construct_is_caught_with_its_line_number(sql: str, what: str) -> None:
@@ -304,6 +326,10 @@ def test_a_bigquery_form_may_unnest_and_nothing_else() -> None:
     assert refused_constructs(body, bigquery_form=True) == []
     assert refused_constructs("regexp_extract(c, p)", bigquery_form=True) == []
     assert refused_constructs("try_cast(x as int64)", bigquery_form=True) == [(1, "try_cast")]
+    # md5 is allowed only as to_hex(md5(...)), the hex text that DuckDB's md5 gives
+    assert refused_constructs("to_hex(md5(s))", bigquery_form=True) == []
+    assert refused_constructs("md5(s)", bigquery_form=True) == [(1, "md5")]
+    assert refused_constructs("to_hex(md5(s))") == [(1, "md5")]
 
 
 def test_an_order_in_a_window_or_a_nested_call_is_not_an_ordered_aggregate() -> None:

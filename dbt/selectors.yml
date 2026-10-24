@@ -1,29 +1,19 @@
 # Named selections, used as `dbt build --selector <name>`.
 selectors:
   - name: bigquery_slice
-    description: The models ported to BigQuery by the spike (spec 0130).
+    description: >
+      Every model that builds on BigQuery: all of them but the lineup solver's Python model
+      and what reads it (ADR 0096; #137 removes the exclusion). One test is left out too:
+      it checks DuckDB's capture glob against the loader's manifest, and BigQuery has
+      neither (spec 0135, Amendments).
     definition:
       union:
         - method: fqn
-          value: fct_matchup_results
-          parents: true
+          value: "*"
           indirect_selection: cautious
-        - method: fqn
-          value: rec_espn__category_result_differences
-          parents: true
-          indirect_selection: cautious
-        - method: fqn
-          value: int_fantasy__category_scales
-          parents: true
-          indirect_selection: cautious
-        # A child of the slice's models, not a parent of one: the winner rule that
-        # fct_matchup_results_match_espn reads (spec 0147, ADR 0078). Its parents include
-        # rec_espn__category_result_differences, so the singular test, which reads both,
-        # lies wholly inside this member and is taken with it. Before it, that test had to be
-        # named as a member of its own: `cautious` is applied to each member of a union on
-        # its own, so a test whose parents lie in two members is in neither. A pytest
-        # (test_bigquery_slice.py) fails if one appears.
-        - method: fqn
-          value: rec_espn__winner_differences
-          parents: true
-          indirect_selection: cautious
+        - exclude:
+            - method: fqn
+              value: int_fantasy__optimal_lineups
+              children: true
+            - method: fqn
+              value: stg_raw__capture_views_cover_the_manifest

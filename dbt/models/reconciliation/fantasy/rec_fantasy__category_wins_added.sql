@@ -74,6 +74,19 @@
     'fantasy_team_id',
     'platform_player_id'
 ] %}
+{%- set pitching_day_kind = fo_pitching_day_kind('days.games_pitched', 'days.games_started') %}
+{#- The fields the draw hashes, in order, joined by '|'. None of them can be null (every key
+    is under a not_null contract), so || gives what concat_ws gave. #}
+{%- set draw_fields = [
+    'pair_components.platform',
+    'pair_components.league_id',
+    'cast(pair_components.season as ' ~ fo_type_text() ~ ')',
+    'cast(pair_components.matchup_id as ' ~ fo_type_text() ~ ')',
+    'cast(pair_components.fantasy_team_id as ' ~ fo_type_text() ~ ')',
+    'cast(pair_components.platform_player_id as ' ~ fo_type_text() ~ ')',
+    'pair_components.component',
+    'cast(draw_numbers.draw as ' ~ fo_type_text() ~ ')'
+] %}
 
 with rescorable_sides as (
 
@@ -110,16 +123,18 @@ pair_matchups as (
         sides.fantasy_team_id,
         sides.opponent_team_id,
         days.platform_player_id,
-        count(*) filter (
-            where days.slot_role = 'hitter' and days.games_batted > 0
+        count(
+            case when days.slot_role = 'hitter' and days.games_batted > 0 then 1 end
         ) as batting_days,
-        count(*) filter (
-            where days.slot_role = 'pitcher'
-            and {{ fo_pitching_day_kind('days.games_pitched', 'days.games_started') }} = 'start'
+        count(
+            case
+                when days.slot_role = 'pitcher' and {{ pitching_day_kind }} = 'start' then 1
+            end
         ) as start_days,
-        count(*) filter (
-            where days.slot_role = 'pitcher'
-            and {{ fo_pitching_day_kind('days.games_pitched', 'days.games_started') }} = 'relief'
+        count(
+            case
+                when days.slot_role = 'pitcher' and {{ pitching_day_kind }} = 'relief' then 1
+            end
         ) as relief_days,
         {%- for column in batting_columns + pitching_columns %}
         sum(coalesce(days.{{ column }}, 0)) as {{ column }}{% if not loop.last %},{% endif %}
@@ -171,7 +186,7 @@ pair_components as (
         pair_matchups.{{ key }},
         {%- endfor %}
         '{{ column }}' as component,
-        pair_matchups.{{ column }}::double as pair_total,
+        cast(pair_matchups.{{ column }} as {{ fo_type_float() }}) as pair_total,
         case
             when pair_matchups.batting_days = 0 then 0
             else pair_matchups.batting_days * batting.level_per_played_day
@@ -191,7 +206,7 @@ pair_components as (
         pair_matchups.{{ key }},
         {%- endfor %}
         '{{ column }}' as component,
-        pair_matchups.{{ column }}::double as pair_total,
+        cast(pair_matchups.{{ column }} as {{ fo_type_float() }}) as pair_total,
         case
             when pair_matchups.start_days = 0 then 0
             else pair_matchups.start_days * starts.level_per_played_day
@@ -242,7 +257,7 @@ side_components as (
         matchup_id,
         fantasy_team_id,
         '{{ column }}' as component,
-        {{ column }}::double as side_total
+        cast({{ column }} as {{ fo_type_float() }}) as side_total
     from {{ ref('int_fantasy__matchup_side_totals') }}
     {{ 'union all' if not loop.last }}
     {%- endfor %}
@@ -251,7 +266,10 @@ side_components as (
 
 draw_numbers as (
 
-    select unnest(range(1, {{ draws + 1 }})) as draw
+    -- 1 to `draws`, both included. The one-row relation is what the unnest is joined to.
+    select draw  -- noqa: RF02
+    from (select 1 as one) as one_row
+    {{ fo_unnest(fo_int_series('1', draws), 'draw') }}
 
 ),
 
@@ -268,20 +286,12 @@ swapped_components as (
         - pair_components.pair_total
         + floor(pair_components.replacement_expected)
         + case
-            when (
-                '0x' || substr(md5(concat_ws(
-                    '|',
-                    pair_components.platform,
-                    pair_components.league_id,
-                    pair_components.season::varchar,
-                    pair_components.matchup_id::varchar,
-                    pair_components.fantasy_team_id::varchar,
-                    pair_components.platform_player_id::varchar,
-                    pair_components.component,
-                    draw_numbers.draw::varchar
-                )), 1, 8)
-            )::bigint / 4294967296.0
-            < pair_components.replacement_expected - floor(pair_components.replacement_expected)
+            when
+                cast(
+                    '0x' || substr({{ fo_md5_hex(draw_fields | join(" || '|' || ")) }}, 1, 8)
+                    as bigint
+                ) / 4294967296.0
+                < pair_components.replacement_expected - floor(pair_components.replacement_expected)
                 then 1
             else 0
         end as swapped_total
@@ -336,16 +346,28 @@ swapped_values as (
         scored_rules.is_lower_better,
         scored_rules.is_bound_by_minimum,
         case
-            when count(*) filter (where scored_rules.part = 'denominator') = 0
+            when count(case when scored_rules.part = 'denominator' then 1 end) = 0
                 then
-                    sum(scored_rules.weight * swapped.swapped_total)
-                    filter (where scored_rules.part = 'numerator')
+                    sum(
+                        case
+                            when scored_rules.part = 'numerator'
+                                then scored_rules.weight * swapped.swapped_total
+                        end
+                    )
             else
-                sum(scored_rules.weight * swapped.swapped_total)
-                filter (where scored_rules.part = 'numerator')
+                sum(
+                    case
+                        when scored_rules.part = 'numerator'
+                            then scored_rules.weight * swapped.swapped_total
+                    end
+                )
                 / nullif(
-                    sum(scored_rules.weight * swapped.swapped_total)
-                    filter (where scored_rules.part = 'denominator'),
+                    sum(
+                        case
+                            when scored_rules.part = 'denominator'
+                                then scored_rules.weight * swapped.swapped_total
+                        end
+                    ),
                     0
                 )
         end as swapped_value
@@ -499,20 +521,20 @@ matchup_draws as (
             as category_wins_added,
         case
             when
-                count(*) filter (where actual_result = 'WIN')
-                > count(*) filter (where actual_result = 'LOSS') then 1.0
+                count(case when actual_result = 'WIN' then 1 end)
+                > count(case when actual_result = 'LOSS' then 1 end) then 1.0
             when
-                count(*) filter (where actual_result = 'WIN')
-                = count(*) filter (where actual_result = 'LOSS') then {{ level_matchup_score }}
+                count(case when actual_result = 'WIN' then 1 end)
+                = count(case when actual_result = 'LOSS' then 1 end) then {{ level_matchup_score }}
             else 0
         end
         - case
             when
-                count(*) filter (where swapped_result = 'WIN')
-                > count(*) filter (where swapped_result = 'LOSS') then 1.0
+                count(case when swapped_result = 'WIN' then 1 end)
+                > count(case when swapped_result = 'LOSS' then 1 end) then 1.0
             when
-                count(*) filter (where swapped_result = 'WIN')
-                = count(*) filter (where swapped_result = 'LOSS') then {{ level_matchup_score }}
+                count(case when swapped_result = 'WIN' then 1 end)
+                = count(case when swapped_result = 'LOSS' then 1 end) then {{ level_matchup_score }}
             else 0
         end as matchup_wins_added
     from category_results
@@ -536,8 +558,10 @@ measured as (
         platform_player_id,
         -- Summed in a fixed order: the last digit of a floating-point sum depends on the
         -- order of its terms, and row order changes from build to build.
-        sum(category_wins_added order by matchup_id, draw) / {{ draws }} as category_wins_added,
-        sum(matchup_wins_added order by matchup_id, draw) / {{ draws }} as matchup_wins_added
+        {{ fo_sum_in_order('category_wins_added', 'matchup_id, draw') }}
+        / {{ draws }} as category_wins_added,
+        {{ fo_sum_in_order('matchup_wins_added', 'matchup_id, draw') }}
+        / {{ draws }} as matchup_wins_added
     from matchup_draws
     group by platform, league_id, season, fantasy_team_id, platform_player_id
 

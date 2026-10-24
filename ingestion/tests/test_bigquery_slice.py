@@ -1,7 +1,8 @@
 """The BigQuery slice, its target and its dependency group (spec 0130, R1 and R2).
 
-The slice is fixed by a dbt selector, so that what is ported is written down once. These
-tests ask dbt what the selector selects and hold it to the names the spec counted; they
+The slice (every model but the lineup solver and its readers, spec 0135) is fixed by a dbt
+selector, so that what is ported is written down once. These tests ask dbt what the
+selector selects and hold it to the names the spec counted; they
 also hold the `bq` target to its promises without ever connecting to BigQuery: it must
 not break `dev` or `ci` for someone with no Google project, must not carry a credential,
 and its adapter must stay out of what CI installs.
@@ -27,70 +28,91 @@ REPO = Path(__file__).resolve().parents[2]
 DBT_ROOT = REPO / "dbt"
 DBT = Path(sys.executable).parent / "dbt"
 SELECTOR = "bigquery_slice"
-ROOTS = (
-    "fct_matchup_results",
-    "rec_espn__category_result_differences",
-    "int_fantasy__category_scales",
-    # spec 0147: a child of the slice's models, read by the singular test
-    # fct_matchup_results_match_espn, which it brings into the slice with its own tests.
-    "rec_espn__winner_differences",
-)
+# Every model but the lineup solver and what reads it (ADR 0096): 71 models, and every seed
+# but none (7). The four left out are named, so that one coming back, or another going, is
+# noticed.
+LEFT_OUT = {
+    "int_fantasy__optimal_lineups",
+    "int_fantasy__lineup_category_totals",
+    "fct_lineup_decisions",
+    "fct_lineup_decision_categories",
+}
 
 SLICE_MODELS = {
+    "dim_player_league_seasons",
+    "dim_players",
     "fct_matchup_category_scores",
     "fct_matchup_results",
+    "fct_player_category_value",
+    "fct_player_season_value",
+    "fct_transaction_impact",
+    "int_fantasy__candidate_day_values",
     "int_fantasy__categories",
     "int_fantasy__category_scales",
     "int_fantasy__league_seasons",
+    "int_fantasy__lineup_options",
+    "int_fantasy__lineup_slots",
     "int_fantasy__matchup_periods",
     "int_fantasy__matchup_side_totals",
     "int_fantasy__matchup_sides",
     "int_fantasy__matchup_stat_values",
     "int_fantasy__player_crosswalk",
+    "int_fantasy__replacement_levels",
+    "int_fantasy__reported_category_scales",
     "int_fantasy__reported_matchup_margins",
     "int_fantasy__roster_days",
     "int_fantasy__start_limits",
     "int_fantasy__started_player_days",
     "int_fantasy__stat_components",
+    "int_fantasy__teams",
+    "int_fantasy__transactions",
     "int_mlb__game_dates",
     "int_mlb__player_game_days",
     "rec_espn__category_result_differences",
+    "rec_espn__matchup_line_totals",
     "rec_espn__matchup_stat_differences",
     "rec_espn__player_day_differences",
-    # spec 0147: the ephemeral sum of ESPN's matchup lines, which the two reconciliation
-    # models read, and the winner rule the singular test reads.
-    "rec_espn__matchup_line_totals",
+    "rec_espn__player_day_residuals",
+    "rec_espn__register_rows",
     "rec_espn__winner_differences",
+    "rec_fantasy__category_wins_added",
+    "rec_fantasy__category_wins_by_group",
     "stg_espn__league_settings",
+    "stg_espn__lineup_slot_limits",
     "stg_espn__lineup_slot_stat_limits",
     "stg_espn__matchup_category_results",
     "stg_espn__matchup_days",
-    "stg_espn__matchup_player_lines",  # spec 0147: ESPN's matchup lines, staged
     "stg_espn__matchup_periods",
+    "stg_espn__matchup_player_lines",
     "stg_espn__matchups",
     "stg_espn__player_game_stats",
     "stg_espn__pro_games",
     "stg_espn__roster_entries",
+    "stg_espn__roster_entry_slots",
     "stg_espn__scoring_categories",
     "stg_espn__scoring_periods",
+    "stg_espn__teams",
     "stg_espn__transaction_logs",
+    "stg_espn__transactions",
     "stg_idmap__players",
     "stg_mlb__batting_game_logs",
     "stg_mlb__games",
     "stg_mlb__pitching_game_logs",
-    # The capture views the staging models read (spec 0150): they replaced
-    # stg_raw__season_responses, which went with the batching.
+    "stg_mlb__players",
     "stg_raw__espn_matchup_days",
     "stg_raw__espn_matchups",
     "stg_raw__espn_pro_schedule",
     "stg_raw__espn_roster",
     "stg_raw__espn_settings",
+    "stg_raw__espn_teams",
     "stg_raw__espn_transactions",
     "stg_raw__idmap_player_id_map",
     "stg_raw__mlb_boxscore",
+    "stg_raw__mlb_players",
     "stg_raw__mlb_schedule",
 }
 SLICE_SEEDS = {
+    "espn_activity_types",
     "espn_lineup_slots",
     "espn_player_positions",
     "espn_reconciliation_residuals",
@@ -159,12 +181,32 @@ def names(rows: list[dict[str, object]], resource_type: str) -> set[str]:
     return {str(r["name"]) for r in rows if r["resource_type"] == resource_type}
 
 
-def test_the_slice_is_the_forty_five_models_and_six_seeds_of_the_specs(
+def test_the_slice_is_the_seventy_one_models_and_seven_seeds_of_the_specs(
     selected: list[dict[str, object]],
 ) -> None:
     """Catches a model or seed joining the slice through a new ref, or leaving it, unnoticed."""
     assert names(selected, "model") == SLICE_MODELS
     assert names(selected, "seed") == SLICE_SEEDS
+
+
+def test_the_four_models_left_out_are_the_solver_and_its_readers(
+    target_path: Path, selected: list[dict[str, object]]
+) -> None:
+    """Catches the exclusion reaching more or less than the solver and what reads it."""
+    everything = listed(
+        run_dbt(
+            target_path,
+            "ls",
+            "--resource-type",
+            "model",
+            "--output",
+            "json",
+            "--output-keys",
+            "name resource_type",
+            "-q",
+        )
+    )
+    assert names(everything, "model") - names(selected, "model") == LEFT_OUT
 
 
 def test_the_slice_has_no_python_model_and_the_materializations_counted(
@@ -174,63 +216,28 @@ def test_the_slice_has_no_python_model_and_the_materializations_counted(
     models = [r for r in selected if r["resource_type"] == "model"]
     assert all(str(r["original_file_path"]).endswith(".sql") for r in models)
     kinds = sorted(r["config"]["materialized"] for r in models)  # type: ignore[index]
-    # Listed on the ci target. The five models once built a season at a time are tables
-    # now (spec 0150), and the nine capture views are views. Spec 0152 adds a staging view
-    # and a table (the games-started limits).
+    # Listed on the ci target: 39 tables, 30 views, and the two ephemeral models
+    # int_fantasy__player_crosswalk and rec_espn__matchup_line_totals (spec 0135).
     counted = (
         kinds.count("table"),
         kinds.count("incremental"),
         kinds.count("view"),
         kinds.count("ephemeral"),
     )
-    # spec 0147: +1 table (stg_espn__matchup_player_lines), +1 view (rec_espn__winner_differences),
-    # +1 ephemeral (rec_espn__matchup_line_totals).
-    assert counted == (26, 0, 20, 2)
+    assert counted == (39, 0, 30, 2)
 
 
 def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) -> None:
     """Catches a test added to or lost from the slice: the counts are the spec's."""
     tests = [r for r in selected if r["resource_type"] == "test"]
     generic = [r for r in tests if r.get("test_metadata")]
-    # Spec 0152 adds 9 generic tests (its two models and is_over_start_limit) and the
-    # singular int_fantasy__start_limits_are_understood.
-    # spec 0147: +1 singular test, stg_espn__matchup_player_lines_one_line_per_player. It reads
-    # only the matchup-days capture view (through fo_espn_latest), which is in the slice, so it
-    # is selected and is written to the two-warehouse rule.
-    # spec 0147 also brings in the tests of stg_espn__matchup_player_lines (11 generic) and of
-    # rec_espn__winner_differences (2 generic), the singular test
-    # stg_espn__matchup_player_lines_cover_played_sides, and fct_matchup_results_match_espn.
-    # spec 0159: +1 singular test, stg_espn__league_settings_tie_rules_are_understood. Both its
-    # parents are in the slice, so it is selected and is written to the two-warehouse rule.
-    # spec 0159: +1 generic test, not_null on fct_matchup_results.is_decided_by_tiebreak.
-    # spec 0160: +1 singular test, stg_espn__league_settings_qualification_is_understood.
-    # Both its parents are in the slice, so it is selected and is written to the two-warehouse
-    # rule.
-    # spec 0160: +2 generic tests, not_null on fct_matchup_category_scores.is_below_minimum and
-    # is_opponent_below_minimum.
-    # spec 0160 (amendment): +1 generic test, not_null on
-    # stg_espn__league_settings.has_qualification_minimum.
-    # spec 0161: +2 singular tests, int_fantasy__category_scales_know_the_scheduled_matchups
-    # and int_fantasy__category_scales_decided_within_the_schedule. Their parents are in the
-    # slice, so they are selected and are written to the two-warehouse rule.
-    assert (len(tests), len(generic), len(tests) - len(generic)) == (261, 224, 37)
-    # spec 0152: 3 + 3 + 1 + 1. Spec 0147 adds 9: two for matchup_player_lines, one for
-    # matchup_line_totals, four for matchup_stat_differences, one each for
-    # category_result_differences and winner_differences.
-    # spec 0159: +1 unit test, matchup_results_a_level_playoff_matchup_goes_to_the_home_side.
-    # spec 0160: +2 unit tests, pitching_minimum_outs_is_the_minimum_on_outs_only and
-    # categories_bound_by_minimum_are_pitching_rates_and_lower_is_better. The new columns carry
-    # contract constraints, not generic tests, so the counts above do not move.
-    # spec 0160 also adds 3 unit tests on fct_matchup_category_scores:
-    # category_scores_a_side_below_the_pitching_minimum_loses_the_bound_categories,
-    # category_scores_minimum_binds_only_when_it_is_missed_and_exists and
-    # category_scores_a_side_with_no_outs_below_the_minimum_loses_rather_than_null.
-    # spec 0161: +4 unit tests on int_fantasy__category_scales,
-    # category_scales_count_history_for_the_matchups_not_yet_played,
-    # category_scales_are_the_seasons_own_once_its_schedule_is_played,
-    # category_scales_clamp_the_weight_at_zero_past_the_schedule and
-    # category_scales_fall_back_to_the_fixed_weight_without_a_schedule.
-    assert len(names(selected, "unit_test")) == 108
+    # Spec 0135: every test whose models are all selected, 436, less the one test that
+    # checks DuckDB's capture glob against its manifest (design, Amendments).
+    assert (len(tests), len(generic), len(tests) - len(generic)) == (435, 365, 70)
+    assert "stg_raw__capture_views_cover_the_manifest" not in names(selected, "test")
+    # Spec 0135: 188 of the project's 212 (187 when it was designed; #188 added one on
+    # stg_espn__transactions).
+    assert len(names(selected, "unit_test")) == 188
 
 
 def test_no_selected_test_reads_a_relation_outside_the_slice(
@@ -263,7 +270,10 @@ def test_the_selector_takes_every_test_wholly_inside_the_slice(
             target_path,
             "ls",
             "--select",
-            " ".join(f"+{root}" for root in ROOTS),
+            "fqn:*",
+            "--exclude",
+            "int_fantasy__optimal_lineups+",
+            "stg_raw__capture_views_cover_the_manifest",
             "--indirect-selection",
             "cautious",
             "--resource-type",
@@ -407,6 +417,10 @@ def test_the_suffix_variable_leaves_every_ci_schema_where_it_was(target_path: Pa
 # `target.type` there (the owner's decision on #130, 2026-10-11).
 SHARED_CONTRACT_TYPES = {"bigint", "integer", "boolean", "date", "timestamp", "string"}
 FLOAT_CONTRACT_TYPE = "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
+INSTANT_CONTRACT_TYPE = (
+    "{{ 'timestamp' if target.type == 'bigquery' else 'timestamp with time zone' }}"
+)
+SWITCHED_CONTRACT_TYPES = {FLOAT_CONTRACT_TYPE, INSTANT_CONTRACT_TYPE}
 
 
 def contract_types(models: set[str]) -> list[tuple[str, str, str]]:
@@ -444,7 +458,7 @@ def test_the_slices_contracts_name_only_types_both_warehouses_accept() -> None:
     refused = [
         row
         for row in typed
-        if row[2] not in SHARED_CONTRACT_TYPES and row[2] != FLOAT_CONTRACT_TYPE
+        if row[2] not in SHARED_CONTRACT_TYPES and row[2] not in SWITCHED_CONTRACT_TYPES
     ]
     assert not refused, f"contract types BigQuery or DuckDB would refuse: {refused}"
 

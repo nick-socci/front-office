@@ -94,6 +94,10 @@ espn_days as (
         sum(stat_value) as espn_value,
         count(distinct espn_game_id) as espn_games
     from {{ ref('stg_espn__player_game_stats') }}
+    -- Only the stats compared below. ESPN writes the largest double for a rate it cannot
+    -- compute (WHIP, ERA, K/BB), and two of them overflow a sum: DuckDB gives infinity,
+    -- which the join below drops, and BigQuery stops with an error (spec 0135).
+    where stat_id in (select single_component_stats.stat_id from single_component_stats)
     group by league_id, season, scoring_period, espn_player_id, stat_id
 
 ),

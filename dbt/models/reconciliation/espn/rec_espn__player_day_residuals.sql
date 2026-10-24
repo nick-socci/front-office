@@ -60,7 +60,7 @@ keys as (
         fantasy_team_id,
         stat_id,
         -- In a fixed order, as every floating-point sum here is.
-        sum(difference order by difference) as difference_sum,
+        {{ fo_sum_in_order('difference', 'difference') }} as difference_sum,
         count(*) as difference_rows
     from differences
     group by league_id, season, matchup_id, fantasy_team_id, stat_id

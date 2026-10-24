@@ -34,15 +34,17 @@ with started_players as (
 
 coverage as (
 
+    -- The CTE is read under another name: BigQuery resolves `started_players.league_id` in
+    -- GROUP BY to the count named started_players, not to the CTE.
     select
-        started_players.league_id,
-        started_players.season,
+        started.league_id,
+        started.season,
         count(*) as started_players,
         count(case when crosswalk.espn_player_id is null then 1 end) as uncovered_players
-    from started_players
+    from started_players as started
     left join {{ ref('stg_idmap__players') }} as crosswalk
-        on crosswalk.espn_player_id = started_players.espn_player_id
-    group by started_players.league_id, started_players.season
+        on crosswalk.espn_player_id = started.espn_player_id
+    group by started.league_id, started.season
 
 )
 

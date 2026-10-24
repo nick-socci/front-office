@@ -42,7 +42,7 @@ pool_parts as (
         max(levels.pool_played_days) as pool_played_days,
         sum(rules.weight * levels.pool_total) as part_total,
         case
-            when bool_or(levels.level_per_played_day is null) then null
+            when {{ fo_any_true('levels.level_per_played_day is null') }} then null
             else sum(rules.weight * levels.level_per_played_day)
         end as part_replacement
     from {{ ref('int_fantasy__replacement_levels') }} as levels
@@ -71,10 +71,10 @@ pool_categories as (
         day_kind,
         category_key,
         max(pool_played_days) as played_days,
-        max(part_total) filter (where part = 'numerator') as numerator,
-        max(part_total) filter (where part = 'denominator') as denominator,
-        max(part_replacement) filter (where part = 'numerator') as replacement_numerator,
-        max(part_replacement) filter (where part = 'denominator') as replacement_denominator
+        max(case when part = 'numerator' then part_total end) as numerator,
+        max(case when part = 'denominator' then part_total end) as denominator,
+        max(case when part = 'numerator' then part_replacement end) as replacement_numerator,
+        max(case when part = 'denominator' then part_replacement end) as replacement_denominator
     from pool_parts
     group by platform, league_id, season, day_kind, category_key
 

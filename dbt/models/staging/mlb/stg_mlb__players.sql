@@ -40,10 +40,11 @@ header as (
 listed as (
 
     select
-        season,
-        fetched_at,
-        unnest(people) as person
+        header.season,
+        header.fetched_at,
+        person  -- noqa: RF02
     from header
+    {{ fo_unnest('header.people', 'person') }}
 
 )
 

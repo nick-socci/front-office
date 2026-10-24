@@ -13,10 +13,10 @@ models:
         enforced: true
     columns:
       - name: platform
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: league_id
-        data_type: varchar
+        data_type: string
         constraints: [{type: not_null}]
       - name: season
         data_type: bigint
@@ -39,13 +39,13 @@ models:
           those matchups and every scored category: a win 1, a tie one half, averaged
           over twenty whole-number draws of replacement. Null when a kind of day he
           played has no replacement level.
-        data_type: double
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
       - name: matchup_wins_added
         description: >
           The same for the matchup, won by more categories won than lost. A level
           matchup counts one half in the regular season, and in a playoff matchup 1 for
           the home side and 0 for the away side, as the league settles it (ADR 0080).
-        data_type: double
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -63,13 +63,13 @@ models:
         enforced: true
     columns:
       - name: platform
-        data_type: varchar
+        data_type: string
       - name: league_id
-        data_type: varchar
+        data_type: string
       - name: season
         data_type: bigint
       - name: replacement_group
-        data_type: varchar
+        data_type: string
       - name: matchups_rescored
         description: Matchups of the league-season with a winner and no unverified inputs.
         data_type: bigint
@@ -83,12 +83,12 @@ models:
         data_tests: [not_null]
       - name: slope
         description: sum(wins * value) / sum(value squared) over the measured pairs; theory gives 0.40.
-        data_type: double
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
       - name: correlation
         description: >
           Pearson correlation of wins added and total_value over the measured pairs, taken
           in player and team order so that it is the same on every build.
-        data_type: double
+        data_type: "{{ 'float64' if target.type == 'bigquery' else 'double' }}"
       - name: is_judged
         description: >
           At least 100 matchups scored again, at least 100 pairs, and a correlation of
@@ -100,7 +100,7 @@ models:
           Why values_track_rescored_category_wins fails the group, or null: a group of
           100 or more pairs with an unmeasured pair is not checkable; a judged group's
           slope must lie in 0.34 to 0.47.
-        data_type: varchar
+        data_type: string
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:

@@ -181,6 +181,16 @@ sides as (
 
 ),
 
+-- The two lineups each side is totalled for. A union, not a VALUES list: BigQuery has no
+-- table constructor.
+lineups as (
+
+    select 'actual' as lineup
+    union all
+    select 'optimal' as lineup
+
+),
+
 side_totals as (
 
     select
@@ -192,7 +202,7 @@ side_totals as (
         coalesce(sum(credited.{{ column }}), 0) as {{ column }}{% if not loop.last %},{% endif %}
         {%- endfor %}
     from sides
-    cross join (values ('actual'), ('optimal')) as lineups (lineup)
+    cross join lineups
     left join {{ ref('int_fantasy__matchup_periods') }} as periods
         on periods.platform = sides.platform
         and periods.league_id = sides.league_id
@@ -220,7 +230,7 @@ components as (
         {{ side_columns | join(', ') }},
         lineup,
         '{{ column }}' as component,
-        cast({{ column }} as double) as component_value
+        cast({{ column }} as {{ fo_type_float() }}) as component_value
     from side_totals
     {{ 'union all' if not loop.last }}
     {%- endfor %}
@@ -257,14 +267,14 @@ stat_values as (
         {{ side_columns | join(',\n        ') }},
         lineup,
         stat_key,
-        max(part_value) filter (where part = 'numerator') as numerator,
-        max(part_value) filter (where part = 'denominator') as denominator,
+        max(case when part = 'numerator' then part_value end) as numerator,
+        max(case when part = 'denominator' then part_value end) as denominator,
         case
-            when count(*) filter (where part = 'denominator') = 0
-                then max(part_value) filter (where part = 'numerator')
+            when count(case when part = 'denominator' then 1 end) = 0
+                then max(case when part = 'numerator' then part_value end)
             else
-                max(part_value) filter (where part = 'numerator')
-                / nullif(max(part_value) filter (where part = 'denominator'), 0)
+                max(case when part = 'numerator' then part_value end)
+                / nullif(max(case when part = 'denominator' then part_value end), 0)
         end as stat_value
     from parts
     group by

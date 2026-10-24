@@ -134,11 +134,12 @@ D, and what did each of them do in MLB that day?*
 ESPN league data requires `ESPN_S2`, `SWID` and `LEAGUE_ID` in a gitignored `.env`
 (copy the cookies from a logged-in browser session). MLB's API needs no credentials.
 
-The BigQuery target builds only the ported slice of spec 0130; the other models are not
-ported and fail there:
+The BigQuery target builds every model but the lineup solver and the three models that read
+it (`bigquery_slice`). Its builds leave out the unit tests, because the fixtures of seven
+of them are written in DuckDB SQL:
 
 ```bash
-cd dbt && DBT_PROFILES_DIR=. uv run --group bigquery dbt build --target bq --selector bigquery_slice
+cd dbt && DBT_PROFILES_DIR=. uv run --group bigquery dbt build --target bq --selector bigquery_slice --exclude-resource-type unit_test
 ```
 
 It reads its project id from the environment variable `FO_BQ_PROJECT`, set in your shell
