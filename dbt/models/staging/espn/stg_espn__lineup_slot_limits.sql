@@ -11,6 +11,8 @@
 -- rows with slot_count = 0 are kept and left for consumers to filter -- "this league
 -- explicitly has no DH slot" is information, not noise.
 
+{%- set counts_path = '$.settings.rosterSettings.lineupSlotCounts' %}
+
 with latest as (
 
     {{ fo_espn_latest('settings') }}
@@ -23,7 +25,8 @@ header as (
         {{ fo_json_text('payload', '$.id') }} as league_id,
         {{ fo_json_int('payload', '$.seasonId') }} as season,
         fetched_at,
-        payload as settings_payload
+        {{ fo_json_keys('payload', counts_path) }} as slot_keys,
+        {{ fo_json_values('payload', counts_path) }} as slot_values
     from latest
 
 ),
@@ -31,28 +34,28 @@ header as (
 slot_keys as (
 
     select
-        league_id,
-        season,
-        fetched_at,
-        -- keys and values unnested together stay paired, so no path is built from a key
-        unnest(
-            {{ fo_json_keys('settings_payload', '$.settings.rosterSettings.lineupSlotCounts') }}
-        ) as slot_key,
-        unnest(
-            {{ fo_json_values('settings_payload', '$.settings.rosterSettings.lineupSlotCounts') }}
-        ) as slot_value
+        header.league_id,
+        header.season,
+        header.fetched_at,
+        -- slot_key and slot_value are the names fo_unnest_pair gives the two unnested
+        -- values; what they would be qualified with differs by warehouse, so they stay bare.
+        -- Keys and values are unnested together, so no path is built from a key. The
+        -- payload is projected away in `header` first (AGENTS.md, rule 1).
+        slot_key,  -- noqa: RF02
+        slot_value  -- noqa: RF02
     from header
+    {{ fo_unnest_pair('header.slot_keys', 'slot_key', 'header.slot_values', 'slot_value') }}
 
 )
 
 select
     slot_keys.league_id,
     slot_keys.season,
-    try_cast(slot_keys.slot_key as bigint) as lineup_slot_id,
+    {{ fo_safe_cast('slot_keys.slot_key', 'bigint') }} as lineup_slot_id,
     slots.slot_abbrev as lineup_slot,
     slots.is_starting_slot,
     {{ fo_json_int('slot_keys.slot_value', '$') }} as slot_count,
     {{ fo_parse_fetched_at('slot_keys.fetched_at') }} as fetched_at
 from slot_keys
 left join {{ ref('espn_lineup_slots') }} as slots
-    on slots.lineup_slot_id = try_cast(slot_keys.slot_key as bigint)
+    on slots.lineup_slot_id = {{ fo_safe_cast('slot_keys.slot_key', 'bigint') }}

@@ -50,40 +50,47 @@ header as (
 
 teams as (
 
+    -- A team's entries are taken out as a column of their own here: fo_unnest is given a
+    -- column, never an expression (see stg_espn__roster_entries).
     select
-        league_id,
-        season,
-        scoring_period,
-        fetched_at,
-        unnest(teams_list) as team
+        header.league_id,
+        header.season,
+        header.scoring_period,
+        header.fetched_at,
+        team.id as team_id,
+        team.roster.entries as roster_entries
     from header
+    {{ fo_unnest('header.teams_list', 'team') }}
 
 ),
 
 entries as (
 
     select
-        league_id,
-        season,
-        scoring_period,
-        fetched_at,
-        team.id as team_id,
-        unnest(team.roster.entries) as entry
+        teams.league_id,
+        teams.season,
+        teams.scoring_period,
+        teams.fetched_at,
+        teams.team_id,
+        entry.playerId as espn_player_id,
+        entry.playerPoolEntry.player.eligibleSlots as eligible_slots
     from teams
+    {{ fo_unnest('teams.roster_entries', 'entry') }}
 
 ),
 
 eligible as (
 
     select
-        league_id,
-        season,
-        scoring_period,
-        fetched_at,
-        team_id,
-        entry.playerId as espn_player_id,
-        unnest(entry.playerPoolEntry.player.eligibleSlots) as lineup_slot_id
+        entries.league_id,
+        entries.season,
+        entries.scoring_period,
+        entries.fetched_at,
+        entries.team_id,
+        entries.espn_player_id,
+        lineup_slot_id  -- noqa: RF02
     from entries
+    {{ fo_unnest('entries.eligible_slots', 'lineup_slot_id') }}
 
 )
 

@@ -9,14 +9,28 @@ with latest as (
 
 ),
 
-teams as (
+header as (
 
     select
         {{ fo_json_text('payload', '$.id') }} as league_id,
         {{ fo_json_int('payload', '$.seasonId') }} as season,
-        unnest({{ fo_json_array('payload', '$.teams[*]') }}) as team,
+        {{ fo_json_array('payload', '$.teams[*]') }} as teams_list,
         fetched_at
     from latest
+
+),
+
+teams as (
+
+    -- The list is computed in `header`, so the payload is not carried beside the unnest
+    -- (AGENTS.md, rule 1).
+    select
+        header.league_id,
+        header.season,
+        team,  -- noqa: RF02
+        header.fetched_at
+    from header
+    {{ fo_unnest('header.teams_list', 'team') }}
 
 )
 

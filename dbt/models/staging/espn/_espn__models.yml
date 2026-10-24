@@ -394,25 +394,25 @@ models:
             combination_of_columns: [league_id, season, transaction_id]
     columns:
       - name: league_id
-        data_type: varchar
+        data_type: string
         data_tests: [not_null]
       - name: season
         data_type: integer
         data_tests: [not_null]
       - name: topic_id
-        data_type: varchar
+        data_type: string
       - name: transaction_id
-        data_type: varchar
+        data_type: string
         data_tests: [not_null]
       - name: transacted_at
-        data_type: timestamp with time zone
+        data_type: "{{ 'timestamp' if target.type == 'bigquery' else 'timestamp with time zone' }}"
       - name: transaction_date
         data_type: date
         data_tests: [not_null]
       - name: message_type_id
         data_type: bigint
       - name: activity
-        data_type: varchar
+        data_type: string
         data_tests:
           - not_null
           - accepted_values:
