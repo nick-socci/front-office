@@ -71,8 +71,9 @@ _REFUSED = (
     ("type varchar", re.compile(r"(?<!\")\bvarchar\b(?!\")", re.IGNORECASE)),
     ("type double", re.compile(r"(?<!\")\bdouble\b(?!\")", re.IGNORECASE)),
     ("type timestamptz", re.compile(r"(?<!\")\btimestamptz\b(?!\")", re.IGNORECASE)),
-    # BigQuery's md5 returns BYTES, not hex text (fo_md5_hex).
-    ("md5", re.compile(r"\bmd5\s*\(", re.IGNORECASE)),
+    # BigQuery's md5 returns BYTES, not hex text (fo_md5_hex). to_hex(md5(...)) is the
+    # hex text, and is what the macro's bigquery__ form says.
+    ("md5", re.compile(r"(?<!to_hex\()\bmd5\s*\(", re.IGNORECASE)),
     ("concat_ws", re.compile(r"\bconcat_ws\s*\(", re.IGNORECASE)),
 )
 # BigQuery's own SQL may unnest, in a FROM clause; regexp_extract with two arguments is its
@@ -306,6 +307,9 @@ def test_a_bigquery_form_may_unnest_and_nothing_else() -> None:
     assert refused_constructs(body, bigquery_form=True) == []
     assert refused_constructs("regexp_extract(c, p)", bigquery_form=True) == []
     assert refused_constructs("try_cast(x as int64)", bigquery_form=True) == [(1, "try_cast")]
+    # md5 is allowed only as to_hex(md5(...)), the hex text that DuckDB's md5 gives
+    assert refused_constructs("to_hex(md5(s))", bigquery_form=True) == []
+    assert refused_constructs("md5(s)", bigquery_form=True) == [(1, "md5")]
 
 
 def test_an_order_in_a_window_or_a_nested_call_is_not_an_ordered_aggregate() -> None:
