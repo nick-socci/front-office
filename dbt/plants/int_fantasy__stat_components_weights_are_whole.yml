@@ -1,0 +1,18 @@
+# int_fantasy__stat_components_weights_are_whole: every component weight is a whole number,
+# which is what keeps the order-exempt sums in rec_fantasy__category_wins_added exact. CI
+# holds the ESPN rows only, whose weights are 1, 3 and 27.
+plants:
+  - name: fractional_weight
+    why: a weight of 1/3 would make the unordered category-value sums order-dependent
+    sql: >-
+      update intermediate.int_fantasy__stat_components
+      set weight = 1.0 / 3
+      where platform = 'espn' and stat_key = 0 and part = 'numerator'
+    expect: {status: fail, failures: 1}
+  - name: another_whole_weight
+    why: the case the test must let through, since a whole weight keeps the sums exact
+    sql: >-
+      update intermediate.int_fantasy__stat_components
+      set weight = 2
+      where platform = 'espn' and stat_key = 0 and part = 'numerator'
+    expect: pass
