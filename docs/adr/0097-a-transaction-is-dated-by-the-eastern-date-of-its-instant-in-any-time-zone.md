@@ -15,9 +15,10 @@ correct in a UTC session and wrong anywhere else.
 
 Measured on 2026-10-23 against the real 2026 season (#188): in an America/New_York session,
 28 of 737 transactions were dated a day early, all between 00:15 and 03:09 Eastern. Rosters
-support the corrected date. `int_fantasy__transactions` has the same 28 rows, and at most 17
-rows of `fct_transaction_impact` change. CI runs in UTC, and none of the fixtures' 11
-transactions is affected, so no gate saw the bug.
+support the corrected date. `int_fantasy__transactions` has the same 28 rows. In
+`fct_transaction_impact` 30 rows change: the 28, whose `transaction_date` the table carries,
+and 2 adds whose next drop moved. 17 of the 30 have a moved window. CI runs in UTC, and none
+of the fixtures' 11 transactions is affected, so no gate saw the bug.
 
 `stg_espn__pro_games` reaches the same macro through `fo_timestamp_from_millis`, whose
 DuckDB form `epoch_ms()` returns a UTC `timestamp` in any session, and is not affected.
