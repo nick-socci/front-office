@@ -828,10 +828,13 @@ def committed_2026_matchups() -> list:
 
 
 def list_leaf_paths(node, prefix=""):
-    """Paths down to scalars, descending into lists (an element is written `[]`). The stat-id
-    map inside a stat line is one leaf, `...stats[].stats`, and is checked on the way: keys
-    all digits, values scalar numbers or strings (ESPN writes "Infinity" for stat 82)."""
-    if isinstance(node, dict):
+    """Paths down to scalars, descending into lists (an element is written `[]`). An empty
+    object or list is a leaf too, so an unlisted key holding `{}` or `[]` is still seen. The
+    stat-id map inside a stat line is one leaf, `...stats[].stats`, and is checked on the way:
+    keys all digits, values scalar numbers or strings (ESPN writes "Infinity" for stat 82)."""
+    if isinstance(node, dict | list) and not node:
+        yield prefix
+    elif isinstance(node, dict):
         for key, value in node.items():
             path = f"{prefix}.{key}" if prefix else key
             if key == "stats" and prefix.endswith("stats[]"):
@@ -852,8 +855,14 @@ def list_leaf_paths(node, prefix=""):
 def matchup_day_allowed_paths() -> set[str]:
     allowed = {"id", "seasonId", "scoringPeriodId", "schedule[].id", "schedule[].matchupPeriodId"}
     for side in ("home", "away"):
-        entry = f"schedule[].{side}.{make_fixtures.MATCHUP_DAY_LINES}.entries[]"
+        entries = f"schedule[].{side}.{make_fixtures.MATCHUP_DAY_LINES}.entries"
+        entry = f"{entries}[]"
         allowed.add(f"schedule[].{side}.teamId")
+        # The empty containers the builder writes: the marker, always `{}`; a side's entries
+        # and an entry's lines, when ESPN sent none.
+        allowed.add(f"schedule[].{side}.{make_fixtures.MATCHUP_DAY_MARKER}")
+        allowed.add(entries)
+        allowed.add(f"{entry}.playerPoolEntry.player.stats")
         allowed.add(f"{entry}.playerId")
         for field in make_fixtures.ESPN_MATCHUP_DAY_LINE_FIELDS:
             allowed.add(f"{entry}.playerPoolEntry.player.stats[].{field}")
