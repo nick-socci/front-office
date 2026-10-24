@@ -9,6 +9,9 @@ copies: they prove isolation (spec 0028, R5), not baseball.
     111111, 2027   the same, a ONE-scoring-period season on a calendar shifted 364 days
     222222, 2027   the 2027 one, league id changed
 
+A one-period season keeps one roster and one matchup-days capture, those of scoring period
+1; the 2026 tenants keep every period (1, 6 and 7).
+
 The base tree also holds a past season (2025: settings, matchups and the two calendars).
 It is copied and is never a source: the others are derived from BASE_SEASON alone.
 
@@ -178,7 +181,10 @@ def one_period_season(meta: dict[str, Any], payload: Any, target_day: date) -> A
 def build_2027_espn(base: list[Capture], target_day: date, stamp_shift: timedelta) -> list[Capture]:
     out: list[Capture] = []
     for meta, payload in base:
-        if meta["endpoint"] == "roster" and meta["partitions"]["scoring_period"] != 1:
+        if (
+            meta["endpoint"] in ("roster", "matchup_days")
+            and meta["partitions"]["scoring_period"] != 1
+        ):
             continue
         new_meta, new_payload = relabel(
             meta, payload, league=BASE_LEAGUE, season=NEW_SEASON, stamp_shift=stamp_shift

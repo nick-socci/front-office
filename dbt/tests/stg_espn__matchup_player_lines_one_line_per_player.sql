@@ -10,7 +10,8 @@
 -- cannot be trusted as the player's period total.
 --
 -- The unnest runs beside the narrow identifier columns only (AGENTS.md, rule 1), exactly
--- as the model's does. Empty where no matchup_days response is loaded, which includes CI.
+-- as the model's does. Empty where no matchup_days response is loaded; CI loads the
+-- fixture's three.
 
 with latest as (
 

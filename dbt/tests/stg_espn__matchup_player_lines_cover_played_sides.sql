@@ -10,10 +10,10 @@
 -- Played: a side of a matchup ESPN has decided (stg_espn__matchups, byes already out).
 -- Covered: a league-season with rosters (ADR 0026) whose matchup-days captures are
 -- landed, i.e. that stg_espn__matchup_days holds rows for. A season with rosters and no
--- matchup-days capture at all, as every CI fixture is, is not judged here: its lack is
--- stg_espn__matchup_days_mark_one_period's and the period models' to report. A season
--- with some captures is judged on every decided matchup, so a period whose captures are
--- missing is found.
+-- matchup-days capture at all (a league that never fetched them) is not judged
+-- here: its lack is stg_espn__matchup_days_mark_one_period's and the period models' to
+-- report. A season with some captures (CI's 2026 among them) is judged on every decided
+-- matchup, so a period whose captures are missing is found.
 --
 -- A matchup ESPN has not decided is left out: its lines are still moving.
 

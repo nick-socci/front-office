@@ -53,8 +53,8 @@ models:
       has lines (spec 0147, R2.2): a stat absent from the side's lines is 0, a side with
       no lines has no row. Counts only (stats with no denominator part). Read by
       rec_espn__matchup_stat_differences and rec_espn__player_day_residuals, so both mean
-      the same thing by "ESPN's lines". Empty where no matchup_days response is loaded,
-      which includes CI.
+      the same thing by "ESPN's lines". Empty where no matchup_days response is loaded;
+      in CI, the four sides of the fixture's two matchups.
 
   - name: rec_espn__category_result_differences
     description: >

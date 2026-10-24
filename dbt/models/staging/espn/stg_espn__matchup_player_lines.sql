@@ -29,8 +29,9 @@
 -- runs beside the narrow identifier columns only, and the sides of a matchup are unnested
 -- from one list, so the schedule is read once.
 --
--- In the BigQuery slice (ADR 0051): written once for both warehouses. In CI there are no
--- matchup_days captures, so this model is empty there; its logic is covered by unit tests.
+-- In the BigQuery slice (ADR 0051): written once for both warehouses. CI holds three
+-- matchup_days captures of the fixture's matchups, so this model holds the lines of the newest
+-- (scoring period 7) there; its logic is also covered by unit tests.
 --
 -- A plain table: it reads the captures at once, as the view streams them (spec 0150).
 

@@ -317,6 +317,23 @@ def fixture_period_number(source_period: int, source_periods: tuple[int, ...]) -
     return source_period - source_periods[0] + 1
 
 
+# Matchup days (spec 0178). The periods are REAL scoring periods 1, 6 and 7, with the same
+# numbers, not renumbered from the rosters' source periods (31, 36, 37). The matchups
+# fixture is real matchup period 1 (real scoring periods 1-12, trimmed to 1-7), and ESPN's
+# captures of real periods 1, 6 and 7 mark that matchup period and carry those matchups'
+# lines. The source periods 31, 36 and 37 mark matchup periods 4 and 5 (ADR 0098).
+FIXTURE_MATCHUP_DAY_PERIODS = tuple(
+    fixture_period_number(p, FIXTURE_SOURCE_SCORING_PERIODS) for p in FIXTURE_SOURCE_SCORING_PERIODS
+)
+# A stat line of a matchup-day entry. Rebuilt from this list, never scrubbed: the real line
+# also has id, appliedTotal and more. `stats` is ESPN's map from stat id to number, whole.
+ESPN_MATCHUP_DAY_LINE_FIELDS = ("statSourceId", "statSplitTypeId", "scoringPeriodId", "stats")
+# The marker names the matchup period the capture is of (its contents are never copied); the
+# lines are the matchup period's entries, which stg_espn__matchup_player_lines reads.
+MATCHUP_DAY_MARKER = "rosterForCurrentScoringPeriod"
+MATCHUP_DAY_LINES = "rosterForMatchupPeriod"
+
+
 def fixture_span(source_periods: tuple[int, ...]) -> int:
     """How many consecutive fixture periods the source periods cover, gaps included."""
     return source_periods[-1] - source_periods[0] + 1
@@ -997,6 +1014,124 @@ def build_espn_rosters() -> list[Path]:
     return written
 
 
+def matchup_identity(matchup: dict[str, Any]) -> tuple[Any, Any, Any]:
+    """What makes two captures describe the same matchup: its id and its two teams.
+
+    A bye has no away side, so its away team is None on both sides of a comparison.
+    """
+    return (
+        matchup.get("id"),
+        matchup.get("home", {}).get("teamId"),
+        (matchup.get("away") or {}).get("teamId"),
+    )
+
+
+def check_matchup_days_match_the_matchups_fixture(season: int = FIXTURE_SEASON) -> None:
+    """Stop when a matchup-day capture is missing or is of other matchups (R1.6, R1.7).
+
+    The matchup-day fixtures keep the first FIXTURE_MATCHUPS matchups of ESPN's schedule, as
+    the matchups fixture does. If a day's capture lists them in another order or with other
+    teams, the two fixtures would describe different matchups and the reconciliation of
+    lines against totals would compare strangers. Names the period, or the capture.
+    """
+    expected = [matchup_identity(m) for m in latest_espn("matchups", season=season)["schedule"]][
+        :FIXTURE_MATCHUPS
+    ]
+    for period in FIXTURE_MATCHUP_DAY_PERIODS:
+        candidates = landed_in("espn", "matchup_days", season=season, scoring_period=period)
+        if not candidates:
+            raise SystemExit(
+                f"no landed espn/matchup_days capture for {season} period {period}"
+                f" (scoring_period={period})"
+            )
+        newest = sorted(candidates)[-1]
+        schedule = json.loads(newest.read_text())["schedule"]
+        kept = [matchup_identity(m) for m in schedule][:FIXTURE_MATCHUPS]
+        if kept != expected:
+            raise SystemExit(
+                f"espn/matchup_days capture {newest} (scoring_period={period}) holds matchups "
+                f"{kept}, not the matchups fixture's {expected}"
+            )
+
+
+def rebuild_matchup_day_side(side: dict[str, Any]) -> dict[str, Any]:
+    """One side of a matchup-day matchup, rebuilt from the allowlist.
+
+    The marker becomes an empty object: its presence is what is read, its roster is not
+    copied. Every stat line is kept, filtered on nothing, because the model's filter is what
+    the fixture exists to exercise. A side without a key gets no key (R1.4).
+    """
+    out = rebuild(side, ("teamId",))
+    if MATCHUP_DAY_MARKER in side:
+        out[MATCHUP_DAY_MARKER] = {}
+    if MATCHUP_DAY_LINES in side:
+        out[MATCHUP_DAY_LINES] = {
+            "entries": [
+                rebuild(entry, ("playerId",))
+                | {
+                    "playerPoolEntry": {
+                        "player": {
+                            "stats": [
+                                rebuild(line, ESPN_MATCHUP_DAY_LINE_FIELDS)
+                                for line in (
+                                    entry.get("playerPoolEntry", {}).get("player", {}).get("stats")
+                                    or []
+                                )
+                            ]
+                        }
+                    },
+                }
+                for entry in side[MATCHUP_DAY_LINES].get("entries") or []
+            ]
+        }
+    return out
+
+
+def build_espn_matchup_days() -> list[Path]:
+    """One capture per fixture matchup day, of the same first matchups as the matchups fixture."""
+    written: list[Path] = []
+    for period in FIXTURE_MATCHUP_DAY_PERIODS:
+        payload = latest_espn("matchup_days", scoring_period=period)
+        schedule = []
+        for matchup in payload["schedule"][:FIXTURE_MATCHUPS]:
+            kept: dict[str, Any] = {
+                "id": matchup["id"],
+                "matchupPeriodId": matchup["matchupPeriodId"],
+                "home": rebuild_matchup_day_side(matchup["home"]),
+            }
+            if matchup.get("away"):
+                kept["away"] = rebuild_matchup_day_side(matchup["away"])
+            schedule.append(kept)
+        fixture = {
+            "id": FIXTURE_LEAGUE_ID,
+            "seasonId": payload.get("seasonId"),
+            "scoringPeriodId": payload.get("scoringPeriodId"),
+            "schedule": schedule,
+        }
+        path = write_fixture(
+            source="espn",
+            endpoint="matchup_days",
+            partitions={
+                "season": 2026,
+                "league_id": FIXTURE_LEAGUE_ID,
+                "scoring_period": period,
+            },
+            payload=fixture,
+            request={
+                "url": "https://lm-api-reads.fantasy.espn.com/",
+                "params": {"view": "mMatchupScore,mScoreboard", "scoringPeriodId": period},
+            },
+        )
+        sides = [side for m in schedule for side in (m["home"], m.get("away", {}))]
+        entries = [len(s.get(MATCHUP_DAY_LINES, {}).get("entries", [])) for s in sides if s]
+        print(
+            f"espn/matchup_days period {period}: {len(schedule)} matchups, "
+            f"entries per side {entries} -> {path.relative_to(REPO_ROOT)}"
+        )
+        written.append(path)
+    return written
+
+
 def trim_scoring_periods(
     matchup: dict[str, Any], periods: int = fixture_span(FIXTURE_SOURCE_SCORING_PERIODS)
 ) -> dict[str, Any]:
@@ -1146,6 +1281,7 @@ def main() -> None:
     dates = tuple(args.dates)
     check_source_periods_are_the_fixture_dates(FIXTURE_SOURCE_SCORING_PERIODS, dates)
     check_one_league()
+    check_matchup_days_match_the_matchups_fixture()
     check_a_free_agent_starts_on_the_earlier_day_and_again_later(dates)
     # Every check of every season first, so a failing past season leaves no half-written run.
     for past in PAST_SEASONS:
@@ -1160,6 +1296,7 @@ def main() -> None:
     build_espn_teams()
     roster_paths = build_espn_rosters()
     build_espn_matchups()
+    build_espn_matchup_days()
     build_espn_transactions()
     build_idmap(roster_paths)
     for past in PAST_SEASONS:
