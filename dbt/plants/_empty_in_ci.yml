@@ -2,12 +2,6 @@
 # on one reads nothing in CI, so the relation is exempt instead of every test getting a plant.
 # The gate fails if a relation listed here has rows, so an entry cannot outlive its reason.
 relations:
-  - relation: staging.stg_espn__matchup_days
-    reason: the CI fixtures hold no espn/matchup_days capture
-    link: "#178"
-  - relation: staging.stg_espn__matchup_player_lines
-    reason: reads stg_espn__matchup_days, which is empty in CI
-    link: "#178"
   - relation: reconciliation.rec_espn__register_rows
     reason: the register names real leagues only (ADR 0040); CI loads the fixture league
     link: ADR 0040
