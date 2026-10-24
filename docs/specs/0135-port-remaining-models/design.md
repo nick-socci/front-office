@@ -381,4 +381,16 @@ Their SQL is still run, once (R5.2):
     the alias case of task 11. Its columns are now qualified.
   The 24 "not found" errors of that round followed from the first: the model was not
   built, and the model and the tests that read it found no table.
+- **2026-10-24, the real build on BigQuery (task 13, round 1).**
+  - Three models of the old slice, not changed by this port, ran into the bq target's
+    600 s job timeout: `stg_mlb__batting_game_logs` (stopped at 615 s, 8.46 slot-hours),
+    `stg_espn__player_game_stats` (614 s) and `stg_espn__matchup_player_lines` (606 s).
+    The spike timed `stg_mlb__batting_game_logs` at 60 s over 827 MB; the upload of #136
+    holds eight seasons, and its sibling `stg_mlb__pitching_game_logs` now bills 6.98 GB in
+    312 s. The stopped jobs billed nothing. The owner chose (2026-10-24) to raise
+    `job_execution_timeout_seconds` to 1800 on the bq target. `maximum_bytes_billed`
+    (10 GB) is unchanged and stays the cost guard.
+  - The unit tests run as `dbt test --selector bigquery_slice --resource-type unit_test`.
+    Task 13's `--selector bigquery_slice,resource_type:unit_test` is read by dbt as one
+    selector's name.
 
