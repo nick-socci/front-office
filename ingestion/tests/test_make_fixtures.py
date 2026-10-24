@@ -1333,3 +1333,239 @@ def test_no_landed_player_list_stops_generation_with_a_message(roots):
     with pytest.raises(SystemExit) as stop:
         make_fixtures.build_mlb_players()
     assert "mlb/players" in str(stop.value)
+
+
+# -- matchup days (spec 0178): the fixture's own matchups, from ESPN's captures of their days ---
+
+
+def _day_line(source=0, split=5, period=1, stats=None, **extra):
+    return {
+        "statSourceId": source,
+        "statSplitTypeId": split,
+        "scoringPeriodId": period,
+        "stats": stats if stats is not None else {"0": 4.0},
+    } | extra
+
+
+def test_rebuild_matchup_day_side_keeps_only_the_allowlist():
+    """Catches a copied name, slot, marker roster or extra stat-line key (appliedTotal, id)."""
+    side = {
+        "teamId": 3,
+        "totalPoints": 9.0,
+        "rosterForCurrentScoringPeriod": {"entries": [{"playerId": 1}]},
+        "rosterForMatchupPeriod": {
+            "entries": [
+                {
+                    "playerId": 10,
+                    "lineupSlotId": 5,
+                    "playerPoolEntry": {
+                        "player": {
+                            "fullName": "Some Player",
+                            "stats": [_day_line(appliedTotal=2.0, id="x")],
+                        }
+                    },
+                }
+            ]
+        },
+    }
+    assert make_fixtures.rebuild_matchup_day_side(side) == {
+        "teamId": 3,
+        "rosterForCurrentScoringPeriod": {},
+        "rosterForMatchupPeriod": {
+            "entries": [
+                {
+                    "playerId": 10,
+                    "playerPoolEntry": {"player": {"stats": [_day_line()]}},
+                }
+            ]
+        },
+    }
+
+
+def test_rebuild_matchup_day_side_invents_no_key_the_real_side_lacks():
+    """Catches an empty marker or an empty roster written for a side that had none (R1.4)."""
+    assert make_fixtures.rebuild_matchup_day_side({"teamId": 3}) == {"teamId": 3}
+    assert make_fixtures.rebuild_matchup_day_side({}) == {}
+    no_player_id = make_fixtures.rebuild_matchup_day_side(
+        {"rosterForMatchupPeriod": {"entries": [{"lineupSlotId": 5}]}}
+    )
+    assert no_player_id == {
+        "rosterForMatchupPeriod": {"entries": [{"playerPoolEntry": {"player": {"stats": []}}}]}
+    }
+    only_lines = make_fixtures.rebuild_matchup_day_side(
+        {"teamId": 3, "rosterForMatchupPeriod": {"entries": []}}
+    )
+    assert only_lines == {"teamId": 3, "rosterForMatchupPeriod": {"entries": []}}
+    only_marker = make_fixtures.rebuild_matchup_day_side(
+        {"teamId": 3, "rosterForCurrentScoringPeriod": {"entries": [{"playerId": 1}]}}
+    )
+    assert only_marker == {"teamId": 3, "rosterForCurrentScoringPeriod": {}}
+
+
+def test_rebuild_matchup_day_side_keeps_every_line_and_gives_a_bare_entry_empty_stats():
+    """Catches a filter on source or split (the model's filter is what is under test)."""
+    projected = _day_line(source=1, split=1)
+    side = {
+        "teamId": 3,
+        "rosterForMatchupPeriod": {
+            "entries": [
+                {
+                    "playerId": 10,
+                    "playerPoolEntry": {"player": {"stats": [_day_line(), projected]}},
+                },
+                {"playerId": 11, "playerPoolEntry": {"player": {"fullName": "N"}}},
+                {"playerId": 12},
+            ]
+        },
+    }
+    entries = make_fixtures.rebuild_matchup_day_side(side)["rosterForMatchupPeriod"]["entries"]
+    assert entries[0]["playerPoolEntry"]["player"]["stats"] == [_day_line(), projected]
+    assert entries[1] == {"playerId": 11, "playerPoolEntry": {"player": {"stats": []}}}
+    assert entries[2] == {"playerId": 12, "playerPoolEntry": {"player": {"stats": []}}}
+
+
+def _real_matchup(matchup_id, home, away=None, **extra):
+    matchup = {"id": matchup_id, "matchupPeriodId": 1, "home": {"teamId": home}}
+    if away is not None:
+        matchup["away"] = {"teamId": away}
+    return matchup | extra
+
+
+def _land_matchup_days(raw, periods, schedule, stamp="20260501T000000Z"):
+    for p in periods:
+        land(
+            raw,
+            "espn",
+            "matchup_days",
+            {"season": 2026, "league_id": "1", "scoring_period": p},
+            stamp,
+            {"id": "1", "scoringPeriodId": p, "schedule": schedule},
+        )
+
+
+def _land_matchups(raw, schedule, stamp="20260501T000000Z"):
+    land(
+        raw,
+        "espn",
+        "matchups",
+        {"season": 2026, "league_id": "1"},
+        stamp,
+        {"id": "1", "seasonId": 2026, "schedule": schedule},
+    )
+
+
+def test_check_matchup_days_match_the_matchups_fixture_passes_on_the_same_matchups(
+    roots, monkeypatch
+):
+    """Catches a false stop: same ids and teams, and a bye on both sides (away None)."""
+    raw, _ = roots
+    monkeypatch.setattr(make_fixtures, "FIXTURE_MATCHUP_DAY_PERIODS", (1, 6))
+    schedule = [_real_matchup(1, 3, 4), _real_matchup(2, 5)]
+    _land_matchups(raw, schedule + [_real_matchup(3, 8, 9)])
+    # Matchups beyond FIXTURE_MATCHUPS are not compared; the other fields may differ.
+    _land_matchup_days(raw, (1, 6), [_real_matchup(1, 3, 4, extra=1), _real_matchup(2, 5)])
+    make_fixtures.check_matchup_days_match_the_matchups_fixture(2026)
+
+
+def test_check_matchup_days_stops_naming_a_period_with_no_capture(roots, monkeypatch):
+    """Catches a missing day capture going unnoticed or unnamed (R1.6)."""
+    raw, _ = roots
+    monkeypatch.setattr(make_fixtures, "FIXTURE_MATCHUP_DAY_PERIODS", (1, 6))
+    schedule = [_real_matchup(1, 3, 4), _real_matchup(2, 5, 6)]
+    _land_matchups(raw, schedule)
+    _land_matchup_days(raw, (1,), schedule)
+    with pytest.raises(SystemExit, match="6"):
+        make_fixtures.check_matchup_days_match_the_matchups_fixture(2026)
+
+
+@pytest.mark.parametrize(
+    "days",
+    [
+        [_real_matchup(1, 3, 4), _real_matchup(9, 5, 6)],  # matchup id
+        [_real_matchup(1, 3, 4), _real_matchup(2, 5, 7)],  # away team
+        [_real_matchup(1, 3, 4), _real_matchup(2, 7, 6)],  # home team
+        [_real_matchup(1, 3, 4), _real_matchup(2, 5)],  # away dropped
+    ],
+)
+def test_check_matchup_days_stops_naming_a_capture_with_other_matchups(roots, monkeypatch, days):
+    """Catches a day capture of different matchups than the matchups fixture (R1.7)."""
+    raw, _ = roots
+    monkeypatch.setattr(make_fixtures, "FIXTURE_MATCHUP_DAY_PERIODS", (1,))
+    _land_matchups(raw, [_real_matchup(1, 3, 4), _real_matchup(2, 5, 6)])
+    _land_matchup_days(raw, (1,), days)
+    with pytest.raises(SystemExit, match="scoring_period=1"):
+        make_fixtures.check_matchup_days_match_the_matchups_fixture(2026)
+
+
+def test_build_espn_matchup_days_writes_one_allowlisted_capture_per_period(roots):
+    """Catches a wrong partition or param, a copied teams/settings/member key, an invented
+    away on a bye, or more than FIXTURE_MATCHUPS matchups."""
+    raw, fixtures = roots
+    schedule = [
+        _real_matchup(1, 3, 4, winner="HOME")
+        | {
+            "home": {
+                "teamId": 3,
+                "rosterForCurrentScoringPeriod": {"entries": [{"playerId": 1}]},
+                "rosterForMatchupPeriod": {
+                    "entries": [
+                        {
+                            "playerId": 10,
+                            "lineupSlotId": 2,
+                            "playerPoolEntry": {
+                                "player": {"fullName": "N", "stats": [_day_line()]}
+                            },
+                        }
+                    ]
+                },
+            }
+        },
+        _real_matchup(2, 5),
+        _real_matchup(3, 8, 9),
+    ]
+    for p in make_fixtures.FIXTURE_MATCHUP_DAY_PERIODS:
+        land(
+            raw,
+            "espn",
+            "matchup_days",
+            {"season": 2026, "league_id": "1", "scoring_period": p},
+            "20260501T000000Z",
+            {
+                "id": "1",
+                "seasonId": 2026,
+                "scoringPeriodId": p,
+                "teams": [{"id": 1, "owners": ["{GUID}"]}],
+                "settings": {"name": "Real League"},
+                "members": [{"displayName": "X"}],
+                "schedule": schedule,
+            },
+        )
+    paths = make_fixtures.build_espn_matchup_days()
+    assert make_fixtures.FIXTURE_MATCHUP_DAY_PERIODS == (1, 6, 7)
+    assert len(paths) == 3
+    for p, path in zip(make_fixtures.FIXTURE_MATCHUP_DAY_PERIODS, paths, strict=True):
+        directory = (
+            fixtures
+            / f"espn/matchup_days/season=2026/league_id=111111/scoring_period={p}"
+            / "fetched_at=20260430T160000Z"
+        )
+        assert path == directory / "payload.json"
+        payload = json.loads(path.read_text())
+        assert list(payload) == ["id", "seasonId", "scoringPeriodId", "schedule"]
+        assert payload["id"] == "111111"
+        assert payload["seasonId"] == 2026
+        assert payload["scoringPeriodId"] == p
+        assert [m["id"] for m in payload["schedule"]] == [1, 2]
+        assert "away" not in payload["schedule"][1]
+        assert payload["schedule"][0]["away"] == {"teamId": 4}
+        assert payload["schedule"][0]["home"]["rosterForCurrentScoringPeriod"] == {}
+        text = path.read_text()
+        for forbidden in ("Real League", "owners", "members", "displayName", "fullName", "winner"):
+            assert forbidden not in text
+        meta = json.loads((directory / "meta.json").read_text())
+        assert meta["partitions"] == {
+            "season": 2026,
+            "league_id": "111111",
+            "scoring_period": p,
+        }
+        assert meta["params"] == {"view": "mMatchupScore,mScoreboard", "scoringPeriodId": p}
