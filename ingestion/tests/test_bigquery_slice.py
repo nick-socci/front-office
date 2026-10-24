@@ -232,8 +232,9 @@ def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) ->
     tests = [r for r in selected if r["resource_type"] == "test"]
     generic = [r for r in tests if r.get("test_metadata")]
     # Spec 0135: every test whose models are all selected, 436, less the one test that
-    # checks DuckDB's capture glob against its manifest (design, Amendments).
-    assert (len(tests), len(generic), len(tests) - len(generic)) == (435, 365, 70)
+    # checks DuckDB's capture glob against its manifest (design, Amendments). #193 added one
+    # singular test, int_fantasy__stat_components_weights_are_whole.
+    assert (len(tests), len(generic), len(tests) - len(generic)) == (436, 365, 71)
     assert "stg_raw__capture_views_cover_the_manifest" not in names(selected, "test")
     # Spec 0135: 188 of the project's 212 (187 when it was designed; #188 added one on
     # stg_espn__transactions).
