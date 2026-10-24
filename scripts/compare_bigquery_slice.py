@@ -286,10 +286,22 @@ def unique_key(manifest: dict[str, Any], unique_id: str) -> list[str] | None:
 
 
 def slice_relations(target_path: Path) -> list[tuple[str, str, list[str] | None]]:
-    """(schema, name, unique key) of every relation of the slice, from dbt."""
+    """(schema, name, unique key) of every relation of the slice, from dbt: its models and its
+    seeds (spec 0135). A seed's key is read from its tests as a model's is; a seed with no
+    float column needs none."""
     dbt = Path(sys.executable).parent / "dbt"
     listed = subprocess.run(
-        [str(dbt), "ls", "--selector", SELECTOR, "--resource-type", "model", "--output", "json"]
+        [
+            str(dbt),
+            "ls",
+            "--selector",
+            SELECTOR,
+            "--resource-type",
+            "model",
+            "--resource-type",
+            "seed",
+        ]
+        + ["--output", "json"]
         + ["--output-keys", "unique_id name schema config", "-q"]
         + ["--target", "dev", "--target-path", str(target_path)],
         cwd=DBT_ROOT,
@@ -303,11 +315,11 @@ def slice_relations(target_path: Path) -> list[tuple[str, str, list[str] | None]
     for line in listed.stdout.splitlines():
         if not line.startswith("{"):
             continue
-        model = json.loads(line)
-        if model["config"]["materialized"] == "ephemeral":
+        node = json.loads(line)
+        if node["config"]["materialized"] == "ephemeral":
             continue
-        key = unique_key(manifest, model["unique_id"])
-        relations.append((str(model["schema"]), str(model["name"]), key))
+        key = unique_key(manifest, node["unique_id"])
+        relations.append((str(node["schema"]), str(node["name"]), key))
     return sorted(relations)
 
 

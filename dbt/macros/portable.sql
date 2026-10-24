@@ -145,6 +145,52 @@
 {%- endmacro %}
 
 
+{#
+  A correlation, with the order its float sum is taken in (ADR 0046) stated in DuckDB.
+  BigQuery's corr takes no order, so its form leaves it out, and a BigQuery build is held to
+  the float tolerance on the column, as for fo_sum_in_order. `order_by` is what follows
+  `order by`, on the grain's key.
+#}
+{% macro fo_corr_in_order(y, x, order_by) %}
+    {{- return(adapter.dispatch('fo_corr_in_order')(y, x, order_by)) -}}
+{% endmacro %}
+{% macro duckdb__fo_corr_in_order(y, x, order_by) -%}
+    corr({{ y }}, {{ x }} order by {{ order_by }})
+{%- endmacro %}
+{% macro bigquery__fo_corr_in_order(y, x, order_by) -%}
+    corr({{ y }}, {{ x }})
+{%- endmacro %}
+
+
+{# The MD5 of text, as 32 characters of lower-case hex. BigQuery's md5 returns BYTES. #}
+{% macro fo_md5_hex(text) %}
+    {{- return(adapter.dispatch('fo_md5_hex')(text)) -}}
+{% endmacro %}
+{% macro duckdb__fo_md5_hex(text) -%}
+    md5({{ text }})
+{%- endmacro %}
+{% macro bigquery__fo_md5_hex(text) -%}
+    to_hex(md5({{ text }}))
+{%- endmacro %}
+
+
+{#
+  The instant a count of milliseconds since 1970-01-01 UTC names, as DuckDB's timestamp with
+  time zone. fo_timestamp_from_millis below is the same instant as a plain TIMESTAMP, for a
+  value that is only read as a date or a time; this one keeps the type of a column that
+  already holds `to_timestamp(ms / 1000)`.
+#}
+{% macro fo_instant_from_millis(ms) %}
+    {{- return(adapter.dispatch('fo_instant_from_millis')(ms)) -}}
+{% endmacro %}
+{% macro duckdb__fo_instant_from_millis(ms) -%}
+    to_timestamp({{ ms }} / 1000)
+{%- endmacro %}
+{% macro bigquery__fo_instant_from_millis(ms) -%}
+    timestamp_millis({{ ms }})
+{%- endmacro %}
+
+
 {# The instant a count of milliseconds since 1970-01-01 UTC names. #}
 {% macro fo_timestamp_from_millis(milliseconds) %}
     {{- return(adapter.dispatch('fo_timestamp_from_millis')(milliseconds)) -}}
