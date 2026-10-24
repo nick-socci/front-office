@@ -1,6 +1,6 @@
 # 0096. Every SQL model is written for both warehouses, and BigQuery builds all but the solver and its readers
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-23
 - Spec: [0135-port-remaining-models](../specs/0135-port-remaining-models/design.md) · Issue: #135
 
@@ -40,9 +40,8 @@ and `scripts/compare_bigquery_slice.py` (C10).
 
 ## Decision
 
-Proposed: **option 1**, chosen by the owner on 2026-10-23 going through the spec's
-decisions, with the rename (option 2) left to #137. It is accepted when the spec is
-approved.
+**Option 1**, chosen by the owner on 2026-10-23 going through the spec's decisions, with
+the rename (option 2) left to #137. Accepted with the spec (PR #189).
 
 Option 3 leaves #137 a port and a decision instead of a decision, and leaves three models
 that drift from the rule with nothing to check them. Option 4 means every new model has to
