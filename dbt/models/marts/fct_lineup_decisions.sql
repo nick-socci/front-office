@@ -41,6 +41,13 @@
 
 {{ config(materialized='table') }}
 
+{#- An option's value, or 0 for a start past the team's start limit that day. #}
+{%- set limited_value = (
+    "case when coalesce(past_limit.is_past_start_limit, false)"
+    ~ " and options.slot_role = 'pitcher' and options.day_kind = 'start'"
+    ~ " then 0 else options.option_value end"
+) %}
+
 with team_days as (
 
     select distinct
@@ -63,7 +70,7 @@ candidate_counts as (
         days.scoring_date,
         days.fantasy_team_id,
         count(*) as candidates,
-        bool_or(days.mlbam_player_id is null) as has_unresolved_candidate
+        {{ fo_any_true('days.mlbam_player_id is null') }} as has_unresolved_candidate
     from {{ ref('int_fantasy__roster_days') }} as days
     inner join {{ ref('espn_lineup_slots') }} as slots
         on slots.lineup_slot_id = days.roster_slot_id
@@ -177,21 +184,24 @@ option_totals as (
         options.season,
         options.scoring_date,
         options.fantasy_team_id,
-        count(*) filter (where options.is_actual) as played_starters,
-        bool_or(options.is_actual and options.option_value is null) as has_unvalued_actual,
-        sum(
+        count(case when options.is_actual then 1 end) as played_starters,
+        {{ fo_any_true(
+            'options.is_actual and options.option_value is null'
+        ) }} as has_unvalued_actual,
+        -- The actual lineup's rows only: any other row is null, which a sum skips, and a
+        -- team-day with none is null, as the filter it replaces gave.
+        {{ fo_sum_in_order(
+            'case when options.is_actual then ' ~ limited_value ~ ' end',
+            'options.platform_player_id'
+        ) }} as actual_sum,
+        count(
             case
                 when
-                    coalesce(past_limit.is_past_start_limit, false)
+                    options.is_actual
                     and options.slot_role = 'pitcher'
                     and options.day_kind = 'start'
-                    then 0
-                else options.option_value
+                    then 1
             end
-            order by options.platform_player_id
-        ) filter (where options.is_actual) as actual_sum,
-        count(*) filter (
-            where options.is_actual and options.slot_role = 'pitcher' and options.day_kind = 'start'
         ) as actual_pitcher_starts
     from {{ ref('int_fantasy__lineup_options') }} as options
     left join days_past_limit as past_limit
@@ -236,21 +246,11 @@ optimal_totals as (
         options.scoring_date,
         options.fantasy_team_id,
         count(*) as optimal_starters,
-        sum(
-            case
-                when
-                    coalesce(past_limit.is_past_start_limit, false)
-                    and options.slot_role = 'pitcher'
-                    and options.day_kind = 'start'
-                    then 0
-                else options.option_value
-            end
-            order by options.platform_player_id
-        ) as optimal_sum,
-        count(*) filter (where not options.is_started) as players_brought_in,
-        count(*) filter (where options.is_started and not options.is_actual) as players_moved,
-        count(*) filter (
-            where options.slot_role = 'pitcher' and options.day_kind = 'start'
+        {{ fo_sum_in_order(limited_value, 'options.platform_player_id') }} as optimal_sum,
+        count(case when not options.is_started then 1 end) as players_brought_in,
+        count(case when options.is_started and not options.is_actual then 1 end) as players_moved,
+        count(
+            case when options.slot_role = 'pitcher' and options.day_kind = 'start' then 1 end
         ) as optimal_pitcher_starts
     from optimal_options as options
     left join days_past_limit as past_limit

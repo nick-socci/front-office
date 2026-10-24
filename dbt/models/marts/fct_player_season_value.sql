@@ -79,9 +79,9 @@ day_counts as (
         platform_player_id,
         fantasy_team_id,
         count(*) as started_days,
-        count(*) filter (where played_on_credited_side) as played_started_days,
-        count(*) filter (where not in_matchup) as started_days_outside_matchups,
-        count(*) filter (where input_status not in ('played', 'verified_off'))
+        count(case when played_on_credited_side then 1 end) as played_started_days,
+        count(case when not in_matchup then 1 end) as started_days_outside_matchups,
+        count(case when input_status not in ('played', 'verified_off') then 1 end)
             as unverified_started_days,
         min(scoring_date) as first_started_date,
         max(scoring_date) as last_started_date
@@ -99,9 +99,9 @@ total_values as (
         platform_player_id,
         fantasy_team_id,
         case
-            when count(*) filter (where scaled_value is null) > 0 then null
+            when count(case when scaled_value is null then 1 end) > 0 then null
             -- in category order: a sum of doubles is only reproducible in a fixed order (#28)
-            else sum(scaled_value order by category_key)
+            else {{ fo_sum_in_order('scaled_value', 'category_key') }}
         end as total_value
     from {{ ref('fct_player_category_value') }}
     group by platform, league_id, season, platform_player_id, fantasy_team_id

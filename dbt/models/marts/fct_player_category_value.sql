@@ -151,7 +151,7 @@ kind_component_totals as (
         {%- endfor %}
         day_kind,
         '{{ column }}' as component,
-        cast({{ column }} as double) as component_total
+        cast({{ column }} as {{ fo_type_float() }}) as component_total
     from kind_days
     {{ 'union all' if not loop.last }}
     {%- endfor %}
@@ -173,8 +173,10 @@ kind_parts as (
         rules.part,
         sum(rules.weight * totals.component_total) as part_total,
         case
-            when bool_or(levels.level_per_played_day is null) then null
-            else sum(rules.weight * levels.level_per_played_day order by rules.component)
+            when {{ fo_any_true('levels.level_per_played_day is null') }} then null
+            else {{ fo_sum_in_order(
+                'rules.weight * levels.level_per_played_day', 'rules.component'
+            ) }}
         end as part_replacement
     from kind_component_totals as totals
     inner join {{ ref('int_fantasy__stat_components') }} as rules
@@ -207,7 +209,7 @@ category_sides as (
         rules.platform,
         rules.stat_key as category_key,
         max(sides.side) as side,
-        bool_or(rules.part = 'denominator') as is_rate
+        {{ fo_any_true("rules.part = 'denominator'") }} as is_rate
     from {{ ref('int_fantasy__stat_components') }} as rules
     inner join component_sides as sides
         on sides.component = rules.component
@@ -223,10 +225,10 @@ kind_parts_pivoted as (
         {%- endfor %}
         day_kind,
         category_key,
-        max(part_total) filter (where part = 'numerator') as numerator,
-        max(part_total) filter (where part = 'denominator') as denominator,
-        max(part_replacement) filter (where part = 'numerator') as replacement_numerator,
-        max(part_replacement) filter (where part = 'denominator') as replacement_denominator
+        max(case when part = 'numerator' then part_total end) as numerator,
+        max(case when part = 'denominator' then part_total end) as denominator,
+        max(case when part = 'numerator' then part_replacement end) as replacement_numerator,
+        max(case when part = 'denominator' then part_replacement end) as replacement_denominator
     from kind_parts
     group by
         {%- for key in pair_keys %}
@@ -281,7 +283,7 @@ summed_over_kinds as (
         sum(numerator) as numerator,
         sum(denominator) as denominator,
         case
-            when bool_or(value_over_replacement is null) then null
+            when {{ fo_any_true('value_over_replacement is null') }} then null
             else sum(value_over_replacement)
         end as value_over_replacement
     from kind_values

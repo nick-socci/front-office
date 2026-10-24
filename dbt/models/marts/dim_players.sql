@@ -106,9 +106,9 @@ platform_names as (
 known_players as (
 
     select mlbam_player_id from {{ ref('stg_mlb__players') }}
-    union
+    union distinct
     select mlbam_player_id from {{ ref('int_mlb__player_game_days') }}
-    union
+    union distinct
     select mlbam_player_id
     from {{ ref('dim_player_league_seasons') }}
     where mlbam_player_id is not null
