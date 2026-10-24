@@ -328,3 +328,16 @@ Their SQL is still run, once (R5.2):
 | design-review | F5 (P2): the 5.35 GB and 256 MB figures had no ledger row | Fixed: C14, from the spike's `run_results.json` as posted on #130 |
 
 ## Amendments
+
+- **2026-10-24, counts retaken at `main` 29982b1 (R1.2).** #188 added the unit test
+  `transactions_are_dated_by_the_eastern_date_of_their_instant` on `stg_espn__transactions`,
+  a selected model. So the project has 212 unit tests and the selector takes **188**, not
+  C1's 211 and 187. Models (71), seeds (7) and data tests (436 of 488) are as C1 says.
+  `test_bigquery_slice.py` pins 188.
+- **2026-10-24, C3 corrected.** Recounted with `refused_constructs` on each file at 29982b1,
+  18 of the 26 models hold a refused construct and 8 hold none, not 14 and 12. The 8 are
+  `int_fantasy__lineup_options`, `int_fantasy__lineup_slots`,
+  `int_fantasy__replacement_levels`, `int_fantasy__teams`, `int_fantasy__transactions`,
+  `rec_espn__register_rows`, `stg_raw__espn_teams` and `stg_raw__mlb_players`. The work is
+  unchanged: the rule test names exactly the 18 and the 9 singular tests, and nothing in the
+  old slice.
