@@ -40,7 +40,9 @@ with measured as (
         sqrt(
             {{ fo_sum_in_order('standard_margin * standard_margin', 'matchup_id') }} / count(*)
         ) as margin_scale,
-        {{ fo_sum_in_order('(home_denominator + away_denominator) / relative_volume', 'matchup_id') }}
+        {{ fo_sum_in_order(
+            '(home_denominator + away_denominator) / relative_volume', 'matchup_id'
+        ) }}
         / (2 * count(*)) as side_denominator
     from {{ ref('int_fantasy__reported_matchup_margins') }}
     where is_measured

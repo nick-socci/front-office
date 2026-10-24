@@ -156,7 +156,9 @@ day_parts as (
         sum(rules.weight * components.component_total) as part_total,
         case
             when {{ fo_any_true('levels.level_per_played_day is null') }} then null
-            else {{ fo_sum_in_order('rules.weight * levels.level_per_played_day', 'rules.component') }}
+            else {{ fo_sum_in_order(
+                'rules.weight * levels.level_per_played_day', 'rules.component'
+            ) }}
         end as part_replacement
     from day_components as components
     inner join {{ ref('int_fantasy__stat_components') }} as rules
