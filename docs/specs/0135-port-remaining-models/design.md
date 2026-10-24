@@ -393,4 +393,16 @@ Their SQL is still run, once (R5.2):
   - The unit tests run as `dbt test --selector bigquery_slice --resource-type unit_test`.
     Task 13's `--selector bigquery_slice,resource_type:unit_test` is read by dbt as one
     selector's name.
+- **2026-10-24, the real build on BigQuery (task 13, round 2).** With the longer timeout,
+  482 of 514 nodes passed, billing 29.88 GB in all, at most 6.98 GB in one query.
+  `rec_espn__player_day_differences` (a model of the old slice) stopped with "floating
+  point overflow" in SUM. ESPN writes the largest double, 1.797e308, for a rate it cannot
+  compute: WHIP (stat 41, 32 values), ERA (47, 32) and K/BB (82, 1,717) in the real
+  season. The model summed every stat per player-day before keeping the single-component
+  stats it compares. Two of those values overflow: DuckDB gives infinity, which the join
+  then drops, and BigQuery stops. `espn_days` now sums only the stats that
+  `single_component_stats` names. The join already kept only those, so the result cannot
+  change, and the real DuckDB warehouse rebuilt from it is equal to the baseline, 73 of
+  73. What ESPN's sentinel means for the models that read rate stats is a question for
+  the owner, not settled here.
 
