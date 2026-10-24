@@ -52,12 +52,13 @@ _EXEMPTION = re.compile(r"order-exempt:.*[A-Za-z0-9]")
 
 
 _NOT_NEWLINE = re.compile(r"[^\n]")
-# The BigQuery forms of the two ordered-aggregate macros (ADR 0051, 0053). BigQuery has no
-# way to state the order of a float aggregate, so these two bodies, and no others, hold one
-# without it; a model reaches them only through fo_sum_in_order / fo_avg_in_order, whose
+# The BigQuery forms of the three ordered-aggregate macros (ADR 0051, 0053). BigQuery has no
+# way to state the order of a float aggregate, so these three bodies, and no others, hold one
+# without it; a model reaches them only through fo_sum_in_order / fo_avg_in_order /
+# fo_corr_in_order, whose
 # DuckDB forms state the order. Their bodies are not read as SQL here.
 _UNORDERED_BY_NECESSITY = re.compile(
-    r"\{%-?\s*macro\s+bigquery__fo_(?:sum|avg)_in_order\b.*?\{%-?\s*endmacro\s*-?%\}",
+    r"\{%-?\s*macro\s+bigquery__fo_(?:sum|avg|corr)_in_order\b.*?\{%-?\s*endmacro\s*-?%\}",
     re.DOTALL,
 )
 _JINJA_EXPRESSION = re.compile(r"\{\{.*?\}\}", re.DOTALL)
@@ -351,7 +352,20 @@ def test_an_aggregate_written_through_the_in_order_macros_is_in_order() -> None:
     assert unordered_aggregates(duckdb_form) == []
 
 
-def test_only_the_two_bigquery_forms_may_leave_the_order_out() -> None:
+def test_an_aggregate_written_through_fo_corr_in_order_is_in_order() -> None:
+    """Catches the rule flagging a model that states a correlation's order through the macro
+    (spec 0135), or its BigQuery form, which cannot state one, being flagged."""
+    model = "select {{ fo_corr_in_order('y', 'x', 'k') }} as r from t"
+    assert unordered_aggregates(model) == []
+    bigquery_form = (
+        "{% macro bigquery__fo_corr_in_order(y, x, order_by) %}\n"
+        "    corr({{ y }}, {{ x }})\n"
+        "{%- endmacro %}\n"
+    )
+    assert unordered_aggregates(bigquery_form) == []
+
+
+def test_only_the_three_bigquery_forms_may_leave_the_order_out() -> None:
     """Catches the allowance widening: BigQuery cannot state the order, so the BigQuery
     forms of fo_sum_in_order and fo_avg_in_order hold an aggregate without one, and nothing
     else may, whatever it is named and wherever it stands in the same file."""
