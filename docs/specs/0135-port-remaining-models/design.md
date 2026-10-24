@@ -105,12 +105,21 @@ well as a decision, and three models stay outside the rule with nothing to hold 
 |---|---|---|
 | [0096](../../adr/0096-every-sql-model-is-written-for-both-warehouses-and-bigquery-builds-all-but-the-solver-and-its-readers.md) | Every SQL model is written for both warehouses; `bigquery_slice` becomes every model but the solver and its readers, name kept | proposed |
 
-Also proposed, without an ADR because each follows a decision already made:
+Chosen by the owner on 2026-10-23, going through the spec's decisions (the spec itself is
+not yet approved, so ADR 0096 stays `proposed` until it is):
 
-- Tier M. The approach is ADR 0051's, already used on 48 models. What is new is scope and
-  one bug fix.
-- The new contract type `timestamp with time zone` is switched on `target.type` in YAML, as
-  the owner chose for floats on #130 (2026-10-11).
+1. The selector keeps the name `bigquery_slice` and takes the exclusion form: every model
+   except the solver and its descendants (ADR 0096, option 1). The rename is left to #137.
+2. One build, with a commit per layer (*Alternatives considered*, A).
+3. The solver readers are run over no rows on BigQuery against an empty stand-in solver
+   table, and all four are then dropped (R5.2, as written).
+4. The contract type `timestamp with time zone` is switched inline on `target.type` in YAML,
+   as the owner chose for floats on #130 (2026-10-11).
+
+Also, without an ADR because each follows a decision already made:
+
+- Tier M. The approach is ADR 0051's, already used on 48 models. What is new is the
+  scope.
 - The 7 unit tests with DuckDB-SQL fixtures are not rewritten (a no-go). They are reported
   as not runnable on BigQuery.
 
@@ -243,7 +252,8 @@ relation. Both sides are built after #188 has merged (R3.5).
 comparison by themselves. One change: `slice_relations` lists `--resource-type model`
 only, so the seeds were never compared, and it gains `--resource-type seed` (design review
 F4). A seed's unique key is read from its tests as a model's is. A seed with no float
-column needs none.
+column needs none. `stg_espn__roster_entry_slots` is a scalar-column table, so it is
+compared exactly, and that covers the roster view's `eligibleSlots` (R4.4).
 
 On BigQuery, both builds leave out unit tests (`--exclude-resource-type unit_test`): dbt
 runs a model's unit tests before the model, and those that cannot run there would stop it
@@ -261,8 +271,7 @@ Their SQL is still run, once (R5.2):
    int_fantasy__lineup_category_totals fct_lineup_decisions fct_lineup_decision_categories`.
    The Python model is not selected, so dbt reads the table of step 1 as it stands.
 3. Drop the table of step 1, and the three relations, so that nothing on BigQuery looks
-   like a built solver. `stg_espn__roster_entry_slots` is a scalar-column table, so
-it is compared exactly, and that covers `eligibleSlots` (R4.4).
+   like a built solver.
 
 ## Test strategy
 

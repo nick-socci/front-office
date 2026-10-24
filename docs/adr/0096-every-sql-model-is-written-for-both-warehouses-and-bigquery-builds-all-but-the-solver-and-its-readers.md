@@ -40,8 +40,9 @@ and `scripts/compare_bigquery_slice.py` (C10).
 
 ## Decision
 
-Proposed: **option 1**. The recommendation is firm on 1 against 3 and 4, and only
-moderately firm against 2.
+Proposed: **option 1**, chosen by the owner on 2026-10-23 going through the spec's
+decisions, with the rename (option 2) left to #137. It is accepted when the spec is
+approved.
 
 Option 3 leaves #137 a port and a decision instead of a decision, and leaves three models
 that drift from the rule with nothing to check them. Option 4 means every new model has to
@@ -56,7 +57,8 @@ last four models, and the rename can be made then, when the exclusion is gone.
 - Good: a new SQL model is held to the rule and built on BigQuery by default. A new model
   that reads the solver is left out by the same exclusion.
 - Good: AGENTS.md's rule reads "every SQL model", which is simpler to follow.
-- Bad / accepted cost: the three solver readers' BigQuery forms are not run by anything
-  until #137. They are only compiled (spec 0135, R5.2).
+- Bad / accepted cost: the three solver readers are not built from real rows on BigQuery
+  until #137. Until then their SQL is run there only over no rows, against an empty
+  stand-in for the solver (spec 0135, R5.2).
 - Bad / accepted cost: "slice" names something that is nearly the whole project.
 - Follow-ups: #137 removes the exclusion. The rename (option 2) can be done then.
