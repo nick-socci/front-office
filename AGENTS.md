@@ -85,7 +85,9 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
   dispatched `fo_*` macro from `dbt/macros/portable.sql` or `json.sql` for the rest (ADR
   0051). No `::`, no `filter (where …)`, no `unnest` in a SELECT list, no `varchar` or `double`.
   `test_dbt_portable_sql_rule.py` fails on the constructs it has a pattern for. It cannot
-  see a type in YAML, date arithmetic, or a bare column in HAVING: those are found by
+  see a type in YAML, date arithmetic, a bare column in HAVING, or a table qualifier that
+  is also an output alias of the same SELECT (BigQuery reads `t.c` as a field of the
+  column `t`): those are found by
   `dbt run --target bq --selector bigquery_slice --empty`, which costs nothing. A ported
   model must leave the real DuckDB warehouse identical (`scripts/compare_warehouses.py`).
 - A seed CSV that gains a **column** needs `dbt seed --full-refresh` locally; dbt otherwise

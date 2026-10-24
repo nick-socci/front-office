@@ -341,3 +341,19 @@ Their SQL is still run, once (R5.2):
   `rec_espn__register_rows`, `stg_raw__espn_teams` and `stg_raw__mlb_players`. The work is
   unchanged: the rule test names exactly the 18 and the 9 singular tests, and nothing in the
   old slice.
+- **2026-10-24, the empty build on BigQuery (task 11, round 1).** Two tests failed there,
+  both outside the port's 26 models:
+  - `stg_raw__capture_views_cover_the_manifest` reads `raw.captures`, DuckDB's loader
+    manifest, which BigQuery does not have: its capture views read uploaded tables, not a
+    file glob. The old selector never took it, because some capture views lay outside it;
+    the exclusion form takes it. It is a check of DuckDB's glob, so the selector now
+    excludes it by name beside the solver, and the selector's data tests are **435**: 365
+    generic and 70 singular, where they were 365 and 71. R1.1 is read with this exclusion.
+  - `stg_idmap__covers_started_players` (spec 0177, added after the last BigQuery build)
+    names a CTE `started_players` and a `count(*) as started_players` in one SELECT, and
+    BigQuery reads `started_players.league_id` in GROUP BY as a field of the count. The CTE
+    is now read under the alias `started`; its DuckDB result is unchanged. No pattern can
+    see this, so AGENTS.md's list of what the empty build finds names it.
+  The 205 skipped nodes followed from the second: `dbt build` skips what is downstream of
+  a failed test.
+

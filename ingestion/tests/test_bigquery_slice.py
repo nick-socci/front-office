@@ -231,8 +231,10 @@ def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) ->
     """Catches a test added to or lost from the slice: the counts are the spec's."""
     tests = [r for r in selected if r["resource_type"] == "test"]
     generic = [r for r in tests if r.get("test_metadata")]
-    # Spec 0135: every test whose models are all selected, 436 in all.
-    assert (len(tests), len(generic), len(tests) - len(generic)) == (436, 365, 71)
+    # Spec 0135: every test whose models are all selected, 436, less the one test that
+    # checks DuckDB's capture glob against its manifest (design, Amendments).
+    assert (len(tests), len(generic), len(tests) - len(generic)) == (435, 365, 70)
+    assert "stg_raw__capture_views_cover_the_manifest" not in names(selected, "test")
     # Spec 0135: 188 of the project's 212 (187 when it was designed; #188 added one on
     # stg_espn__transactions).
     assert len(names(selected, "unit_test")) == 188
@@ -271,6 +273,7 @@ def test_the_selector_takes_every_test_wholly_inside_the_slice(
             "fqn:*",
             "--exclude",
             "int_fantasy__optimal_lineups+",
+            "stg_raw__capture_views_cover_the_manifest",
             "--indirect-selection",
             "cautious",
             "--resource-type",

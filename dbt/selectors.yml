@@ -3,7 +3,9 @@ selectors:
   - name: bigquery_slice
     description: >
       Every model that builds on BigQuery: all of them but the lineup solver's Python model
-      and what reads it (ADR 0096; #137 removes the exclusion).
+      and what reads it (ADR 0096; #137 removes the exclusion). One test is left out too:
+      it checks DuckDB's capture glob against the loader's manifest, and BigQuery has
+      neither (spec 0135, Amendments).
     definition:
       union:
         - method: fqn
@@ -13,3 +15,5 @@ selectors:
             - method: fqn
               value: int_fantasy__optimal_lineups
               children: true
+            - method: fqn
+              value: stg_raw__capture_views_cover_the_manifest
