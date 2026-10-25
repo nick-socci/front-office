@@ -1251,6 +1251,11 @@ seeds:
         data_tests: [not_null, unique]
       - name: display_label
         data_tests: [not_null]
+      - name: is_rate
+        description: >
+          True for ESPN's rate stats and RC, which the line models do not stage (ADR 0099).
+          Generated from RATE_STAT_IDS in make_espn_seeds.py.
+        data_tests: [not_null]
   - name: espn_activity_types
     description: >
       ESPN messageTypeId -> activity (FA ADDED, DROPPED, TRADED...). is_transaction is

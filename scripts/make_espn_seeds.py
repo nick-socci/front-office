@@ -31,6 +31,16 @@ SEED_DIR = Path(__file__).resolve().parent.parent / "dbt/seeds"
 # 2.8125 * (144/3) / 9 = exactly 15 earned runs, so 144 is outs (48.0 IP).
 DISPLAY_LABELS = {34: "IP"}
 
+# The stats the line models do not stage (ADR 0099): ESPN's rates, and RC.
+#   2 AVG, 9 SLG, 17 OBP, 18 OPS, 29 PPA, 38 OBA, 41 WHIP, 43 OOBP, 47 ERA, 49 K/9,
+#   55 WPCT, 59 SV%, 71 FPCT, 82 K/BB are ratios; 19 RC is a derived value rather than a
+#   ratio, but it is no count either.
+# Why they are listed: ESPN writes a value even when a rate's denominator is zero, in
+# encodings that change by season, so the models keep the components and never stage a rate.
+# Why the list cannot come from the values: WPCT and SV% are 0 or 1 per game, which looks
+# just like a count.
+RATE_STAT_IDS = frozenset({2, 9, 17, 18, 19, 29, 38, 41, 43, 47, 49, 55, 59, 71, 82})
+
 # A roster slot either counts toward the day's scoring or it does not. Bench and injured
 # list are the two that do not, in every ESPN league: a benched player's real-life game
 # happens, it just is not credited to the fantasy team. This is a property of the slot,
@@ -93,13 +103,25 @@ def write_seed(name: str, header: tuple[str, ...], rows: list[tuple[object, ...]
 
 
 def main() -> None:
+    stats = numeric_only(STATS_MAP)
+    unknown_rates = sorted(RATE_STAT_IDS - stats.keys())
+    if unknown_rates:
+        raise SystemExit(f"RATE_STAT_IDS names stat ids espn-api does not know: {unknown_rates}")
+
     SEED_DIR.mkdir(parents=True, exist_ok=True)
 
-    stats = numeric_only(STATS_MAP)
     write_seed(
         "espn_stat_ids",
-        ("stat_id", "stat_abbrev", "display_label"),
-        [(key, stats[key], DISPLAY_LABELS.get(key, stats[key])) for key in sorted(stats)],
+        ("stat_id", "stat_abbrev", "display_label", "is_rate"),
+        [
+            (
+                key,
+                stats[key],
+                DISPLAY_LABELS.get(key, stats[key]),
+                str(key in RATE_STAT_IDS).lower(),
+            )
+            for key in sorted(stats)
+        ],
     )
 
     slots = numeric_only(POSITION_MAP)
