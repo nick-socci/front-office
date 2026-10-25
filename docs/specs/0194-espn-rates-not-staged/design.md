@@ -223,3 +223,17 @@ review F2).
 | design-review | F4 (P2): RC is a derived value, not a ratio, yet the spec promised every count unchanged | Fixed. The requirements and design say `is_rate` covers RC as a derived value, and the promise is limited to the stat ids that are kept |
 
 ## Amendments
+
+- **2026-10-25, task 7 builds into suffixed datasets.** `dbt build --target bq --selector
+  bigquery_slice --empty` replaces each relation in the slice with an empty one, and the
+  BigQuery project holds #135's real-season build (`stg_espn__player_game_stats`:
+  7,526,702 rows). Task 7 runs with `--vars '{fo_schema_suffix: _e194}'` (spec 0130,
+  R5.5), which builds into `staging_e194`, `marts_e194` and the rest, and leaves that build
+  as it is. What it checks is unchanged: BigQuery compiles and runs every model and test in
+  the slice, `fo_is_finite` among them.
+- **2026-10-25, a unit test for the join.** R2.3 had only task 8's one-off count as a
+  check, so a filter written as an inner join would pass every test in the build. The unit
+  test `matchup_player_lines_leave_out_rates_and_keep_unknown_stats` gives one line with a
+  count (1), a rate (82) and a stat the seed does not know (22), and expects 1 and 22. It
+  fails on an inner join and on a model that stages rates. `test_bigquery_slice.py` pins
+  189 unit tests.

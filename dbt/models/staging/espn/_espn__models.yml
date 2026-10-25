@@ -777,6 +777,40 @@ unit_tests:
         - {league_id: "1", season: 2018, matchup_period: 1, matchup_id: 1, team_id: 1, espn_player_id: 10, stat_id: 1, stat_value: 2.0, scoring_period: 2, fetched_at: "2026-09-01 00:00:00"}
         - {league_id: "1", season: 2018, matchup_period: 2, matchup_id: 2, team_id: 1, espn_player_id: 10, stat_id: 1, stat_value: 5.0, scoring_period: 4, fetched_at: "2026-09-15 00:00:00"}
 
+  - name: matchup_player_lines_leave_out_rates_and_keep_unknown_stats
+    description: >
+      ADR 0099, R2.2, R2.3. One line of three stats: 1, a count in the seed; 82 (K/BB),
+      a rate in the seed; and 22, which the seed does not know. 1 and 22 are kept, 82 is
+      not. Catches a rate staged, and the seed joined as an inner join, which would drop
+      the 7 stat ids espn-api does not name along with the rates.
+    model: stg_espn__matchup_player_lines
+    given:
+      - input: ref('stg_raw__espn_matchup_days')
+        format: sql
+        rows: |
+          select
+              'espn' as source, 'matchup_days' as endpoint, '/l' as request_path,
+              'scoringPeriodId=1&view=mMatchupScore,mScoreboard' as request_key,
+              '20260901T000000Z' as fetched_at,
+              '{"season": 2018, "league_id": "1", "scoring_period": 1}'::JSON as partitions,
+              'c1' as file_path, '1' as id, 2018::BIGINT as "seasonId",
+              from_json('[{"id": 1, "matchupPeriodId": 1, "home": {"teamId": 1, "rosterForMatchupPeriod": {"entries": [{"playerId": 10, "playerPoolEntry": {"player": {"stats": [{"statSourceId": 0, "statSplitTypeId": 5, "scoringPeriodId": 0, "stats": {"1": 3.0, "82": 1.5, "22": 1.0}}]}}}]}}, "away": {"teamId": 2}}]',
+              '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}}]') as schedule
+      - input: source('raw', 'captures')
+        rows:
+          - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=1&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", partitions: '{"season": 2018, "league_id": "1", "scoring_period": 1}', file_path: c1}
+      - input: ref('stg_espn__matchup_days')
+        rows:
+          - {league_id: "1", season: 2018, scoring_period: 1, matchup_period: 1, fetched_at: "2026-09-01 00:00:00"}
+      - input: ref('espn_stat_ids')
+        rows:
+          - {stat_id: 1, is_rate: false}
+          - {stat_id: 82, is_rate: true}
+    expect:
+      rows:
+        - {league_id: "1", season: 2018, matchup_period: 1, matchup_id: 1, team_id: 1, espn_player_id: 10, stat_id: 1, stat_value: 3.0, scoring_period: 1, fetched_at: "2026-09-01 00:00:00"}
+        - {league_id: "1", season: 2018, matchup_period: 1, matchup_id: 1, team_id: 1, espn_player_id: 10, stat_id: 22, stat_value: 1.0, scoring_period: 1, fetched_at: "2026-09-01 00:00:00"}
+
   - name: transactions_keep_each_league_seasons_newest_run
     description: >
       Catches a global newest run. League A's newest run (fetched 09-01) is older than
