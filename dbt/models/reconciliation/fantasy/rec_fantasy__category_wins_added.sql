@@ -348,8 +348,9 @@ swapped_values as (
         case
             when count(case when scored_rules.part = 'denominator' then 1 end) = 0
                 then
-                    -- order-exempt: whole weights (int_fantasy__stat_components_weights_are_whole)
-                    -- times whole swapped totals; |sum| < 3e4, far below 2^53.
+                    -- order-exempt: whole weights of at most 10^6, held by
+                    -- int_fantasy__stat_components_weights_are_whole, times whole swapped
+                    -- totals in the hundreds: |sum| < 2e12, far below 2^53.
                     sum(
                         case
                             when scored_rules.part = 'numerator'
