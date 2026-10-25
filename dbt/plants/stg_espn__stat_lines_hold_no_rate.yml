@@ -1,0 +1,44 @@
+# stg_espn__stat_lines_hold_no_rate: neither ESPN line model holds a row of a rate stat (ADR
+# 0099). Once the models filter, CI holds no rate row, so one is inserted. The key of each
+# planted row is a string no real row has, and it is a rate (82) whichever stat ids the CI
+# fixtures hold. The test returns one row per model and stat id, so a planted row is one
+# failure however many rows of that stat the model holds.
+plants:
+  - name: rate_row_in_game_stats
+    why: a game line of stat 82 in stg_espn__player_game_stats, as if the model had stopped filtering rates
+    sql: >-
+      insert into staging.stg_espn__player_game_stats
+      (league_id, season, scoring_period, team_id, espn_player_id, espn_game_id, stat_id,
+      stat_value, fetched_at)
+      values ('plant', 2025, 1, 1, 1, 'plant', 82, 0.5, timestamp '2025-01-01 00:00:00')
+    expect: {status: fail, failures: 1}
+  - name: rate_row_in_matchup_lines
+    why: a matchup line of stat 82 in stg_espn__matchup_player_lines, as if the model had stopped filtering rates
+    sql: >-
+      insert into staging.stg_espn__matchup_player_lines
+      (league_id, season, matchup_period, matchup_id, team_id, espn_player_id, stat_id,
+      stat_value, scoring_period, fetched_at)
+      values ('plant', 2025, 1, 1, 1, 1, 82, 0.5, 1, timestamp '2025-01-01 00:00:00')
+    expect: {status: fail, failures: 1}
+  - name: rate_rows_in_both_models
+    why: each model is named on its own row, so a rate in both is two failures
+    sql:
+      - >-
+        insert into staging.stg_espn__player_game_stats
+        (league_id, season, scoring_period, team_id, espn_player_id, espn_game_id, stat_id,
+        stat_value, fetched_at)
+        values ('plant', 2025, 1, 1, 1, 'plant', 82, 0.5, timestamp '2025-01-01 00:00:00')
+      - >-
+        insert into staging.stg_espn__matchup_player_lines
+        (league_id, season, matchup_period, matchup_id, team_id, espn_player_id, stat_id,
+        stat_value, scoring_period, fetched_at)
+        values ('plant', 2025, 1, 1, 1, 1, 82, 0.5, 1, timestamp '2025-01-01 00:00:00')
+    expect: {status: fail, failures: 2}
+  - name: count_row_in_game_stats
+    why: the case the test must let through, a count (stat 1) is not a rate
+    sql: >-
+      insert into staging.stg_espn__player_game_stats
+      (league_id, season, scoring_period, team_id, espn_player_id, espn_game_id, stat_id,
+      stat_value, fetched_at)
+      values ('plant', 2025, 1, 1, 1, 'plant', 1, 2, timestamp '2025-01-01 00:00:00')
+    expect: pass

@@ -1,0 +1,89 @@
+# stg_espn__stat_lines_hold_finite_values: no stat value in either ESPN line model is NaN,
+# infinite, or at least 1e300 in size (ADR 0099). CI holds none, so a count row (stat 1,
+# which is not a rate and so stays in the models once they drop rates) is set to one. The
+# row is the first by its key, so the plants pick the same row on every run.
+plants:
+  - name: largest_double_in_game_stats
+    why: ESPN's x/0 sentinel for an undefined ratio, near the largest double, in a game line
+    sql: >-
+      update staging.stg_espn__player_game_stats
+      set stat_value = 1.7976931348623157e308
+      where (league_id, season, scoring_period, espn_player_id, espn_game_id, stat_id) = (
+      select (league_id, season, scoring_period, espn_player_id, espn_game_id, stat_id)
+      from staging.stg_espn__player_game_stats
+      where stat_id = 1
+      order by league_id, season, scoring_period, espn_player_id, espn_game_id
+      limit 1)
+    expect: {status: fail, failures: 1}
+  - name: nan_in_game_stats
+    why: a NaN in a game line
+    sql: >-
+      update staging.stg_espn__player_game_stats
+      set stat_value = cast('nan' as double)
+      where (league_id, season, scoring_period, espn_player_id, espn_game_id, stat_id) = (
+      select (league_id, season, scoring_period, espn_player_id, espn_game_id, stat_id)
+      from staging.stg_espn__player_game_stats
+      where stat_id = 1
+      order by league_id, season, scoring_period, espn_player_id, espn_game_id
+      limit 1)
+    expect: {status: fail, failures: 1}
+  - name: large_count_in_game_stats
+    why: the case the test must let through, a large count (10^6) is far below 1e300
+    sql: >-
+      update staging.stg_espn__player_game_stats
+      set stat_value = 1000000
+      where (league_id, season, scoring_period, espn_player_id, espn_game_id, stat_id) = (
+      select (league_id, season, scoring_period, espn_player_id, espn_game_id, stat_id)
+      from staging.stg_espn__player_game_stats
+      where stat_id = 1
+      order by league_id, season, scoring_period, espn_player_id, espn_game_id
+      limit 1)
+    expect: pass
+  - name: null_in_game_stats
+    why: the case the test must let through, a null value (from fo_safe_cast) is not a failure
+    sql: >-
+      update staging.stg_espn__player_game_stats
+      set stat_value = null
+      where (league_id, season, scoring_period, espn_player_id, espn_game_id, stat_id) = (
+      select (league_id, season, scoring_period, espn_player_id, espn_game_id, stat_id)
+      from staging.stg_espn__player_game_stats
+      where stat_id = 1
+      order by league_id, season, scoring_period, espn_player_id, espn_game_id
+      limit 1)
+    expect: pass
+  - name: largest_double_in_matchup_lines
+    why: ESPN's x/0 sentinel for an undefined ratio, near the largest double, in a matchup line
+    sql: >-
+      update staging.stg_espn__matchup_player_lines
+      set stat_value = 1.7976931348623157e308
+      where (league_id, season, matchup_id, team_id, espn_player_id, stat_id) = (
+      select (league_id, season, matchup_id, team_id, espn_player_id, stat_id)
+      from staging.stg_espn__matchup_player_lines
+      where stat_id = 1
+      order by league_id, season, matchup_id, team_id, espn_player_id
+      limit 1)
+    expect: {status: fail, failures: 1}
+  - name: nan_in_matchup_lines
+    why: a NaN in a matchup line
+    sql: >-
+      update staging.stg_espn__matchup_player_lines
+      set stat_value = cast('nan' as double)
+      where (league_id, season, matchup_id, team_id, espn_player_id, stat_id) = (
+      select (league_id, season, matchup_id, team_id, espn_player_id, stat_id)
+      from staging.stg_espn__matchup_player_lines
+      where stat_id = 1
+      order by league_id, season, matchup_id, team_id, espn_player_id
+      limit 1)
+    expect: {status: fail, failures: 1}
+  - name: large_count_in_matchup_lines
+    why: the case the test must let through, a large count (10^6) is far below 1e300
+    sql: >-
+      update staging.stg_espn__matchup_player_lines
+      set stat_value = 1000000
+      where (league_id, season, matchup_id, team_id, espn_player_id, stat_id) = (
+      select (league_id, season, matchup_id, team_id, espn_player_id, stat_id)
+      from staging.stg_espn__matchup_player_lines
+      where stat_id = 1
+      order by league_id, season, matchup_id, team_id, espn_player_id
+      limit 1)
+    expect: pass
