@@ -1,6 +1,6 @@
 # 0099. ESPN's rate stats are not staged
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-24
 - Spec: [0194-espn-rates-not-staged](../specs/0194-espn-rates-not-staged/design.md) · Issue: #194
 
