@@ -227,7 +227,9 @@ models:
       One row per (matchup, side, ESPN player, stat): ESPN's own record of what each
       player was credited with in a matchup, from rosterForMatchupPeriod in the
       matchup-days captures. Actual stats only (statSourceId 0, statSplitTypeId 5); a
-      value that is not a number is left out. A matchup's lines come from the newest
+      value that is not a number is left out. ESPN's rate stats (is_rate in espn_stat_ids)
+      are not staged: ESPN writes a value for a rate even when its denominator is zero,
+      in encodings that change by season (ADR 0099). A matchup's lines come from the newest
       capture of the last scoring period of its matchup period that has a capture, and
       scoring_period and fetched_at say which. Empty where no matchup_days response is
       loaded; in CI, the lines of the fixture's two matchups, from its period-7 capture.
@@ -348,8 +350,10 @@ models:
     description: >
       ESPN's own per-game stat lines for rostered players: one row per (scoring period,
       player, ESPN game, stat), actual stats only, from each period's own roster
-      snapshot. A doubleheader is two game lines. Used by the reconciliation to trace a
-      matchup residual to the player-day that causes it.
+      snapshot. A doubleheader is two game lines. ESPN's rate stats (is_rate in
+      espn_stat_ids) are not staged: ESPN writes a value for a rate even when its
+      denominator is zero, in encodings that change by season (ADR 0099). Used by the
+      reconciliation to trace a matchup residual to the player-day that causes it.
     columns:
       - name: espn_game_id
         description: ESPN's game id (externalId), not MLB's game_pk.
@@ -678,6 +682,13 @@ unit_tests:
       - input: ref('stg_espn__matchup_days')
         rows:
           - {league_id: "1", season: 2018, scoring_period: 7, matchup_period: 2, fetched_at: "2026-09-01 00:00:00"}
+      # Stat 2 is a rate in the real seed; left out here so that its "n/a" is still what
+      # drops the stat, not the rate filter.
+      - input: ref('espn_stat_ids')
+        rows:
+          - {stat_id: 1, is_rate: false}
+          - {stat_id: 3, is_rate: false}
+          - {stat_id: 4, is_rate: false}
     expect:
       rows:
         - {league_id: "1", season: 2018, matchup_period: 2, matchup_id: 20, team_id: 1, espn_player_id: 100, stat_id: 1, stat_value: 3.0, scoring_period: 7, fetched_at: "2026-09-01 00:00:00"}
@@ -758,6 +769,9 @@ unit_tests:
           - {league_id: "1", season: 2018, scoring_period: 2, matchup_period: 1, fetched_at: "2026-09-01 00:00:00"}
           - {league_id: "1", season: 2018, scoring_period: 3, matchup_period: 2, fetched_at: "2026-09-01 00:00:00"}
           - {league_id: "1", season: 2018, scoring_period: 4, matchup_period: 2, fetched_at: "2026-09-15 00:00:00"}
+      - input: ref('espn_stat_ids')
+        rows:
+          - {stat_id: 1, is_rate: false}
     expect:
       rows:
         - {league_id: "1", season: 2018, matchup_period: 1, matchup_id: 1, team_id: 1, espn_player_id: 10, stat_id: 1, stat_value: 2.0, scoring_period: 2, fetched_at: "2026-09-01 00:00:00"}

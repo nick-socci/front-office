@@ -19,6 +19,12 @@
 -- the declared fields, and everything else is computed before any unnest. The stats
 -- object is left as JSON, and its keys and values are unnested together to rows.
 --
+-- ESPN's rates (15 stat ids, `is_rate` in espn_stat_ids) are not staged. ESPN writes a
+-- value for a rate even when its denominator is zero, in encodings that change by season:
+-- the largest double in 2018, NaN for RC in 2021, 0.0 from 2019 (which cannot be told from
+-- a real zero); and two largest doubles in one sum overflow. The project keeps components,
+-- never rates (AGENTS.md, rule 4); ADR 0099. A stat id the seed does not know is kept.
+--
 -- A plain table: it reads every capture at once, as the view streams them (spec 0150).
 
 {{ config(materialized='table') }}
@@ -129,13 +135,16 @@ stat_rows as (
 )
 
 select
-    league_id,
-    season,
-    scoring_period,
-    team_id,
-    espn_player_id,
-    espn_game_id,
-    cast(stat_key as bigint) as stat_id,
-    {{ fo_safe_cast(fo_json_string('stat_value', '$'), fo_type_float()) }} as stat_value,
+    stat_rows.league_id,
+    stat_rows.season,
+    stat_rows.scoring_period,
+    stat_rows.team_id,
+    stat_rows.espn_player_id,
+    stat_rows.espn_game_id,
+    cast(stat_rows.stat_key as bigint) as stat_id,
+    {{ fo_safe_cast(fo_json_string('stat_rows.stat_value', '$'), fo_type_float()) }} as stat_value,
     {{ fo_parse_fetched_at() }} as fetched_at
 from stat_rows
+left join {{ ref('espn_stat_ids') }} as stat_ids
+    on stat_ids.stat_id = cast(stat_rows.stat_key as bigint)
+where not coalesce(stat_ids.is_rate, false)

@@ -20,7 +20,9 @@
 -- `scoringPeriodId` is 0 on every such line (C1) and is not filtered on, so that a capture
 -- where ESPN fills it is not silently emptied. The `stats` object becomes rows, keys
 -- beside values; a value that is not a number leaves that stat out and keeps the line's
--- others (R1.5). A bye has no lines.
+-- others (R1.5). ESPN's rates are not staged either (`is_rate` in espn_stat_ids, ADR 0099),
+-- and the "Infinity" that R1.5 drops is ESPN's undefined K/BB. A stat id the seed does
+-- not know is kept. A bye has no lines.
 --
 -- Memory (AGENTS.md, rule 1; spec 0150): the capture view parses the file into the fields
 -- declared there, so no name and no member data is a value here. Which captures are read
@@ -234,15 +236,19 @@ numbered as (
 )
 
 select
-    league_id,
-    season,
-    matchup_period,
-    matchup_id,
-    team_id,
-    espn_player_id,
-    stat_id,
-    stat_value,
-    scoring_period,
-    fetched_at
+    numbered.league_id,
+    numbered.season,
+    numbered.matchup_period,
+    numbered.matchup_id,
+    numbered.team_id,
+    numbered.espn_player_id,
+    numbered.stat_id,
+    numbered.stat_value,
+    numbered.scoring_period,
+    numbered.fetched_at
 from numbered
-where stat_value is not null
+left join {{ ref('espn_stat_ids') }} as stat_ids
+    on stat_ids.stat_id = numbered.stat_id
+where
+    numbered.stat_value is not null
+    and not coalesce(stat_ids.is_rate, false)
