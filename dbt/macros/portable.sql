@@ -162,6 +162,21 @@
 {%- endmacro %}
 
 
+{#
+  True if a number is neither NaN nor infinite; null for a null input, on both. DuckDB's
+  isfinite and BigQuery's is_nan and is_inf are the same test. Neither accepts a string.
+#}
+{% macro fo_is_finite(expression) %}
+    {{- return(adapter.dispatch('fo_is_finite')(expression)) -}}
+{% endmacro %}
+{% macro duckdb__fo_is_finite(expression) -%}
+    isfinite({{ expression }})
+{%- endmacro %}
+{% macro bigquery__fo_is_finite(expression) -%}
+    (not is_nan({{ expression }}) and not is_inf({{ expression }}))
+{%- endmacro %}
+
+
 {# The MD5 of text, as 32 characters of lower-case hex. BigQuery's md5 returns BYTES. #}
 {% macro fo_md5_hex(text) %}
     {{- return(adapter.dispatch('fo_md5_hex')(text)) -}}
