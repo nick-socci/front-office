@@ -87,9 +87,14 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
   `test_dbt_portable_sql_rule.py` fails on the constructs it has a pattern for. It cannot
   see a type in YAML, date arithmetic, a bare column in HAVING, or a table qualifier that
   is also an output alias of the same SELECT (BigQuery reads `t.c` as a field of the
-  column `t`): those are found by
-  `dbt run --target bq --selector bigquery_slice --empty`, which costs nothing. A ported
-  model must leave the real DuckDB warehouse identical (`scripts/compare_warehouses.py`).
+  column `t`): those are found by `uv run --group bigquery dbt run --target bq --selector
+  bigquery_slice --empty --vars '{fo_schema_suffix: _<tag>}'`, then `dbt test` on the same
+  datasets (`--exclude-resource-type unit_test`) for the tests' SQL. Neither bills
+  anything. **The suffix is not optional:** without it, `--empty` replaces the slice's
+  populated tables in BigQuery with empty ones. `dbt build --empty` is no shortcut: it
+  stops at `int_fantasy__started_days_match_the_starting_slots`, which fails over no rows
+  by design, and skips the 148 nodes downstream of it. A ported model must leave the real
+  DuckDB warehouse identical (`scripts/compare_warehouses.py`).
 - A seed CSV that gains a **column** needs `dbt seed --full-refresh` locally; dbt otherwise
   reuses the old table schema and DuckDB rejects the mismatch. CI builds from empty, so
   only local builds hit this.
