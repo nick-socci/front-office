@@ -18,8 +18,9 @@
 --     never selected; and `rosterForMatchupPeriod.entries[]`, ESPN's own record of what
 --     each player was credited with in the matchup, which stg_espn__matchup_player_lines
 --     reads: the entry's `playerId` and its stat lines' `statSourceId`,
---     `statSplitTypeId`, `scoringPeriodId` and `stats` (JSON: that model reads its keys
---     and values with fo_json_keys / fo_json_values).
+--     `statSplitTypeId`, `scoringPeriodId` and `stats` (a map from stat id to its
+--     value as JSON: that model unnests its entries with fo_map_entries, since unnesting
+--     keys beside values as a subquery made DuckDB hold every parsed capture, spec 0156).
 -- A side with none of these keys (a playoff bye has an empty `away`) is a struct of
 -- nulls. A field a model reads that is not declared here fails that model when it is
 -- compiled.
@@ -41,7 +42,7 @@
           "statSourceId": "BIGINT",
           "statSplitTypeId": "BIGINT",
           "scoringPeriodId": "BIGINT",
-          "stats": "JSON"
+          "stats": {"__map__": "JSON"}
         }]}}
       }]}
     },
@@ -54,7 +55,7 @@
           "statSourceId": "BIGINT",
           "statSplitTypeId": "BIGINT",
           "scoringPeriodId": "BIGINT",
-          "stats": "JSON"
+          "stats": {"__map__": "JSON"}
         }]}}
       }]}
     }

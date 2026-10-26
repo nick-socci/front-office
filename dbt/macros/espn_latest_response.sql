@@ -22,6 +22,31 @@
   view's rows are kept by a semi-join on file_path, which streams.
 #}
 
+{#
+  The manifest's file_path of the newest capture of each league and season (and of each
+  value of `extra_partition`, a request parameter), as a query of one column. fo_espn_latest
+  keeps the view's rows with it; a model that needs only the narrow columns of those
+  captures reads the manifest with it and leaves the parsed rows to a single reader, since
+  DuckDB materializes parsed captures read twice (spec 0156, C11).
+#}
+{% macro fo_espn_latest_paths(endpoint, extra_partition=none) %}
+
+    select keys.file_path
+    from {{ fo_capture_keys() }} as keys
+    where keys.source = 'espn'
+      and keys.endpoint = '{{ endpoint }}'
+    qualify row_number() over (
+        partition by
+            {{ fo_json_text('keys.partitions', '$.league_id') }},
+            {{ fo_json_int('keys.partitions', '$.season') }}
+            {%- if extra_partition %},
+            {{ fo_request_param('keys.request_key', extra_partition) }}
+            {%- endif %}
+        order by keys.fetched_at desc, keys.file_path desc
+    ) = 1
+
+{%- endmacro %}
+
 {% macro fo_espn_latest(endpoint, extra_partition=none) %}
 
     select
@@ -30,19 +55,7 @@
         cast({{ fo_json_int('captures.partitions', '$.season') }} as integer) as season
     from {{ ref('stg_raw__espn_' ~ endpoint) }} as captures
     where captures.file_path in (
-        select keys.file_path
-        from {{ fo_capture_keys() }} as keys
-        where keys.source = 'espn'
-          and keys.endpoint = '{{ endpoint }}'
-        qualify row_number() over (
-            partition by
-                {{ fo_json_text('keys.partitions', '$.league_id') }},
-                {{ fo_json_int('keys.partitions', '$.season') }}
-                {%- if extra_partition %},
-                {{ fo_request_param('keys.request_key', extra_partition) }}
-                {%- endif %}
-            order by keys.fetched_at desc, keys.file_path desc
-        ) = 1
+        {{ fo_espn_latest_paths(endpoint, extra_partition) }}
     )
 
 {%- endmacro %}
