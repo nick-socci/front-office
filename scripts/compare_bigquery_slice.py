@@ -38,6 +38,9 @@ Exit 0 only if every relation passes. One line per relation either way.
 
 `--bq-against-bq SUFFIX` compares two BigQuery builds with each other instead, exactly,
 floats included: the second is the one built with --vars '{fo_schema_suffix: SUFFIX}'.
+
+`--suffix SUFFIX` reads the (first) BigQuery build from the datasets of that suffix, so a
+branch built beside the populated build is compared without replacing it (spec 0156).
 """
 
 from __future__ import annotations
@@ -398,12 +401,17 @@ def main(argv: list[str] | None = None) -> int:
         metavar="SUFFIX",
         help="compare the BigQuery build with the one built under this schema suffix, exactly",
     )
+    parser.add_argument(
+        "--suffix",
+        default="",
+        help="read the BigQuery build from the datasets of this schema suffix (fo_schema_suffix)",
+    )
     args = parser.parse_args(argv)
     with tempfile.TemporaryDirectory() as scratch:
         relations = slice_relations(Path(scratch) / "dbt_target")
         con = duckdb.connect()
         con.execute(f"attach '{Path(scratch) / 'bq.duckdb'}' as bq")
-        unread = read_back(con, args.project, "bq", relations)
+        unread = read_back(con, args.project, "bq", relations, args.suffix)
         left_unread: dict[str, set[str]] = {}
         if args.bq_against_bq:
             con.execute(f"attach '{Path(scratch) / 'bq_second.duckdb'}' as bq_second")
