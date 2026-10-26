@@ -983,6 +983,44 @@ unit_tests:
       rows:
         - {league_id: "1", season: 2026, scoring_period: 5, team_id: 1, espn_player_id: 10, lineup_slot_id: 16, lineup_slot: BE}
 
+  - name: player_game_stats_keep_only_actual_single_game_lines_of_the_snapshots_own_period
+    description: >
+      Catches the game-line filter (spec 0156) losing a condition. One capture, scoring
+      period 6, one player with four lines: an actual single-game line of this period
+      (stats 0 and 1, kept), a projection (statSourceId 1), a season line
+      (statSplitTypeId 1) and an actual single-game line of period 5, which the next
+      period's snapshot repeats (all three dropped). Also catches a line's stats not
+      unnested as one row per stat id.
+    model: stg_espn__player_game_stats
+    given:
+      - input: ref('stg_raw__espn_roster')
+        format: sql
+        rows: |
+          select
+              'espn' as source, 'roster' as endpoint, '/r' as request_path,
+              'scoringPeriodId=6&view=x' as request_key, '20260601T000000Z' as fetched_at,
+              '{"season": 2026, "league_id": "1"}'::JSON as partitions,
+              'r1' as file_path, '1' as id, 2026::BIGINT as "seasonId",
+              from_json('[{"id": 1, "roster": {"entries": [{"playerId": 10, "playerPoolEntry": {"player": {"stats": [
+                {"statSourceId": 0, "statSplitTypeId": 5, "scoringPeriodId": 6, "externalId": "g1", "stats": {"0": 4, "1": 2}},
+                {"statSourceId": 1, "statSplitTypeId": 5, "scoringPeriodId": 6, "externalId": "g1", "stats": {"0": 9}},
+                {"statSourceId": 0, "statSplitTypeId": 1, "scoringPeriodId": 6, "externalId": "g1", "stats": {"0": 9}},
+                {"statSourceId": 0, "statSplitTypeId": 5, "scoringPeriodId": 5, "externalId": "g0", "stats": {"0": 9}}]}}}]}}]', '[{"id": "BIGINT", "roster": {"entries": [{"playerId": "BIGINT", "lineupSlotId": "BIGINT", "injuryStatus": "VARCHAR", "acquisitionType": "VARCHAR", "playerPoolEntry": {"player": {"fullName": "VARCHAR", "defaultPositionId": "BIGINT", "proTeamId": "BIGINT", "eligibleSlots": ["BIGINT"], "stats": [{"scoringPeriodId": "BIGINT", "statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "externalId": "VARCHAR", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}]') as teams
+      - input: source('raw', 'captures')
+        rows:
+          - {source: espn, endpoint: roster, request_path: /r, request_key: "scoringPeriodId=6&view=x", fetched_at: "20260601T000000Z", partitions: '{"season": 2026, "league_id": "1"}', file_path: r1}
+      # In SQL so that the test does not need the seed built to read its columns.
+      - input: ref('espn_stat_ids')
+        format: sql
+        rows: |
+          select 0::BIGINT as stat_id, false as is_rate
+          union all
+          select 1::BIGINT, false
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, scoring_period: 6, team_id: 1, espn_player_id: 10, espn_game_id: g1, stat_id: 0, stat_value: 4.0}
+        - {league_id: "1", season: 2026, scoring_period: 6, team_id: 1, espn_player_id: 10, espn_game_id: g1, stat_id: 1, stat_value: 2.0}
+
   - name: scoring_periods_run_to_each_leagues_own_final_period
     description: >
       Catches one series generated to the longest league's final period. Two league-seasons

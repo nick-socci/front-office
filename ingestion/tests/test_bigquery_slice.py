@@ -240,7 +240,8 @@ def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) ->
     assert "stg_raw__capture_views_cover_the_manifest" not in names(selected, "test")
     # Spec 0135: 188 of the project's 212 (187 when it was designed; #188 added one on
     # stg_espn__transactions). #194 added one on stg_espn__matchup_player_lines: 189 of 213.
-    assert len(names(selected, "unit_test")) == 189
+    # #156 added one on stg_espn__player_game_stats: 190 of 214.
+    assert len(names(selected, "unit_test")) == 190
 
 
 def test_no_selected_test_reads_a_relation_outside_the_slice(
