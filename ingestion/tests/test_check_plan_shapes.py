@@ -397,3 +397,18 @@ def test_a_repeated_operator_in_one_plan_is_one_problem():
     """Catches the same shape twice in a plan reporting twice."""
     found = {"stg_a": [("cte", "boxscore"), ("cte", "boxscore")]}
     assert len(cps.problems(found, [], {"stg_a"})) == 1
+
+
+# --- every heavy endpoint has CI captures (pre-PR review F1) -------------------------------
+
+
+def test_a_heavy_endpoint_without_ci_captures_is_a_problem():
+    """Catches the readers of an endpoint CI holds nothing of passing unchecked."""
+    found = cps.uncovered({"boxscore", "schedule"}, {"boxscore", "settings"})
+    assert len(found) == 1
+    assert found[0].startswith("schedule:")
+
+
+def test_every_heavy_endpoint_with_ci_captures_is_no_problem():
+    """Catches a false positive when every heavy endpoint has a capture."""
+    assert cps.uncovered({"boxscore", "roster"}, {"boxscore", "roster", "settings"}) == []

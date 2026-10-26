@@ -19,6 +19,9 @@ manifest:
   operator whose subtree reads files names its endpoints by the `endpoint='...'` filters on
   its scans of `raw.captures`. One over a heavy endpoint needs an entry in
   dbt/plan_shapes.yml for its node, operator and endpoint.
+- Cover every heavy endpoint. A heavy endpoint with no capture in the CI warehouse compiles
+  to an empty query, with no file read for a gathering operator to sit over, so its readers
+  could not be judged: that fails (spec 0156, pre-PR review F1).
 - Keep the register honest (R4.3, R4.4). An entry whose node no longer has that operator
   over that endpoint, or whose node is not a reader, fails: an entry cannot outlive its reason.
 
@@ -148,6 +151,15 @@ def gathering(plan: list[dict[str, Any]], heavy: set[str]) -> list[tuple[str, tu
             if endpoints:
                 result.append((kind, endpoints))
     return result
+
+
+def uncovered(heavy_endpoints: set[str], endpoints_with_captures: set[str]) -> list[str]:
+    """A problem for each heavy endpoint the CI warehouse holds no capture of."""
+    return [
+        f"{endpoint}: a heavy endpoint with no capture in the CI warehouse; its readers' plans "
+        "read no file and cannot be checked. Add a fixture capture of it"
+        for endpoint in sorted(heavy_endpoints - endpoints_with_captures)
+    ]
 
 
 # --- the register (R4.3) -----------------------------------------------------------------
@@ -303,6 +315,13 @@ def main(argv: list[str] | None = None) -> int:
     found: dict[str, list[tuple[str, str]]] = {}
     operators = 0
     try:
+        captured = {
+            row[0]
+            for row in con.execute(
+                f"select distinct endpoint from {db.stem}.raw.captures"
+            ).fetchall()
+        }
+        found_problems += uncovered(heavy_endpoints, captured)
         for unique_id in reading:
             node = nodes[unique_id]
             path = compiled_file(node, project_dir)
