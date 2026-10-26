@@ -1,0 +1,28 @@
+# Gathering operators allowed over a heavy endpoint's files (spec 0156, R4, ADR 0102). A
+# heavy endpoint is one whose capture view declares a structure; a CTE or a delim join over
+# its read gathers the whole parse before emitting a row, so the build's memory grows with
+# the captures loaded. scripts/check_plan_shapes.py explains every model and test that
+# reaches such a view and fails on any such operator not listed here.
+# The gate also fails on an entry whose node no longer has that operator over that endpoint,
+# or that names no such node, so an entry cannot outlive its reason.
+# `measured` is the node's smallest memory limit alone, at four DuckDB threads, for 2026 and
+# for all seasons. `on` is quoted because YAML reads a bare `on` as true.
+entries:
+  - node: stg_mlb__batting_game_logs
+    operator: cte
+    endpoint: boxscore
+    reason: the newest boxscores are read once for both sides through one CTE; every shape without it measured costs more (spec 0156, C15)
+    link: ADR 0102
+    measured: {threads: 4, gb_2026: 0.5, gb_all_seasons: 0.75, "on": 2026-10-25}
+  - node: stg_mlb__pitching_game_logs
+    operator: cte
+    endpoint: boxscore
+    reason: the newest boxscores are read once for both sides through one CTE; every shape without it measured costs more (spec 0156, C15)
+    link: ADR 0102
+    measured: {threads: 4, gb_2026: 0.5, gb_all_seasons: 0.75, "on": 2026-10-25}
+  - node: stg_mlb__batting_totals_match_team_stats
+    operator: cte
+    endpoint: boxscore
+    reason: reads the newest boxscores through the same CTE as the game logs (fo_boxscore_players)
+    link: ADR 0102
+    measured: {threads: 4, gb_2026: 0.5, gb_all_seasons: 0.75, "on": 2026-10-25}
