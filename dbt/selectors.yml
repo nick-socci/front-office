@@ -1,19 +1,17 @@
 # Named selections, used as `dbt build --selector <name>`.
 selectors:
-  - name: bigquery_slice
+  - name: bigquery
     description: >
-      Every model that builds on BigQuery: all of them but the lineup solver's Python model
-      and what reads it (ADR 0096; #137 removes the exclusion). One test is left out too:
-      it checks DuckDB's capture glob against the loader's manifest, and BigQuery has
-      neither (spec 0135, Amendments).
+      Everything that builds on BigQuery, which is every model: the lineup solver is a
+      function there (ADR 0103), so it and the models that read it are no longer left out
+      (ADR 0105, which amends ADR 0096). The selection holds the function node too, which
+      only exists on the bigquery target. One test is left out: it checks DuckDB's capture
+      glob against the loader's manifest, and BigQuery has neither (spec 0135, Amendments).
     definition:
       union:
         - method: fqn
           value: "*"
           indirect_selection: cautious
         - exclude:
-            - method: fqn
-              value: int_fantasy__optimal_lineups
-              children: true
             - method: fqn
               value: stg_raw__capture_views_cover_the_manifest

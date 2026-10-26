@@ -2262,7 +2262,7 @@ unit_tests:
         - {league_id: "1", season: 2026, platform_player_id: 3, fantasy_team_id: 1, started_days: 1, played_started_days: 1, total_value: null, mlbam_player_id: null}
 
 # -----------------------------------------------------------------------------
-# fct_lineup_decisions unit tests (#12, R4). The Python model's output is given as the rows of
+# fct_lineup_decisions unit tests (#12, R4). The solver's output is given as the rows of
 # int_fantasy__optimal_lineups; every test gives only the columns the model reads.
 # Slots: 0 C and 12 UTIL (hitter), 14 SP (pitcher), 16 BE (bench), 17 IL (injured list).
 # -----------------------------------------------------------------------------

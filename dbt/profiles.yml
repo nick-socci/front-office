@@ -35,7 +35,7 @@ front_office:
       plugins:
         - module: fo_duckdb_functions
 
-    # BigQuery, for the slice of spec 0130. Credentials are application-default
+    # BigQuery, for the `bigquery` selector (specs 0130, 0137). Credentials are application-default
     # (gcloud auth application-default login); nothing about them is in this file.
     bq:
       type: bigquery

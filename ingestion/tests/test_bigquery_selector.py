@@ -1,18 +1,19 @@
-"""The BigQuery slice, its target and its dependency group (spec 0130, R1 and R2).
+"""The BigQuery selector, its target and its dependency group (spec 0130, R1 and R2; 0137).
 
-The slice (every model but the lineup solver and its readers, spec 0135) is fixed by a dbt
-selector, so that what is ported is written down once. These tests ask dbt what the
-selector selects and hold it to the names the spec counted; they
-also hold the `bq` target to its promises without ever connecting to BigQuery: it must
-not break `dev` or `ci` for someone with no Google project, must not carry a credential,
-and its adapter must stay out of what CI installs.
+The selector `bigquery` (ADR 0105) is every model of the project, one test excepted: the
+lineup solver is a function on BigQuery (ADR 0103), so the solver and its readers are no
+longer left out as ADR 0096 had it. These tests ask dbt what the selector selects and hold it
+to the names and counts the specs gave; they also hold the `bq` target to its promises
+without ever connecting to BigQuery: it must not break `dev` or `ci` for someone with no
+Google project, must not carry a credential, and its adapter must stay out of what CI
+installs.
 
 dbt is run as a subprocess, on the `ci` target, with its target directory in a temporary
 place. `dbt ls` and `dbt parse` open no connection. They need the dbt packages, which CI
-installs only after pytest, so the first use installs them if they are missing.
+installs only after pytest, so the first use installs them if they are missing. The function
+node exists only on the `bigquery` target, whose adapter is in the `bigquery` dependency
+group: the test that lists it is skipped when that adapter is not installed.
 """
-
-from __future__ import annotations
 
 import json
 import os
@@ -27,20 +28,24 @@ import yaml
 REPO = Path(__file__).resolve().parents[2]
 DBT_ROOT = REPO / "dbt"
 DBT = Path(sys.executable).parent / "dbt"
-SELECTOR = "bigquery_slice"
-# Every model but the lineup solver and what reads it (ADR 0096): 71 models, and every seed
-# but none (7). The four left out are named, so that one coming back, or another going, is
-# noticed.
-LEFT_OUT = {
+SELECTOR = "bigquery"
+# The lineup solver and the three models that read it, which ADR 0096 left out of the
+# selector and ADR 0105 brings in. Named, so that one going missing is noticed.
+SOLVER_AND_READERS = {
     "int_fantasy__optimal_lineups",
     "int_fantasy__lineup_category_totals",
     "fct_lineup_decisions",
     "fct_lineup_decision_categories",
 }
+SOLVER_FUNCTION = "function.front_office.solve_lineup_period"
+# The one node the selector leaves out: DuckDB's capture glob against the loader's manifest.
+LEFT_OUT_TEST = "stg_raw__capture_views_cover_the_manifest"
 
-SLICE_MODELS = {
+SELECTED_MODELS = {
     "dim_player_league_seasons",
     "dim_players",
+    "fct_lineup_decision_categories",
+    "fct_lineup_decisions",
     "fct_matchup_category_scores",
     "fct_matchup_results",
     "fct_player_category_value",
@@ -50,12 +55,14 @@ SLICE_MODELS = {
     "int_fantasy__categories",
     "int_fantasy__category_scales",
     "int_fantasy__league_seasons",
+    "int_fantasy__lineup_category_totals",
     "int_fantasy__lineup_options",
     "int_fantasy__lineup_slots",
     "int_fantasy__matchup_periods",
     "int_fantasy__matchup_side_totals",
     "int_fantasy__matchup_sides",
     "int_fantasy__matchup_stat_values",
+    "int_fantasy__optimal_lineups",
     "int_fantasy__player_crosswalk",
     "int_fantasy__replacement_levels",
     "int_fantasy__reported_category_scales",
@@ -111,7 +118,7 @@ SLICE_MODELS = {
     "stg_raw__mlb_players",
     "stg_raw__mlb_schedule",
 }
-SLICE_SEEDS = {
+SELECTED_SEEDS = {
     "espn_activity_types",
     "espn_lineup_slots",
     "espn_player_positions",
@@ -122,9 +129,12 @@ SLICE_SEEDS = {
 }
 
 
-def run_dbt(target_path: Path, *args: str, target: str = "ci") -> subprocess.CompletedProcess[str]:
-    """One dbt command from dbt/, with FO_BQ_PROJECT unset and no warehouse file made here."""
-    env = {k: v for k, v in os.environ.items() if k != "FO_BQ_PROJECT"}
+def run_dbt(
+    target_path: Path, *args: str, target: str = "ci", keep_project: bool = False
+) -> subprocess.CompletedProcess[str]:
+    """One dbt command from dbt/, with FO_BQ_PROJECT unset (unless `keep_project`) and no
+    warehouse file made here."""
+    env = {k: v for k, v in os.environ.items() if keep_project or k != "FO_BQ_PROJECT"}
     env["DBT_PROFILES_DIR"] = str(DBT_ROOT)
     env["FO_CI_DUCKDB_PATH"] = str(target_path / "unused_ci.duckdb")
     env["FO_DUCKDB_PATH"] = str(target_path / "unused_dev.duckdb")
@@ -181,18 +191,21 @@ def names(rows: list[dict[str, object]], resource_type: str) -> set[str]:
     return {str(r["name"]) for r in rows if r["resource_type"] == resource_type}
 
 
-def test_the_slice_is_the_seventy_one_models_and_seven_seeds_of_the_specs(
+def test_the_selector_is_the_seventy_five_models_and_seven_seeds_of_the_project(
     selected: list[dict[str, object]],
 ) -> None:
-    """Catches a model or seed joining the slice through a new ref, or leaving it, unnoticed."""
-    assert names(selected, "model") == SLICE_MODELS
-    assert names(selected, "seed") == SLICE_SEEDS
+    """Catches a model or seed joining the selector through a new ref, or leaving it,
+    unnoticed. Seventy-one were selected under ADR 0096; the solver and its three readers
+    make seventy-five, which is every model of the project."""
+    assert names(selected, "model") == SELECTED_MODELS
+    assert names(selected, "seed") == SELECTED_SEEDS
+    assert names(selected, "model") >= SOLVER_AND_READERS
 
 
-def test_the_four_models_left_out_are_the_solver_and_its_readers(
+def test_every_model_of_the_project_is_selected(
     target_path: Path, selected: list[dict[str, object]]
 ) -> None:
-    """Catches the exclusion reaching more or less than the solver and what reads it."""
+    """Catches an exclusion coming back: the selector leaves out no model (ADR 0105)."""
     everything = listed(
         run_dbt(
             target_path,
@@ -206,51 +219,51 @@ def test_the_four_models_left_out_are_the_solver_and_its_readers(
             "-q",
         )
     )
-    assert names(everything, "model") - names(selected, "model") == LEFT_OUT
+    assert names(everything, "model") == names(selected, "model")
 
 
-def test_the_slice_has_no_python_model_and_the_materializations_counted(
+def test_the_selector_has_no_python_model_and_the_materializations_counted(
     selected: list[dict[str, object]],
 ) -> None:
-    """Catches the lineup solver, or any Python model, being pulled into the slice."""
+    """Catches any Python model, the lineup solver included, being in the project again: the
+    solver is a SQL model that calls a function (ADR 0103)."""
     models = [r for r in selected if r["resource_type"] == "model"]
     assert all(str(r["original_file_path"]).endswith(".sql") for r in models)
     kinds = sorted(r["config"]["materialized"] for r in models)  # type: ignore[index]
-    # Listed on the ci target: 39 tables, 30 views, and the two ephemeral models
-    # int_fantasy__player_crosswalk and rec_espn__matchup_line_totals (spec 0135).
+    # Listed on the ci target: 43 tables, 30 views, and the two ephemeral models
+    # int_fantasy__player_crosswalk and rec_espn__matchup_line_totals (spec 0135). The 39
+    # tables of ADR 0096's selection and the four it left out, which are all tables.
     counted = (
         kinds.count("table"),
         kinds.count("incremental"),
         kinds.count("view"),
         kinds.count("ephemeral"),
     )
-    assert counted == (39, 0, 30, 2)
+    assert counted == (43, 0, 30, 2)
 
 
-def test_the_slice_takes_the_tests_counted(selected: list[dict[str, object]]) -> None:
-    """Catches a test added to or lost from the slice: the counts are the spec's."""
+def test_the_selector_takes_the_tests_counted(selected: list[dict[str, object]]) -> None:
+    """Catches a test added to or lost from the selector: the counts are the specs'."""
     tests = [r for r in selected if r["resource_type"] == "test"]
     generic = [r for r in tests if r.get("test_metadata")]
-    # Spec 0135: every test whose models are all selected, 436, less the one test that
-    # checks DuckDB's capture glob against its manifest (design, Amendments). #193 added one
-    # singular test, int_fantasy__stat_components_weights_are_whole. #194 added two singular
-    # tests, stg_espn__stat_lines_hold_no_rate and stg_espn__stat_lines_hold_finite_values,
-    # and one generic, not_null on espn_stat_ids.is_rate.
-    assert (len(tests), len(generic), len(tests) - len(generic)) == (439, 366, 73)
-    assert "stg_raw__capture_views_cover_the_manifest" not in names(selected, "test")
-    # Spec 0135: 188 of the project's 212 (187 when it was designed; #188 added one on
-    # stg_espn__transactions). #194 added one on stg_espn__matchup_player_lines: 189 of 213.
-    # #156 added one on stg_espn__player_game_stats: 190 of 214.
-    assert len(names(selected, "unit_test")) == 190
+    # Every test of the project but the one that checks DuckDB's capture glob against its
+    # manifest (spec 0135, Amendments): 491 of 492. Under ADR 0096 it was 439 (366 generic
+    # and 73 singular); the tests of the solver and its readers make 52 more (47 generic and
+    # 5 singular). The figures are what `dbt ls --selector bigquery` lists on `ci`.
+    assert (len(tests), len(generic), len(tests) - len(generic)) == (491, 413, 78)
+    assert LEFT_OUT_TEST not in names(selected, "test")
+    # Every unit test of the project: 221. ADR 0096's selection held 190; the other 31 are
+    # the unit tests of the solver (seven, spec 0137) and of its three readers (24).
+    assert len(names(selected, "unit_test")) == 221
 
 
-def test_no_selected_test_reads_a_relation_outside_the_slice(
+def test_no_selected_test_reads_a_relation_outside_the_selector(
     selected: list[dict[str, object]],
 ) -> None:
     """Catches a test that would look, on BigQuery, for a model that was never built there."""
     inside = {
         f"{kind}.front_office.{name}"
-        for kind, known in (("model", SLICE_MODELS), ("seed", SLICE_SEEDS))
+        for kind, known in (("model", SELECTED_MODELS), ("seed", SELECTED_SEEDS))
         for name in known
     }
     for row in selected:
@@ -264,11 +277,11 @@ def test_no_selected_test_reads_a_relation_outside_the_slice(
         assert parents <= inside, f"{row['name']} reads {sorted(parents - inside)}"
 
 
-def test_the_selector_takes_every_test_wholly_inside_the_slice(
+def test_the_selector_takes_every_test_but_the_one_left_out(
     target_path: Path, selected: list[dict[str, object]]
 ) -> None:
     """Catches a test left out because its parents lie in two members of the union:
-    `cautious` is applied to each member alone, so such a test has to be named."""
+    `cautious` is applied to each member alone, so such a test would have to be named."""
     whole = listed(
         run_dbt(
             target_path,
@@ -276,8 +289,7 @@ def test_the_selector_takes_every_test_wholly_inside_the_slice(
             "--select",
             "fqn:*",
             "--exclude",
-            "int_fantasy__optimal_lineups+",
-            "stg_raw__capture_views_cover_the_manifest",
+            LEFT_OUT_TEST,
             "--indirect-selection",
             "cautious",
             "--resource-type",
@@ -290,6 +302,42 @@ def test_the_selector_takes_every_test_wholly_inside_the_slice(
         )
     )
     assert names(selected, "test") == names(whole, "test")
+
+
+def test_the_function_is_in_the_bigquery_selection_and_not_in_the_ci_one(
+    target_path: Path, selected: list[dict[str, object]]
+) -> None:
+    """Catches the solver function missing from BigQuery's DAG, or enabled on DuckDB (R1.3):
+    on `ci` the function is disabled and the selector holds none; on `bq` it holds the
+    function node, so the models that call it are built after it. `dbt ls` opens no
+    connection; the placeholder project only lets the profile render."""
+    assert not [r for r in selected if r["resource_type"] == "function"]
+    pytest.importorskip("dbt.adapters.bigquery", reason="the bigquery dependency group")
+    env_project = os.environ.get("FO_BQ_PROJECT")
+    os.environ["FO_BQ_PROJECT"] = "unused-project"
+    try:
+        result = run_dbt(
+            target_path,
+            "ls",
+            "--selector",
+            SELECTOR,
+            "--output",
+            "json",
+            "--output-keys",
+            "name resource_type unique_id",
+            "-q",
+            target="bq",
+            keep_project=True,
+        )
+    finally:
+        if env_project is None:
+            del os.environ["FO_BQ_PROJECT"]
+        else:
+            os.environ["FO_BQ_PROJECT"] = env_project
+    rows = listed(result)
+    functions = [r for r in rows if r["resource_type"] == "function"]
+    assert [r["unique_id"] for r in functions] == [SOLVER_FUNCTION]
+    assert names(rows, "model") == SELECTED_MODELS
 
 
 @pytest.mark.parametrize("target", ["dev", "ci"])
@@ -456,9 +504,9 @@ def seed_column_types(seeds: set[str]) -> list[tuple[str, str, str]]:
     return found
 
 
-def test_the_slices_contracts_name_only_types_both_warehouses_accept() -> None:
-    typed = contract_types(SLICE_MODELS)
-    assert typed, "no contract found on the slice: the scan is broken"
+def test_the_selected_contracts_name_only_types_both_warehouses_accept() -> None:
+    typed = contract_types(SELECTED_MODELS)
+    assert typed, "no contract found on the selection: the scan is broken"
     refused = [
         row
         for row in typed
@@ -473,8 +521,8 @@ def test_the_slices_contracts_name_only_types_both_warehouses_accept() -> None:
 SHARED_SEED_TYPES = {"int64", "string", "boolean"}
 
 
-def test_the_slices_seeds_name_only_types_both_warehouses_load() -> None:
-    typed = seed_column_types(SLICE_SEEDS)
+def test_the_selected_seeds_name_only_types_both_warehouses_load() -> None:
+    typed = seed_column_types(SELECTED_SEEDS)
     assert typed, "no seed column type found: the scan is broken"
     refused = [
         row for row in typed if row[2] not in SHARED_SEED_TYPES and row[2] != FLOAT_CONTRACT_TYPE

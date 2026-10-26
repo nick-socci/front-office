@@ -79,22 +79,29 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
 
 ## dbt gotchas
 
-- Every SQL model is written once for both warehouses, and `bigquery_slice` (in
-  `dbt/selectors.yml`) is what BigQuery builds: every model but the lineup solver and the
-  three models that read it. A model is SQL DuckDB and BigQuery both accept, and a
+- Every SQL model is written once for both warehouses, and `bigquery` (in
+  `dbt/selectors.yml`) is what BigQuery builds: every model, less one DuckDB-only test
+  (ADR 0105). A model is SQL DuckDB and BigQuery both accept, and a
   dispatched `fo_*` macro from `dbt/macros/portable.sql` or `json.sql` for the rest (ADR
   0051). No `::`, no `filter (where …)`, no `unnest` in a SELECT list, no `varchar` or `double`.
   `test_dbt_portable_sql_rule.py` fails on the constructs it has a pattern for. It cannot
   see a type in YAML, date arithmetic, a bare column in HAVING, or a table qualifier that
   is also an output alias of the same SELECT (BigQuery reads `t.c` as a field of the
   column `t`): those are found by `uv run --group bigquery dbt run --target bq --selector
-  bigquery_slice --empty --vars '{fo_schema_suffix: _<tag>}'`, then `dbt test` on the same
+  bigquery --empty --vars '{fo_schema_suffix: _<tag>}'`, then `dbt test` on the same
   datasets (`--exclude-resource-type unit_test`) for the tests' SQL. Neither bills
-  anything. **The suffix is not optional:** without it, `--empty` replaces the slice's
+  anything. **The suffix is not optional:** without it, `--empty` replaces the selector's
   populated tables in BigQuery with empty ones. `dbt build --empty` is no shortcut: it
   stops at `int_fantasy__started_days_match_the_starting_slots`, which fails over no rows
   by design, and skips the 148 nodes downstream of it. A ported model must leave the real
   DuckDB warehouse identical (`scripts/compare_warehouses.py`).
+- The lineup solver is one file, `dbt/functions/solve_lineup_period.py`: a BigQuery Python
+  UDF (a dbt function resource, Python 3.11, scipy and numpy pinned because BigQuery
+  constrains numpy<2) and a DuckDB function the `fo_duckdb_functions` plugin registers on
+  dbt's connections (ADRs 0103, 0104). Only `int_fantasy__optimal_lineups` calls it, through
+  `fo_solve_lineup_period()`, and it must stay a table: the function does not exist outside
+  dbt. The file holds no `'''` and no Jinja delimiter (dbt renders it, BigQuery quotes it)
+  and must run on Python 3.11; tests hold both. It rounds values to 12 places itself.
 - A seed CSV that gains a **column** needs `dbt seed --full-refresh` locally; dbt otherwise
   reuses the old table schema and DuckDB rejects the mismatch. CI builds from empty, so
   only local builds hit this.

@@ -1,14 +1,14 @@
-"""Compare the BigQuery build of the slice with the DuckDB build of the same slice.
+"""Compare the BigQuery build with the DuckDB build of the same models.
 
 Spec 0130, R5.2 to R5.5; ADR 0053. Everything that is not floating-point is held exactly;
 floating-point columns are held to a tolerance, because BigQuery cannot be told the order
 of a float sum and so cannot be made to agree to the last digit.
 
-Usage:  uv run --group bigquery python scripts/compare_bigquery_slice.py \\
+Usage:  uv run --group bigquery python scripts/compare_bigquery.py \\
             --db data/warehouse.duckdb --project "$FO_BQ_PROJECT" [--bq-against-bq SUFFIX]
 
-1. The relations are the models of the dbt selector `bigquery_slice`, less the ephemeral
-   one, which has no relation.
+1. The relations are the models of the dbt selector `bigquery` (every model, ADR 0105), less
+   the ephemeral ones, which have no relation.
 2. Each BigQuery relation is read back into a scratch DuckDB database, and the local
    warehouse is attached read-only beside it. A table is read through the client, which is
    not billed. A view has no rows to read, so it is queried, under the same cap on bytes
@@ -33,6 +33,12 @@ Usage:  uv run --group bigquery python scripts/compare_bigquery_slice.py \\
    values (a league id, a season). Selecting only those from a BigQuery view leaves its
    payload unread, so it costs little. Their nested fields are what the staging models
    built on them read, and those models are compared exactly.
+
+8. For a relation in GROUPS (the lineup solver's rows, spec 0137, R3.3), a difference is
+   printed as the groups that differ, here the team-days, each with its rows on each side,
+   and not only as a count: whether the two warehouses broke a tie differently is a
+   decision for the owner, who needs the rows to make it. At most MAX_GROUPS_LISTED are
+   printed, and the rest are counted.
 
 Exit 0 only if every relation passes. One line per relation either way.
 
@@ -67,10 +73,22 @@ from warehouse_diff import (
     view_catalog,
 )
 
-SELECTOR = "bigquery_slice"
+SELECTOR = "bigquery"
 RELATIVE_TOLERANCE = 1e-9
 ABSOLUTE_TOLERANCE = 1e-12
 NEAR_ZERO = 1e-3
+# Relations whose differences are listed by group, with the rows of each side (item 8): the
+# columns that name a group. The solver's group is a team-day.
+GROUPS = {
+    "int_fantasy__optimal_lineups": [
+        "platform",
+        "league_id",
+        "season",
+        "scoring_date",
+        "fantasy_team_id",
+    ]
+}
+MAX_GROUPS_LISTED = 20
 MAXIMUM_BYTES_BILLED = 10_000_000_000
 DBT_ROOT = Path(__file__).resolve().parents[1] / "dbt"
 
@@ -132,6 +150,15 @@ class FloatColumn:
 
 
 @dataclass
+class GroupDifference:
+    """One group (a team-day) whose rows differ, with its rows on each side."""
+
+    group: tuple[Any, ...]
+    left_rows: list[tuple[Any, ...]]
+    right_rows: list[tuple[Any, ...]]
+
+
+@dataclass
 class Result:
     relation: str
     left_rows: int = 0
@@ -142,6 +169,9 @@ class Result:
     problems: list[str] = field(default_factory=list)
     uncompared: list[str] = field(default_factory=list)
     floats: dict[str, FloatColumn] = field(default_factory=dict)
+    group_columns: list[str] = field(default_factory=list)
+    differing_groups: list[GroupDifference] = field(default_factory=list)
+    groups_not_listed: int = 0
 
     @property
     def passed(self) -> bool:
@@ -234,6 +264,13 @@ def compare_relation(
         right_sql = f"select {selection} from {qualified(right, relation)}"
         result.only_left = count_except(con, left_sql, right_sql)
         result.only_right = count_except(con, right_sql, left_sql)
+        group_columns = GROUPS.get(relation.split(".")[-1], [])
+        if (
+            group_columns
+            and (result.only_left or result.only_right)
+            and all(n in exact for n in group_columns)
+        ):
+            list_differing_groups(con, result, left_sql, right_sql, group_columns)
     if not float_names:
         return result
     if not key or any(name not in shared for name in key):
@@ -272,6 +309,34 @@ def compare_relation(
     return result
 
 
+def list_differing_groups(
+    con: duckdb.DuckDBPyConnection,
+    result: Result,
+    left_sql: str,
+    right_sql: str,
+    group_columns: list[str],
+) -> None:
+    """Fill `result` with the groups that hold a row on one side only, up to
+    MAX_GROUPS_LISTED, each with all its rows on both sides. The sql arguments select the
+    same columns, comparable on both sides, the group columns among them."""
+    names = ", ".join(quote(n) for n in group_columns)
+    differing = con.execute(
+        f"select distinct {names} from ("
+        f"(select * from ({left_sql}) except all (select * from ({right_sql}))) "
+        f"union all (select * from ({right_sql}) except all (select * from ({left_sql})))"
+        f") order by {names}"
+    ).fetchall()
+    result.group_columns = group_columns
+    result.groups_not_listed = max(0, len(differing) - MAX_GROUPS_LISTED)
+    where = " and ".join(f"{quote(n)} is not distinct from ?" for n in group_columns)
+    for group in differing[:MAX_GROUPS_LISTED]:
+        sides = [
+            con.execute(f"select * from ({sql}) where {where} order by all", list(group)).fetchall()
+            for sql in (left_sql, right_sql)
+        ]
+        result.differing_groups.append(GroupDifference(tuple(group), sides[0], sides[1]))
+
+
 def unique_key(manifest: dict[str, Any], unique_id: str) -> list[str] | None:
     """The columns of a model's declared unique key, from its tests in dbt's manifest."""
     for node in manifest["nodes"].values():
@@ -288,9 +353,9 @@ def unique_key(manifest: dict[str, Any], unique_id: str) -> list[str] | None:
 # -- what is compared, and reading BigQuery back --------------------------------------------
 
 
-def slice_relations(target_path: Path) -> list[tuple[str, str, list[str] | None]]:
-    """(schema, name, unique key) of every relation of the slice, from dbt: its models and its
-    seeds (spec 0135). A seed's key is read from its tests as a model's is; a seed with no
+def selected_relations(target_path: Path) -> list[tuple[str, str, list[str] | None]]:
+    """(schema, name, unique key) of every relation the selector selects, from dbt: its models
+    and its seeds (spec 0135). A seed's key is read from its tests as a model's is; a seed with no
     float column needs none."""
     dbt = Path(sys.executable).parent / "dbt"
     listed = subprocess.run(
@@ -381,6 +446,19 @@ def describe(result: Result, left_name: str, right_name: str) -> list[str]:
         + (f"; rows with no partner on the key {result.unjoined}" if result.unjoined else "")
     ]
     lines.extend(f"       {problem}" for problem in result.problems)
+    for difference in result.differing_groups:
+        label = ", ".join(
+            f"{name}={value}"
+            for name, value in zip(result.group_columns, difference.group, strict=True)
+        )
+        lines.append(f"       differs: {label}")
+        for side, rows in ((left_name, difference.left_rows), (right_name, difference.right_rows)):
+            lines.append(f"         {side}: {rows}")
+    if result.groups_not_listed:
+        lines.append(
+            f"       ... and {result.groups_not_listed} more that differ "
+            f"(the first {MAX_GROUPS_LISTED} are listed)"
+        )
     if result.uncompared:
         lines.append(f"       JSON or nested columns not compared: {', '.join(result.uncompared)}")
     for name, column in result.floats.items():
@@ -408,7 +486,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     with tempfile.TemporaryDirectory() as scratch:
-        relations = slice_relations(Path(scratch) / "dbt_target")
+        relations = selected_relations(Path(scratch) / "dbt_target")
         con = duckdb.connect()
         con.execute(f"attach '{Path(scratch) / 'bq.duckdb'}' as bq")
         unread = read_back(con, args.project, "bq", relations, args.suffix)
