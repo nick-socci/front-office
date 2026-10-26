@@ -178,5 +178,5 @@ Measured at `main` 1c81306 on the real season, eight league-seasons (design C9 t
 | Team-days that change against `main` on DuckDB (R4.2) | 1,231 in 911 team-periods (1,987 rows each way), every one a tie: gap ≤ 1e-12, same size and kept count, same credited period value | `probes/compare_solves.py compare` |
 | BigQuery rows against DuckDB rows (R3.2) | 0 and 0 | `EXCEPT ALL` both ways |
 | Relations other than the solver and its readers, DuckDB against `main` | identical | `scripts/compare_warehouses.py` |
-| Solver node time, DuckDB, eight seasons | about 9 s (56 s today) | `run_results.json` |
+| Solver node time, DuckDB, eight seasons | below `main`'s in the same build (amended 2026-10-26: 63 s against 124 s; was "about 9 s", see design *Amendments*) | `run_results.json` |
 | BigQuery comparison | every relation passes | `scripts/compare_bigquery.py` |

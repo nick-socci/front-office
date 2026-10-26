@@ -306,3 +306,28 @@ asserts the function node is selected.
 | design-review | F7 (P2): the C10 and C11 scripts lived in a scratchpad | Committed as `probes/compare_solves.py`, with the input snapshot named in the ledger. Task 9 uses it. |
 
 ## Amendments
+
+**2026-10-26, during the build. None of these changes a goal, a no-go or a decision.**
+
+- **Module paths.** The `dev` and `ci` profiles list `module_paths` relative to both `dbt/`
+  and the repo root: `["python_modules", "functions", "dbt/python_modules", "dbt/functions"]`.
+  The design gave only the first two. With a plugin in the profile, dbt-duckdb imports it
+  whenever it opens a connection. The gates' sqlfluff run uses the dbt templater from the
+  repo root, and failed with `Unable to import module 'fo_duckdb_functions'`. A path that
+  does not exist is skipped.
+- **The failing behaviours.** Open question 1 is answered: a dbt unit test can call the
+  plugin's function. But a unit test cannot expect an error. So the three behaviours that
+  must fail the build (a null beside an out-of-bound value, an out-of-bound value, a date
+  in no matchup period) run `dbt run` on a small DuckDB in a subprocess and read its
+  output (`test_optimal_lineups_failures.py`). The seven that give rows are dbt unit tests.
+- **A null slot list.** A league-season with no slot rows reaches the function with a null
+  array through the left join. The entry point reads it as empty (`slots or []`), as the
+  Python model's `slots_of.get(key, [])` did.
+- **The solver node's time on DuckDB is 63 s, not about 9 s.** The real-season build of the
+  branch (task 9) took 63.0 s on the solver, against 123.8 s for `main`'s in the same kind
+  of build. C14's 9 s was measured while the `bigquery` dependency group, which brings
+  pandas, was installed in the shared venv. Without pandas, DuckDB's Python function call
+  tries to import it on each conversion. The same prototype then takes 41 s, 4.6 s with
+  pandas, and 6 s with the import blocked. Speed is a no-go here (#201), so nothing is
+  added. The expected value is amended to "faster than `main`", and the finding goes to
+  #201.
