@@ -9,8 +9,11 @@ view of staging, intermediate, marts and reconciliation:
 - the column names must match (as `--strict-columns`), except the named exclusions;
 - the row counts must match, and EXCEPT ALL both ways over the shared columns gives 0.
 
-The capture views (`staging.stg_raw__*`) are skipped: their columns are parsed payloads
-(JSON, structs, maps), which no EXCEPT compares; R3.4's probe compares the schedule's.
+The capture views (`staging.stg_raw__*`) are compared too, on what an EXCEPT can compare:
+their column names, held strict except the two R6.3 names (`stg_raw__mlb_schedule`'s
+`payload` and `dates`), and their rows over the manifest's columns (`partitions` as
+text). Their parsed fields (JSON, structs, maps) are not: the staging models built on them
+are compared exactly, and R3.4's probe compares the schedule's games (pre-PR review F2).
 A view names the catalog it was built in (`warehouse`, the file stem), so each file is
 attached as `warehouse` in turn, read-only, and each relation's rows are copied into a
 local table before the other file is attached.
@@ -32,11 +35,12 @@ from pathlib import Path
 import duckdb
 
 SCHEMAS = ("staging", "intermediate", "marts", "reconciliation")
+MANIFEST = ("source", "endpoint", "request_path", "request_key", "fetched_at", "file_path")
+EXCLUDED = {"staging.stg_raw__mlb_schedule": {"payload", "dates"}}
 RELATIONS = """
     select table_schema, table_name, table_type
     from information_schema.tables
     where table_catalog = 'warehouse' and table_schema in ({schemas})
-      and table_name not like 'stg_raw\\_\\_%' escape '\\'
     order by 1, 2
 """
 
@@ -82,10 +86,16 @@ def main() -> int:
             if name not in new_rel or name not in old_rel:
                 problems.append(f"{name}: only in {'old' if name in old_rel else 'new'}")
                 continue
-            if old_rel[name] != new_rel[name]:
-                problems.append(f"{name}: columns differ {old_rel[name]} vs {new_rel[name]}")
+            excluded = EXCLUDED.get(name, set())
+            old_cols = [c for c in old_rel[name] if c not in excluded]
+            new_cols = [c for c in new_rel[name] if c not in excluded]
+            if old_cols != new_cols:
+                problems.append(f"{name}: columns differ {old_cols} vs {new_cols}")
                 continue
-            cols = ", ".join(f'"{c}"' for c in old_rel[name])
+            if name.startswith("staging.stg_raw__"):
+                cols = ", ".join([*MANIFEST, "cast(partitions as varchar) as partitions"])
+            else:
+                cols = ", ".join(f'"{c}"' for c in old_cols)
             for label, path in (("o", args.old), ("n", args.new)):
                 attach(path)
                 copy = f"create or replace table {label} as select {cols} from warehouse.{name}"
