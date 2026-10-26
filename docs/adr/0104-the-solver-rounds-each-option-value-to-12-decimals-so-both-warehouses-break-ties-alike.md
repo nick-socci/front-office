@@ -1,6 +1,6 @@
 # 0104. The solver rounds each option value to 12 decimals, so both warehouses break ties alike
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-26
 - Spec: [0137-lineup-solver-on-bigquery](../specs/0137-lineup-solver-on-bigquery/design.md) · Issue: #137
 

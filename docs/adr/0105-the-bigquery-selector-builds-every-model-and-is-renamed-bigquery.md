@@ -1,6 +1,6 @@
 # 0105. The BigQuery selector builds every model and is renamed `bigquery`
 
-- Status: proposed
+- Status: accepted; amends [0096](0096-every-sql-model-is-written-for-both-warehouses-and-bigquery-builds-all-but-the-solver-and-its-readers.md)
 - Date: 2026-10-26
 - Spec: [0137-lineup-solver-on-bigquery](../specs/0137-lineup-solver-on-bigquery/design.md) · Issue: #137
 
