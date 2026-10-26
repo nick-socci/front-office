@@ -90,9 +90,9 @@ reopens it.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0100](../../adr/0100-the-development-build-runs-one-node-at-a-time-on-four-duckdb-threads.md) | The `dev` target builds one node at a time (dbt `threads: 1`) on four DuckDB threads; `ci` and `bq` unchanged (owner, 2026-10-25) | proposed |
-| [0101](../../adr/0101-the-mlb-schedule-is-read-with-a-declared-structure.md) | `stg_raw__mlb_schedule` declares `dates[].games[]`, each game kept as JSON; the schedule joins the heavy endpoints (owner, 2026-10-25) | proposed |
-| [0102](../../adr/0102-a-node-that-parses-a-heavy-endpoint-may-not-gather-the-parse-unless-registered.md) | A gate step fails a node that parses a heavy endpoint and whose plan has a delim join or CTE scan, unless a register lists it with its measured limits; the game logs and the batting-totals test start in it (owner, 2026-10-25) | proposed |
+| [0100](../../adr/0100-the-development-build-runs-one-node-at-a-time-on-four-duckdb-threads.md) | The `dev` target builds one node at a time (dbt `threads: 1`) on four DuckDB threads; `ci` and `bq` unchanged (owner, 2026-10-25) | accepted |
+| [0101](../../adr/0101-the-mlb-schedule-is-read-with-a-declared-structure.md) | `stg_raw__mlb_schedule` declares `dates[].games[]`, each game kept as JSON; the schedule joins the heavy endpoints (owner, 2026-10-25) | accepted |
+| [0102](../../adr/0102-a-node-that-parses-a-heavy-endpoint-may-not-gather-the-parse-unless-registered.md) | A gate step fails a node that parses a heavy endpoint and whose plan has a delim join or CTE scan, unless a register lists it with its measured limits; the game logs and the batting-totals test start in it (owner, 2026-10-25) | accepted |
 
 ## Detailed design
 
