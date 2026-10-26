@@ -268,3 +268,10 @@ the ladder (`probes/ladder.sh`) is how the bar is checked.
   `--suffix` to read a suffixed build. R3.5's billed-bytes criterion has no same-code
   baseline (the populated build predates #194); the owner chose not to build `main`'s
   slice for one, so that criterion is reported unverified (53.95 GB billed).
+- **2026-10-26, R3.5's billing criterion verified (PR #202 review F1, the owner's
+  decision).** The entry above left it unverified. The owner chose to build `main`'s slice
+  (c42ef19) the same way, into `*_m156` datasets from the same uploaded eight seasons: 69
+  models and 439 data tests pass. Bytes billed, `main` against the branch: models 24.556
+  against 24.561 GB, tests 29.392 against 29.392 GB, in all 53.947 against 53.952 GB
+  (+0.01%), within R3.5's 5%. Only `stg_espn__matchup_player_lines` differs, by 5 MB
+  (0.134 against 0.139 GB).
