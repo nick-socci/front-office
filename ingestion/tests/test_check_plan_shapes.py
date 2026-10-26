@@ -171,11 +171,35 @@ def test_a_captures_scan_without_a_file_read_is_not_found():
     assert cps.gathering(plan, HEAVY) == []
 
 
+def test_a_cte_of_manifest_rows_beside_a_parse_is_not_found():
+    """Catches a CTE judged by the query that reads it, not by what it holds.
+
+    A CTE's first child is its definition, the second the rest of the query. Here the CTE
+    holds manifest rows only, and the parse is in the query that reads it.
+    """
+    definition = {"name": "HASH_JOIN", "children": [scan("matchup_days")], "extra_info": {}}
+    rest = {"name": "HASH_JOIN", "children": [scan("matchup_days"), read_json()], "extra_info": {}}
+    plan = plan_of({"name": "CTE", "children": [definition, rest], "extra_info": {}})
+    assert cps.gathering(plan, HEAVY) == []
+
+
+def test_a_cte_holding_a_parse_is_found_whatever_reads_it():
+    """Catches the CTE rule above letting a materialized parse through."""
+    definition = {
+        "name": "HASH_JOIN",
+        "children": [scan("boxscore"), read_json()],
+        "extra_info": {},
+    }
+    rest = {"name": "PROJECTION", "children": [], "extra_info": {}}
+    plan = plan_of({"name": "CTE", "children": [definition, rest], "extra_info": {}})
+    assert cps.gathering(plan, HEAVY) == [("cte", ("boxscore",))]
+
+
 def test_filters_as_a_list_are_read():
     """Catches the list form of Filters being ignored."""
     plan = plan_of(
         {
-            "name": "CTE",
+            "name": "LEFT_DELIM_JOIN",
             "children": [
                 read_json(),
                 scan("matchup_days", ["source='espn'", "endpoint='matchup_days'"]),
@@ -183,19 +207,19 @@ def test_filters_as_a_list_are_read():
             "extra_info": {},
         }
     )
-    assert cps.gathering(plan, HEAVY) == [("cte", ("matchup_days",))]
+    assert cps.gathering(plan, HEAVY) == [("delim_join", ("matchup_days",))]
 
 
 def test_filters_as_a_string_are_read():
     """Catches the string form of Filters being ignored."""
     plan = plan_of(
         {
-            "name": "CTE",
+            "name": "LEFT_DELIM_JOIN",
             "children": [read_json(), scan("x", "endpoint='boxscore'")],
             "extra_info": {},
         }
     )
-    assert cps.gathering(plan, HEAVY) == [("cte", ("boxscore",))]
+    assert cps.gathering(plan, HEAVY) == [("delim_join", ("boxscore",))]
 
 
 def test_a_scan_of_another_table_is_not_an_endpoint():

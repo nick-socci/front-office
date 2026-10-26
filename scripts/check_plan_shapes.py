@@ -140,7 +140,11 @@ def gathering(plan: list[dict[str, Any]], heavy: set[str]) -> list[tuple[str, tu
                 kind = "cte"
             else:
                 continue
-            endpoints = tuple(sorted(_endpoints_read(op) & heavy))
+            # A CTE's first child is its definition, what it materializes; the second is
+            # the rest of the query, which reads it. Only the first says what it holds: a
+            # CTE of manifest rows is not a gathered parse because the query reads files.
+            gathered = op["children"][0] if kind == "cte" and op.get("children") else op
+            endpoints = tuple(sorted(_endpoints_read(gathered) & heavy))
             if endpoints:
                 result.append((kind, endpoints))
     return result
