@@ -93,6 +93,34 @@
 {%- endmacro %}
 
 
+{#
+  The elements of a list for which `condition` holds, as a list, in their order. `element`
+  names one element inside `condition`, which may also read the columns of the row:
+
+      {{ fo_list_filter('entry.lines', 'line', 'line.statSourceId = 0') }} as lines
+
+  Filter a list of parsed captures this way, before fo_unnest, rather than with a WHERE
+  over the unnested rows: DuckDB plans a WHERE comparing an unnested element's fields as a
+  delim join, which holds every parsed capture before it emits a row (spec 0156, C9). The
+  same holds for fo_unnest_pair, a subquery DuckDB also plans that way: over parsed
+  captures, declare the object as a map and unnest fo_map_entries instead.
+#}
+{% macro fo_list_filter(list, element, condition) %}
+    {{- return(adapter.dispatch('fo_list_filter')(list, element, condition)) -}}
+{% endmacro %}
+{% macro duckdb__fo_list_filter(list, element, condition) -%}
+    list_filter({{ list }}, lambda {{ element }}: {{ condition }})
+{%- endmacro %}
+{% macro bigquery__fo_list_filter(list, element, condition) -%}
+    array(
+        select {{ element }}
+        from unnest({{ list }}) as {{ element }} with offset as _at_{{ element }}
+        where {{ condition }}
+        order by _at_{{ element }}
+    )
+{%- endmacro %}
+
+
 {# The whole numbers from `first` to `last`, both included, as a list: unnest it with fo_unnest. #}
 {% macro fo_int_series(first, last) %}
     {{- return(adapter.dispatch('fo_int_series')(first, last)) -}}

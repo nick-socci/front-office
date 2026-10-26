@@ -10,8 +10,9 @@
 -- cannot be trusted as the player's period total.
 --
 -- The unnest runs beside the narrow identifier columns only (AGENTS.md, rule 1), exactly
--- as the model's does. Empty where no matchup_days response is loaded; CI loads the
--- fixture's three.
+-- as the model's does, and the lines are chosen with fo_list_filter before it, not with a
+-- WHERE after it, so DuckDB streams the parsed captures (spec 0156). Empty where no
+-- matchup_days response is loaded; CI loads the fixture's three.
 
 with latest as (
 
@@ -66,7 +67,10 @@ entries as (
         matchup_id,
         team_id,
         entry.playerId as espn_player_id,
-        entry.playerPoolEntry.player.stats as player_lines
+        {{ fo_list_filter(
+            'entry.playerPoolEntry.player.stats', 'line',
+            'line.statSourceId = 0 and line.statSplitTypeId = 5'
+        ) }} as player_lines
     from side_entries
     {{ fo_unnest('side_entries.roster_entries', 'entry') }}
 
@@ -96,8 +100,5 @@ select
     espn_player_id,
     count(*) as period_lines
 from lines
-where
-    line.statSourceId = 0
-    and line.statSplitTypeId = 5
 group by league_id, season, scoring_period, matchup_id, team_id, espn_player_id
 having count(*) > 1

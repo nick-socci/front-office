@@ -223,3 +223,18 @@ the ladder (`probes/ladder.sh`) is how the bar is checked.
 | design-review | F4 (P2): finding heavy views from compiled SQL misses an endpoint with no fixture captures | changed: heavy views are found from the model's source (`fo_captures` with a structure), R4.1 and *The plan check* |
 
 ## Amendments
+- **2026-10-26, the shape of `stg_espn__player_game_stats` and of
+  `stg_espn__matchup_player_lines_one_line_per_player` (task 6).** *Detailed design* left
+  the shape to the build. Each delim join had one cause (C9): the WHERE on the game lines'
+  struct fields, and `fo_unnest_pair`, a subquery DuckDB plans the same way. The game lines
+  are now chosen before the unnest by a new dispatched macro, `fo_list_filter` (DuckDB
+  `list_filter` with a lambda; BigQuery `array(select … where …)`), and a line's `stats`
+  is declared in `stg_raw__espn_roster` as a map of JSON, unnested by `fo_map_entries` as
+  the boxscore's players are. Only this model reads that field; the roster unit tests'
+  `from_json` specs follow the declared type. On eight seasons: `stg_espn__player_game_stats`,
+  `stg_espn__roster_entries` and `stg_espn__roster_entry_slots` identical to `main`
+  (6,182,774, 437,227 and 2,348,532 rows, except-all 0 both ways); no gathering operator;
+  0.5 GB alone at four threads for 2026 and for eight seasons, 3.4 s instead of 19.9 s.
+  The test gives the same per-player line counts as before (343,691 groups, at most one
+  line each, except-all 0 both ways) and no gathering operator; alone it needs 0.5 GB at
+  four threads where it needed 0.25. Within the goals and no-goes.
