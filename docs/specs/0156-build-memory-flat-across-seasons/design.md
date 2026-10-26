@@ -260,3 +260,11 @@ the ladder (`probes/ladder.sh`) is how the bar is checked.
   separate issue or by narrowing the bar. `probes/compare_bounded.py` compares the
   relations exactly with columns held strict, without materializing the capture views,
   which `scripts/compare_warehouses.py` does and the real season cannot afford (19 GB).
+- **2026-10-26, the BigQuery slice was compared on eight seasons, not 2026 (task 10).**
+  BigQuery's `raw.api_responses` holds all eight seasons (44,426 captures), and loading
+  2026 alone would have replaced it under the populated build. The branch's slice was
+  built from it into `*_p156` datasets instead, beside that build, and compared with the
+  DuckDB eight-season build: 76 of 76 relations pass. `compare_bigquery_slice.py` gains
+  `--suffix` to read a suffixed build. R3.5's billed-bytes criterion has no same-code
+  baseline (the populated build predates #194); the owner chose not to build `main`'s
+  slice for one, so that criterion is reported unverified (53.95 GB billed).
