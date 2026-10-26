@@ -5,6 +5,13 @@ blocks a better lineup. Filling slots with players is an assignment problem, and
 solves it exactly. This module builds the cost matrix and reads the answer back; it knows
 nothing of dbt or the database, so pytest can test it on hand-built cases.
 
+This file is also the body of a BigQuery Python UDF and the function the DuckDB plugin
+(dbt/python_modules/fo_duckdb_functions.py) registers: `solve_lineup_period`, at the end,
+is the entry point both call (spec 0137, ADRs 0103 and 0104). It therefore runs on Python
+3.11 with scipy 1.17.1 and numpy 1.26.4, the versions BigQuery offers, and holds neither
+a triple quote nor a Jinja delimiter: dbt renders a function body as Jinja and BigQuery
+wraps it in a triple-quoted string. A test holds both.
+
 The rule (ADR 0037): the optimal lineup replaces a starter who played only with another
 player who played. Its totals are therefore hindsight opportunity, not manager skill.
 
@@ -284,3 +291,71 @@ def solve_team_period(
         for (scoring_date, _), lineup in zip(ordered, best_plan, strict=True)
         for player_id, slot_id in lineup
     )
+
+
+def solve_lineup_period(team, matchup_period, options, slots, start_limit):
+    """The optimal lineups of one team-period, as a list of {scoring_date, player_id, slot_id}.
+
+    The entry point of the BigQuery UDF and of the DuckDB function (spec 0137). `team` names
+    the team for messages only; `options` are dicts of scoring_date, player_id, slot_id, role,
+    value (None when unvalued), is_actual and is_start; `slots` are dicts of slot_id, role and
+    count. In order: a date in no matchup period raises (R2.4); each day's non-null values
+    are rounded to 12 places (ADR 0104) and checked against the bound (R2.3), every day before
+    the skip; a team-period with any null value returns [] (spec 0164, R2.1); then the start
+    cap is floor(start_limit), or the starts of the actual lineups where they went past it
+    (R1.3), and the period is solved.
+    """
+    if matchup_period is None:
+        first_day = min(o["scoring_date"] for o in options)
+        raise ValueError(
+            f"optimal lineup failed for team-day {team}, scoring_date={first_day}: "
+            "its date is in no matchup period"
+        )
+    by_day = {}
+    for o in options:
+        by_day.setdefault(o["scoring_date"], []).append(o)
+    days = []  # (day, the options of the day that have a value)
+    unvalued = False
+    for day in sorted(by_day):
+        valued = []
+        for o in by_day[day]:
+            if o["value"] is None:
+                unvalued = True
+            else:
+                valued.append(
+                    Option(
+                        o["player_id"],
+                        o["slot_id"],
+                        o["role"],
+                        round(o["value"], 12),
+                        bool(o["is_actual"]),
+                        bool(o["is_start"]),
+                    )
+                )
+        try:
+            check_value_bound(valued)
+        except ValueError as error:
+            raise ValueError(
+                f"optimal lineup failed for team-day {team}, scoring_date={day}: {error}"
+            ) from error
+        days.append((day, valued))
+    if unvalued:
+        return []
+
+    if start_limit is None:
+        start_cap = None
+    else:
+        actual_starts = sum(o.is_actual and o.is_start for _, valued in days for o in valued)
+        start_cap = max(math.floor(start_limit), actual_starts)
+    slot_list = [Slot(s["slot_id"], s["role"], s["count"]) for s in slots]
+    try:
+        assigned = solve_team_period(days, slot_list, start_limit, start_cap)
+    except ValueError as error:
+        raise ValueError(
+            f"optimal lineup failed for team-period {team}, matchup_period={matchup_period}: "
+            f"{error}"
+        ) from error
+    return [
+        {"scoring_date": day, "player_id": player_id, "slot_id": slot_id}
+        for day, player_id, slot_id in assigned
+    ]

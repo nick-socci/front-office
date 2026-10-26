@@ -2,7 +2,7 @@
 
 Why Python: filling slots with players is an assignment problem, which a greedy SQL pass
 gets wrong (it double-assigns a player eligible at two slots). SciPy solves it exactly;
-dbt/python_modules/lineup_solver.py builds the matrix and this model only feeds it (ADR 0039).
+dbt/functions/solve_lineup_period.py builds the matrix and this model only feeds it (ADR 0039).
 
 What the rows mean (R6.4): hindsight opportunity under the rule of R3.1 -- a starter who
 played is replaced only by another player who played (ADR 0037), and ties keep the actual
@@ -23,7 +23,7 @@ team-day (R1.8), even in an unvalued period: the bound is checked on every non-n
 before the skip. A team-day whose date is in no matchup period fails the build too; on real
 data every option has one.
 
-Running it: the solver is imported through `module_paths: ["python_modules"]` in
+Running it: the solver is imported through `module_paths: ["python_modules", "functions"]` in
 profiles.yml, which dbt-duckdb appends to sys.path as written. It resolves against the
 working directory, so this model builds only when dbt is run from `dbt/`.
 
@@ -37,7 +37,7 @@ as the table. With dbt-duckdb, `session` is a DuckDB connection.
 import math
 from itertools import groupby
 
-from lineup_solver import Option, Slot, check_value_bound, solve_team_period
+from solve_lineup_period import Option, Slot, check_value_bound, solve_team_period
 
 TEAM_DAY = ("platform", "league_id", "season", "scoring_date", "fantasy_team_id")
 OPTION_COLUMNS = (

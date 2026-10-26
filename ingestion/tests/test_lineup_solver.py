@@ -11,7 +11,7 @@ from datetime import date
 
 import pytest
 
-from lineup_solver import (
+from solve_lineup_period import (
     Infeasible,
     Option,
     Slot,
