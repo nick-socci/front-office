@@ -10,10 +10,12 @@
 --
 -- The structure is the union of what its readers take: stg_espn__roster_entries (the
 -- entry and the player's name, position and team), stg_espn__roster_entry_slots
--- (eligibleSlots) and stg_espn__player_game_stats (the stat lines, whose `stats` stays
--- JSON: that model reads its keys and values with fo_json_keys / fo_json_values, as it
--- did). `id` is read as text, as the models read the league id. A field a model reads
--- that is not declared here fails that model when it is compiled.
+-- (eligibleSlots) and stg_espn__player_game_stats (the stat lines, whose `stats` is a
+-- map from stat id to its value as JSON: that model unnests its entries with
+-- fo_map_entries, since unnesting keys beside values as a subquery made DuckDB hold
+-- every parsed roster, spec 0156). `id` is read as text, as the models read the league
+-- id. A field a model reads that is not declared here fails that model when it is
+-- compiled.
 
 {% set structure %}
 {
@@ -36,7 +38,7 @@
           "statSourceId": "BIGINT",
           "statSplitTypeId": "BIGINT",
           "externalId": "VARCHAR",
-          "stats": "JSON"
+          "stats": {"__map__": "JSON"}
         }]
       }}
     }]}

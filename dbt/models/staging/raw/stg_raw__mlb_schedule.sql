@@ -1,9 +1,14 @@
--- One row per committed capture of mlb/schedule that the loader has listed, with the whole
--- response as `payload` (spec 0150, ADR 0068).
+-- One row per committed capture of mlb/schedule that the loader has listed, parsed as it
+-- is read: `dates`, each day holding its games (spec 0156, ADR 0101; spec 0150, ADR 0068).
 --
--- The capture views are the only readers of payload files and of raw.captures. This
--- endpoint's responses are small, so its models read them as one JSON value each, as they
--- read the raw table before; only the three heavy endpoints are parsed with a declared
--- structure. A view, so the read happens inside each model's own query.
+-- A schedule response is over 1 MB, 20 of them are that large, and every reader of
+-- stg_mlb__games reads this view. Read whole, each was a payload value in a query; read
+-- through a declared structure only the days and their games are kept, and the rest of the
+-- response is dropped while it is read. Each game stays one JSON value, because its readers
+-- read it with fo_json_*, from the same paths as before.
 
-{{ fo_captures('mlb', 'schedule') }}
+{% set structure %}
+{"dates": [{"games": ["JSON"]}]}
+{% endset %}
+
+{{ fo_captures('mlb', 'schedule', structure) }}

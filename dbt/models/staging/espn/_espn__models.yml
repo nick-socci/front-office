@@ -503,7 +503,7 @@ unit_tests:
               'scoringPeriodId=85&view=mRoster' as request_key, '20261012T000000Z' as fetched_at,
               '{"season": 2025, "league_id": "1", "scoring_period": 85}'::JSON as partitions,
               'a1' as file_path, '1' as id, 2025::BIGINT as "seasonId",
-              from_json('[{"id":3,"roster":{"entries":[{"playerId":77,"playerPoolEntry":{"player":{"eligibleSlots":[13,14,22]}}}]}}]', '[{"id": "BIGINT", "roster": {"entries": [{"playerId": "BIGINT", "lineupSlotId": "BIGINT", "injuryStatus": "VARCHAR", "acquisitionType": "VARCHAR", "playerPoolEntry": {"player": {"fullName": "VARCHAR", "defaultPositionId": "BIGINT", "proTeamId": "BIGINT", "eligibleSlots": ["BIGINT"], "stats": [{"scoringPeriodId": "BIGINT", "statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "externalId": "VARCHAR", "stats": "JSON"}]}}}]}}]') as teams
+              from_json('[{"id":3,"roster":{"entries":[{"playerId":77,"playerPoolEntry":{"player":{"eligibleSlots":[13,14,22]}}}]}}]', '[{"id": "BIGINT", "roster": {"entries": [{"playerId": "BIGINT", "lineupSlotId": "BIGINT", "injuryStatus": "VARCHAR", "acquisitionType": "VARCHAR", "playerPoolEntry": {"player": {"fullName": "VARCHAR", "defaultPositionId": "BIGINT", "proTeamId": "BIGINT", "eligibleSlots": ["BIGINT"], "stats": [{"scoringPeriodId": "BIGINT", "statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "externalId": "VARCHAR", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}]') as teams
       - input: source('raw', 'captures')
         rows:
           - {source: espn, endpoint: roster, request_path: /l, request_key: "scoringPeriodId=85&view=mRoster", fetched_at: "20261012T000000Z", partitions: '{"season": 2025, "league_id": "1", "scoring_period": 85}', file_path: a1}
@@ -547,7 +547,7 @@ unit_tests:
               '20260901T000000Z' as fetched_at,
               '{"season": 2018, "league_id": "1", "scoring_period": 5}'::JSON as partitions,
               'a1' as file_path, '1' as id, 2018::BIGINT as "seasonId",
-              from_json('[{"matchupPeriodId": 3, "home": {"teamId": 1, "rosterForMatchupPeriod": {"entries": []}}, "away": {"teamId": 2, "rosterForMatchupPeriod": {"entries": []}}}, {"matchupPeriodId": 4, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2, "rosterForCurrentScoringPeriod": {"entries": []}}}, {"matchupPeriodId": 4, "home": {"teamId": 3, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 4, "rosterForCurrentScoringPeriod": {"entries": []}}}, {"matchupPeriodId": 4, "home": {"teamId": 5, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {}}, {"matchupPeriodId": 5, "home": {"teamId": 1}, "away": {"teamId": 2}}]', '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}}]') as schedule
+              from_json('[{"matchupPeriodId": 3, "home": {"teamId": 1, "rosterForMatchupPeriod": {"entries": []}}, "away": {"teamId": 2, "rosterForMatchupPeriod": {"entries": []}}}, {"matchupPeriodId": 4, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2, "rosterForCurrentScoringPeriod": {"entries": []}}}, {"matchupPeriodId": 4, "home": {"teamId": 3, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 4, "rosterForCurrentScoringPeriod": {"entries": []}}}, {"matchupPeriodId": 4, "home": {"teamId": 5, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {}}, {"matchupPeriodId": 5, "home": {"teamId": 1}, "away": {"teamId": 2}}]', '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}}]') as schedule
       - input: source('raw', 'captures')
         rows:
           - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=5&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", partitions: '{"season": 2018, "league_id": "1", "scoring_period": 5}', file_path: a1}
@@ -571,7 +571,7 @@ unit_tests:
               '20260915T000000Z' as fetched_at,
               '{"season": 2018, "league_id": "1", "scoring_period": 5}'::JSON as partitions,
               'a2' as file_path, '1' as id, 2018::BIGINT as "seasonId",
-              from_json('[{"matchupPeriodId": 4, "home": {"teamId": 1}, "away": {"teamId": 2}}, {"matchupPeriodId": 6, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}]', '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}}]') as schedule
+              from_json('[{"matchupPeriodId": 4, "home": {"teamId": 1}, "away": {"teamId": 2}}, {"matchupPeriodId": 6, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}]', '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}}]') as schedule
           union all
           select
               'espn', 'matchup_days', '/l',
@@ -579,7 +579,7 @@ unit_tests:
               '20260901T000000Z',
               '{"season": 2018, "league_id": "1", "scoring_period": 5}'::JSON,
               'a1', '1', 2018::BIGINT,
-              from_json('[{"matchupPeriodId": 4, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}, {"matchupPeriodId": 6, "home": {"teamId": 1}, "away": {"teamId": 2}}]', '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}}]')
+              from_json('[{"matchupPeriodId": 4, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}, {"matchupPeriodId": 6, "home": {"teamId": 1}, "away": {"teamId": 2}}]', '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}}]')
       - input: source('raw', 'captures')
         rows:
           - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=5&view=mMatchupScore,mScoreboard", fetched_at: "20260915T000000Z", partitions: '{"season": 2018, "league_id": "1", "scoring_period": 5}', file_path: a2}
@@ -605,7 +605,7 @@ unit_tests:
               '20260901T000000Z' as fetched_at,
               '{"season": 2018, "league_id": "1", "scoring_period": 5}'::JSON as partitions,
               'a1' as file_path, '1' as id, 2018::BIGINT as "seasonId",
-              from_json('[{"matchupPeriodId": 4, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}]', '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}}]') as schedule
+              from_json('[{"matchupPeriodId": 4, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}]', '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}}]') as schedule
           union all
           select
               'espn', 'matchup_days', '/l',
@@ -613,7 +613,7 @@ unit_tests:
               '20260901T000000Z',
               '{"season": 2019, "league_id": "1", "scoring_period": 5}'::JSON,
               'a2', '1', 2019::BIGINT,
-              from_json('[{"matchupPeriodId": 6, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}]', '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}}]')
+              from_json('[{"matchupPeriodId": 6, "home": {"teamId": 1, "rosterForCurrentScoringPeriod": {"entries": []}}, "away": {"teamId": 2}}]', '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}}]')
           union all
           select
               'espn', 'matchup_days', '/l',
@@ -621,7 +621,7 @@ unit_tests:
               '20260901T000000Z',
               '{"season": 2018, "league_id": "2", "scoring_period": 5}'::JSON,
               'b1', '2', 2018::BIGINT,
-              from_json('[{"matchupPeriodId": 7, "home": {"teamId": 1}, "away": {"teamId": 2, "rosterForCurrentScoringPeriod": {"entries": []}}}]', '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}}]')
+              from_json('[{"matchupPeriodId": 7, "home": {"teamId": 1}, "away": {"teamId": 2, "rosterForCurrentScoringPeriod": {"entries": []}}}]', '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}}]')
       - input: source('raw', 'captures')
         rows:
           - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=5&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", partitions: '{"season": 2018, "league_id": "1", "scoring_period": 5}', file_path: a1}
@@ -675,7 +675,7 @@ unit_tests:
                    {"playerId": 400, "playerPoolEntry": {"player": {"stats": [
                      {"statSourceId": 0, "statSplitTypeId": 5, "scoringPeriodId": 0, "stats": {"1": 50.0}}]}}}]}},
                  "away": {"teamId": 5}}]',
-              '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}}]') as schedule
+              '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}}]') as schedule
       - input: source('raw', 'captures')
         rows:
           - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=7&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", partitions: '{"season": 2018, "league_id": "1", "scoring_period": 7}', file_path: a1}
@@ -719,7 +719,7 @@ unit_tests:
               '{"season": 2018, "league_id": "1", "scoring_period": 1}'::JSON as partitions,
               'b1' as file_path, '1' as id, 2018::BIGINT as "seasonId",
               from_json('[{"id": 1, "matchupPeriodId": 1, "home": {"teamId": 1, "rosterForMatchupPeriod": {"entries": [{"playerId": 10, "playerPoolEntry": {"player": {"stats": [{"statSourceId": 0, "statSplitTypeId": 5, "scoringPeriodId": 0, "stats": {"1": 1.0}}]}}}]}}, "away": {"teamId": 2}}]',
-              '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}}]') as schedule
+              '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}}]') as schedule
           union all
           select
               'espn', 'matchup_days', '/l',
@@ -728,7 +728,7 @@ unit_tests:
               '{"season": 2018, "league_id": "1", "scoring_period": 2}'::JSON,
               'b2', '1', 2018::BIGINT,
               from_json('[{"id": 1, "matchupPeriodId": 1, "home": {"teamId": 1, "rosterForMatchupPeriod": {"entries": [{"playerId": 10, "playerPoolEntry": {"player": {"stats": [{"statSourceId": 0, "statSplitTypeId": 5, "scoringPeriodId": 0, "stats": {"1": 2.0}}]}}}]}}, "away": {"teamId": 2}}]',
-              '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}}]')
+              '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}}]')
           union all
           select
               'espn', 'matchup_days', '/l',
@@ -737,7 +737,7 @@ unit_tests:
               '{"season": 2018, "league_id": "1", "scoring_period": 3}'::JSON,
               'b3', '1', 2018::BIGINT,
               from_json('[{"id": 2, "matchupPeriodId": 2, "home": {"teamId": 1, "rosterForMatchupPeriod": {"entries": [{"playerId": 10, "playerPoolEntry": {"player": {"stats": [{"statSourceId": 0, "statSplitTypeId": 5, "scoringPeriodId": 0, "stats": {"1": 3.0}}]}}}]}}, "away": {"teamId": 2}}]',
-              '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}}]')
+              '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}}]')
           union all
           select
               'espn', 'matchup_days', '/l',
@@ -746,7 +746,7 @@ unit_tests:
               '{"season": 2018, "league_id": "1", "scoring_period": 4}'::JSON,
               'b4', '1', 2018::BIGINT,
               from_json('[{"id": 2, "matchupPeriodId": 2, "home": {"teamId": 1, "rosterForMatchupPeriod": {"entries": [{"playerId": 10, "playerPoolEntry": {"player": {"stats": [{"statSourceId": 0, "statSplitTypeId": 5, "scoringPeriodId": 0, "stats": {"1": 4.0}}]}}}]}}, "away": {"teamId": 2}}]',
-              '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}}]')
+              '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}}]')
           union all
           select
               'espn', 'matchup_days', '/l',
@@ -755,7 +755,7 @@ unit_tests:
               '{"season": 2018, "league_id": "1", "scoring_period": 4}'::JSON,
               'b5', '1', 2018::BIGINT,
               from_json('[{"id": 1, "matchupPeriodId": 1, "home": {"teamId": 1, "rosterForMatchupPeriod": {"entries": [{"playerId": 10, "playerPoolEntry": {"player": {"stats": [{"statSourceId": 0, "statSplitTypeId": 5, "scoringPeriodId": 0, "stats": {"1": 6.0}}]}}}]}}, "away": {"teamId": 2}}, {"id": 2, "matchupPeriodId": 2, "home": {"teamId": 1, "rosterForMatchupPeriod": {"entries": [{"playerId": 10, "playerPoolEntry": {"player": {"stats": [{"statSourceId": 0, "statSplitTypeId": 5, "scoringPeriodId": 0, "stats": {"1": 5.0}}]}}}]}}, "away": {"teamId": 2}}]',
-              '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}}]')
+              '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}}]')
       - input: source('raw', 'captures')
         rows:
           - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=1&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", partitions: '{"season": 2018, "league_id": "1", "scoring_period": 1}', file_path: b1}
@@ -795,7 +795,7 @@ unit_tests:
               '{"season": 2018, "league_id": "1", "scoring_period": 1}'::JSON as partitions,
               'c1' as file_path, '1' as id, 2018::BIGINT as "seasonId",
               from_json('[{"id": 1, "matchupPeriodId": 1, "home": {"teamId": 1, "rosterForMatchupPeriod": {"entries": [{"playerId": 10, "playerPoolEntry": {"player": {"stats": [{"statSourceId": 0, "statSplitTypeId": 5, "scoringPeriodId": 0, "stats": {"1": 3.0, "82": 1.5, "22": 1.0}}]}}}]}}, "away": {"teamId": 2}}]',
-              '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "JSON"}]}}}]}}}]') as schedule
+              '[{"id": "BIGINT", "matchupPeriodId": "BIGINT", "home": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}, "away": {"teamId": "BIGINT", "rosterForCurrentScoringPeriod": "JSON", "rosterForMatchupPeriod": {"entries": [{"playerId": "BIGINT", "playerPoolEntry": {"player": {"stats": [{"statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "scoringPeriodId": "BIGINT", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}}]') as schedule
       - input: source('raw', 'captures')
         rows:
           - {source: espn, endpoint: matchup_days, request_path: /l, request_key: "scoringPeriodId=1&view=mMatchupScore,mScoreboard", fetched_at: "20260901T000000Z", partitions: '{"season": 2018, "league_id": "1", "scoring_period": 1}', file_path: c1}
@@ -960,14 +960,14 @@ unit_tests:
               'scoringPeriodId=5&view=x' as request_key, '20260601T000000Z' as fetched_at,
               '{"season": 2026, "league_id": "1"}'::JSON as partitions,
               'r1' as file_path, '1' as id, 2026::BIGINT as "seasonId",
-              from_json('[{"id": 1, "roster": {"entries": [{"playerId": 10, "lineupSlotId": 0, "playerPoolEntry": {"player": {"fullName": "Ten", "defaultPositionId": 2, "proTeamId": 5}}}, {"playerId": 11, "lineupSlotId": 0, "playerPoolEntry": {"player": {"fullName": "Eleven", "defaultPositionId": 2, "proTeamId": 5}}}]}}]', '[{"id": "BIGINT", "roster": {"entries": [{"playerId": "BIGINT", "lineupSlotId": "BIGINT", "injuryStatus": "VARCHAR", "acquisitionType": "VARCHAR", "playerPoolEntry": {"player": {"fullName": "VARCHAR", "defaultPositionId": "BIGINT", "proTeamId": "BIGINT", "eligibleSlots": ["BIGINT"], "stats": [{"scoringPeriodId": "BIGINT", "statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "externalId": "VARCHAR", "stats": "JSON"}]}}}]}}]') as teams
+              from_json('[{"id": 1, "roster": {"entries": [{"playerId": 10, "lineupSlotId": 0, "playerPoolEntry": {"player": {"fullName": "Ten", "defaultPositionId": 2, "proTeamId": 5}}}, {"playerId": 11, "lineupSlotId": 0, "playerPoolEntry": {"player": {"fullName": "Eleven", "defaultPositionId": 2, "proTeamId": 5}}}]}}]', '[{"id": "BIGINT", "roster": {"entries": [{"playerId": "BIGINT", "lineupSlotId": "BIGINT", "injuryStatus": "VARCHAR", "acquisitionType": "VARCHAR", "playerPoolEntry": {"player": {"fullName": "VARCHAR", "defaultPositionId": "BIGINT", "proTeamId": "BIGINT", "eligibleSlots": ["BIGINT"], "stats": [{"scoringPeriodId": "BIGINT", "statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "externalId": "VARCHAR", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}]') as teams
           union all
           select
               'espn', 'roster', '/r',
               'scoringPeriodId=5&view=x', '20260602T000000Z',
               '{"season": 2026, "league_id": "1"}'::JSON,
               'r2', '1', 2026::BIGINT,
-              from_json('[{"id": 1, "roster": {"entries": [{"playerId": 10, "lineupSlotId": 16, "playerPoolEntry": {"player": {"fullName": "Ten", "defaultPositionId": 2, "proTeamId": 5}}}]}}]', '[{"id": "BIGINT", "roster": {"entries": [{"playerId": "BIGINT", "lineupSlotId": "BIGINT", "injuryStatus": "VARCHAR", "acquisitionType": "VARCHAR", "playerPoolEntry": {"player": {"fullName": "VARCHAR", "defaultPositionId": "BIGINT", "proTeamId": "BIGINT", "eligibleSlots": ["BIGINT"], "stats": [{"scoringPeriodId": "BIGINT", "statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "externalId": "VARCHAR", "stats": "JSON"}]}}}]}}]')
+              from_json('[{"id": 1, "roster": {"entries": [{"playerId": 10, "lineupSlotId": 16, "playerPoolEntry": {"player": {"fullName": "Ten", "defaultPositionId": 2, "proTeamId": 5}}}]}}]', '[{"id": "BIGINT", "roster": {"entries": [{"playerId": "BIGINT", "lineupSlotId": "BIGINT", "injuryStatus": "VARCHAR", "acquisitionType": "VARCHAR", "playerPoolEntry": {"player": {"fullName": "VARCHAR", "defaultPositionId": "BIGINT", "proTeamId": "BIGINT", "eligibleSlots": ["BIGINT"], "stats": [{"scoringPeriodId": "BIGINT", "statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "externalId": "VARCHAR", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}]')
       - input: source('raw', 'captures')
         rows:
           - {source: espn, endpoint: roster, request_path: /r, request_key: "scoringPeriodId=5&view=x", fetched_at: "20260601T000000Z", partitions: '{"season": 2026, "league_id": "1"}', file_path: r1}
@@ -982,6 +982,44 @@ unit_tests:
     expect:
       rows:
         - {league_id: "1", season: 2026, scoring_period: 5, team_id: 1, espn_player_id: 10, lineup_slot_id: 16, lineup_slot: BE}
+
+  - name: player_game_stats_keep_only_actual_single_game_lines_of_the_snapshots_own_period
+    description: >
+      Catches the game-line filter (spec 0156) losing a condition. One capture, scoring
+      period 6, one player with four lines: an actual single-game line of this period
+      (stats 0 and 1, kept), a projection (statSourceId 1), a season line
+      (statSplitTypeId 1) and an actual single-game line of period 5, which the next
+      period's snapshot repeats (all three dropped). Also catches a line's stats not
+      unnested as one row per stat id.
+    model: stg_espn__player_game_stats
+    given:
+      - input: ref('stg_raw__espn_roster')
+        format: sql
+        rows: |
+          select
+              'espn' as source, 'roster' as endpoint, '/r' as request_path,
+              'scoringPeriodId=6&view=x' as request_key, '20260601T000000Z' as fetched_at,
+              '{"season": 2026, "league_id": "1"}'::JSON as partitions,
+              'r1' as file_path, '1' as id, 2026::BIGINT as "seasonId",
+              from_json('[{"id": 1, "roster": {"entries": [{"playerId": 10, "playerPoolEntry": {"player": {"stats": [
+                {"statSourceId": 0, "statSplitTypeId": 5, "scoringPeriodId": 6, "externalId": "g1", "stats": {"0": 4, "1": 2}},
+                {"statSourceId": 1, "statSplitTypeId": 5, "scoringPeriodId": 6, "externalId": "g1", "stats": {"0": 9}},
+                {"statSourceId": 0, "statSplitTypeId": 1, "scoringPeriodId": 6, "externalId": "g1", "stats": {"0": 9}},
+                {"statSourceId": 0, "statSplitTypeId": 5, "scoringPeriodId": 5, "externalId": "g0", "stats": {"0": 9}}]}}}]}}]', '[{"id": "BIGINT", "roster": {"entries": [{"playerId": "BIGINT", "lineupSlotId": "BIGINT", "injuryStatus": "VARCHAR", "acquisitionType": "VARCHAR", "playerPoolEntry": {"player": {"fullName": "VARCHAR", "defaultPositionId": "BIGINT", "proTeamId": "BIGINT", "eligibleSlots": ["BIGINT"], "stats": [{"scoringPeriodId": "BIGINT", "statSourceId": "BIGINT", "statSplitTypeId": "BIGINT", "externalId": "VARCHAR", "stats": "MAP(VARCHAR, JSON)"}]}}}]}}]') as teams
+      - input: source('raw', 'captures')
+        rows:
+          - {source: espn, endpoint: roster, request_path: /r, request_key: "scoringPeriodId=6&view=x", fetched_at: "20260601T000000Z", partitions: '{"season": 2026, "league_id": "1"}', file_path: r1}
+      # In SQL so that the test does not need the seed built to read its columns.
+      - input: ref('espn_stat_ids')
+        format: sql
+        rows: |
+          select 0::BIGINT as stat_id, false as is_rate
+          union all
+          select 1::BIGINT, false
+    expect:
+      rows:
+        - {league_id: "1", season: 2026, scoring_period: 6, team_id: 1, espn_player_id: 10, espn_game_id: g1, stat_id: 0, stat_value: 4.0}
+        - {league_id: "1", season: 2026, scoring_period: 6, team_id: 1, espn_player_id: 10, espn_game_id: g1, stat_id: 1, stat_value: 2.0}
 
   - name: scoring_periods_run_to_each_leagues_own_final_period
     description: >

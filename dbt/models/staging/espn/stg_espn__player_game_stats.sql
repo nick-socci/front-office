@@ -16,8 +16,16 @@
 --
 -- Same memory rules as stg_espn__roster_entries, and for the same reason -- each payload
 -- is ~2.3 MB of embedded stats: it is read from the roster capture view, which keeps only
--- the declared fields, and everything else is computed before any unnest. The stats
--- object is left as JSON, and its keys and values are unnested together to rows.
+-- the declared fields, and everything else is computed before any unnest. A line's stats
+-- are a map from stat id to value (the capture view declares them so), unnested by their
+-- entries.
+--
+-- Both steps over the parsed rosters are written so that DuckDB streams them (spec 0156,
+-- checked by scripts/check_plan_shapes.py): the game lines are chosen with
+-- fo_list_filter before the unnest, not with a WHERE after it, and the stats are unnested
+-- as map entries, not as keys beside values. A WHERE over the unnested lines, and the
+-- keys-beside-values subquery, each made DuckDB hold every parsed roster first; written
+-- this way the model needs 0.5 GB for eight seasons as for one, at four threads.
 --
 -- ESPN's rates (15 stat ids, `is_rate` in espn_stat_ids) are not staged. ESPN writes a
 -- value for a rate even when its denominator is zero, in encodings that change by season:
@@ -72,7 +80,13 @@ entries as (
         fetched_at,
         team_id,
         entry.playerId as espn_player_id,
-        entry.playerPoolEntry.player.stats as player_lines
+        -- Kept: actual stats (statSourceId 0) of a single game (statSplitTypeId 5) in the
+        -- snapshot's own scoring period.
+        {{ fo_list_filter(
+            'entry.playerPoolEntry.player.stats', 'line',
+            'line.statSourceId = 0 and line.statSplitTypeId = 5'
+            ~ ' and line.scoringPeriodId = teams.scoring_period'
+        ) }} as player_lines
     from teams
     {{ fo_unnest('teams.roster_entries', 'entry') }}
 
@@ -103,19 +117,14 @@ game_lines as (
         team_id,
         espn_player_id,
         line.externalId as espn_game_id,
-        line.stats as line_stats
+        {{ fo_map_entries('line.stats') }} as stat_entries
     from lines
-    where
-        line.statSourceId = 0
-        and line.statSplitTypeId = 5
-        and line.scoringPeriodId = scoring_period
 
 ),
 
 stat_rows as (
 
-    -- stat_key and stat_value are the names fo_unnest_pair gives the two unnested values,
-    -- the keys of the stats object beside the values of the same keys (a JSON number each).
+    -- An entry's key is the stat id as text, its value the stat's value as JSON.
     select
         game_lines.league_id,
         game_lines.season,
@@ -124,13 +133,10 @@ stat_rows as (
         game_lines.team_id,
         game_lines.espn_player_id,
         game_lines.espn_game_id,
-        stat_key,  -- noqa: RF02
-        stat_value  -- noqa: RF02
+        stat_entry.key as stat_key,
+        stat_entry.value as stat_value
     from game_lines
-    {{ fo_unnest_pair(
-        fo_json_keys('game_lines.line_stats', '$'), 'stat_key',
-        fo_json_values('game_lines.line_stats', '$'), 'stat_value'
-    ) }}
+    {{ fo_unnest('game_lines.stat_entries', 'stat_entry') }}
 
 )
 

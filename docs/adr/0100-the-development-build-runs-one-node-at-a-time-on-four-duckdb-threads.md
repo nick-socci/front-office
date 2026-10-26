@@ -1,6 +1,6 @@
 # 0100. The development build runs one node at a time, on four DuckDB threads
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-25
 - Spec: [0156-build-memory-flat-across-seasons](../specs/0156-build-memory-flat-across-seasons/design.md) · Issue: #156
 

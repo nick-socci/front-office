@@ -101,8 +101,9 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
 - Staging reads captures **only through the capture views** `stg_raw__<source>_<endpoint>`
   (spec 0150, ADRs 0066 to 0068). There is no payload in the warehouse: `raw.captures` is
   the loader's manifest (keys and file paths), and each view reads its endpoint's files
-  through `fo_captures`, parsing a heavy endpoint (rosters, matchup days, boxscores) into a
-  declared structure as it reads, so no megabyte JSON value is ever a value in a query.
+  through `fo_captures`, parsing a heavy endpoint (rosters, matchup days, boxscores,
+  schedules) into a declared structure as it reads, so no megabyte JSON value is ever a
+  value in a query.
   - A field a model needs from a heavy endpoint is added to that view's structure; a
     model reading an undeclared field fails to compile.
   - The newest capture of an entity is chosen on `raw.captures`' narrow columns and kept
@@ -112,6 +113,14 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
   - A dbt unit test can mock a capture view, not the file read inside it; the views are
     held by `ingestion/tests/test_capture_glob.py` and
     `stg_raw__capture_views_cover_the_manifest`.
+- A node that parses a heavy endpoint (a capture view that declares a structure) must not
+  gather the parse: no WHERE over the rows of a `fo_unnest` of parsed captures (filter the
+  list first with `fo_list_filter`, or apply the condition after a `group by`), no
+  `fo_unnest_pair` over them (declare a map, unnest `fo_map_entries`), no CTE of parsed
+  captures read twice (take narrow columns from `fo_capture_keys()`).
+  `scripts/check_plan_shapes.py` (a gate) holds this, and `dbt/plan_shapes.yml` registers
+  the measured exceptions (ADR 0102). The `dev` profile builds one node at a time on four
+  DuckDB threads on purpose: nodes built at once share one memory limit (ADR 0100).
 - dbt renders YAML `description:` fields as Jinja: `{{ source(...) }}` in prose is a
   compilation error.
 - dbt 1.12: generic test arguments nest under `arguments:`.

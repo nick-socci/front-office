@@ -1,6 +1,6 @@
 # 0101. The MLB schedule is read with a declared structure
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-25
 - Spec: [0156-build-memory-flat-across-seasons](../specs/0156-build-memory-flat-across-seasons/design.md) · Issue: #156
 

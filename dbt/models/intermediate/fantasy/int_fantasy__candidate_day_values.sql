@@ -143,39 +143,104 @@ day_components as (
 
 ),
 
--- The weighted sums per (day, category, part): what the day did, and what a replacement
--- would have done in a day of that kind. A null level anywhere makes the replacement null.
-day_parts as (
+-- What a replacement would have done in a day of each kind, per (category, part): the
+-- weighted sum of the levels. A null level anywhere makes it null. It depends on the
+-- league-season, the side and the day's kind, not on the day: every day of a side meets
+-- all of that side's components. So it is summed once per kind here, not once per day:
+-- an ordered sum holds every row it sums, and per day it held every component of every
+-- day of every season, 1.5 GB for eight seasons alone where this needs 0.5 (spec 0156).
+-- The terms and their order are the same, so the values are too.
+replacement_parts as (
 
     select
-        {%- for key in day_keys %}
-        components.{{ key }},
-        {%- endfor %}
+        kinds.platform,
+        kinds.league_id,
+        kinds.season,
+        kinds.side,
+        kinds.day_kind,
         rules.stat_key as category_key,
         rules.part,
-        sum(rules.weight * components.component_total) as part_total,
         case
             when {{ fo_any_true('levels.level_per_played_day is null') }} then null
             else {{ fo_sum_in_order(
                 'rules.weight * levels.level_per_played_day', 'rules.component'
             ) }}
         end as part_replacement
+    from (
+        select distinct
+            platform,
+            league_id,
+            season,
+            side,
+            day_kind,
+            component
+        from day_components
+    ) as kinds
+    inner join {{ ref('int_fantasy__stat_components') }} as rules
+        on rules.platform = kinds.platform
+        and rules.component = kinds.component
+    left join {{ ref('int_fantasy__replacement_levels') }} as levels
+        on levels.platform = kinds.platform
+        and levels.league_id = kinds.league_id
+        and levels.season = kinds.season
+        and levels.component = kinds.component
+        and levels.day_kind = kinds.day_kind
+    group by
+        kinds.platform,
+        kinds.league_id,
+        kinds.season,
+        kinds.side,
+        kinds.day_kind,
+        rules.stat_key,
+        rules.part
+
+),
+
+-- The weighted sums per (day, category, part): what the day did. The day's kind is a key
+-- too (one kind per day and side), to meet the replacement of that kind.
+day_totals as (
+
+    select
+        {%- for key in day_keys %}
+        components.{{ key }},
+        {%- endfor %}
+        components.day_kind,
+        rules.stat_key as category_key,
+        rules.part,
+        sum(rules.weight * components.component_total) as part_total
     from day_components as components
     inner join {{ ref('int_fantasy__stat_components') }} as rules
         on rules.platform = components.platform
         and rules.component = components.component
-    left join {{ ref('int_fantasy__replacement_levels') }} as levels
-        on levels.platform = components.platform
-        and levels.league_id = components.league_id
-        and levels.season = components.season
-        and levels.component = components.component
-        and levels.day_kind = components.day_kind
     group by
         {%- for key in day_keys %}
         components.{{ key }},
         {%- endfor %}
+        components.day_kind,
         rules.stat_key,
         rules.part
+
+),
+
+day_parts as (
+
+    select
+        {%- for key in day_keys %}
+        totals.{{ key }},
+        {%- endfor %}
+        totals.category_key,
+        totals.part,
+        totals.part_total,
+        replacement.part_replacement
+    from day_totals as totals
+    left join replacement_parts as replacement
+        on replacement.platform = totals.platform
+        and replacement.league_id = totals.league_id
+        and replacement.season = totals.season
+        and replacement.side = totals.side
+        and replacement.day_kind = totals.day_kind
+        and replacement.category_key = totals.category_key
+        and replacement.part = totals.part
 
 ),
 

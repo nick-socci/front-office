@@ -58,7 +58,7 @@ thread) or of 1, 2, 4, 8 GB (`probes/ladder.sh`, a full build from empty). Roots
 | C21 | With 1 dbt thread, 4 DuckDB threads and matchup days rewritten (C9), eight seasons at 1 GB fails only on two tests that read the MLB schedule; 2026 passes at 1 GB. | as C20, in C17's worktree | 2026: 1 GB passes (77 s). Eight seasons at 1 GB: 2 errors, `stg_mlb__games_prefers_played_over_unplayed` and `stg_mlb__no_stats_for_unplayed_games` (out of memory at 0.94 of 0.95 GB) | 2026-10-25 |
 | C22 | Those two tests grow with seasons with no delim join or CTE scan in their plan: they read `stg_raw__mlb_schedule`, whose 20 captures (4 for 2026) are each over 1 MB, as a whole JSON `payload`. | `probes/node_memory.py --threads 4` on C20's builds; `probes/plan_shapes.py`-style `explain`; `find data/raw/mlb/schedule -name payload.json -size +1M` | prefers_played_over_unplayed 0.5 → 1.5 GB; no_stats_for_unplayed_games 0.75 → 1.5 GB; delim joins 0, CTE scans 0; 20 of 20 schedule payloads over 1 MB, 66 MB in all | 2026-10-25 |
 | C23 | With 1 dbt thread and DuckDB's default 16 threads (matchup days rewritten), eight seasons fails at 2 GB on the two game-log models alone; 2026 passes at 2 GB (73 s). | `probes/ladder.sh`, `THREADS=1`, in C17's worktree | 2026: 1 GB fails, 2 GB passes. Eight seasons: 1 GB fails (8 errors), 2 GB fails (batting and pitching game logs only); 4 GB not run | 2026-10-25 |
-| C24 | Read with `dates[].games[]` declared and each game kept as JSON, the MLB schedule needs the same limit for both roots and gives the same rows; read as a whole payload it grows. `stg_mlb__games`, which reads it, is a view, so every node that reads `stg_mlb__games` parses the schedule again. | `probes/schedule_shape.py` (4 DuckDB threads); `materialized` of `stg_mlb__games` in the build's manifest | payload: 0.5 GB (2026) → 0.75 GB (eight seasons); structure: 0.5 → 0.5 GB; rows 2,486 / 2,430 games (2026) and 20,780 / 20,342 (eight seasons) both ways; `stg_mlb__games` is a view | 2026-10-25 |
+| C24 | Read with `dates[].games[]` declared and each game kept as JSON, the MLB schedule needs the same limit for both roots and gives the same rows; read as a whole payload it grows. `stg_mlb__games`, which reads it, is a view, so every node that reads `stg_mlb__games` parses the schedule again. | `probes/schedule_shape.py` (4 DuckDB threads); `materialized` of `stg_mlb__games` in the build's manifest | payload: 0.5 GB (2026) → 0.75 GB (eight seasons); structure: 0.5 → 0.5 GB; distinct (game, state) pairs / distinct games: 2,486 / 2,430 (2026) and 20,780 / 20,342 (eight seasons), both ways; `stg_mlb__games` is a view | 2026-10-25 |
 | C25 | 29 nodes parse the MLB schedule (through `stg_mlb__games`, a view); none gathers over it. Three `stg_espn__scoring_periods_*` tests have a delim join or CTE, but over `espn/settings`, a small endpoint. | `probes/plan_shapes.py` with the schedule as the only heavy endpoint, then with every endpoint | schedule readers: 29, gathering over the schedule: 0. scoring_periods_start_on_opening_day, _have_game_lines_to_check, _agree_with_espn_game_lines: CTE or delim join over `settings` only | 2026-10-25 |
 
 ## Alternatives considered
@@ -90,9 +90,9 @@ reopens it.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0100](../../adr/0100-the-development-build-runs-one-node-at-a-time-on-four-duckdb-threads.md) | The `dev` target builds one node at a time (dbt `threads: 1`) on four DuckDB threads; `ci` and `bq` unchanged (owner, 2026-10-25) | proposed |
-| [0101](../../adr/0101-the-mlb-schedule-is-read-with-a-declared-structure.md) | `stg_raw__mlb_schedule` declares `dates[].games[]`, each game kept as JSON; the schedule joins the heavy endpoints (owner, 2026-10-25) | proposed |
-| [0102](../../adr/0102-a-node-that-parses-a-heavy-endpoint-may-not-gather-the-parse-unless-registered.md) | A gate step fails a node that parses a heavy endpoint and whose plan has a delim join or CTE scan, unless a register lists it with its measured limits; the game logs and the batting-totals test start in it (owner, 2026-10-25) | proposed |
+| [0100](../../adr/0100-the-development-build-runs-one-node-at-a-time-on-four-duckdb-threads.md) | The `dev` target builds one node at a time (dbt `threads: 1`) on four DuckDB threads; `ci` and `bq` unchanged (owner, 2026-10-25) | accepted |
+| [0101](../../adr/0101-the-mlb-schedule-is-read-with-a-declared-structure.md) | `stg_raw__mlb_schedule` declares `dates[].games[]`, each game kept as JSON; the schedule joins the heavy endpoints (owner, 2026-10-25) | accepted |
+| [0102](../../adr/0102-a-node-that-parses-a-heavy-endpoint-may-not-gather-the-parse-unless-registered.md) | A gate step fails a node that parses a heavy endpoint and whose plan has a delim join or CTE scan, unless a register lists it with its measured limits; the game logs and the batting-totals test start in it (owner, 2026-10-25) | accepted |
 
 ## Detailed design
 
@@ -223,3 +223,55 @@ the ladder (`probes/ladder.sh`) is how the bar is checked.
 | design-review | F4 (P2): finding heavy views from compiled SQL misses an endpoint with no fixture captures | changed: heavy views are found from the model's source (`fo_captures` with a structure), R4.1 and *The plan check* |
 
 ## Amendments
+- **2026-10-26, the shape of `stg_espn__player_game_stats` and of
+  `stg_espn__matchup_player_lines_one_line_per_player` (task 6).** *Detailed design* left
+  the shape to the build. Each delim join had one cause (C9): the WHERE on the game lines'
+  struct fields, and `fo_unnest_pair`, a subquery DuckDB plans the same way. The game lines
+  are now chosen before the unnest by a new dispatched macro, `fo_list_filter` (DuckDB
+  `list_filter` with a lambda; BigQuery `array(select … where …)`), and a line's `stats`
+  is declared in `stg_raw__espn_roster` as a map of JSON, unnested by `fo_map_entries` as
+  the boxscore's players are. Only this model reads that field; the roster unit tests'
+  `from_json` specs follow the declared type. On eight seasons: `stg_espn__player_game_stats`,
+  `stg_espn__roster_entries` and `stg_espn__roster_entry_slots` identical to `main`
+  (6,182,774, 437,227 and 2,348,532 rows, except-all 0 both ways); no gathering operator;
+  0.5 GB alone at four threads for 2026 and for eight seasons, 3.4 s instead of 19.9 s.
+  The test gives the same per-player line counts as before (343,691 groups, at most one
+  line each, except-all 0 both ways) and no gathering operator; alone it needs 0.5 GB at
+  four threads where it needed 0.25. Within the goals and no-goes.
+- **2026-10-26, the schedule's expected values named the wrong count.** *Expected values*
+  gave 20,780 as the schedule's "game entries". C24 counted distinct (game, state) pairs;
+  the schedule holds 47,999 game entries over all captures of eight seasons, 20,342
+  distinct games (one `stg_mlb__games` row each), both counted again on the baseline
+  warehouse. The requirement is unchanged; the row and C24 now say which count is which.
+- **2026-10-26, `int_fantasy__candidate_day_values` added to the rewrites (the owner's
+  decision).** The branch's first ladder passed 2026 at 1 GB; eight seasons at 1 GB got
+  through every heavy staging node and then aborted in this intermediate model (DuckDB's
+  out-of-memory exception, uncaught, at 953.4 of 953.6 MiB). It parses no capture: its
+  `day_parts` summed the replacement levels with an ordered sum (ADR 0046) per day, and an
+  ordered aggregate holds every row it sums, so alone it needed 0.25 GB for 2026 and 1.5 GB
+  for eight seasons, at four threads (without the ordering, 0.25 GB: the ordering is the
+  cause). Of the 17 nodes with an ordered aggregate, measured alone the same way, no other
+  needs more than 0.75 GB for eight seasons (`probes/node_memory.py`). The replacement sum
+  depends on the league-season, side and day kind, not on the day, since every day of a
+  side meets all its components; it is now summed once per kind and joined, with the same
+  terms in the same order. On eight seasons the model and everything downstream are
+  identical to `main` (198,363 rows; 62 relations, `probes/compare_bounded.py`), and it
+  needs 0.5 GB alone. Reported to the owner, who chose to rewrite it here rather than in a
+  separate issue or by narrowing the bar. `probes/compare_bounded.py` compares the
+  relations exactly with columns held strict, without materializing the capture views,
+  which `scripts/compare_warehouses.py` does and the real season cannot afford (19 GB).
+- **2026-10-26, the BigQuery slice was compared on eight seasons, not 2026 (task 10).**
+  BigQuery's `raw.api_responses` holds all eight seasons (44,426 captures), and loading
+  2026 alone would have replaced it under the populated build. The branch's slice was
+  built from it into `*_p156` datasets instead, beside that build, and compared with the
+  DuckDB eight-season build: 76 of 76 relations pass. `compare_bigquery_slice.py` gains
+  `--suffix` to read a suffixed build. R3.5's billed-bytes criterion has no same-code
+  baseline (the populated build predates #194); the owner chose not to build `main`'s
+  slice for one, so that criterion is reported unverified (53.95 GB billed).
+- **2026-10-26, R3.5's billing criterion verified (PR #202 review F1, the owner's
+  decision).** The entry above left it unverified. The owner chose to build `main`'s slice
+  (c42ef19) the same way, into `*_m156` datasets from the same uploaded eight seasons: 69
+  models and 439 data tests pass. Bytes billed, `main` against the branch: models 24.556
+  against 24.561 GB, tests 29.392 against 29.392 GB, in all 53.947 against 53.952 GB
+  (+0.01%), within R3.5's 5%. Only `stg_espn__matchup_player_lines` differs, by 5 MB
+  (0.134 against 0.139 GB).
