@@ -243,3 +243,20 @@ the ladder (`probes/ladder.sh`) is how the bar is checked.
   the schedule holds 47,999 game entries over all captures of eight seasons, 20,342
   distinct games (one `stg_mlb__games` row each), both counted again on the baseline
   warehouse. The requirement is unchanged; the row and C24 now say which count is which.
+- **2026-10-26, `int_fantasy__candidate_day_values` added to the rewrites (the owner's
+  decision).** The branch's first ladder passed 2026 at 1 GB; eight seasons at 1 GB got
+  through every heavy staging node and then aborted in this intermediate model (DuckDB's
+  out-of-memory exception, uncaught, at 953.4 of 953.6 MiB). It parses no capture: its
+  `day_parts` summed the replacement levels with an ordered sum (ADR 0046) per day, and an
+  ordered aggregate holds every row it sums, so alone it needed 0.25 GB for 2026 and 1.5 GB
+  for eight seasons, at four threads (without the ordering, 0.25 GB: the ordering is the
+  cause). Of the 17 nodes with an ordered aggregate, measured alone the same way, no other
+  needs more than 0.75 GB for eight seasons (`probes/node_memory.py`). The replacement sum
+  depends on the league-season, side and day kind, not on the day, since every day of a
+  side meets all its components; it is now summed once per kind and joined, with the same
+  terms in the same order. On eight seasons the model and everything downstream are
+  identical to `main` (198,363 rows; 62 relations, `probes/compare_bounded.py`), and it
+  needs 0.5 GB alone. Reported to the owner, who chose to rewrite it here rather than in a
+  separate issue or by narrowing the bar. `probes/compare_bounded.py` compares the
+  relations exactly with columns held strict, without materializing the capture views,
+  which `scripts/compare_warehouses.py` does and the real season cannot afford (19 GB).
