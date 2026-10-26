@@ -7,7 +7,12 @@ front_office:
     dev:
       type: duckdb
       path: "{{ env_var('FO_DUCKDB_PATH', '../data/warehouse.duckdb') }}"
-      threads: 4
+      # One node at a time, on four DuckDB threads. dbt-duckdb builds every node on one
+      # DuckDB instance, so nodes built at once share one memory limit; one at a time keeps
+      # the build's memory the same for one season as for eight (ADR 0100).
+      threads: 1
+      settings:
+        threads: 4
       # Python models import the solver from here; resolved against the working directory, so run dbt from dbt/.
       module_paths: ["python_modules"]
 
