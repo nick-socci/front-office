@@ -153,9 +153,9 @@ So no two heavy nodes share the memory limit, and a streaming node's floor is 0.
 | Ladder, eight seasons, committed profile | 1 GB passes; if not, the same rung as 2026, and the cause brought to the owner | `probes/ladder.sh`, `ROOTS=raw RUNGS="1 2 4"`; C21, C24 |
 | Build time, eight seasons | about 300 s (accepted, ADR 0100) | the ladder's `build exit … s` |
 | Every relation against `main` | identical rows and columns, each landing root, the schedule view's two columns excluded | `scripts/compare_warehouses.py --strict-columns --exclude staging.stg_raw__mlb_schedule:payload --exclude staging.stg_raw__mlb_schedule:dates <main build> <new build>` |
-| The schedule view's games against `main` | equal multisets, each landing root; 20,780 game entries for eight seasons (C24) | R3.4's comparison |
+| The schedule view's games against `main` | equal multisets, each landing root; 47,999 game entries over all captures for eight seasons (20,780 distinct game and state pairs, C24) | `probes/schedule_games_equal.py` |
 | `stg_espn__matchup_days`, eight seasons | 1,469 rows | the comparison above; C9 |
-| `stg_mlb__games` games, eight seasons | as `main`; the schedule holds 20,780 game entries, 20,342 distinct games | the comparison above; C24 |
+| `stg_mlb__games`, eight seasons | as `main`: 20,342 rows, one per distinct game (C24) | the comparison above |
 | Plan check on fixtures | passes, with three registered entries and no other gathering operator over a heavy read | `scripts/check_plan_shapes.py` |
 | Nodes the check reads | 41 on `main`'s fixtures (C13), give or take the nodes the rewrites add or remove | the check's output |
 | `dbt test`, eight seasons | the same failures as `main` with the committed profile today: none (C3) | the ladder's `run_results.json` |

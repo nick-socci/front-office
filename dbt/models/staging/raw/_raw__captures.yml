@@ -42,7 +42,8 @@ models:
   - name: stg_raw__mlb_schedule
     description: >-
       One row per committed capture of mlb/schedule that the loader has listed in
-      raw.captures, with the manifest's columns. MLB schedules, whole.
+      raw.captures, with the manifest's columns and `dates`, each day's games as JSON values
+      (parsed as read, spec 0156).
   - name: stg_raw__mlb_players
     description: >-
       One row per committed capture of mlb/players that the loader has listed in

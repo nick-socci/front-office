@@ -23,31 +23,34 @@
 with responses as (
 
     select
-        payload,
+        dates,
         fetched_at
     from {{ ref('stg_raw__mlb_schedule') }}
 
 ),
 
-game_lists as (
+days as (
 
-    -- The payload is left behind here, before the unnest (AGENTS.md rule 1). An unnest in
-    -- the FROM clause repeats every column of its relation once per element, used or not:
-    -- unnesting straight from `responses` held each 3.5 MB schedule once per game.
+    -- One row per day of each response. The days are unnested straight from `responses`,
+    -- which holds only `dates` and the stamp (AGENTS.md rule 1): an unnest repeats every
+    -- other column of its relation once per element.
     select
-        fetched_at,
-        {{ fo_json_array('payload', '$.dates[*].games[*]') }} as games
+        responses.fetched_at,
+        schedule_day.games
     from responses
+    {{ fo_unnest('responses.dates', 'schedule_day') }}
 
 ),
 
 games as (
 
+    -- One row per game: a day's list of games, taken as a column first so that nothing
+    -- large sits beside this unnest either.
     select
-        fetched_at,
+        days.fetched_at,
         game
-    from game_lists
-    {{ fo_unnest('game_lists.games', 'game') }}
+    from days
+    {{ fo_unnest('days.games', 'game') }}
 
 )
 

@@ -10,7 +10,9 @@ run on DuckDB. What each test catches:
 - an endpoint with no captures failing the build instead of giving no rows (R2.4);
 - partition levels of different depth within an endpoint breaking the read (R2.1);
 - a whole-document read splitting a JSON array into rows (R3.3);
-- a declared structure, map included, not giving its typed fields (R3.2).
+- a declared structure, map included, not giving its typed fields (R3.2);
+- a list of structs holding a list of JSON values, the schedule's, not giving each element
+  as JSON, or keeping a field that was not declared (spec 0156, R3.1).
 """
 
 from __future__ import annotations
@@ -29,6 +31,8 @@ ROSTER_STRUCTURE = (
     '{"id": "BIGINT", "teams": [{"id": "BIGINT", "roster": {"entries": '
     '[{"playerId": "BIGINT"}]}}], "stats": {"__map__": "DOUBLE"}}'
 )
+
+SCHEDULE_STRUCTURE = '{"dates": [{"games": ["JSON"]}]}'
 
 
 def _capture(root: Path, relative: str, payload: str) -> str:
@@ -90,6 +94,21 @@ def landing(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[Path, Pa
                 "teams": [{"id": 3, "roster": {"entries": [{"playerId": 11}, {"playerId": 12}]}}],
                 "stats": {"20": 1.5, "21": 2.0},
                 "ignored": "x" * 1000,
+            }
+        ),
+    )
+    # Spec 0156 R3.1: days holding lists of games, with a field and a game field undeclared.
+    listed_capture(
+        "mlb",
+        "schedule_shape",
+        "mlb/schedule_shape/season=2026/fetched_at=20260101T000000Z",
+        json.dumps(
+            {
+                "copyright": "x",
+                "dates": [
+                    {"date": "2026-06-01", "games": [{"gamePk": 1, "k": [1, 2]}, {"gamePk": 2}]},
+                    {"date": "2026-06-02", "games": []},
+                ],
             }
         ),
     )
@@ -186,6 +205,20 @@ def test_a_declared_structure_gives_its_typed_fields_and_drops_the_rest(landing,
         {"id": 3, "roster": {"entries": [{"playerId": 11}, {"playerId": 12}]}}
     ]
     assert json.loads(stats) == {"20": 1.5, "21": 2.0}
+
+
+def test_a_list_of_days_holding_lists_of_json_games_gives_each_game_as_json(landing, monkeypatch):
+    call = f"fo_captures('mlb', 'schedule_shape', '{SCHEDULE_STRUCTURE}')"
+    assert len(_rows(landing, monkeypatch, call)[0]) == 7 + 1  # the manifest's, and `dates`
+    # dbt show gives nested values as JSON text; the undeclared `date` must be gone.
+    [(dates,)] = _rows(landing, monkeypatch, call, "to_json(dates)::varchar as dates")
+    assert json.loads(dates) == [
+        {"games": [{"gamePk": 1, "k": [1, 2]}, {"gamePk": 2}]},
+        {"games": []},
+    ]
+    # An element is a JSON value, read with the JSON functions as the schedule's readers do.
+    columns = "json_extract_string(dates[1].games[2], '$.gamePk') as pk"
+    assert _rows(landing, monkeypatch, call, columns) == [("2",)]
 
 
 def test_a_landing_root_with_a_quote_in_its_path_is_read(tmp_path, monkeypatch):

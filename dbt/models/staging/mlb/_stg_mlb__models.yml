@@ -203,13 +203,13 @@ unit_tests:
     model: stg_mlb__games
     given:
       - input: ref('stg_raw__mlb_schedule')
-        rows:
-          - source: mlb
-            endpoint: schedule
-            request_key: "season=2026"
-            fetched_at: "20260601T000000Z"
-            file_path: schedule.json
-            payload: '{"dates":[{"games":[{"gamePk":1,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Cancelled"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":1,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":2,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":2,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Cancelled"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Postponed"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Completed Early"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}}]}]}'
+        format: sql
+        rows: |
+          select
+              'mlb' as source, 'schedule' as endpoint, '/s' as request_path,
+              'season=2026' as request_key, '20260601T000000Z' as fetched_at,
+              '{}'::JSON as partitions, 'schedule.json' as file_path,
+              from_json('[{"games":[{"gamePk":1,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Cancelled"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":1,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":2,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":2,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Cancelled"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Postponed"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Completed Early"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}}]}]', '[{"games": ["JSON"]}]') as dates
       - input: ref('mlb_game_states')
         rows:
           - {detailed_state: Final, is_played: true}
@@ -234,13 +234,13 @@ unit_tests:
     model: stg_mlb__games
     given:
       - input: ref('stg_raw__mlb_schedule')
-        rows:
-          - source: mlb
-            endpoint: schedule
-            request_key: "season=2026"
-            fetched_at: "20260701T000000Z"
-            file_path: schedule.json
-            payload: '{"dates":[{"games":[{"gamePk":1,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-16T23:15:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":1,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-17T18:00:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}},"resumedFrom":"2026-06-16T23:15:00Z"},{"gamePk":2,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-17T18:00:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}},"resumedFrom":"2026-06-16T23:15:00Z"},{"gamePk":2,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-16T23:15:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-10T23:10:00Z","status":{"abstractGameState":"Final","detailedState":"Postponed"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-16T12:33:00Z","status":{"abstractGameState":"Final","detailedState":"Cancelled"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}}]}]}'
+        format: sql
+        rows: |
+          select
+              'mlb' as source, 'schedule' as endpoint, '/s' as request_path,
+              'season=2026' as request_key, '20260701T000000Z' as fetched_at,
+              '{}'::JSON as partitions, 'schedule.json' as file_path,
+              from_json('[{"games":[{"gamePk":1,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-16T23:15:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":1,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-17T18:00:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}},"resumedFrom":"2026-06-16T23:15:00Z"},{"gamePk":2,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-17T18:00:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}},"resumedFrom":"2026-06-16T23:15:00Z"},{"gamePk":2,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-16T23:15:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-10T23:10:00Z","status":{"abstractGameState":"Final","detailedState":"Postponed"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-16T12:33:00Z","status":{"abstractGameState":"Final","detailedState":"Cancelled"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}}]}]', '[{"games": ["JSON"]}]') as dates
       - input: ref('mlb_game_states')
         rows:
           - {detailed_state: Final, is_played: true}

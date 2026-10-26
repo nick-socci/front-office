@@ -3,19 +3,26 @@
 -- tie-break in stg_mlb__games: without it, 29 makeup games in 2026 lose to their
 -- postponements.
 
-with game_lists as (
+with responses as (
 
-    -- the payload is left behind before the unnest (AGENTS.md rule 1)
-    select {{ fo_json_array('payload', '$.dates[*].games[*]') }} as games
+    select dates
     from {{ ref('stg_raw__mlb_schedule') }}
+
+),
+
+days as (
+
+    select schedule_day.games
+    from responses
+    {{ fo_unnest('responses.dates', 'schedule_day') }}
 
 ),
 
 source_games as (
 
     select game
-    from game_lists
-    {{ fo_unnest('game_lists.games', 'game') }}
+    from days
+    {{ fo_unnest('days.games', 'game') }}
 
 ),
 
