@@ -26,7 +26,8 @@
 -- the unnest runs beside the small identifier columns only, one constant-path branch per
 -- side, as in stg_espn__matchup_periods. A playoff bye has an empty `away`, whose marker
 -- member is null.
--- `select distinct` gives one row however many sides and matchups carry the marker.
+-- The `group by` gives one row however many sides and matchups carry the marker, and its
+-- `having` keeps the matchup periods that some matchup marked (spec 0156).
 --
 -- A plain table: it reads every capture at once, as the view streams them (spec 0150).
 --
@@ -71,24 +72,32 @@ marked as (
     -- A matchup marks the scoring period if either side carries the roster for it. One pass
     -- over the matchups, not one branch per side: two branches read the matchups twice,
     -- and DuckDB then held every matchup of every season, both rosters included (spec
-    -- 0150, Amendments). The `distinct` below keeps one row however many matchups mark it.
+    -- 0150, Amendments). The condition is a column here and is applied by the HAVING
+    -- below, not by a WHERE: a WHERE comparing the fields of unnested parsed captures is
+    -- planned as a delim join, which holds every capture before it emits a row (spec 0156).
     select
         league_id,
         season,
         scoring_period,
         fetched_at,
-        matchup.matchupPeriodId as matchup_period
+        matchup.matchupPeriodId as matchup_period,
+        case
+            when
+                matchup.home.rosterForCurrentScoringPeriod is not null
+                or matchup.away.rosterForCurrentScoringPeriod is not null
+                then 1
+            else 0
+        end as is_marked
     from matchups
-    where
-        matchup.home.rosterForCurrentScoringPeriod is not null
-        or matchup.away.rosterForCurrentScoringPeriod is not null
 
 )
 
-select distinct
+select
     league_id,
     season,
     scoring_period,
     matchup_period,
     {{ fo_parse_fetched_at() }} as fetched_at
 from marked
+group by league_id, season, scoring_period, matchup_period, fetched_at
+having max(is_marked) = 1
