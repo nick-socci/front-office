@@ -298,12 +298,12 @@ def solve_lineup_period(team, matchup_period, options, slots, start_limit):
 
     The entry point of the BigQuery UDF and of the DuckDB function (spec 0137). `team` names
     the team for messages only; `options` are dicts of scoring_date, player_id, slot_id, role,
-    value (None when unvalued), is_actual and is_start; `slots` are dicts of slot_id, role and
-    count. In order: a date in no matchup period raises (R2.4); each day's non-null values
-    are rounded to 12 places (ADR 0104) and checked against the bound (R2.3), every day before
-    the skip; a team-period with any null value returns [] (spec 0164, R2.1); then the start
-    cap is floor(start_limit), or the starts of the actual lineups where they went past it
-    (R1.3), and the period is solved.
+    value (None when unvalued), is_actual and is_start; `slots` (None reads as empty) are
+    dicts of slot_id, role and count. In order: a date in no matchup period raises (R2.4);
+    each day's non-null values are rounded to 12 places (ADR 0104) and checked against the
+    bound (R2.3), every day before the skip; a team-period with any null value returns []
+    (spec 0164, R2.1); then the start cap is floor(start_limit), or the starts of the actual
+    lineups where they went past it (R1.3), and the period is solved.
     """
     if matchup_period is None:
         first_day = min(o["scoring_date"] for o in options)
@@ -347,7 +347,7 @@ def solve_lineup_period(team, matchup_period, options, slots, start_limit):
     else:
         actual_starts = sum(o.is_actual and o.is_start for _, valued in days for o in valued)
         start_cap = max(math.floor(start_limit), actual_starts)
-    slot_list = [Slot(s["slot_id"], s["role"], s["count"]) for s in slots]
+    slot_list = [Slot(s["slot_id"], s["role"], s["count"]) for s in slots or []]
     try:
         assigned = solve_team_period(days, slot_list, start_limit, start_cap)
     except ValueError as error:

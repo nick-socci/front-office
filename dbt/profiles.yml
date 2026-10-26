@@ -14,8 +14,9 @@ front_office:
       settings:
         threads: 4
       # The plugin and the solver it registers are imported from here (ADR 0103); resolved
-      # against the working directory, so run dbt from dbt/.
-      module_paths: ["python_modules", "functions"]
+      # against the working directory, so the paths are given for dbt run from dbt/ and from
+      # the repo root (the SQL linter's dbt templater runs there).
+      module_paths: ["python_modules", "functions", "dbt/python_modules", "dbt/functions"]
       # Registers the lineup solver as a SQL function on dbt's connections.
       plugins:
         - module: fo_duckdb_functions
@@ -27,8 +28,9 @@ front_office:
       path: "{{ env_var('FO_CI_DUCKDB_PATH', 'ci.duckdb') }}"
       threads: 4
       # The plugin and the solver it registers are imported from here (ADR 0103); resolved
-      # against the working directory, so run dbt from dbt/.
-      module_paths: ["python_modules", "functions"]
+      # against the working directory, so the paths are given for dbt run from dbt/ and from
+      # the repo root (the SQL linter's dbt templater runs there).
+      module_paths: ["python_modules", "functions", "dbt/python_modules", "dbt/functions"]
       # Registers the lineup solver as a SQL function on dbt's connections.
       plugins:
         - module: fo_duckdb_functions

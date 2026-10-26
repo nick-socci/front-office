@@ -187,6 +187,14 @@ def test_the_order_of_the_options_does_not_change_the_result():
         assert solve(shuffled, limit=1.0) == expected
 
 
+def test_a_null_slot_list_is_an_empty_one():
+    """Catches a TypeError on a league-season with no slot rows: the SQL left-joins the slots,
+    so BigQuery and DuckDB may both hand over a NULL array, which the Python model it
+    replaced saw as []."""
+    options = [option(DAY1, 1, 5.0)]
+    assert solve(options, slots=None) == solve(options, slots=[]) == []
+
+
 def test_the_file_can_be_a_udf_body():
     """Catches a construct that breaks the function body: dbt renders it as Jinja and
     BigQuery wraps it in a triple-quoted string, so neither delimiter may appear (ADR 0103);

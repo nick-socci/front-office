@@ -209,12 +209,13 @@ def test_the_slice_and_the_macros_it_reaches_hold_no_sql_bigquery_refuses(
     sitting in a shared macro one of them calls."""
     models = [label for label in project_sources if label.startswith("models/")]
     macros = [label for label in project_sources if label.startswith("macros/")]
-    # Every SQL model of the project (spec 0135): 74, the Python model left out. Of these,
-    # 34 are the models of spec 0130, nine the capture views they read (spec 0150), two the
-    # games-started limit models (spec 0152), three added by spec 0147
-    # (stg_espn__matchup_player_lines, rec_espn__matchup_line_totals and
-    # rec_espn__winner_differences), and the 26 others are ported by spec 0135.
-    assert len(models) == 74, "the project's SQL models were not all found"
+    # Every SQL model of the project (spec 0135): 75. Of these, 34 are the models of spec
+    # 0130, nine the capture views they read (spec 0150), two the games-started limit models
+    # (spec 0152), three added by spec 0147 (stg_espn__matchup_player_lines,
+    # rec_espn__matchup_line_totals and rec_espn__winner_differences), the lineup solver's
+    # model, which was a Python model until spec 0137, and the 26 others are ported by spec
+    # 0135.
+    assert len(models) == 75, "the project's SQL models were not all found"
     assert any("boxscore_players.sql" in label for label in macros), "macros are not followed"
     assert any("json.sql::bigquery__" in label for label in macros), "bigquery forms not reached"
     assert not any("::duckdb__" in label for label in project_sources)
@@ -283,6 +284,7 @@ def test_the_shared_spellings_and_the_macro_calls_pass() -> None:
         "    row_number() over (partition by a order by b) as n,\n"
         "    sum(x) over (order by k) as running, x_range, filtered\n"
         "from t {{ fo_unnest('t.xs', 'x') }}\n"
+        "where {{ fo_solve_lineup_period() }}(a, {{ fo_struct([('a', 'x')]) }}) is null\n"
         "where d between a and b order by 1\n"
         "union all select 1 union distinct select 2 UNION  ALL select 3\n"
     )
@@ -389,3 +391,32 @@ def test_the_bigquery_form_of_a_dispatched_macro_is_reached_with_what_it_calls()
         "macro.front_office.bigquery__helper",
         "macro.front_office.duckdb__fo_only",
     }
+
+
+def macro_forms(name: str) -> dict[str, str]:
+    """The duckdb__ and bigquery__ bodies of a macro of portable.sql, by form."""
+    text = (DBT_ROOT / "macros" / "portable.sql").read_text()
+    forms = {}
+    for form in ("duckdb", "bigquery"):
+        match = re.search(
+            rf"\{{% macro {form}__{name}\([^)]*\) -?%\}}(.*?)\{{%-? endmacro %\}}", text, re.S
+        )
+        assert match, f"{form}__{name} not found"
+        forms[form] = match.group(1)
+    return forms
+
+
+def test_the_struct_and_solver_macros_keep_duckdb_syntax_in_the_duckdb_form() -> None:
+    """Catches the lineup solver's two macros (spec 0137) leaking DuckDB's spelling into the
+    BigQuery form: struct_pack(name := x) is DuckDB's, struct(x as name) is BigQuery's, and
+    the solver is a bare name on DuckDB but a dbt function resource on BigQuery."""
+    struct = macro_forms("fo_struct")
+    assert ":=" in struct["duckdb"] and "struct_pack" in struct["duckdb"]
+    assert ":=" not in struct["bigquery"] and "struct_pack" not in struct["bigquery"]
+    assert " as " in struct["bigquery"]
+    solver = macro_forms("fo_solve_lineup_period")
+    assert solver["duckdb"].strip() == "solve_lineup_period"
+    assert "function('solve_lineup_period')" in solver["bigquery"]
+    for body in (struct["bigquery"], solver["bigquery"]):
+        assert refused_constructs(body, bigquery_form=True) == []
+    assert refused_constructs(struct["duckdb"]) == []
