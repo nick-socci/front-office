@@ -94,9 +94,11 @@ def test_the_bound_message_names_the_team_and_the_scoring_date():
     assert "player 2" in message
 
 
-def test_the_bound_is_checked_on_the_rounded_value():
-    """Catches checking before rounding: a value of 1000 plus noise below 1e-12 is 1000."""
-    assert solve([option(DAY1, 1, 1000.0 + 1e-13)]) != []
+def test_the_bound_is_checked_on_the_value_as_given():
+    """Catches the bound being checked after rounding (pre-PR review, F1): 1000 plus 1e-13
+    rounds to 1000 at 12 places, but the value as given is beyond the bound (R2.3)."""
+    with pytest.raises(ValueError, match="out of bound"):
+        solve([option(DAY1, 1, 1000.0 + 1e-13)])
 
 
 def test_a_date_in_no_matchup_period_fails_naming_the_team_and_first_date():

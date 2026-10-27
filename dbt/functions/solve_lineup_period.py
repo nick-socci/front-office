@@ -300,10 +300,11 @@ def solve_lineup_period(team, matchup_period, options, slots, start_limit):
     the team for messages only; `options` are dicts of scoring_date, player_id, slot_id, role,
     value (None when unvalued), is_actual and is_start; `slots` (None reads as empty) are
     dicts of slot_id, role and count. In order: a date in no matchup period raises (R2.4);
-    each day's non-null values are rounded to 12 places (ADR 0104) and checked against the
-    bound (R2.3), every day before the skip; a team-period with any null value returns []
-    (spec 0164, R2.1); then the start cap is floor(start_limit), or the starts of the actual
-    lineups where they went past it (R1.3), and the period is solved.
+    each day's non-null values are checked against the bound as given (R2.3), every day
+    before the skip, and rounded to 12 places for the solve (ADR 0104); a team-period with
+    any null value returns [] (spec 0164, R2.1); then the start cap is floor(start_limit),
+    or the starts of the actual lineups where they went past it (R1.3), and the period is
+    solved.
     """
     if matchup_period is None:
         first_day = min(o["scoring_date"] for o in options)
@@ -327,18 +328,19 @@ def solve_lineup_period(team, matchup_period, options, slots, start_limit):
                         o["player_id"],
                         o["slot_id"],
                         o["role"],
-                        round(o["value"], 12),
+                        o["value"],
                         bool(o["is_actual"]),
                         bool(o["is_start"]),
                     )
                 )
+        # The bound holds the value as given (R2.3); only the solve sees it rounded.
         try:
             check_value_bound(valued)
         except ValueError as error:
             raise ValueError(
                 f"optimal lineup failed for team-day {team}, scoring_date={day}: {error}"
             ) from error
-        days.append((day, valued))
+        days.append((day, [o._replace(value=round(o.value, 12)) for o in valued]))
     if unvalued:
         return []
 

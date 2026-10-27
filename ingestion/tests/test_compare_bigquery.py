@@ -515,17 +515,18 @@ def test_a_team_day_present_on_one_side_only_is_listed_with_nothing_on_the_other
     assert len(difference.left_rows) == 1 and difference.right_rows == []
 
 
-def test_the_listing_is_capped_and_the_rest_are_counted(con: duckdb.DuckDBPyConnection) -> None:
-    """Catches a real-season difference printing thousands of team-days: past
-    MAX_GROUPS_LISTED, the rest are only counted, in order."""
-    extra = 5
-    teams = cmp.MAX_GROUPS_LISTED + extra
+def test_every_differing_team_day_is_listed_in_order(con: duckdb.DuckDBPyConnection) -> None:
+    """Catches a listing cut short (pre-PR review, F2): R3.3 asks for each team-day that
+    differs, so 25 differing team-days print 25, in team order."""
+    teams = 25
     result = lineups_pair(con, [lineup(1, team, 10) for team in range(1, teams + 1)], [])
-    assert len(result.differing_groups) == cmp.MAX_GROUPS_LISTED
-    assert result.groups_not_listed == extra
+    assert len(result.differing_groups) == teams
     printed = "\n".join(cmp.describe(result, "A", "B"))
-    assert f"and {extra} more that differ" in printed
-    assert printed.count("differs:") == cmp.MAX_GROUPS_LISTED
+    assert printed.count("differs:") == teams
+    listed = [
+        line.split("fantasy_team_id=")[1] for line in printed.splitlines() if "differs:" in line
+    ]
+    assert listed == [str(team) for team in range(1, teams + 1)]
 
 
 def test_an_equal_lineup_relation_lists_nothing(con: duckdb.DuckDBPyConnection) -> None:

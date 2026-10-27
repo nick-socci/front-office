@@ -37,8 +37,7 @@ Usage:  uv run --group bigquery python scripts/compare_bigquery.py \\
 8. For a relation in GROUPS (the lineup solver's rows, spec 0137, R3.3), a difference is
    printed as the groups that differ, here the team-days, each with its rows on each side,
    and not only as a count: whether the two warehouses broke a tie differently is a
-   decision for the owner, who needs the rows to make it. At most MAX_GROUPS_LISTED are
-   printed, and the rest are counted.
+   decision for the owner, who needs the rows to make it. Every such group is printed.
 
 Exit 0 only if every relation passes. One line per relation either way.
 
@@ -88,7 +87,6 @@ GROUPS = {
         "fantasy_team_id",
     ]
 }
-MAX_GROUPS_LISTED = 20
 MAXIMUM_BYTES_BILLED = 10_000_000_000
 DBT_ROOT = Path(__file__).resolve().parents[1] / "dbt"
 
@@ -171,7 +169,6 @@ class Result:
     floats: dict[str, FloatColumn] = field(default_factory=dict)
     group_columns: list[str] = field(default_factory=list)
     differing_groups: list[GroupDifference] = field(default_factory=list)
-    groups_not_listed: int = 0
 
     @property
     def passed(self) -> bool:
@@ -316,8 +313,8 @@ def list_differing_groups(
     right_sql: str,
     group_columns: list[str],
 ) -> None:
-    """Fill `result` with the groups that hold a row on one side only, up to
-    MAX_GROUPS_LISTED, each with all its rows on both sides. The sql arguments select the
+    """Fill `result` with every group that holds a row on one side only, each with all its
+    rows on both sides. The sql arguments select the
     same columns, comparable on both sides, the group columns among them."""
     names = ", ".join(quote(n) for n in group_columns)
     differing = con.execute(
@@ -327,9 +324,8 @@ def list_differing_groups(
         f") order by {names}"
     ).fetchall()
     result.group_columns = group_columns
-    result.groups_not_listed = max(0, len(differing) - MAX_GROUPS_LISTED)
     where = " and ".join(f"{quote(n)} is not distinct from ?" for n in group_columns)
-    for group in differing[:MAX_GROUPS_LISTED]:
+    for group in differing:
         sides = [
             con.execute(f"select * from ({sql}) where {where} order by all", list(group)).fetchall()
             for sql in (left_sql, right_sql)
@@ -454,11 +450,6 @@ def describe(result: Result, left_name: str, right_name: str) -> list[str]:
         lines.append(f"       differs: {label}")
         for side, rows in ((left_name, difference.left_rows), (right_name, difference.right_rows)):
             lines.append(f"         {side}: {rows}")
-    if result.groups_not_listed:
-        lines.append(
-            f"       ... and {result.groups_not_listed} more that differ "
-            f"(the first {MAX_GROUPS_LISTED} are listed)"
-        )
     if result.uncompared:
         lines.append(f"       JSON or nested columns not compared: {', '.join(result.uncompared)}")
     for name, column in result.floats.items():
