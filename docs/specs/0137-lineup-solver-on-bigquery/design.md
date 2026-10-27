@@ -331,3 +331,15 @@ asserts the function node is selected.
   pandas, and 6 s with the import blocked. Speed is a no-go here (#201), so nothing is
   added. The expected value is amended to "faster than `main`", and the finding goes to
   #201.
+- **`fct_lineup_decisions` rounds the missed start's order too** (2026-10-27, the owner's
+  choice). On BigQuery's first real build the solver's rows equalled DuckDB's (0/0), but
+  `fct_lineup_decisions` differed in 4 of 17,628 rows: it keeps one missed start per
+  team-day ordered by `option_value desc, platform_player_id`. In 16 team-days the top two
+  candidates are worth exactly the same on DuckDB, and BigQuery's last-digit noise made 4 of
+  them unequal. That is ADR 0104's cause, outside the solver. The order now uses
+  `round(option_value, 12)`, which changes 0 of DuckDB's 12,331 team-days with a missed
+  start, and a unit test holds it. Other keep-one-row steps ordered by a float remain #141's.
+- **An empty run needs the seeds and the function first.** `dbt run --empty` into new
+  suffixed datasets builds neither seeds nor dbt function resources, so the models fail on a
+  missing `main_<suffix>` and a missing function. `dbt seed` and `dbt build --select
+  resource_type:function`, with the same vars, come first (AGENTS.md).

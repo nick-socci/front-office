@@ -297,9 +297,12 @@ ranked_missed_starts as (
 
     select
         *,
+        -- The value is rounded to 12 places for the order only, as the solver rounds it
+        -- (ADR 0104): two players worth the same differ in BigQuery's last digits, and the
+        -- unrounded order would pick between them by that noise instead of by player id.
         row_number() over (
             partition by platform, league_id, season, scoring_date, fantasy_team_id
-            order by option_value desc, platform_player_id asc
+            order by round(option_value, 12) desc, platform_player_id asc
         ) as missed_start_rank
     from optimal_options
     where not is_started

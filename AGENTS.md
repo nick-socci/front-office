@@ -89,12 +89,15 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
   is also an output alias of the same SELECT (BigQuery reads `t.c` as a field of the
   column `t`): those are found by `uv run --group bigquery dbt run --target bq --selector
   bigquery --empty --vars '{fo_schema_suffix: _<tag>}'`, then `dbt test` on the same
-  datasets (`--exclude-resource-type unit_test`) for the tests' SQL. Neither bills
-  anything. **The suffix is not optional:** without it, `--empty` replaces the selector's
-  populated tables in BigQuery with empty ones. `dbt build --empty` is no shortcut: it
-  stops at `int_fantasy__started_days_match_the_starting_slots`, which fails over no rows
-  by design, and skips the 148 nodes downstream of it. A ported model must leave the real
-  DuckDB warehouse identical (`scripts/compare_warehouses.py`).
+  datasets (`--exclude-resource-type unit_test`) for the tests' SQL. Into new suffixed
+  datasets, run `dbt seed` and `dbt build --select resource_type:function` with the same
+  vars first: `dbt run` builds neither seeds nor the solver function, and the models read
+  both. The run and the seeds bill nothing; the tests bill about 0.5 GB, and the function
+  bills its image build. **The suffix is not optional:** without it, `--empty` replaces
+  the selector's populated tables in BigQuery with empty ones. `dbt build --empty` is no
+  shortcut: it stops at `int_fantasy__started_days_match_the_starting_slots`, which fails
+  over no rows by design, and skips the 148 nodes downstream of it. A ported model must
+  leave the real DuckDB warehouse identical (`scripts/compare_warehouses.py`).
 - The lineup solver is one file, `dbt/functions/solve_lineup_period.py`: a BigQuery Python
   UDF (a dbt function resource, Python 3.11, scipy and numpy pinned because BigQuery
   constrains numpy<2) and a DuckDB function the `fo_duckdb_functions` plugin registers on
