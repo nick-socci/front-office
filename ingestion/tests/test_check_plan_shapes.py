@@ -59,6 +59,38 @@ def test_a_multiline_call_with_double_quotes_is_heavy():
     assert cps.heavy_views({"model.p.v": model(code)}) == {"model.p.v": "roster"}
 
 
+REAL = "{{ fo_captures('espn', 'teams') }}"
+
+
+@pytest.mark.parametrize(
+    "commented",
+    [
+        "-- {{ fo_captures('a', 'example', structure) }}\n",
+        "{# {{ fo_captures('a', 'example', structure) }} #}\n",
+        "/* {{ fo_captures('a', 'example', structure) }} */\n",
+    ],
+    ids=["line", "jinja", "block"],
+)
+def test_a_commented_example_before_the_real_call_is_ignored(commented):
+    """Catches a call inside a comment classifying the view instead of the real call."""
+    nodes = {"model.p.v": model(commented + REAL)}
+    assert cps.heavy_views(nodes) == {}
+    assert cps.payload_views(nodes) == {"model.p.v": ("espn", "teams")}
+
+
+def test_a_dash_dash_inside_a_string_is_not_a_comment():
+    """Catches a quoted `--` cutting the rest of the line, and the call with it."""
+    nodes = {"model.p.v": model("{% set x = 'a -- b' %}" + REAL)}
+    assert cps.payload_views(nodes) == {"model.p.v": ("espn", "teams")}
+
+
+def test_a_call_only_in_a_comment_is_neither_heavy_nor_payload():
+    """Catches a commented-out call making a view that has none look like a capture view."""
+    nodes = {"model.p.v": model("-- {{ fo_captures('a', 'example') }}\nselect 1")}
+    assert cps.heavy_views(nodes) == {}
+    assert cps.payload_views(nodes) == {}
+
+
 def test_a_model_without_fo_captures_is_not_heavy():
     """Catches an ordinary model, or one with no raw_code, being read as heavy."""
     nodes = {"model.p.a": model("select 1"), "model.p.b": {"resource_type": "model"}}

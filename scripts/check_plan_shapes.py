@@ -118,14 +118,45 @@ def _string_literal(argument: str) -> str | None:
     return None
 
 
+def _without_comments(code: str) -> str:
+    """The code with `--`, `/* */` and `{# #}` comments blanked to spaces, strings kept."""
+    out: list[str] = []
+    i = 0
+    quote = ""
+    while i < len(code):
+        char = code[i]
+        if quote:
+            if char == quote:
+                quote = ""
+            out.append(char)
+            i += 1
+            continue
+        closer = {"--": "\n", "/*": "*/", "{#": "#}"}.get(code[i : i + 2])
+        if closer is None:
+            if char in "'\"":
+                quote = char
+            out.append(char)
+            i += 1
+            continue
+        end = code.find(closer, i + 2)
+        if closer == "\n":
+            end = len(code) if end == -1 else end  # keep the newline itself
+        else:
+            end = len(code) if end == -1 else end + len(closer)
+        out.extend(c if c == "\n" else " " for c in code[i:end])
+        i = end
+    return "".join(out)
+
+
 # Parsed, not matched: a regex kept missing variants of the third argument (positional `none`,
-# `structure=none`, a trailing comma), each found in a review of #207.
+# `structure=none`, a trailing comma), a call inside a comment, each found in a review of #207.
 def _captures_call(raw_code: str) -> tuple[str, str, bool] | None:
     """(source, endpoint, declares_structure) of the first fo_captures call, or None."""
-    match = _CAPTURES_CALL.search(raw_code)
+    code = _without_comments(raw_code)
+    match = _CAPTURES_CALL.search(code)
     if not match:
         return None
-    arguments = _call_arguments(raw_code[match.end() :])
+    arguments = _call_arguments(code[match.end() :])
     if len(arguments) < 2:
         return None
     source = _string_literal(arguments[0])
