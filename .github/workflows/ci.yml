@@ -74,7 +74,7 @@ jobs:
         # Before docs generate, which rewrites dbt/target: this reads the build's manifest.
         run: uv run python scripts/check_plants.py --db dbt/ci.duckdb
 
-      - name: Plan shapes (heavy parses stream)
+      - name: Plan shapes (heavy parses stream; no payload beside an unnest)
         # Also reads the build's manifest and compiled SQL, which docs generate rewrites.
         run: uv run python scripts/check_plan_shapes.py --db dbt/ci.duckdb
 

@@ -64,7 +64,10 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
    `unnest(teams)` copies the 2.3 MB ESPN roster payload twelve times per period and
    exhausted 24 GB of memory. Compute everything payload-derived in a `header` CTE first, as
    `stg_espn__roster_entries.sql` does. `count(*)` probes hide this, because the optimizer
-   prunes the parse.
+   prunes the parse. The plan-shapes gate holds this (ADR 0106): it fails when a model's or
+   test's DuckDB plan feeds a column named `payload` into an unnest, or into a join with an
+   unnest under one side. It cannot see a payload renamed before the unnest, and no
+   exemption exists.
 2. **Never commit league members' data.** No `members`, `owners`, `primaryOwner`,
    `firstName`, `lastName`, `displayName` or `author` keys, and no ESPN account GUIDs, in
    any model, fixture, seed or doc. Fixtures are rebuilt from an allowlist of wanted fields,
