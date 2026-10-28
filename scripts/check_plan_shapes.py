@@ -68,27 +68,72 @@ _MEASURED_KEYS = {"threads", "gb_2026", "gb_all_seasons", "on"}
 _LINK = re.compile(r"ADR \d{4}")
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _ENDPOINT = re.compile(r"endpoint='([a-z_]+)'")
-# fo_captures('<source>', '<endpoint>', <structure>): the third argument is the declaration.
-# A third argument of exactly `none`, positional or `structure=none`, declares nothing (the view
-# keeps its payload column), so the lookahead excludes it; a name such as `none_structure`
-# still matches.
-_STRUCTURED_CALL = re.compile(
-    r"""fo_captures\(\s*(['"])[^'"]*\1\s*,\s*(['"])([^'"]+)\2\s*,"""
-    r"""(?!\s*(?:structure\s*=\s*)?none\s*\))""",
-    re.DOTALL,
-)
-# fo_captures('<source>', '<endpoint>') or with an explicit `none` third argument (positional or
-# `structure=none`): no structure, so the view keeps its payload column.
-_PLAIN_CALL = re.compile(
-    r"""fo_captures\(\s*(['"])([^'"]*)\1\s*,\s*(['"])([^'"]+)\3\s*"""
-    r"""(?:,\s*(?:structure\s*=\s*)?none\s*)?\)""",
-    re.DOTALL,
-)
+_CAPTURES_CALL = re.compile(r"(?<![A-Za-z0-9_])fo_captures\(")
+_NONE_ARGUMENT = re.compile(r"(?:structure\s*=\s*)?none", re.IGNORECASE)
 _PAYLOAD = re.compile(r"\bpayload\b")
 _NON_MULTIPLYING = {"SEMI", "ANTI", "MARK", "RIGHT_SEMI", "RIGHT_ANTI"}
 
 
 # --- finding the readers (R4.1) ----------------------------------------------------------
+
+
+def _call_arguments(text: str) -> list[str]:
+    """The top-level arguments of a call whose text follows the opening parenthesis.
+
+    Stops at the matching `)`. Parentheses and commas inside quotes do not count, and commas
+    inside (), [] or {} do not split. Parts are stripped and empty ones (a trailing comma) dropped.
+    """
+    parts: list[str] = []
+    depth = 0
+    quote = ""
+    start = 0
+    i = 0
+    while i < len(text):
+        char = text[i]
+        if quote:
+            if char == "\\":
+                i += 1
+            elif char == quote:
+                quote = ""
+        elif char in "'\"":
+            quote = char
+        elif char in "([{":
+            depth += 1
+        elif char in ")]}":
+            if depth == 0:
+                parts.append(text[start:i])
+                break
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(text[start:i])
+            start = i + 1
+        i += 1
+    return [part.strip() for part in parts if part.strip()]
+
+
+def _string_literal(argument: str) -> str | None:
+    """The contents of a quoted string literal, or None if the argument is not one."""
+    if len(argument) >= 2 and argument[0] in "'\"" and argument[-1] == argument[0]:
+        return argument[1:-1]
+    return None
+
+
+# Parsed, not matched: a regex kept missing variants of the third argument (positional `none`,
+# `structure=none`, a trailing comma), each found in a review of #207.
+def _captures_call(raw_code: str) -> tuple[str, str, bool] | None:
+    """(source, endpoint, declares_structure) of the first fo_captures call, or None."""
+    match = _CAPTURES_CALL.search(raw_code)
+    if not match:
+        return None
+    arguments = _call_arguments(raw_code[match.end() :])
+    if len(arguments) < 2:
+        return None
+    source = _string_literal(arguments[0])
+    endpoint = _string_literal(arguments[1])
+    if source is None or endpoint is None:
+        return None
+    declares = len(arguments) > 2 and not _NONE_ARGUMENT.fullmatch(arguments[2])
+    return source, endpoint, declares
 
 
 def heavy_views(nodes: dict[str, Any]) -> dict[str, str]:
@@ -97,9 +142,9 @@ def heavy_views(nodes: dict[str, Any]) -> dict[str, str]:
     for unique_id, node in nodes.items():
         if node.get("resource_type") != "model":
             continue
-        match = _STRUCTURED_CALL.search(node.get("raw_code") or "")
-        if match:
-            found[unique_id] = match.group(3)
+        call = _captures_call(node.get("raw_code") or "")
+        if call and call[2]:
+            found[unique_id] = call[1]
     return found
 
 
@@ -109,9 +154,9 @@ def payload_views(nodes: dict[str, Any]) -> dict[str, tuple[str, str]]:
     for unique_id, node in nodes.items():
         if node.get("resource_type") != "model":
             continue
-        match = _PLAIN_CALL.search(node.get("raw_code") or "")
-        if match:
-            found[unique_id] = (match.group(2), match.group(4))
+        call = _captures_call(node.get("raw_code") or "")
+        if call and not call[2]:
+            found[unique_id] = (call[0], call[1])
     return found
 
 

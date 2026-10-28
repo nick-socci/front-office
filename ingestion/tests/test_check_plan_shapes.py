@@ -1003,3 +1003,43 @@ def test_each_probe_is_flagged_on_this_duckdb(con, index):
     """Catches a probe the gate relies on not working on the installed DuckDB."""
     _, template = cps.PROBES[index]
     assert cps.payload_carries(plan(con, template.format(relation="r"))) != []
+
+
+# --- the fo_captures call is parsed, not matched (reviews of #207) -----------------------
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        "fo_captures('espn', 'new_endpoint', structure=none,)",
+        "fo_captures('espn', 'new_endpoint',)",
+        "fo_captures('espn', 'new_endpoint', None)",
+    ],
+)
+def test_a_none_third_argument_in_any_text_variant_is_a_payload_view(call):
+    """Catches a trailing comma, or a capital `None`, making a payload view look heavy."""
+    nodes = {"model.p.v": model("{{ " + call + " }}")}
+    assert cps.payload_views(nodes) == {"model.p.v": ("espn", "new_endpoint")}
+    assert cps.heavy_views(nodes) == {}
+
+
+def test_a_structure_followed_by_a_trailing_comma_is_heavy():
+    """Catches the trailing-comma handling dropping a real structure."""
+    nodes = {"model.p.v": model("{{ fo_captures('espn', 'roster', structure,) }}")}
+    assert cps.heavy_views(nodes) == {"model.p.v": "roster"}
+    assert cps.payload_views(nodes) == {}
+
+
+def test_a_dict_literal_structure_with_commas_and_parentheses_in_strings_is_heavy():
+    """Catches the argument split or the closing parenthesis being found inside a literal."""
+    code = "{{ fo_captures('espn', 'roster', {'teams': '[{\"id\": \"BIGINT\"}], )'}, ) }}"
+    nodes = {"model.p.v": model(code)}
+    assert cps.heavy_views(nodes) == {"model.p.v": "roster"}
+    assert cps.payload_views(nodes) == {}
+
+
+def test_a_macro_whose_name_ends_in_fo_captures_is_neither():
+    """Catches the word boundary before `fo_captures` being lost."""
+    nodes = {"model.p.v": model("{{ duckdb__fo_captures('a', 'b') }}")}
+    assert cps.heavy_views(nodes) == {}
+    assert cps.payload_views(nodes) == {}
