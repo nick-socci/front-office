@@ -455,6 +455,36 @@ def test_a_multiline_none_structure_with_spaces_is_a_payload_view():
     assert cps.heavy_views(nodes) == {}
 
 
+def test_a_keyword_none_structure_is_a_payload_view_not_a_heavy_one():
+    """Catches `structure=none`, spaced or across lines, being read as a heavy declaration."""
+    for code in (
+        "{{ fo_captures('espn', 'teams', structure=none) }}",
+        "{{ fo_captures(\n  'espn',\n  'teams',\n  structure = none\n) }}",
+    ):
+        nodes = {"model.p.v": model(code)}
+        assert cps.payload_views(nodes) == {"model.p.v": ("espn", "teams")}
+        assert cps.heavy_views(nodes) == {}
+
+
+def test_a_keyword_real_structure_is_heavy_not_a_payload_view():
+    """Catches the keyword form hiding a real declaration from the heavy check."""
+    nodes = {"model.p.v": model("{{ fo_captures('espn', 'teams', structure=my_structure) }}")}
+    assert cps.heavy_views(nodes) == {"model.p.v": "teams"}
+    assert cps.payload_views(nodes) == {}
+
+
+def test_no_payload_view_is_a_problem_naming_the_adr():
+    """Catches the payload check going quiet when no view is found to check."""
+    problems = cps.no_payload_views_problem({})
+    assert len(problems) == 1
+    assert "ADR 0106" in problems[0]
+
+
+def test_one_payload_view_is_no_missing_view_problem():
+    """Catches the missing-view problem being raised when a payload view exists."""
+    assert cps.no_payload_views_problem({"model.p.v": ("espn", "teams")}) == []
+
+
 def test_a_structure_named_like_none_is_still_heavy():
     """Catches the none exemption matching a variable that merely starts with none."""
     nodes = {"model.p.v": model("{{ fo_captures('espn', 'teams', none_structure) }}")}

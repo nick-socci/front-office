@@ -69,15 +69,19 @@ _LINK = re.compile(r"ADR \d{4}")
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _ENDPOINT = re.compile(r"endpoint='([a-z_]+)'")
 # fo_captures('<source>', '<endpoint>', <structure>): the third argument is the declaration.
-# A third argument of exactly `none` declares nothing (the view keeps its payload column), so
-# the lookahead excludes it; a name such as `none_structure` still matches.
+# A third argument of exactly `none`, positional or `structure=none`, declares nothing (the view
+# keeps its payload column), so the lookahead excludes it; a name such as `none_structure`
+# still matches.
 _STRUCTURED_CALL = re.compile(
-    r"""fo_captures\(\s*(['"])[^'"]*\1\s*,\s*(['"])([^'"]+)\2\s*,(?!\s*none\s*\))""", re.DOTALL
+    r"""fo_captures\(\s*(['"])[^'"]*\1\s*,\s*(['"])([^'"]+)\2\s*,"""
+    r"""(?!\s*(?:structure\s*=\s*)?none\s*\))""",
+    re.DOTALL,
 )
-# fo_captures('<source>', '<endpoint>') or with an explicit `none` third argument: no structure,
-# so the view keeps its payload column.
+# fo_captures('<source>', '<endpoint>') or with an explicit `none` third argument (positional or
+# `structure=none`): no structure, so the view keeps its payload column.
 _PLAIN_CALL = re.compile(
-    r"""fo_captures\(\s*(['"])([^'"]*)\1\s*,\s*(['"])([^'"]+)\3\s*(?:,\s*none\s*)?\)""",
+    r"""fo_captures\(\s*(['"])([^'"]*)\1\s*,\s*(['"])([^'"]+)\3\s*"""
+    r"""(?:,\s*(?:structure\s*=\s*)?none\s*)?\)""",
     re.DOTALL,
 )
 _PAYLOAD = re.compile(r"\bpayload\b")
@@ -109,6 +113,17 @@ def payload_views(nodes: dict[str, Any]) -> dict[str, tuple[str, str]]:
         if match:
             found[unique_id] = (match.group(2), match.group(4))
     return found
+
+
+def no_payload_views_problem(payload: dict[str, tuple[str, str]]) -> list[str]:
+    """A project with no payload view runs neither the payload check nor its probes: say so."""
+    if payload:
+        return []
+    return [
+        "no payload capture view found (fo_captures with two arguments): the payload check "
+        "and its probes did not run; if no endpoint keeps a payload any more, retire the "
+        "check by a new ADR superseding ADR 0106"
+    ]
 
 
 def readers(nodes: dict[str, Any], heavy: dict[str, str]) -> dict[str, frozenset[str]]:
@@ -505,6 +520,7 @@ def main(argv: list[str] | None = None) -> int:
     heavy_endpoints = set(heavy.values())
     reading = readers(nodes, heavy)
     payload = payload_views(nodes)
+    found_problems += no_payload_views_problem(payload)
     payload_reading = readers(nodes, {uid: endpoint for uid, (_, endpoint) in payload.items()})
 
     # The catalog is the file's stem: compiled SQL names it (`ci.staging.x`).
@@ -596,6 +612,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"readers of a heavy endpoint checked: {len(reading)}; "
         f"gathering operators over one: {operators}; registered: {len(entries)}; "
+        f"payload views: {len(payload)}; "
         f"payload readers explained: {len(payload_reading)}; "
         f"unnest operators in them: {unnests}"
     )
