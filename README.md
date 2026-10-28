@@ -134,12 +134,13 @@ D, and what did each of them do in MLB that day?*
 ESPN league data requires `ESPN_S2`, `SWID` and `LEAGUE_ID` in a gitignored `.env`
 (copy the cookies from a logged-in browser session). MLB's API needs no credentials.
 
-The BigQuery target builds every model but the lineup solver and the three models that read
-it (`bigquery_slice`). Its builds leave out the unit tests, because the fixtures of seven
-of them are written in DuckDB SQL:
+The BigQuery target builds every model (`bigquery`), the lineup solver included: it is one
+Python function, a BigQuery Python UDF there and a function registered on DuckDB here
+(ADR 0103). Its builds leave out the unit tests, because the fixtures of seven of them are
+written in DuckDB SQL:
 
 ```bash
-cd dbt && DBT_PROFILES_DIR=. uv run --group bigquery dbt build --target bq --selector bigquery_slice --exclude-resource-type unit_test
+cd dbt && DBT_PROFILES_DIR=. uv run --group bigquery dbt build --target bq --selector bigquery --exclude-resource-type unit_test
 ```
 
 It reads its project id from the environment variable `FO_BQ_PROJECT`, set in your shell
@@ -303,8 +304,8 @@ Built: ingestion, staging, the intermediate layer, the nine marts
 [docs site](https://nick-socci.github.io/front-office/). Not built, in order:
 
 1. **BigQuery migration** — adapter-specific JSON and SQL need a representative
-   migration spike; portability is not yet verified. The lineup solver is a dbt Python
-   model and needs its own answer there (ADR 0039).
+   migration spike; portability is not yet verified. The lineup solver is a Python
+   function that is a BigQuery UDF there (ADRs 0039, 0103).
 2. **Orchestration** — Dagster asset definitions locally, Cloud Scheduler + Cloud Run in
    production.
 3. **Dashboard** — Streamlit: standings, projections, waiver targets, player trends.

@@ -1,6 +1,6 @@
 # 0103. The lineup solver is a Python function called from one SQL model on both warehouses
 
-- Status: proposed
+- Status: accepted; amends [0039](0039-the-optimal-lineup-is-solved-in-a-dbt-python-model-with-scipy.md)
 - Date: 2026-10-26
 - Spec: [0137-lineup-solver-on-bigquery](../specs/0137-lineup-solver-on-bigquery/design.md) · Issue: #137
 

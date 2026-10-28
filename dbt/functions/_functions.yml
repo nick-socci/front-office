@@ -1,0 +1,27 @@
+functions:
+  - name: solve_lineup_period
+    description: >
+      The lineup solver as a BigQuery Python UDF (ADR 0103): the optimal lineups of one
+      team-period, as an array of (scoring_date, player_id, slot_id). Its body is
+      solve_lineup_period.py in this directory. It is disabled on DuckDB, where the
+      fo_duckdb_functions plugin registers the same file under the same name; the two
+      signatures are compared by a test. It pins BigQuery's Python 3.11 and scipy 1.17.1,
+      with numpy 1.26.4 because BigQuery constrains numpy below 2 (spec 0137).
+    config:
+      enabled: "{{ target.type == 'bigquery' }}"
+      runtime_version: "3.11"
+      entry_point: solve_lineup_period
+      packages: ["scipy==1.17.1", "numpy==1.26.4"]
+    arguments:
+      - name: team
+        data_type: string
+      - name: matchup_period
+        data_type: int64
+      - name: options
+        data_type: "array<struct<scoring_date date, player_id int64, slot_id int64, role string, value float64, is_actual bool, is_start bool>>"
+      - name: slots
+        data_type: "array<struct<slot_id int64, role string, count int64>>"
+      - name: start_limit
+        data_type: float64
+    returns:
+      data_type: "array<struct<scoring_date date, player_id int64, slot_id int64>>"

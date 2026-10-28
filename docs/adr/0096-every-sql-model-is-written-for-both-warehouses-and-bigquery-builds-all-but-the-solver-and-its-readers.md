@@ -1,6 +1,6 @@
 # 0096. Every SQL model is written for both warehouses, and BigQuery builds all but the solver and its readers
 
-- Status: accepted
+- Status: accepted; amended by [0105](0105-the-bigquery-selector-builds-every-model-and-is-renamed-bigquery.md)
 - Date: 2026-10-23
 - Spec: [0135-port-remaining-models](../specs/0135-port-remaining-models/design.md) · Issue: #135
 

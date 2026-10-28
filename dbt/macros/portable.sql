@@ -284,3 +284,46 @@
 {% macro fo_year_start(year) %}{{ return(adapter.dispatch('fo_year_start')(year)) }}{% endmacro %}
 {% macro duckdb__fo_year_start(year) %}make_date({{ year }}, 1, 1){% endmacro %}
 {% macro bigquery__fo_year_start(year) %}date({{ year }}, 1, 1){% endmacro %}
+
+
+{#
+  A struct value from `fields`, a list of (expression, name) pairs:
+
+      {{ fo_struct([('t.day', 'scoring_date'), ('t.id', 'player_id')]) }}
+
+  DuckDB names the fields in struct_pack(name := expression), BigQuery in
+  struct(expression as name). Fields are in the order given, which is the order the lineup
+  solver function's signature declares them in (spec 0137).
+#}
+{% macro fo_struct(fields) %}
+    {{- return(adapter.dispatch('fo_struct')(fields)) -}}
+{% endmacro %}
+{% macro duckdb__fo_struct(fields) -%}
+    struct_pack(
+        {%- for expression, name in fields %}{{ name }} := {{ expression }}{{ ', ' if not loop.last }}{% endfor -%}
+    )
+{%- endmacro %}
+{% macro bigquery__fo_struct(fields) -%}
+    struct(
+        {%- for expression, name in fields %}{{ expression }} as {{ name }}{{ ', ' if not loop.last }}{% endfor -%}
+    )
+{%- endmacro %}
+
+
+{#
+  What to call the lineup solver by (spec 0137, ADR 0103). On DuckDB it is the function the
+  fo_duckdb_functions plugin registers on dbt's connections, so the bare name. On BigQuery it
+  is the dbt function resource dbt/functions/_functions.yml declares, which function() names
+  in full and which makes the calling model depend on it on that warehouse only. Only
+  int_fantasy__optimal_lineups calls it (a test holds that): the DuckDB function exists on
+  dbt's connections alone, so a view calling it would fail anywhere else.
+#}
+{% macro fo_solve_lineup_period() %}
+    {{- return(adapter.dispatch('fo_solve_lineup_period')()) -}}
+{% endmacro %}
+{% macro duckdb__fo_solve_lineup_period() -%}
+    solve_lineup_period
+{%- endmacro %}
+{% macro bigquery__fo_solve_lineup_period() -%}
+    {{ function('solve_lineup_period') }}
+{%- endmacro %}

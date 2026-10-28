@@ -13,8 +13,13 @@ front_office:
       threads: 1
       settings:
         threads: 4
-      # Python models import the solver from here; resolved against the working directory, so run dbt from dbt/.
-      module_paths: ["python_modules"]
+      # The plugin and the solver it registers are imported from here (ADR 0103); resolved
+      # against the working directory, so the paths are given for dbt run from dbt/ and from
+      # the repo root (the SQL linter's dbt templater runs there).
+      module_paths: ["python_modules", "functions", "dbt/python_modules", "dbt/functions"]
+      # Registers the lineup solver as a SQL function on dbt's connections.
+      plugins:
+        - module: fo_duckdb_functions
 
     # CI: a throwaway database built from the committed fixture landing zone.
     # Same SQL, tiny anonymised data, no credentials.
@@ -22,10 +27,15 @@ front_office:
       type: duckdb
       path: "{{ env_var('FO_CI_DUCKDB_PATH', 'ci.duckdb') }}"
       threads: 4
-      # Python models import the solver from here; resolved against the working directory, so run dbt from dbt/.
-      module_paths: ["python_modules"]
+      # The plugin and the solver it registers are imported from here (ADR 0103); resolved
+      # against the working directory, so the paths are given for dbt run from dbt/ and from
+      # the repo root (the SQL linter's dbt templater runs there).
+      module_paths: ["python_modules", "functions", "dbt/python_modules", "dbt/functions"]
+      # Registers the lineup solver as a SQL function on dbt's connections.
+      plugins:
+        - module: fo_duckdb_functions
 
-    # BigQuery, for the slice of spec 0130. Credentials are application-default
+    # BigQuery, for the `bigquery` selector (specs 0130, 0137). Credentials are application-default
     # (gcloud auth application-default login); nothing about them is in this file.
     bq:
       type: bigquery

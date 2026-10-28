@@ -970,15 +970,19 @@ models:
 
   - name: int_fantasy__optimal_lineups
     description: >
-      The best lineup each team-day could have fielded (#12, R3): one row per team-day and
+      The best lineup each team could have fielded (#12, #164): one row per team-day and
       assigned player, with his slot. Solved exactly as an assignment problem by SciPy (ADR
-      0039). A team-day with an option whose value is null is unvalued and has no rows; a
-      team-day with no options has no rows either, its optimal lineup being the empty one.
-      THESE LINEUPS ARE HINDSIGHT OPPORTUNITY under the rule of R3.1 (a starter who played is
-      replaced only by another player who played, ADR 0037; ties keep the actual lineup), NOT
-      A MEASURE OF MANAGER SKILL. The eligibility they rest on is ESPN's as fetched (ADR 0038).
-      This is a Python model: on BigQuery it needs a Spark or BigQuery DataFrames runtime, so
-      it either stays DuckDB-only or the solver moves; sub-project 3 decides.
+      0039), a matchup period at a time so that a league's limit on pitcher starts couples
+      its days (ADR 0090). A team-period with an option whose value is null is unvalued and
+      has no rows on any day; a team-day with no options has no rows either, its optimal
+      lineup being the empty one. THESE LINEUPS ARE HINDSIGHT OPPORTUNITY under the rule of
+      R3.1 (a starter who played is replaced only by another player who played, ADR 0037;
+      ties keep the actual lineup), NOT A MEASURE OF MANAGER SKILL. The eligibility they rest
+      on is ESPN's as fetched (ADR 0038). This is a SQL model that calls the solver function
+      once per team-period, the same file as a BigQuery Python UDF and as a DuckDB function
+      (ADR 0103); the function rounds each value to 12 places first, so both warehouses
+      choose the same lineups (ADR 0104). It is a table, never a view, and the only caller
+      of the function.
     columns:
       - name: platform
         data_tests: [not_null]
@@ -4685,3 +4689,198 @@ unit_tests:
       rows:
         - {fantasy_team_id: 1, category_key: 48, lineup: actual, numerator: 12, category_value: 12}
         - {fantasy_team_id: 1, category_key: 48, lineup: optimal, numerator: 8, category_value: 8}
+
+# -----------------------------------------------------------------------------
+# int_fantasy__optimal_lineups unit tests (#12, #164, #137): the model calls the solver
+# function, which a unit test runs on DuckDB through the fo_duckdb_functions plugin. The
+# cases that must FAIL the build (a value beyond the bound, a date in no matchup period)
+# cannot be unit tests: they are in ingestion/tests/test_optimal_lineups_failures.py.
+# -----------------------------------------------------------------------------
+
+  - name: optimal_lineups_an_unvalued_team_day_has_no_rows_while_another_is_solved
+    description: >
+      Team 1 has a player whose day is worth nothing known (null) and one worth 2.0; team 2
+      has one worth 4.0, all for one slot. Catches (R3.5) an unvalued team-day returning
+      rows, or poisoning its neighbours: only team 2's player is assigned.
+    model: int_fantasy__optimal_lineups
+    given:
+      - input: ref('int_fantasy__lineup_options')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 1, slot_role: hitter, option_value: null, is_actual: false, day_kind: batting}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 1, slot_role: hitter, option_value: 2.0, is_actual: false, day_kind: batting}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 2, platform_player_id: 3, lineup_slot_id: 1, slot_role: hitter, option_value: 4.0, is_actual: false, day_kind: batting}
+      - input: ref('int_fantasy__lineup_slots')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 1, slot_role: hitter, slot_count: 1}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+      - input: ref('int_fantasy__start_limits')
+        rows: []
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 2, platform_player_id: 3, lineup_slot_id: 1}
+
+  - name: optimal_lineups_the_best_player_is_assigned_to_the_slot
+    description: >
+      One team-day, one hitter slot, the actual player worth 1.0 and a bench player worth
+      3.0. Catches a wrong assignment, and a renamed or mis-mapped output column: the
+      bench player is assigned, and the seven columns carry the platform, league, season,
+      date, team, player and slot.
+    model: int_fantasy__optimal_lineups
+    given:
+      - input: ref('int_fantasy__lineup_options')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 1, slot_role: hitter, option_value: 1.0, is_actual: true, day_kind: batting}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 1, slot_role: hitter, option_value: 3.0, is_actual: false, day_kind: batting}
+      - input: ref('int_fantasy__lineup_slots')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 1, slot_role: hitter, slot_count: 1}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+      - input: ref('int_fantasy__start_limits')
+        rows: []
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 1}
+
+  - name: optimal_lineups_no_option_rows_give_no_rows
+    description: >
+      No options at all. Catches an empty input failing the build or producing a row: the
+      model is empty, and its columns are the same as ever (the types are held by
+      ingestion/tests/test_optimal_lineups_failures.py).
+    model: int_fantasy__optimal_lineups
+    given:
+      - input: ref('int_fantasy__lineup_options')
+        rows: []
+      - input: ref('int_fantasy__lineup_slots')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 1, slot_role: hitter, slot_count: 1}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+      - input: ref('int_fantasy__start_limits')
+        rows: []
+    expect:
+      rows: []
+
+  - name: optimal_lineups_rows_do_not_depend_on_input_order_and_each_league_uses_its_own_slots
+    description: >
+      League A has one hitter slot, league B two, and the options are given in an order that
+      is neither sorted by league nor by player (B's 4, A's 2, B's 3, A's 1). Catches (R3.6)
+      order dependence, and one league-season's slot counts leaking into another's: A is
+      filled with its best player alone, B with its two.
+    model: int_fantasy__optimal_lineups
+    given:
+      - input: ref('int_fantasy__lineup_options')
+        rows:
+          - {platform: espn, league_id: "B", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 4, lineup_slot_id: 1, slot_role: hitter, option_value: 6.0, is_actual: false, day_kind: batting}
+          - {platform: espn, league_id: "A", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 1, slot_role: hitter, option_value: 6.0, is_actual: false, day_kind: batting}
+          - {platform: espn, league_id: "B", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 3, lineup_slot_id: 1, slot_role: hitter, option_value: 5.0, is_actual: false, day_kind: batting}
+          - {platform: espn, league_id: "A", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 1, slot_role: hitter, option_value: 5.0, is_actual: false, day_kind: batting}
+      - input: ref('int_fantasy__lineup_slots')
+        rows:
+          - {platform: espn, league_id: "B", season: 2026, lineup_slot_id: 1, slot_role: hitter, slot_count: 2}
+          - {platform: espn, league_id: "A", season: 2026, lineup_slot_id: 1, slot_role: hitter, slot_count: 1}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "B", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "A", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+      - input: ref('int_fantasy__start_limits')
+        rows: []
+    expect:
+      rows:
+        - {platform: espn, league_id: "A", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 1}
+        - {platform: espn, league_id: "B", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 3, lineup_slot_id: 1}
+        - {platform: espn, league_id: "B", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 4, lineup_slot_id: 1}
+
+  - name: optimal_lineups_the_start_cap_is_the_floor_of_the_limit_and_couples_the_days_of_a_period
+    description: >
+      One pitcher slot over two days of a period with a limit of 1.5. Day 1: the actual
+      starter (2.0) and a reliever (1.0); day 2: a starter (5.0) and a reliever (0.5).
+      Catches a ceil instead of a floor (a limit of 1.5 would allow both starts, 7.0), and
+      the days still being solved alone (each day alone takes its starter): the cap of 1
+      keeps the better start on day 2 and gives day 1 to the reliever, 1.0 + 5.0 against
+      2.0 + 0.5.
+    model: int_fantasy__optimal_lineups
+    given:
+      - input: ref('int_fantasy__lineup_options')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 2, slot_role: pitcher, option_value: 2.0, is_actual: true, day_kind: start}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 2, slot_role: pitcher, option_value: 1.0, is_actual: false, day_kind: relief}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 3, lineup_slot_id: 2, slot_role: pitcher, option_value: 5.0, is_actual: false, day_kind: start}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 4, lineup_slot_id: 2, slot_role: pitcher, option_value: 0.5, is_actual: false, day_kind: relief}
+      - input: ref('int_fantasy__lineup_slots')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 2, slot_role: pitcher, slot_count: 1}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-02"}
+      - input: ref('int_fantasy__start_limits')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, start_limit: 1.5}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 2}
+        - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 3, lineup_slot_id: 2}
+
+  - name: optimal_lineups_a_period_where_the_actual_lineup_went_past_the_limit_may_use_as_many_starts
+    description: >
+      The actual lineup started on both days of a period with a limit of 1, and the only
+      options are those two starts. Catches (R1.3) the cap being floor(limit) alone: a cap of
+      1 has no plan, so the build would fail instead of giving both starts.
+    model: int_fantasy__optimal_lineups
+    given:
+      - input: ref('int_fantasy__lineup_options')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 2, slot_role: pitcher, option_value: 3.0, is_actual: true, day_kind: start}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 2, slot_role: pitcher, option_value: 4.0, is_actual: true, day_kind: start}
+      - input: ref('int_fantasy__lineup_slots')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 2, slot_role: pitcher, slot_count: 1}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-02"}
+      - input: ref('int_fantasy__start_limits')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, start_limit: 1.0}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 2}
+        - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 2}
+
+  - name: optimal_lineups_an_unvalued_day_leaves_its_whole_team_period_with_no_rows
+    description: >
+      Team 1's day 2 (period 1) has an option with a null value; its day 1 is valued, and
+      its day 3 is in period 2. Team 2 has two valued days in period 1. Catches (R2.1) the
+      unvalued skip stopping at the day: team 1's valued day 1 must go too, while team 2 in
+      the same period and team 1 in period 2 are still solved.
+    model: int_fantasy__optimal_lineups
+    given:
+      - input: ref('int_fantasy__lineup_options')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 1, platform_player_id: 1, lineup_slot_id: 1, slot_role: hitter, option_value: 2.0, is_actual: false, day_kind: batting}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 1, platform_player_id: 2, lineup_slot_id: 1, slot_role: hitter, option_value: null, is_actual: false, day_kind: batting}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", fantasy_team_id: 1, platform_player_id: 3, lineup_slot_id: 1, slot_role: hitter, option_value: 3.0, is_actual: false, day_kind: batting}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 2, platform_player_id: 4, lineup_slot_id: 1, slot_role: hitter, option_value: 4.0, is_actual: false, day_kind: batting}
+          - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 2, platform_player_id: 5, lineup_slot_id: 1, slot_role: hitter, option_value: 5.0, is_actual: false, day_kind: batting}
+      - input: ref('int_fantasy__lineup_slots')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, lineup_slot_id: 1, slot_role: hitter, slot_count: 1}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-01"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_date: "2026-06-02"}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_date: "2026-06-03"}
+      - input: ref('int_fantasy__start_limits')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, start_limit: 5.0}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, start_limit: 5.0}
+    expect:
+      rows:
+        - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-01", fantasy_team_id: 2, platform_player_id: 4, lineup_slot_id: 1}
+        - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-02", fantasy_team_id: 2, platform_player_id: 5, lineup_slot_id: 1}
+        - {platform: espn, league_id: "1", season: 2026, scoring_date: "2026-06-03", fantasy_team_id: 1, platform_player_id: 3, lineup_slot_id: 1}

@@ -15,7 +15,7 @@ from typing import Any
 import duckdb
 import pytest
 
-import compare_bigquery_slice as cmp
+import compare_bigquery as cmp
 
 RELATION = "marts.fct_thing"
 
@@ -286,7 +286,7 @@ def test_the_selected_seeds_are_listed_with_the_models(
         )
 
     monkeypatch.setattr(cmp.subprocess, "run", fake_run)
-    assert cmp.slice_relations(target) == [
+    assert cmp.selected_relations(target) == [
         ("marts", "one", None),
         ("seeds", "espn_stat_ids", ["stat_id"]),
     ]
@@ -458,3 +458,93 @@ def test_json_columns_are_held_to_the_same_schema_whichever_side_has_them(
     assert problems(left_unread=set(), right_unread={"payload"}) == [
         "payload: text in A, JSON in B"
     ]
+
+
+LINEUPS = "intermediate.int_fantasy__optimal_lineups"
+LINEUP_DDL = (
+    "(platform varchar, league_id varchar, season bigint, scoring_date date, "
+    "fantasy_team_id bigint, platform_player_id bigint, lineup_slot_id bigint)"
+)
+
+
+def lineup(day: int, team: int, player: int, slot: int = 1) -> str:
+    return f"('espn', '1', 2026, date '2026-06-{day:02d}', {team}, {player}, {slot})"
+
+
+def lineups_pair(
+    con: duckdb.DuckDBPyConnection, local_rows: list[str], bq_rows: list[str]
+) -> cmp.Result:
+    for name, rows in (("local", local_rows), ("bq", bq_rows)):
+        con.execute(f"create schema if not exists {name}.intermediate")
+        con.execute(f"create table {name}.{LINEUPS} {LINEUP_DDL}")
+        if rows:
+            con.execute(f"insert into {name}.{LINEUPS} values {', '.join(rows)}")
+    return cmp.compare_relation(con, "local", "bq", LINEUPS, None, left_name="A", right_name="B")
+
+
+def test_a_differing_lineup_is_printed_as_its_team_day_with_the_rows_of_each_side(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Catches R3.3 unmet: a solver row that differs must come out as the team-day it is in,
+    with that team-day's rows on each side, not as a count. A team-day that is the same on
+    both sides must not be listed."""
+    result = lineups_pair(
+        con,
+        [lineup(1, 1, 10), lineup(1, 1, 11, 2), lineup(2, 1, 12), lineup(1, 2, 20)],
+        [lineup(1, 1, 10), lineup(1, 1, 13, 2), lineup(2, 1, 12), lineup(1, 2, 20)],
+    )
+    assert not result.passed
+    assert [g.group for g in result.differing_groups] == [("espn", "1", 2026, _date(1), 1)]
+    difference = result.differing_groups[0]
+    assert [row[5] for row in difference.left_rows] == [10, 11]
+    assert [row[5] for row in difference.right_rows] == [10, 13]
+    printed = "\n".join(cmp.describe(result, "A", "B"))
+    assert "differs: platform=espn, league_id=1, season=2026, scoring_date=2026-06-01" in printed
+    assert "fantasy_team_id=1" in printed
+    assert "A: [" in printed and "B: [" in printed and "13" in printed
+    assert "fantasy_team_id=2" not in printed
+
+
+def test_a_team_day_present_on_one_side_only_is_listed_with_nothing_on_the_other(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Catches a team-day one warehouse solved and the other left empty (an unvalued
+    period on one side) being missed because it has no rows to show on a side."""
+    result = lineups_pair(con, [lineup(1, 1, 10)], [])
+    difference = result.differing_groups[0]
+    assert len(difference.left_rows) == 1 and difference.right_rows == []
+
+
+def test_every_differing_team_day_is_listed_in_order(con: duckdb.DuckDBPyConnection) -> None:
+    """Catches a listing cut short (pre-PR review, F2): R3.3 asks for each team-day that
+    differs, so 25 differing team-days print 25, in team order."""
+    teams = 25
+    result = lineups_pair(con, [lineup(1, team, 10) for team in range(1, teams + 1)], [])
+    assert len(result.differing_groups) == teams
+    printed = "\n".join(cmp.describe(result, "A", "B"))
+    assert printed.count("differs:") == teams
+    listed = [
+        line.split("fantasy_team_id=")[1] for line in printed.splitlines() if "differs:" in line
+    ]
+    assert listed == [str(team) for team in range(1, teams + 1)]
+
+
+def test_an_equal_lineup_relation_lists_nothing(con: duckdb.DuckDBPyConnection) -> None:
+    """Catches the listing appearing on a pass."""
+    rows = [lineup(1, 1, 10), lineup(2, 1, 11)]
+    result = lineups_pair(con, rows, rows)
+    assert result.passed and result.differing_groups == []
+
+
+def test_other_relations_are_not_listed_by_group(con: duckdb.DuckDBPyConnection) -> None:
+    """Catches the group listing reaching a relation it was not asked for."""
+    fill(con)
+    con.execute(f"update bq.{RELATION} set total = 21 where id = 2")
+    result = compare(con)
+    assert not result.passed and result.differing_groups == []
+
+
+def _date(day: int) -> object:
+    from datetime import date
+
+    return date(2026, 6, day)

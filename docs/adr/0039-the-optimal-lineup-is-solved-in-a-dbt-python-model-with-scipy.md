@@ -1,6 +1,6 @@
 # 0039. The optimal lineup is solved in a dbt Python model, with SciPy
 
-- Status: accepted
+- Status: accepted; amended by [0103](0103-the-lineup-solver-is-a-python-function-called-from-one-sql-model-on-both-warehouses.md)
 - Date: 2026-10-09
 - Spec: [0012-lineup-decisions](../specs/0012-lineup-decisions/design.md) · Issue: #12
 

@@ -44,7 +44,9 @@ packages = ["ingestion/src/front_office"]
 
 [tool.ruff]
 line-length = 100
-src = ["ingestion/src", "ingestion/tests", "scripts", "dbt/python_modules"]
+src = ["ingestion/src", "ingestion/tests", "scripts", "dbt/python_modules", "dbt/functions"]
+# BigQuery runs the function file on Python 3.11; keep ruff from rewriting it to newer syntax.
+per-file-target-version = { "dbt/functions/**" = "py311" }
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "PTH"]
@@ -60,5 +62,5 @@ disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["ingestion/tests"]
-pythonpath = ["ingestion/src", "scripts", "dbt/python_modules"]
+pythonpath = ["ingestion/src", "scripts", "dbt/python_modules", "dbt/functions"]
 addopts = "-q"
