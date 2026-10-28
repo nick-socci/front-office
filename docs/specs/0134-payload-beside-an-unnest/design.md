@@ -213,3 +213,15 @@ All of these go in `ingestion/tests/test_check_plan_shapes.py`.
 | design-review | F3 (P2): C4 counted payload files with `find`, not through `LandingZone` | Fixed: C4 recomputed with `LandingZone.committed`. The numbers are identical |
 
 ## Amendments
+
+### 2026-10-28, during the build (pre-PR review)
+
+- **An explicit `none` structure is a payload view (refines R1.1).** `fo_captures` defaults
+  `structure` to `none` and then emits `payload`. So `fo_captures('espn', 'teams', none)` is
+  a payload view, and the heavy check no longer counts it as heavy. No model writes it that
+  way today, so neither check changes its result on `main`. Pre-PR review F1.
+- **The probes run on a payload view that has the column, and cannot crash the gate
+  (refines R3.1).** The probe view is the first payload view, in unique_id order, whose
+  columns include `payload`. If there is none, that is a problem. A probe that cannot be
+  explained is a problem, not a traceback, so every problem is still printed (R2.7).
+  Pre-PR review F2.

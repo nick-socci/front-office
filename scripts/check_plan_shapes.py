@@ -69,12 +69,16 @@ _LINK = re.compile(r"ADR \d{4}")
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _ENDPOINT = re.compile(r"endpoint='([a-z_]+)'")
 # fo_captures('<source>', '<endpoint>', <structure>): the third argument is the declaration.
+# A third argument of exactly `none` declares nothing (the view keeps its payload column), so
+# the lookahead excludes it; a name such as `none_structure` still matches.
 _STRUCTURED_CALL = re.compile(
-    r"""fo_captures\(\s*(['"])[^'"]*\1\s*,\s*(['"])([^'"]+)\2\s*,""", re.DOTALL
+    r"""fo_captures\(\s*(['"])[^'"]*\1\s*,\s*(['"])([^'"]+)\2\s*,(?!\s*none\s*\))""", re.DOTALL
 )
-# fo_captures('<source>', '<endpoint>'): two arguments, so the view keeps its payload column.
+# fo_captures('<source>', '<endpoint>') or with an explicit `none` third argument: no structure,
+# so the view keeps its payload column.
 _PLAIN_CALL = re.compile(
-    r"""fo_captures\(\s*(['"])([^'"]*)\1\s*,\s*(['"])([^'"]+)\3\s*\)""", re.DOTALL
+    r"""fo_captures\(\s*(['"])([^'"]*)\1\s*,\s*(['"])([^'"]+)\3\s*(?:,\s*none\s*)?\)""",
+    re.DOTALL,
 )
 _PAYLOAD = re.compile(r"\bpayload\b")
 _NON_MULTIPLYING = {"SEMI", "ANTI", "MARK", "RIGHT_SEMI", "RIGHT_ANTI"}
@@ -305,6 +309,19 @@ PROBES = [
 ]
 
 
+def probe_relation(
+    payload: dict[str, tuple[str, str]],
+    nodes: dict[str, Any],
+    columns: dict[str, list[str]],
+) -> str | None:
+    """The relation_name of the first payload view (by unique_id) that has a payload column."""
+    for unique_id in sorted(payload):
+        node = nodes[unique_id]
+        if "payload" in columns.get(node.get("alias") or node["name"], []):
+            return str(node["relation_name"])
+    return None
+
+
 def probe_problems(results: dict[str, list[str]]) -> list[str]:
     """A problem for each probe whose plan the detector found no carry in."""
     return [
@@ -524,14 +541,24 @@ def main(argv: list[str] | None = None) -> int:
         found_problems += missing_payload_column(columns)
 
         if payload:
-            relation = nodes[min(payload)]["relation_name"]
-            probed: dict[str, list[str]] = {}
-            for name, template in PROBES:
-                rows = con.execute(
-                    "explain (format json) " + template.format(relation=relation)
-                ).fetchall()
-                probed[name] = payload_carries(json.loads(rows[0][1]))
-            found_problems += probe_problems(probed)
+            relation = probe_relation(payload, nodes, columns)
+            if relation is None:
+                found_problems.append(
+                    "no payload capture view has a payload column to probe; "
+                    "the payload check cannot be shown to work"
+                )
+            else:
+                probed: dict[str, list[str]] = {}
+                for name, template in PROBES:
+                    try:
+                        rows = con.execute(
+                            "explain (format json) " + template.format(relation=relation)
+                        ).fetchall()
+                        probed[name] = payload_carries(json.loads(rows[0][1]))
+                    except (duckdb.Error, ValueError, IndexError) as exc:
+                        probed[name] = []
+                        found_problems.append(f"probe '{name}' cannot be explained ({exc})")
+                found_problems += probe_problems(probed)
 
         for unique_id in sorted(set(reading) | set(payload_reading)):
             node = nodes[unique_id]

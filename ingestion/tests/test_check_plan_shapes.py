@@ -440,6 +440,56 @@ def test_a_multiline_double_quoted_two_argument_call_is_a_payload_view():
     assert cps.payload_views({"model.p.v": model(code)}) == {"model.p.v": ("espn", "teams")}
 
 
+def test_an_explicit_none_structure_is_a_payload_view_not_a_heavy_one():
+    """Catches `fo_captures(..., none)`, which keeps its payload column, being read as heavy."""
+    nodes = {"model.p.v": model("{{ fo_captures('espn', 'teams', none) }}")}
+    assert cps.payload_views(nodes) == {"model.p.v": ("espn", "teams")}
+    assert cps.heavy_views(nodes) == {}
+
+
+def test_a_multiline_none_structure_with_spaces_is_a_payload_view():
+    """Catches the none exemption depending on one line or on tight spacing."""
+    code = "{{ fo_captures(\n  'espn',\n  'teams',\n  none  \n) }}"
+    nodes = {"model.p.v": model(code)}
+    assert cps.payload_views(nodes) == {"model.p.v": ("espn", "teams")}
+    assert cps.heavy_views(nodes) == {}
+
+
+def test_a_structure_named_like_none_is_still_heavy():
+    """Catches the none exemption matching a variable that merely starts with none."""
+    nodes = {"model.p.v": model("{{ fo_captures('espn', 'teams', none_structure) }}")}
+    assert cps.heavy_views(nodes) == {"model.p.v": "teams"}
+    assert cps.payload_views(nodes) == {}
+
+
+def _probe_nodes():
+    return {
+        "model.p.a": {"name": "a", "alias": "stg_a", "relation_name": '"ci"."raw"."stg_a"'},
+        "model.p.b": {"name": "b", "relation_name": '"ci"."raw"."b"'},
+    }
+
+
+def test_probe_relation_is_the_first_view_with_a_payload_column():
+    """Catches the probe relation being any view but the first one that has a payload."""
+    payload = {"model.p.a": ("s", "x"), "model.p.b": ("s", "y")}
+    columns = {"stg_a": ["payload"], "b": ["payload"]}
+    assert cps.probe_relation(payload, _probe_nodes(), columns) == '"ci"."raw"."stg_a"'
+
+
+def test_probe_relation_skips_a_first_view_without_a_payload_column():
+    """Catches the probe running over a view with no payload column, which cannot be explained."""
+    payload = {"model.p.a": ("s", "x"), "model.p.b": ("s", "y")}
+    columns = {"stg_a": ["file_path"], "b": ["payload"]}
+    assert cps.probe_relation(payload, _probe_nodes(), columns) == '"ci"."raw"."b"'
+
+
+def test_probe_relation_is_none_when_no_view_has_a_payload_column():
+    """Catches a probe being chosen when there is nothing it can run over."""
+    payload = {"model.p.a": ("s", "x"), "model.p.b": ("s", "y")}
+    columns = {"stg_a": ["file_path"], "b": []}
+    assert cps.probe_relation(payload, _probe_nodes(), columns) is None
+
+
 def test_a_model_without_fo_captures_is_not_a_payload_view():
     """Catches an ordinary model, or one with no raw_code, being read as a payload view."""
     nodes = {"model.p.a": model("select 1"), "model.p.b": {"resource_type": "model"}}
