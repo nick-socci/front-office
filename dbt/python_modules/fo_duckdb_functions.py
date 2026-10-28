@@ -13,6 +13,10 @@ signature, field for field and in the same order; a pytest compares the two (spe
 
 `null_handling="special"` hands a NULL argument to the function as None: a league with no
 start limit passes a null `start_limit`, and the default would return NULL without a call.
+
+DuckDB tries to import pandas on every value it converts for a Python function. pandas is in
+the dev group for that alone: without it the failed import, not the solve, takes most of the
+node's time (#201).
 """
 
 import duckdb
