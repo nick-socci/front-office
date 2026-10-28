@@ -29,6 +29,9 @@ dev = [
     "scipy>=1.18.1",
     "sqlfluff==4.4.0",
     "sqlfluff-templater-dbt==4.4.0",
+    # Nothing here imports pandas. DuckDB's Python-function calls try to, on every value they
+    # convert, and a failed import makes the lineup solver's node about ten times slower (#201).
+    "pandas>=3.0.6",
 ]
 
 [tool.uv]
