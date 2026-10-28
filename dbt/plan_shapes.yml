@@ -5,6 +5,8 @@
 # reaches such a view and fails on any such operator not listed here.
 # The gate also fails on an entry whose node no longer has that operator over that endpoint,
 # or that names no such node, so an entry cannot outlive its reason.
+# The same script fails a plan that carries a payload column into an unnest (spec 0134,
+# ADR 0106). That has no entry here: no operator for it is accepted, and none can exempt it.
 # `measured` is the node's smallest memory limit alone, at four DuckDB threads, for 2026 and
 # for all seasons. `on` is quoted because YAML reads a bare `on` as true.
 entries:

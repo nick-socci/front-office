@@ -25,6 +25,19 @@ manifest:
 - Keep the register honest (R4.3, R4.4). An entry whose node no longer has that operator
   over that endpoint, or whose node is not a reader, fails: an entry cannot outlive its reason.
 
+Payload check (spec 0134, ADR 0106). The endpoints that are not parsed into a structure keep
+a `payload` column: their capture views call `fo_captures` with two arguments, and every
+model or test that reaches one through views and ephemerals alone is a payload reader. The
+same explain of a reader's compiled SQL is searched for an operator that repeats its input
+once per list element (an UNNEST, an INOUT_FUNCTION named unnest, or a join with an unnest
+under one side) and is fed a column named `payload`: that carries the whole file once per
+element (AGENTS.md rule 1). No register entry can exempt it. Three probe queries that do
+carry a payload must be flagged on every run, so a change in DuckDB's plan format cannot
+switch the check off. A payload view needs a capture in the CI warehouse, compared by
+(source, endpoint), and a column named `payload`. Blind spot: a payload renamed (`payload as
+body`) is not seen. The lineup solver is registered on the connection from
+fo_duckdb_functions so that its node can be explained.
+
 Every problem is printed, not just the first (R4.6). Exit 1 if there is any. The pure parts
 take dicts and strings so that ingestion/tests/test_check_plan_shapes.py reaches them
 without dbt.
@@ -55,13 +68,103 @@ _MEASURED_KEYS = {"threads", "gb_2026", "gb_all_seasons", "on"}
 _LINK = re.compile(r"ADR \d{4}")
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _ENDPOINT = re.compile(r"endpoint='([a-z_]+)'")
-# fo_captures('<source>', '<endpoint>', <structure>): the third argument is the declaration.
-_STRUCTURED_CALL = re.compile(
-    r"""fo_captures\(\s*(['"])[^'"]*\1\s*,\s*(['"])([^'"]+)\2\s*,""", re.DOTALL
-)
+_CAPTURES_CALL = re.compile(r"(?<![A-Za-z0-9_])fo_captures\(")
+_NONE_ARGUMENT = re.compile(r"(?:structure\s*=\s*)?none", re.IGNORECASE)
+_PAYLOAD = re.compile(r"\bpayload\b")
+_NON_MULTIPLYING = {"SEMI", "ANTI", "MARK", "RIGHT_SEMI", "RIGHT_ANTI"}
 
 
 # --- finding the readers (R4.1) ----------------------------------------------------------
+
+
+def _call_arguments(text: str) -> list[str]:
+    """The top-level arguments of a call whose text follows the opening parenthesis.
+
+    Stops at the matching `)`. Parentheses and commas inside quotes do not count, and commas
+    inside (), [] or {} do not split. Parts are stripped and empty ones (a trailing comma) dropped.
+    """
+    parts: list[str] = []
+    depth = 0
+    quote = ""
+    start = 0
+    i = 0
+    while i < len(text):
+        char = text[i]
+        if quote:
+            if char == "\\":
+                i += 1
+            elif char == quote:
+                quote = ""
+        elif char in "'\"":
+            quote = char
+        elif char in "([{":
+            depth += 1
+        elif char in ")]}":
+            if depth == 0:
+                parts.append(text[start:i])
+                break
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(text[start:i])
+            start = i + 1
+        i += 1
+    return [part.strip() for part in parts if part.strip()]
+
+
+def _string_literal(argument: str) -> str | None:
+    """The contents of a quoted string literal, or None if the argument is not one."""
+    if len(argument) >= 2 and argument[0] in "'\"" and argument[-1] == argument[0]:
+        return argument[1:-1]
+    return None
+
+
+def _without_comments(code: str) -> str:
+    """The code with `--`, `/* */` and `{# #}` comments blanked to spaces, strings kept."""
+    out: list[str] = []
+    i = 0
+    quote = ""
+    while i < len(code):
+        char = code[i]
+        if quote:
+            if char == quote:
+                quote = ""
+            out.append(char)
+            i += 1
+            continue
+        closer = {"--": "\n", "/*": "*/", "{#": "#}"}.get(code[i : i + 2])
+        if closer is None:
+            if char in "'\"":
+                quote = char
+            out.append(char)
+            i += 1
+            continue
+        end = code.find(closer, i + 2)
+        if closer == "\n":
+            end = len(code) if end == -1 else end  # keep the newline itself
+        else:
+            end = len(code) if end == -1 else end + len(closer)
+        out.extend(c if c == "\n" else " " for c in code[i:end])
+        i = end
+    return "".join(out)
+
+
+# Parsed, not matched: a regex kept missing variants of the third argument (positional `none`,
+# `structure=none`, a trailing comma), a call inside a comment, each found in a review of #207.
+def _captures_call(raw_code: str) -> tuple[str, str, bool] | None:
+    """(source, endpoint, declares_structure) of the first fo_captures call, or None."""
+    code = _without_comments(raw_code)
+    match = _CAPTURES_CALL.search(code)
+    if not match:
+        return None
+    arguments = _call_arguments(code[match.end() :])
+    if len(arguments) < 2:
+        return None
+    source = _string_literal(arguments[0])
+    endpoint = _string_literal(arguments[1])
+    if source is None or endpoint is None:
+        return None
+    declares = len(arguments) > 2 and not _NONE_ARGUMENT.fullmatch(arguments[2])
+    return source, endpoint, declares
 
 
 def heavy_views(nodes: dict[str, Any]) -> dict[str, str]:
@@ -70,10 +173,33 @@ def heavy_views(nodes: dict[str, Any]) -> dict[str, str]:
     for unique_id, node in nodes.items():
         if node.get("resource_type") != "model":
             continue
-        match = _STRUCTURED_CALL.search(node.get("raw_code") or "")
-        if match:
-            found[unique_id] = match.group(3)
+        call = _captures_call(node.get("raw_code") or "")
+        if call and call[2]:
+            found[unique_id] = call[1]
     return found
+
+
+def payload_views(nodes: dict[str, Any]) -> dict[str, tuple[str, str]]:
+    """unique_id -> (source, endpoint), for each model that calls fo_captures with two arguments."""
+    found: dict[str, tuple[str, str]] = {}
+    for unique_id, node in nodes.items():
+        if node.get("resource_type") != "model":
+            continue
+        call = _captures_call(node.get("raw_code") or "")
+        if call and not call[2]:
+            found[unique_id] = (call[0], call[1])
+    return found
+
+
+def no_payload_views_problem(payload: dict[str, tuple[str, str]]) -> list[str]:
+    """A project with no payload view runs neither the payload check nor its probes: say so."""
+    if payload:
+        return []
+    return [
+        "no payload capture view found (fo_captures with two arguments): the payload check "
+        "and its probes did not run; if no endpoint keeps a payload any more, retire the "
+        "check by a new ADR superseding ADR 0106"
+    ]
 
 
 def readers(nodes: dict[str, Any], heavy: dict[str, str]) -> dict[str, frozenset[str]]:
@@ -151,6 +277,167 @@ def gathering(plan: list[dict[str, Any]], heavy: set[str]) -> list[tuple[str, tu
             if endpoints:
                 result.append((kind, endpoints))
     return result
+
+
+# --- a payload carried into an unnest (spec 0134, ADR 0106) ------------------------------
+
+
+def _projections(op: dict[str, Any]) -> list[str]:
+    """The operator's Projections as a list: DuckDB gives one column as a bare string."""
+    value = (op.get("extra_info") or {}).get("Projections")
+    if value is None:
+        return []
+    return [value] if isinstance(value, str) else [str(item) for item in value]
+
+
+def _is_unnest(op: dict[str, Any]) -> bool:
+    """An UNNEST, or the INOUT_FUNCTION DuckDB plans an unnest of an expression as."""
+    name = op.get("name")
+    return name == "UNNEST" or (
+        name == "INOUT_FUNCTION" and (op.get("extra_info") or {}).get("Name") == "unnest"
+    )
+
+
+def _join_type(op: dict[str, Any]) -> str:
+    return str((op.get("extra_info") or {}).get("Join Type", "")).upper()
+
+
+def _is_join(op: dict[str, Any]) -> bool:
+    """A cross product or join, not a delim join."""
+    name = str(op.get("name", ""))
+    return name == "CROSS_PRODUCT" or (name.endswith("JOIN") and "DELIM" not in name)
+
+
+def _emits(op: dict[str, Any]) -> list[str]:
+    """What the operator outputs: its Projections, else what its children emit.
+
+    A semi, anti or mark join emits its first child only.
+    """
+    if "Projections" in (op.get("extra_info") or {}):
+        return _projections(op)
+    children = op.get("children", [])
+    if _join_type(op) in _NON_MULTIPLYING:
+        children = children[:1]
+    return [column for child in children for column in _emits(child)]
+
+
+def _carries_payload(op: dict[str, Any]) -> bool:
+    return any(_PAYLOAD.search(column) for column in _emits(op))
+
+
+def payload_carries(plan: list[dict[str, Any]]) -> list[str]:
+    """Sorted unique names of the operators fed a payload.
+
+    An unnest is fed its children. A multiplying join with an unnest under at least one child
+    is fed the children with none under them: the list does not depend on the row.
+    """
+    found: set[str] = set()
+    for root in plan:
+        for op in _walk(root):
+            children = op.get("children", [])
+            if _is_unnest(op):
+                inputs = children
+            elif _is_join(op) and _join_type(op) not in _NON_MULTIPLYING:
+                has_unnest = [any(_is_unnest(o) for o in _walk(c)) for c in children]
+                inputs = (
+                    [c for c, below in zip(children, has_unnest, strict=True) if not below]
+                    if any(has_unnest)
+                    else []
+                )
+            else:
+                continue
+            if any(_carries_payload(child) for child in inputs):
+                found.add(str(op.get("name", "")))
+    return sorted(found)
+
+
+def payload_problems(found: dict[str, list[str]], endpoints: dict[str, list[str]]) -> list[str]:
+    """A problem for each (node, operator) fed a payload; `endpoints` names what the node reads."""
+    return [
+        f"{node}: {operator} is fed a payload ({', '.join(endpoints.get(node, []))}); "
+        "compute what it needs in a CTE before the unnest (AGENTS.md rule 1)"
+        for node in sorted(found)
+        for operator in sorted(set(found[node]))
+    ]
+
+
+def uncovered_pairs(
+    payload_pairs: set[tuple[str, str]], captured: set[tuple[str, str]]
+) -> list[str]:
+    """A problem for each payload (source, endpoint) the CI warehouse holds no capture of."""
+    return [
+        f"{source}/{endpoint}: a payload endpoint with no capture in the CI warehouse; its "
+        "readers' plans read no file and cannot be checked. Add a fixture capture of it"
+        for source, endpoint in sorted(payload_pairs - captured)
+    ]
+
+
+def missing_payload_column(columns: dict[str, list[str]]) -> list[str]:
+    """A problem for each payload view (name -> its column names) with no `payload` column."""
+    return [
+        f"{view}: a payload capture view with no column named payload; the check keys on that name"
+        for view, names in sorted(columns.items())
+        if "payload" not in names
+    ]
+
+
+# Each carries a payload into an unnest and must be flagged: an UNNEST, a CROSS_PRODUCT, and a
+# FILTER between a CROSS_PRODUCT and its unnest.
+PROBES = [
+    (
+        "header list column",
+        "with h as (select payload, [1] as l from {relation}) "
+        "select h.payload, e from h cross join unnest(h.l) as _u(e)",
+    ),
+    (
+        "constant list",
+        "select payload, e from {relation} cross join unnest([1, 2]) as _u(e)",
+    ),
+    (
+        "constant list with a filter",
+        "select payload, e from {relation} cross join unnest([1, 2]) as _u(e) where e > 1",
+    ),
+]
+
+
+def probe_relation(
+    payload: dict[str, tuple[str, str]],
+    nodes: dict[str, Any],
+    columns: dict[str, list[str]],
+) -> str | None:
+    """The relation_name of the first payload view (by unique_id) that has a payload column."""
+    for unique_id in sorted(payload):
+        node = nodes[unique_id]
+        if "payload" in columns.get(node.get("alias") or node["name"], []):
+            return str(node["relation_name"])
+    return None
+
+
+def probe_problems(results: dict[str, list[str]]) -> list[str]:
+    """A problem for each probe whose plan the detector found no carry in."""
+    return [
+        f"probe '{name}' carries a payload into an unnest and was not flagged; "
+        "the plan format has changed, so the payload check can no longer be trusted"
+        for name, _ in PROBES
+        if not results.get(name)
+    ]
+
+
+def register_functions(con: duckdb.DuckDBPyConnection) -> None:
+    """Register the lineup solver as dbt's plugin does, so its node can be explained."""
+    for directory in ("dbt/python_modules", "dbt/functions"):
+        path = str(REPO_ROOT / directory)
+        if path not in sys.path:
+            sys.path.append(path)
+    import fo_duckdb_functions as plugin  # noqa: PLC0415
+
+    con.create_function(
+        plugin.NAME,
+        plugin.solve_lineup_period,
+        [t for _, t in plugin.ARGUMENTS],
+        plugin.RETURNS,
+        null_handling="special",
+    )
 
 
 def uncovered(heavy_endpoints: set[str], endpoints_with_captures: set[str]) -> list[str]:
@@ -308,21 +595,64 @@ def main(argv: list[str] | None = None) -> int:
     heavy = heavy_views(nodes)
     heavy_endpoints = set(heavy.values())
     reading = readers(nodes, heavy)
+    payload = payload_views(nodes)
+    found_problems += no_payload_views_problem(payload)
+    payload_reading = readers(nodes, {uid: endpoint for uid, (_, endpoint) in payload.items()})
 
     # The catalog is the file's stem: compiled SQL names it (`ci.staging.x`).
     con = duckdb.connect()
     con.execute(f"attach '{db}' as {db.stem} (read_only)")
+    register_functions(con)
     found: dict[str, list[tuple[str, str]]] = {}
+    found_payload: dict[str, list[str]] = {}
     operators = 0
+    unnests = 0
     try:
-        captured = {
-            row[0]
+        captured_pairs = {
+            (row[0], row[1])
             for row in con.execute(
-                f"select distinct endpoint from {db.stem}.raw.captures"
+                f"select distinct source, endpoint from {db.stem}.raw.captures"
             ).fetchall()
         }
+        captured = {endpoint for _, endpoint in captured_pairs}
         found_problems += uncovered(heavy_endpoints, captured)
-        for unique_id in reading:
+        found_problems += uncovered_pairs(set(payload.values()), captured_pairs)
+
+        columns: dict[str, list[str]] = {}
+        for unique_id in sorted(payload):
+            node = nodes[unique_id]
+            view = node.get("alias") or node["name"]
+            columns[view] = [
+                row[0]
+                for row in con.execute(
+                    "select column_name from duckdb_columns() "
+                    f"where database_name = '{db.stem}' and schema_name = '{node['schema']}' "
+                    f"and table_name = '{view}' order by column_index"
+                ).fetchall()
+            ]
+        found_problems += missing_payload_column(columns)
+
+        if payload:
+            relation = probe_relation(payload, nodes, columns)
+            if relation is None:
+                found_problems.append(
+                    "no payload capture view has a payload column to probe; "
+                    "the payload check cannot be shown to work"
+                )
+            else:
+                probed: dict[str, list[str]] = {}
+                for name, template in PROBES:
+                    try:
+                        rows = con.execute(
+                            "explain (format json) " + template.format(relation=relation)
+                        ).fetchall()
+                        probed[name] = payload_carries(json.loads(rows[0][1]))
+                    except (duckdb.Error, ValueError, IndexError) as exc:
+                        probed[name] = []
+                        found_problems.append(f"probe '{name}' cannot be explained ({exc})")
+                found_problems += probe_problems(probed)
+
+        for unique_id in sorted(set(reading) | set(payload_reading)):
             node = nodes[unique_id]
             path = compiled_file(node, project_dir)
             if path is None or not path.is_file():
@@ -336,17 +666,31 @@ def main(argv: list[str] | None = None) -> int:
             except (duckdb.Error, ValueError, IndexError) as exc:
                 found_problems.append(f"{node['name']}: cannot explain its compiled SQL ({exc})")
                 continue
-            for kind, endpoints in gathering(plan, heavy_endpoints):
-                operators += len(endpoints)
-                found.setdefault(node["name"], []).extend((kind, e) for e in endpoints)
+            if unique_id in reading:
+                for kind, endpoints in gathering(plan, heavy_endpoints):
+                    operators += len(endpoints)
+                    found.setdefault(node["name"], []).extend((kind, e) for e in endpoints)
+            if unique_id in payload_reading:
+                unnests += sum(1 for root in plan for o in _walk(root) if _is_unnest(o))
+                carried = payload_carries(plan)
+                if carried:
+                    found_payload[node["name"]] = carried
     finally:
         con.close()
 
     names = {nodes[unique_id]["name"] for unique_id in reading}
     found_problems += problems(found, entries, names)
+    payload_endpoints = {
+        nodes[unique_id]["name"]: sorted(endpoints)
+        for unique_id, endpoints in payload_reading.items()
+    }
+    found_problems += payload_problems(found_payload, payload_endpoints)
     print(
         f"readers of a heavy endpoint checked: {len(reading)}; "
-        f"gathering operators over one: {operators}; registered: {len(entries)}"
+        f"gathering operators over one: {operators}; registered: {len(entries)}; "
+        f"payload views: {len(payload)}; "
+        f"payload readers explained: {len(payload_reading)}; "
+        f"unnest operators in them: {unnests}"
     )
     if found_problems:
         print(f"\n{len(found_problems)} problem(s):")

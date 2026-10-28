@@ -1,6 +1,6 @@
 # 0106. The plan-shapes gate fails a payload carried into an unnest, with no exemption
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-28
 - Spec: [0134-payload-beside-an-unnest](../specs/0134-payload-beside-an-unnest/design.md) · Issue: #134
 
