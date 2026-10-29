@@ -119,8 +119,9 @@ than marking the staging tests DuckDB-only.
   nor in any project macro a fixture calls, directly or through another macro, nor in the
   `safe_cast` override. The list is the one `test_dbt_portable_sql_rule.py` holds for
   models and macros.
-- R5.2 THE SYSTEM SHALL add to that list two constructs found here: a comma join, and a
-  WHERE in a query with no FROM. These apply to models and macros as well as fixtures.
+- R5.2 THE SYSTEM SHALL add to that list the construct found here: a WHERE in a query
+  with no FROM. It applies to models and macros as well as fixtures. (Amended 2026-10-29:
+  a comma join was dropped; see design.md, Amendments.)
 - R5.3 IF a SQL fixture holds a refused construct THEN the gates SHALL fail and name the
   test and the construct.
 - R5.4 WHEN a fixture needs a project macro (a portable type, an integer series,

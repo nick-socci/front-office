@@ -48,7 +48,8 @@ it is.
 ## Consequences
 
 - Good: a new DuckDB-only fixture fails the gates with the test named, in seconds.
-- Good: the rule's two new constructs (comma join, WHERE with no FROM) hold models too.
+- Good: the rule's new construct (a WHERE with no FROM) holds models too. (Corrected
+  2026-10-29: a comma join was listed here in error; see spec 0138, Amendments.)
 - Bad / accepted cost: between by-hand runs, a fixture can still go wrong on BigQuery in
   a way the text rule cannot see (a type, a JSON path). The next run finds it.
 - Follow-ups: revisit option 2 when the orchestration of sub-project 4 decides where
