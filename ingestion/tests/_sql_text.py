@@ -54,16 +54,21 @@ def sql_code(sql: str) -> str:
 
 
 def line_comment(line: str) -> str | None:
-    """The text after the first `--` that is not inside a string literal, or None.
+    """The text after the first `--` that is not inside quotes, or None.
 
-    Quotes are tracked only up to that point: after it the line is prose, and an apostrophe
-    in it is not a string.
+    Both quotes count: `'…'` is a string, and `"…"` is an identifier or a Jinja string, and a
+    `--` inside either is not a comment (#209 review, round 1). One kind of quote inside the
+    other is just a character. Quotes are tracked only up to the comment: after it the line
+    is prose, and an apostrophe in it is not a string.
     """
-    quoted = False
+    quote: str | None = None
     for at, char in enumerate(line):
-        if char == "'":
-            quoted = not quoted
-        elif not quoted and line.startswith("--", at):
+        if quote:
+            if char == quote:
+                quote = None
+        elif char in "'\"":
+            quote = char
+        elif line.startswith("--", at):
             return line[at + 2 :]
     return None
 

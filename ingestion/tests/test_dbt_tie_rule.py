@@ -141,6 +141,10 @@ def test_an_exemption_needs_a_reason_and_has_to_be_a_comment() -> None:
     assert unchecked_windows(blank_reason) == [(3, "row_number")]
     assert unchecked_windows(in_a_string) == [(1, "row_number")]
     assert unchecked_windows(dashes_in_a_string) == [(1, "row_number")]
+    dashes_in_double_quotes = 'select "-- tie-exempt: an identifier", row_number() over w from t'
+    assert unchecked_windows(dashes_in_double_quotes) == [(1, "row_number")]
+    after_a_quoted_identifier = 'select "a""b", lag(x) over w -- tie-exempt: same window\nfrom t'
+    assert unchecked_windows(after_a_quoted_identifier) == []
     assert unchecked_windows("select lag(x) over w -- tie-exempt: ...") == [(1, "lag")]
     assert unchecked_windows("select lag(x) over w -- tie-exempt: it's equal") == []
 

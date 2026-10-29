@@ -189,6 +189,8 @@ def test_an_exemption_needs_a_reason_and_has_to_be_a_comment() -> None:
     assert unordered_aggregates(blank_reason) == [(3, "avg")]
     assert unordered_aggregates(in_a_string) == [(1, "avg")]
     assert unordered_aggregates(dashes_in_a_string) == [(1, "avg")]
+    dashes_in_double_quotes = 'select "-- order-exempt: an identifier", avg(x) from t'
+    assert unordered_aggregates(dashes_in_double_quotes) == [(1, "avg")]
     # an empty quoted value is not a reason, and a reason that contains quotes still is one
     assert unordered_aggregates("select avg(x) -- order-exempt: ''\nfrom t") == [(1, "avg")]
     assert unordered_aggregates("select avg(x) -- order-exempt: '  ' \nfrom t") == [(1, "avg")]
