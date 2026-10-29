@@ -1,6 +1,6 @@
 # 0114. A unit test names the manifest through the target
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-29
 - Spec: [0138-unit-tests-on-bigquery](../specs/0138-unit-tests-on-bigquery/design.md) · Issue: #138
 

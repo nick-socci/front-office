@@ -1,6 +1,6 @@
 # 0112. A fixture calls a project macro inside a raw block
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-29
 - Spec: [0138-unit-tests-on-bigquery](../specs/0138-unit-tests-on-bigquery/design.md) · Issue: #138
 

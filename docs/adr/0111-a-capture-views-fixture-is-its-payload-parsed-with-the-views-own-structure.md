@@ -1,6 +1,6 @@
 # 0111. A capture view's fixture is its payload, parsed with the view's own structure
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-29
 - Spec: [0138-unit-tests-on-bigquery](../specs/0138-unit-tests-on-bigquery/design.md) · Issue: #138
 

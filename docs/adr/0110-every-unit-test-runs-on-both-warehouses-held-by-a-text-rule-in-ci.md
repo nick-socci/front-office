@@ -1,6 +1,6 @@
 # 0110. Every unit test runs on both warehouses, held by a text rule in CI
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-29
 - Spec: [0138-unit-tests-on-bigquery](../specs/0138-unit-tests-on-bigquery/design.md) · Issue: #138
 
