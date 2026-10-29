@@ -1,6 +1,6 @@
 # 0107. A ranking checks its own window, and a tie across its cut stops the build
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-28
 - Spec: [0141-total-tie-breaks](../specs/0141-total-tie-breaks/design.md) · Issue: #141
 

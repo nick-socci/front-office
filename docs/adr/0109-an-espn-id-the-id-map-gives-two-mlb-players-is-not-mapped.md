@@ -1,6 +1,6 @@
 # 0109. An ESPN id the id map gives to two MLB players is not mapped
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-28
 - Spec: [0141-total-tie-breaks](../specs/0141-total-tie-breaks/design.md) · Issue: #141
 

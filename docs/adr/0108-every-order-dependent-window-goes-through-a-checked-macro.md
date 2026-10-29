@@ -1,6 +1,6 @@
 # 0108. Every order-dependent window goes through a checked macro, held by a text rule
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-28
 - Spec: [0141-total-tie-breaks](../specs/0141-total-tie-breaks/design.md) · Issue: #141
 
