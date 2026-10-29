@@ -518,15 +518,16 @@ class Fixture(NamedTuple):
     input: str  # the `input:` of the `given` entry
     format: str
     rows: object  # SQL text for `format: sql`; a list of mappings for `dict`
+    file: str = ""  # the `fixture:` a `given` names instead of rows, if any
 
 
 def unit_test_fixtures(root: Path = DBT_ROOT / "models") -> Iterator[Fixture]:
     """Each `given` of each unit test in the model YAML under `root`.
 
     Read from the YAML text: the manifest holds an input after the parse has resolved it.
-    A fixture given by `fixture:` (a file under tests/fixtures/) is not read: this project
-    has none (spec 0138, C7), and a file there would be compiled with the project's macros
-    and need no blanking."""
+    A fixture given by `fixture:` (a file under tests/fixtures/) is not read, but its name
+    is kept: fixture_problems refuses it, since fixtures are written inline (ADR 0112) and
+    this rule reads only those (spec 0138, pre-PR review F1)."""
     for path in sorted(root.rglob("*.yml")):
         document = yaml.safe_load(path.read_text())
         if not isinstance(document, dict):
@@ -539,6 +540,7 @@ def unit_test_fixtures(root: Path = DBT_ROOT / "models") -> Iterator[Fixture]:
                     str(given.get("input", "")),
                     str(given.get("format", "dict")),
                     given.get("rows"),
+                    str(given.get("fixture") or ""),
                 )
 
 
@@ -613,12 +615,20 @@ def fixture_problems(fixtures: Iterator[Fixture], capture_views: set[str]) -> li
                 f"{where}:1: manifest input named literally (use the target-dependent "
                 "spelling of spec 0138, design 3)"
             )
+        if fixture.file:
+            problems.append(
+                f"{where}:1: fixture given as a file, which this rule cannot read; write it "
+                "inline (ADR 0112)"
+            )
         if fixture.format != "sql" or not isinstance(fixture.rows, str):
             continue
+        code, expressions = blank_jinja(fixture.rows)
+        # A call in one of the fixture's Jinja expressions, not the name anywhere in its text
+        # (a SQL comment could hold it): pre-PR review F2.
+        called = set().union(*(macro_names(expression) for expression in expressions))
         view = _CAPTURE_VIEW_INPUT.match(fixture.input)
-        if view and view.group(1) in capture_views and "fo_capture_rows(" not in fixture.rows:
+        if view and view.group(1) in capture_views and "fo_capture_rows" not in called:
             problems.append(f"{where}:1: capture view fixture without fo_capture_rows")
-        code, _ = blank_jinja(fixture.rows)
         problems.extend(f"{where}:{n}: {what}" for n, what in refused_constructs(code))
     return problems
 
@@ -769,6 +779,21 @@ def test_a_capture_fixture_must_go_through_fo_capture_rows() -> None:
     assert fixture_problems(iter([through]), heavy) == []
     plain = by_hand._replace(input="ref('stg_raw__mlb_players')")
     assert fixture_problems(iter([plain]), heavy) == []
+    # The name in a SQL comment, or in a Jinja string, is not a call.
+    commented = by_hand._replace(rows="-- fo_capture_rows(\nselect 1 as dates")
+    quoted = by_hand._replace(rows="select {{ 'fo_capture_rows(' }} as dates")
+    for fixture in (commented, quoted):
+        assert fixture_problems(iter([fixture]), heavy) == problems
+
+
+def test_a_fixture_given_as_a_file_is_refused() -> None:
+    """Catches SQL slipping past the rule through a `fixture:` file, which it does not read
+    (fixtures are written inline, ADR 0112)."""
+    from_file = Fixture("dbt/models/m.yml", "t", "ref('m')", "sql", None, "my_fixture")
+    assert fixture_problems(iter([from_file]), set()) == [
+        "dbt/models/m.yml::t::ref('m'):1: fixture given as a file, which this rule cannot "
+        "read; write it inline (ADR 0112)"
+    ]
 
 
 def test_a_refused_construct_in_a_sql_fixture_is_named_with_its_line() -> None:
