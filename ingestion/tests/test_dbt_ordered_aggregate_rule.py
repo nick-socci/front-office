@@ -193,6 +193,9 @@ def test_an_exemption_needs_a_reason_and_has_to_be_a_comment() -> None:
     assert unordered_aggregates(dashes_in_double_quotes) == [(1, "avg")]
     escaped_in_jinja = 'select avg(x), {{ "\'a\\" -- order-exempt: no\'" }} from t'
     assert unordered_aggregates(escaped_in_jinja) == [(1, "avg")]
+    # a backslash in a SQL string is a plain character, so the string ends at its quote
+    backslash_in_sql = "select avg(x), 'a\\' || '-- order-exempt: a string' from t"
+    assert unordered_aggregates(backslash_in_sql) == [(1, "avg")]
     # an empty quoted value is not a reason, and a reason that contains quotes still is one
     assert unordered_aggregates("select avg(x) -- order-exempt: ''\nfrom t") == [(1, "avg")]
     assert unordered_aggregates("select avg(x) -- order-exempt: '  ' \nfrom t") == [(1, "avg")]

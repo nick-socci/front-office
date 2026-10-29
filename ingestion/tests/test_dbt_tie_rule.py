@@ -147,6 +147,9 @@ def test_an_exemption_needs_a_reason_and_has_to_be_a_comment() -> None:
     assert unchecked_windows(after_a_quoted_identifier) == []
     escaped_in_jinja = '{{ x("a \\" -- tie-exempt: inside the string") }} row_number() over w'
     assert unchecked_windows(escaped_in_jinja) == [(1, "row_number")]
+    # a backslash in a SQL string is a plain character, so the string ends at its quote
+    backslash_in_sql = "select row_number() over w, 'a\\' || '-- tie-exempt: a string' from t"
+    assert unchecked_windows(backslash_in_sql) == [(1, "row_number")]
     call_before_escaped = 'select row_number() over w, {{ "\'a\\" -- tie-exempt: no\'" }} from t'
     assert unchecked_windows(call_before_escaped) == [(1, "row_number")]
     # a backslash at the end of a line does not carry the span onto the next one, where it

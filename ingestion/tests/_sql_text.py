@@ -72,11 +72,12 @@ def line_comment(line: str) -> str | None:
 
     Both quotes count: `'…'` is a string, and `"…"` is an identifier or a Jinja string, and a
     `--` inside either is not a comment (#209 review, round 1). One kind of quote inside the
-    other is just a character, and inside quotes a backslash takes the next character with
-    it, as Jinja's `\"` does (round 2). Where a warehouse reads a backslash as a plain
-    character, the span runs on too far, which only hides a comment and flags its call.
-    Quotes are tracked only up to the comment: after it the line is prose, and an
-    apostrophe in it is not a string.
+    other is just a character. Inside double quotes a backslash takes the next character with
+    it, as Jinja's `\"` does (round 2), and as `sql_code` reads them. Inside single quotes it
+    is a plain character, as the warehouses read a SQL string: escaping there would end
+    `'a\\'` late and turn the next string's text into a comment (round 3). Quotes are
+    tracked only up to the comment: after it the line is prose, and an apostrophe in it is
+    not a string.
     """
     quote: str | None = None
     escaped = False
@@ -84,7 +85,7 @@ def line_comment(line: str) -> str | None:
         if escaped:
             escaped = False
         elif quote:
-            if char == "\\":
+            if char == "\\" and quote == '"':
                 escaped = True
             elif char == quote:
                 quote = None
