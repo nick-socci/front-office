@@ -171,3 +171,96 @@
         ) -}}
     {%- endif -%}
 {% endmacro %}
+
+{#
+  A structure part as the JSON that DuckDB's from_json reads as a type: the same part, with
+  each {"__map__": X} replaced by the type string "MAP(VARCHAR, <X's type>)" (a MAP is the
+  one part from_json cannot be given as JSON; the string is the type duckdb__fo_structure_type
+  writes for the view). tojson escapes the quotes inside that type string.
+#}
+{% macro duckdb__fo_structure_as_json(structure) %}
+    {%- if structure is mapping and structure | length == 1 and '__map__' in structure -%}
+        {{ duckdb__fo_structure_type(structure) | trim | tojson }}
+    {%- elif structure is mapping -%}
+        { {%- for field, inner in structure.items() -%}
+            {{ field | tojson }}: {{ duckdb__fo_structure_as_json(inner) }}{{ ', ' if not loop.last }}
+        {%- endfor -%} }
+    {%- elif structure is string -%}
+        {{ structure | tojson }}
+    {%- else -%}
+        [{{ duckdb__fo_structure_as_json(structure[0]) }}]
+    {%- endif -%}
+{% endmacro %}
+
+{# JSON text as a JSON value: json() on DuckDB, parse_json() on BigQuery. #}
+{% macro fo_capture_json(text) %}
+    {{- return(adapter.dispatch('fo_capture_json')(text)) -}}
+{% endmacro %}
+{% macro duckdb__fo_capture_json(text) -%}
+    json({{ fo_sql_string(text) }})
+{%- endmacro %}
+{% macro bigquery__fo_capture_json(text) -%}
+    parse_json({{ fo_sql_string(text) }})
+{%- endmacro %}
+
+{#
+  One top-level field of a payload, parsed with its part of the structure, as the capture
+  view parses it. `payload_sql` is a SQL expression holding the payload as a JSON value.
+  DuckDB uses from_json, not a cast: from_json ignores a key the structure does not name,
+  as the view's read_json does, and a cast refuses it (spec 0138, C12). BigQuery uses the
+  view's own expression, bigquery__fo_json_parse_value.
+#}
+{% macro fo_capture_field(payload_sql, field, structure) %}
+    {{- return(adapter.dispatch('fo_capture_field')(payload_sql, field, structure)) -}}
+{% endmacro %}
+{% macro duckdb__fo_capture_field(payload_sql, field, structure) -%}
+    from_json(json_extract({{ payload_sql }}, '$."{{ field }}"'), {{ fo_sql_string(duckdb__fo_structure_as_json(structure) | trim) }}) as "{{ field }}"
+{%- endmacro %}
+{% macro bigquery__fo_capture_field(payload_sql, field, structure) -%}
+    {{ bigquery__fo_json_parse_value("json_query(" ~ payload_sql ~ ", '$." ~ field ~ "')", structure, 0) }} as {{ field }}
+{%- endmacro %}
+
+{#
+  Mocked capture rows for a unit test of a capture view that declares a structure (spec
+  0138, ADR 0111): the rows fo_captures gives for those captures, built from the payload
+  text a fixture holds, with the view's own structure (fo_capture_structure), so the
+  columns and types are the view's on each warehouse.
+
+  captures is a list of mappings; request_key, fetched_at and file_path (text),
+  partitions and payload (JSON text) are required, request_path defaults to '/fixture'.
+  The columns are fo_captures' in its order: the manifest's, then each top-level field of
+  the structure. An empty list gives the same columns and no rows, by a select over the
+  payload '{}' with `limit 0`: BigQuery refuses a WHERE with no FROM.
+
+  A field the payload lacks is read as the view reads it (null; on BigQuery an empty list
+  or a struct of nulls, spec 0138 C20), and a key the structure does not declare is dropped
+  (ingestion/tests/test_capture_glob.py holds both against the view itself).
+#}
+{% macro fo_capture_rows(source_name, endpoint, captures) %}
+    {%- set fields = fromjson(fo_capture_structure(source_name, endpoint) | trim) -%}
+    {%- for c in captures -%}
+        {%- set number = loop.index -%}
+        {%- for key in ['request_key', 'fetched_at', 'file_path', 'partitions', 'payload'] -%}
+            {%- if key not in c -%}
+                {{- exceptions.raise_compiler_error("fo_capture_rows: capture " ~ number ~ " lacks '" ~ key ~ "'") -}}
+            {%- endif -%}
+        {%- endfor -%}
+    {%- endfor -%}
+    {%- set empty = captures | length == 0 -%}
+    {%- set rows = [{'request_key': 'none', 'fetched_at': 'none', 'file_path': 'none', 'partitions': '{}', 'payload': '{}'}] if empty else captures -%}
+    {%- for c in rows %}
+    select
+        {{ fo_sql_string(source_name) }} as source,
+        {{ fo_sql_string(endpoint) }} as endpoint,
+        {{ fo_sql_string(c.get('request_path', '/fixture')) }} as request_path,
+        {{ fo_sql_string(c.request_key) }} as request_key,
+        {{ fo_sql_string(c.fetched_at) }} as fetched_at,
+        {{ fo_capture_json(c.partitions) }} as partitions,
+        {{ fo_sql_string(c.file_path) }} as file_path,
+        {%- for field, inner in fields.items() %}
+        {{ fo_capture_field(fo_capture_json(c.payload), field, inner) }}{{ ',' if not loop.last }}
+        {%- endfor %}
+    {{ 'union all' if not loop.last }}
+    {%- endfor %}
+    {{ 'limit 0' if empty }}
+{% endmacro %}

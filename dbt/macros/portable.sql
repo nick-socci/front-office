@@ -327,3 +327,23 @@
 {% macro bigquery__fo_solve_lineup_period() -%}
     {{ function('solve_lineup_period') }}
 {%- endmacro %}
+
+
+{#
+  A text as a SQL string literal, quotes included (spec 0138, ADR 0111). For the unit-test
+  fixtures that put JSON text into SQL (fo_capture_rows).
+
+  DuckDB's string literals have no backslash escapes: only the quote is doubled. BigQuery
+  unescapes backslashes inside a string literal, so JSON holding \" would reach parse_json
+  as a bare quote and fail (spec 0138, C11 and C19): every backslash is doubled first, then
+  every quote is written \'.
+#}
+{% macro fo_sql_string(text) %}
+    {{- return(adapter.dispatch('fo_sql_string')(text)) -}}
+{% endmacro %}
+{% macro duckdb__fo_sql_string(text) -%}
+    '{{ text | replace("'", "''") }}'
+{%- endmacro %}
+{% macro bigquery__fo_sql_string(text) -%}
+    '{{ text | replace("\\", "\\\\") | replace("'", "\\'") }}'
+{%- endmacro %}
