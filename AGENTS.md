@@ -107,6 +107,35 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
   shortcut: it stops at `int_fantasy__started_days_match_the_starting_slots`, which fails
   over no rows by design, and skips the 148 nodes downstream of it. A ported model must
   leave the real DuckDB warehouse identical (`scripts/compare_warehouses.py`).
+- Every **unit test** runs on both warehouses too, from one definition (spec 0138, ADRs
+  0110 to 0114). dbt renders a fixture's `rows` when it parses the YAML, before the
+  project's macros exist, so a fixture that calls one wraps the call in
+  `{% raw %}…{% endraw %}`. The fixture forms:
+  - a capture view that declares a structure: its payload, through
+    `{% raw %}{{ fo_capture_rows('espn', 'roster', [{'request_key': …, 'fetched_at': …,
+    'file_path': …, 'partitions': '<JSON>', 'payload': '<JSON>'}]) }}{% endraw %}`, which
+    parses it with the view's own structure (`fo_capture_structure`);
+  - the manifest: `- input: "source('raw', '{{ 'api_responses' if target.type ==
+    'bigquery' else 'captures' }}')"`, never either source by name;
+  - a JSON column in a dict fixture: JSON text in a YAML string, as it lands. The project's
+    `bigquery__safe_cast` parses it on BigQuery;
+  - any other SQL fixture: SQL both warehouses take (`limit 0`, not `where false` with no
+    FROM; `union all`, not `VALUES`; `fo_type_text()`, `fo_unnest(fo_int_series(…), 'i')`).
+  `test_dbt_portable_sql_rule.py` holds the fixtures to these, for the constructs it knows.
+  The rest shows only on BigQuery: any build that adds a new form of fixture runs the unit
+  tests there and records the result on its issue. Into new suffixed datasets, as above:
+
+  ```bash
+  cd dbt && V='{fo_schema_suffix: _<tag>}'   # FO_BQ_PROJECT named explicitly
+  uv run --group bigquery dbt seed --target bq --vars "$V"
+  uv run --group bigquery dbt build --target bq --select resource_type:function --vars "$V"
+  uv run --group bigquery dbt run --target bq --selector bigquery --empty --vars "$V"
+  uv run --group bigquery dbt test --target bq --selector bigquery --resource-type unit_test --vars "$V"
+  ```
+
+  dbt reads the columns of each dict fixture's input from the warehouse, so the unit
+  tests need that complete build; the run bills nothing but the function's image build.
+  The four float tests of #139 fail there until #139 is settled.
 - The lineup solver is one file, `dbt/functions/solve_lineup_period.py`: a BigQuery Python
   UDF (a dbt function resource, Python 3.11, scipy and numpy pinned because BigQuery
   constrains numpy<2) and a DuckDB function the `fo_duckdb_functions` plugin registers on
@@ -131,7 +160,8 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
     of memory at 2 GB, the semi-join needs 0.18 GB.
   - A dbt unit test can mock a capture view, not the file read inside it; the views are
     held by `ingestion/tests/test_capture_glob.py` and
-    `stg_raw__capture_views_cover_the_manifest`.
+    `stg_raw__capture_views_cover_the_manifest`. A heavy view is mocked with
+    `fo_capture_rows` (see the unit-test entry above).
 - A node that parses a heavy endpoint (a capture view that declares a structure) must not
   gather the parse: no WHERE over the rows of a `fo_unnest` of parsed captures (filter the
   list first with `fo_list_filter`, or apply the condition after a `group by`), no
