@@ -343,3 +343,10 @@ None. C6 to C14 tested each mechanism this design rests on, on both warehouses.
   `fo_sql_string`'s BigQuery form also writes newlines and carriage returns as `\n` and
   `\r`: a single-quoted BigQuery literal cannot hold a line break, where dbt's `'''…'''`
   could. With both, R4.2's test passes on DuckDB and on BigQuery (`_141` datasets).
+- **2026-10-29, task 5.** R1.4's comparison found two differences, neither in what a model
+  reads. (1) `partitions`: the old fixtures cast the text with `::JSON`, which keeps its
+  spacing, and `fo_capture_rows` gives `json(…)`, which normalises it. The JSON values are
+  equal in all 14. (2) The six matchup-days fixtures had left out `scoringPeriodId`, a
+  top-level field of the view's structure. `fo_capture_rows` gives every declared field,
+  as the view does, so the new rows carry it, null in every row as before. R1.4 now
+  compares JSON as values and allows such a column. On those terms all 14 are equal.

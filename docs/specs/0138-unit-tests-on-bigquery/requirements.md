@@ -73,8 +73,11 @@ than marking the staging tests DuckDB-only.
   and SHALL give no error.
 - R1.3 THE SYSTEM SHALL keep each unit test's name, model and `expect` block as they were.
 - R1.4 WHEN a fixture is rewritten THE SYSTEM SHALL give, on DuckDB, the same rows as the
-  fixture it replaces: equal both ways under `except all`, with the same column names
-  and types. Checked once per rewritten fixture during the build, and recorded on #138.
+  fixture it replaces: equal both ways under `except all`, with JSON columns compared as
+  JSON values, and the same column names and types. A column the view has but the old
+  fixture left out may be added, and it is null in every row. Checked once per rewritten
+  fixture during the build, and recorded on #138. (Amended 2026-10-29; see design.md,
+  Amendments.)
 
 ### R2. The manifest is named by the target
 
