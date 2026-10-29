@@ -194,10 +194,11 @@ batting_pool as (
         on league_seasons.platform = hitter_totals.platform
         and league_seasons.league_id = hitter_totals.league_id
         and league_seasons.season = hitter_totals.season
-    qualify row_number() over (
-        partition by hitter_totals.platform, hitter_totals.league_id, hitter_totals.season
-        order by hitter_totals.plate_appearances desc, hitter_totals.mlbam_player_id asc
-    ) <= league_seasons.team_count
+    {{ fo_keep_first(
+        ['hitter_totals.platform', 'hitter_totals.league_id', 'hitter_totals.season'],
+        'hitter_totals.plate_appearances desc, hitter_totals.mlbam_player_id asc',
+        'league_seasons.team_count'
+    ) }}
 
 ),
 
@@ -244,17 +245,17 @@ pitching_pool as (
         on league_seasons.platform = pitching_candidates.platform
         and league_seasons.league_id = pitching_candidates.league_id
         and league_seasons.season = pitching_candidates.season
-    qualify row_number() over (
-        partition by
-            pitching_candidates.platform,
-            pitching_candidates.league_id,
-            pitching_candidates.season,
-            pitching_candidates.day_kind
-        order by
-            pitching_candidates.kind_days desc,
-            pitching_candidates.kind_outs desc,
-            pitching_candidates.mlbam_player_id asc
-    ) <= league_seasons.team_count
+    {{ fo_keep_first(
+        [
+            'pitching_candidates.platform',
+            'pitching_candidates.league_id',
+            'pitching_candidates.season',
+            'pitching_candidates.day_kind',
+        ],
+        'pitching_candidates.kind_days desc, pitching_candidates.kind_outs desc,'
+        ' pitching_candidates.mlbam_player_id asc',
+        'league_seasons.team_count'
+    ) }}
 
 ),
 
@@ -303,9 +304,14 @@ pitching_days_to_date as (
         mlbam_player_id,
         season,
         game_date,
-        row_number() over pitching_order - 1 as earlier_pitching_days,
+        {{ fo_row_number(['mlbam_player_id', 'season'], 'game_date') }} - 1
+            as earlier_pitching_days,
+        -- tie-exempt: pitching_order is the window fo_row_number checks on
+        -- earlier_pitching_days, in the same select
         lag({{ fo_pitching_day_kind('games_pitched', 'games_started') }} = 'start', 1)
             over pitching_order as last_was_start,
+        -- tie-exempt: pitching_order is the window fo_row_number checks on
+        -- earlier_pitching_days, in the same select
         lag({{ fo_pitching_day_kind('games_pitched', 'games_started') }} = 'start', 2)
             over pitching_order as one_before_was_start
     from {{ ref('int_mlb__player_game_days') }}

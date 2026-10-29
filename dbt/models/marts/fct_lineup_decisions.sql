@@ -293,26 +293,18 @@ sat_totals as (
 
 ),
 
-ranked_missed_starts as (
-
-    select
-        *,
-        -- The value is rounded to 12 places for the order only, as the solver rounds it
-        -- (ADR 0104): two players worth the same differ in BigQuery's last digits, and the
-        -- unrounded order would pick between them by that noise instead of by player id.
-        row_number() over (
-            partition by platform, league_id, season, scoring_date, fantasy_team_id
-            order by round(option_value, 12) desc, platform_player_id asc
-        ) as missed_start_rank
-    from optimal_options
-    where not is_started
-
-),
-
 missed_starts as (
 
-    select * from ranked_missed_starts
-    where missed_start_rank = 1
+    select *
+    from optimal_options
+    where not is_started
+    -- The value is rounded to 12 places for the order only, as the solver rounds it
+    -- (ADR 0104): two players worth the same differ in BigQuery's last digits, and the
+    -- unrounded order would pick between them by that noise instead of by player id.
+    {{ fo_keep_first(
+        ['platform', 'league_id', 'season', 'scoring_date', 'fantasy_team_id'],
+        'round(option_value, 12) desc, platform_player_id asc'
+    ) }}
 
 ),
 

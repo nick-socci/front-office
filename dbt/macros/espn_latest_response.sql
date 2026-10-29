@@ -31,19 +31,19 @@
 #}
 {% macro fo_espn_latest_paths(endpoint, extra_partition=none) %}
 
+    {%- set partition_by = [
+        fo_json_text('keys.partitions', '$.league_id'),
+        fo_json_int('keys.partitions', '$.season'),
+    ] -%}
+    {%- if extra_partition -%}
+        {%- do partition_by.append(fo_request_param('keys.request_key', extra_partition)) -%}
+    {%- endif %}
+
     select keys.file_path
     from {{ fo_capture_keys() }} as keys
     where keys.source = 'espn'
       and keys.endpoint = '{{ endpoint }}'
-    qualify row_number() over (
-        partition by
-            {{ fo_json_text('keys.partitions', '$.league_id') }},
-            {{ fo_json_int('keys.partitions', '$.season') }}
-            {%- if extra_partition %},
-            {{ fo_request_param('keys.request_key', extra_partition) }}
-            {%- endif %}
-        order by keys.fetched_at desc, keys.file_path desc
-    ) = 1
+    {{ fo_keep_first(partition_by, 'keys.fetched_at desc, keys.file_path desc') }}
 
 {%- endmacro %}
 

@@ -245,35 +245,25 @@ drop_games as (
 next_adds as (
 
     select
-        platform,
-        league_id,
-        season,
-        transaction_id,
-        next_added_at,
-        next_added_by_team_id
-    from (
-        select
-            drops.platform,
-            drops.league_id,
-            drops.season,
-            drops.transaction_id,
-            adds.transacted_at as next_added_at,
-            adds.fantasy_team_id as next_added_by_team_id,
-            row_number() over (
-                partition by drops.platform, drops.league_id, drops.season, drops.transaction_id
-                order by adds.transacted_at, adds.transaction_id
-            ) as add_rank
-        from transactions as drops
-        inner join transactions as adds
-            on adds.platform = drops.platform
-            and adds.league_id = drops.league_id
-            and adds.season = drops.season
-            and adds.platform_player_id = drops.platform_player_id
-            and adds.movement = 'add'
-            and adds.transacted_at > drops.transacted_at
-        where drops.movement = 'drop'
-    ) as ranked_adds
-    where add_rank = 1
+        drops.platform,
+        drops.league_id,
+        drops.season,
+        drops.transaction_id,
+        adds.transacted_at as next_added_at,
+        adds.fantasy_team_id as next_added_by_team_id
+    from transactions as drops
+    inner join transactions as adds
+        on adds.platform = drops.platform
+        and adds.league_id = drops.league_id
+        and adds.season = drops.season
+        and adds.platform_player_id = drops.platform_player_id
+        and adds.movement = 'add'
+        and adds.transacted_at > drops.transacted_at
+    where drops.movement = 'drop'
+    {{ fo_keep_first(
+        ['drops.platform', 'drops.league_id', 'drops.season', 'drops.transaction_id'],
+        'adds.transacted_at, adds.transaction_id'
+    ) }}
 
 ),
 

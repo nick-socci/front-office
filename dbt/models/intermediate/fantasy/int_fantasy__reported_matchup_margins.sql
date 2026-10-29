@@ -217,6 +217,8 @@ ranked_period_means as (
         season,
         category_key,
         mean_side_total,
+        -- tie-exempt: only the values at the middle positions are read, and tied rows hold
+        -- equal values
         row_number() over (
             partition by league_id, season, category_key
             order by mean_side_total
@@ -262,6 +264,8 @@ ranked_volume_ratios as (
         period_means.season,
         period_means.matchup_period,
         period_means.mean_side_total / usual_means.usual_side_total as volume_ratio,
+        -- tie-exempt: only the values at the middle positions are read, and tied rows hold
+        -- equal values
         row_number() over (
             partition by
                 period_means.league_id, period_means.season, period_means.matchup_period

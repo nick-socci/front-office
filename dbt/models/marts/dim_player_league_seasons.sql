@@ -53,31 +53,18 @@ with roster_players as (
         player_name,
         player_resolution,
         default_position,
-        first_rostered_date,
-        last_rostered_date
-    from (
-        select
-            platform,
-            league_id,
-            season,
-            platform_player_id,
-            mlbam_player_id,
-            player_name,
-            player_resolution,
-            default_position,
-            min(scoring_date) over (
-                partition by platform, league_id, season, platform_player_id
-            ) as first_rostered_date,
-            max(scoring_date) over (
-                partition by platform, league_id, season, platform_player_id
-            ) as last_rostered_date,
-            row_number() over (
-                partition by platform, league_id, season, platform_player_id
-                order by scoring_date desc, fantasy_team_id asc
-            ) as latest_rank
-        from {{ ref('int_fantasy__roster_days') }}
-    )
-    where latest_rank = 1
+        -- QUALIFY filters after the windows, so these two still see every day of the player.
+        min(scoring_date) over (
+            partition by platform, league_id, season, platform_player_id
+        ) as first_rostered_date,
+        max(scoring_date) over (
+            partition by platform, league_id, season, platform_player_id
+        ) as last_rostered_date
+    from {{ ref('int_fantasy__roster_days') }}
+    {{ fo_keep_first(
+        ['platform', 'league_id', 'season', 'platform_player_id'],
+        'scoring_date desc, fantasy_team_id asc'
+    ) }}
 
 ),
 

@@ -7,9 +7,10 @@ with latest as (
 
     select
         payload,
-        fetched_at
+        fetched_at,
+        file_path
     from {{ ref('stg_raw__idmap_player_id_map') }}
-    qualify row_number() over (order by fetched_at desc) = 1
+    {{ fo_keep_first([], 'fetched_at desc, file_path desc') }}
 
 ),
 
