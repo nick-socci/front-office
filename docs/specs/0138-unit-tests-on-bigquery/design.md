@@ -333,3 +333,13 @@ None. C6 to C14 tested each mechanism this design rests on, on both warehouses.
   so the two could not both hold. R3.3 now compares the compiled views without their
   comment lines, which is what it is there to protect. The 11 views compile identically
   on `ci` and on `bq` once comment and blank lines are left out.
+- **2026-10-29, task 4.** R4.2's new test failed on BigQuery in its expected rows, not in
+  its JSON. dbt-bigquery writes a STRING value as `'''…'''` without escaping backslashes,
+  so the expected name `Bob "Q" Back\slash` failed as `Illegal escape sequence: \s`. That is
+  C11's flaw in every string column, inputs and expected rows alike. No fixture held a
+  backslash before, which is why it had not shown. `bigquery__safe_cast` (§4) now also
+  rebuilds a non-JSON string whose text holds a backslash, `safe_cast(<fo_sql_string> as
+  <type>)`. Other values still go to the adapter unchanged. R4.3 is amended to say so.
+  `fo_sql_string`'s BigQuery form also writes newlines and carriage returns as `\n` and
+  `\r`: a single-quoted BigQuery literal cannot hold a line break, where dbt's `'''…'''`
+  could. With both, R4.2's test passes on DuckDB and on BigQuery (`_141` datasets).

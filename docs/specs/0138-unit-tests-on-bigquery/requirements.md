@@ -112,7 +112,8 @@ than marking the staging tests DuckDB-only.
   (`Travis d'Arnaud`), an escaped double quote and a backslash come out exactly as MLB
   gives them.
 - R4.3 WHILE a fixture value is for a column that is not JSON THE SYSTEM SHALL cast it as
-  dbt does today.
+  dbt does today, except that on BigQuery a text holding a backslash keeps its backslashes.
+  (Amended 2026-10-29; see design.md, Amendments.)
 
 ### R5. SQL fixtures are portable
 

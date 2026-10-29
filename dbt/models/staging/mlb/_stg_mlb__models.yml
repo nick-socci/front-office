@@ -384,6 +384,30 @@ unit_tests:
         - {season: 2026, mlbam_player_id: 2, player_name: Only Older, primary_position: C, bats: R, throws: R, birth_date: "1999-06-01", mlb_debut_date: "2023-06-05"}
         - {season: 2025, mlbam_player_id: 1, player_name: Past Name, primary_position: P, bats: L, throws: L, birth_date: "1999-06-01", mlb_debut_date: "2023-06-05"}
 
+  - name: stg_mlb__players_keep_a_name_exactly_as_mlb_gives_it
+    description: >
+      A name with an apostrophe, and one with an escaped double quote and an escaped
+      backslash in its JSON text, comes out of the model character for character. Catches
+      an apostrophe, a quote or a backslash in a JSON fixture value lost or changed on
+      either warehouse (spec 0138, R4.2): BigQuery unescapes backslashes in a string
+      literal, so a fixture literal written without care loses the escape and the JSON
+      no longer parses to the same name.
+    model: stg_mlb__players
+    given:
+      - input: ref('stg_raw__mlb_players')
+        rows:
+          - source: mlb
+            endpoint: players
+            request_key: "season=2026"
+            fetched_at: "20260901T000000Z"
+            file_path: players-2026-20260901T000000Z.json
+            payload: '{"people":[{"id":1,"fullName":"Travis d''Arnaud","primaryPosition":{"abbreviation":"C"},"batSide":{"code":"R"},"pitchHand":{"code":"R"},"birthDate":"1989-02-10","mlbDebutDate":"2012-08-21"},{"id":2,"fullName":"Bob \"Q\" Back\\slash","primaryPosition":{"abbreviation":"P"},"batSide":{"code":"L"},"pitchHand":{"code":"L"},"birthDate":"1999-06-01","mlbDebutDate":"2023-06-05"}]}'
+    expect:
+      # Double-quoted YAML, so the meaning is explicit: \" is a quote, \\ is one backslash.
+      rows:
+        - {season: 2026, mlbam_player_id: 1, player_name: "Travis d'Arnaud", primary_position: C, bats: R, throws: R, birth_date: "1989-02-10", mlb_debut_date: "2012-08-21"}
+        - {season: 2026, mlbam_player_id: 2, player_name: "Bob \"Q\" Back\\slash", primary_position: P, bats: L, throws: L, birth_date: "1999-06-01", mlb_debut_date: "2023-06-05"}
+
 seeds:
   - name: mlb_game_states
     description: >
