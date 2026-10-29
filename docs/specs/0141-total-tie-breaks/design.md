@@ -236,3 +236,13 @@ same MLB id (C4).
   `identifier` is `inline_query`. The design said it was undefined there. The macro still
   falls back to `inline` where `this` is undefined, and the tests assert `inline_query`.
   R1.2's message is unchanged.
+- **2026-10-29 (pre-PR review, F1).** R4.3 said the BigQuery tests over the `--empty`
+  tables "SHALL pass". One test, `int_fantasy__started_days_match_the_starting_slots`,
+  fails over no rows by design (AGENTS.md, dbt gotchas). R4.3 now names it, and requires
+  the rest to match `main`: PASS=489 WARN=1 ERROR=1 on both, as #137 recorded.
+- **2026-10-29 (pre-PR review, F2).** R1.1a's check compared `min(rows)` with `max(rows)`,
+  which skip nulls, so a partition with a null `rows` beside a value passed. The macro also
+  compares `count(rows)` with `count(*)` over the partition. A literal-row case for a null
+  beside a value, and one for all nulls, is in `test_tie_macros.py` and in the BigQuery
+  script. The R1.1a text already asked for one value per partition, so no requirement
+  changed.

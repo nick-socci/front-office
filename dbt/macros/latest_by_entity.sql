@@ -58,19 +58,21 @@
 
 {#
   Keep places 1 to `rows` of each partition. `rows` is an integer, or a column expression
-  with one value in each partition: with several values there is no single cut, and a tie
-  could pass unseen, so that stops the build too.
+  with one non-null value in each partition: with several values, or a null, there is no
+  single cut, and a tie could pass unseen, so that stops the build too. min and max skip
+  nulls, so the null case is the count of values against the count of rows.
 #}
 {% macro fo_keep_first(partition_by, order_by, rows=1) %}
     {%- set over = fo_tie_window(partition_by, order_by) -%}
+    {%- set whole = '(' ~ ('partition by ' ~ (partition_by | join(', ')) if partition_by else '') ~ ')' -%}
     {%- set literal = rows is integer or (rows | string).isdigit() -%}
     qualify case
         when row_number() over {{ over }} = ({{ rows }}) + 1
             and rank() over {{ over }} <= ({{ rows }})
             then error({{ fo_tie_message(partition_by, '(' ~ rows ~ ')') }})
         {%- if not literal %}
-        when min({{ rows }}) over ({% if partition_by %}partition by {{ partition_by | join(', ') }}{% endif %})
-            <> max({{ rows }}) over ({% if partition_by %}partition by {{ partition_by | join(', ') }}{% endif %})
+        when min({{ rows }}) over {{ whole }} <> max({{ rows }}) over {{ whole }}
+            or count({{ rows }}) over {{ whole }} <> count(*) over {{ whole }}
             then error({{ fo_tie_message(partition_by, none, 'the number of rows to keep differs') }})
         {%- endif %}
         else row_number() over {{ over }} <= ({{ rows }})

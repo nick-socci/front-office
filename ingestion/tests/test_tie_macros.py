@@ -17,8 +17,9 @@ installs them if they are missing. What each case catches:
 - no partition: a window that drops the partition clause, or a message that names no keys;
 - `rows` as a column constant within each partition: a cut that ignores the expression,
   or an expression that loses its parentheses;
-- `rows` as a column that differs within a partition (R1.1a): a partition with no single
-  cut, where a tie could pass unseen;
+- `rows` as a column that differs within a partition, or is null in it (R1.1a): a
+  partition with no single cut, where a tie could pass unseen. min and max skip nulls, so
+  a null beside a value is its own case;
 - a null partition key: a key that reads as nothing in the message, or a null partition
   that is not checked like any other;
 - the message: the node, the place and the key values, so a failed build says where;
@@ -178,6 +179,17 @@ def test_keep_with_a_column_for_rows_raises_on_a_tie_at_that_cut(run: Run) -> No
 
 def test_keep_raises_when_rows_differs_within_a_partition_even_without_a_tie(run: Run) -> None:
     rows = "(1, 1, 'a', 1), (1, 2, 'b', 2), (1, 3, 'c', 2)"
+    message = _error(run, _keep(rows, "['g']", "o", "'quota'"))
+    assert f"{NODE}: the number of rows to keep differs in (1)" in message
+
+
+@pytest.mark.parametrize(
+    "rows",
+    ["(1, 1, 'a', 1), (1, 2, 'b', null)", "(1, 1, 'a', null), (1, 2, 'b', null)"],
+    ids=["null-beside-a-value", "all-null"],
+)
+def test_keep_raises_when_rows_is_null_in_a_partition(run: Run, rows: str) -> None:
+    # min and max skip nulls, so a null beside a value looks like one value to them.
     message = _error(run, _keep(rows, "['g']", "o", "'quota'"))
     assert f"{NODE}: the number of rows to keep differs in (1)" in message
 
