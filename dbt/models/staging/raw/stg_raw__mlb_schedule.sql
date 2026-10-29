@@ -4,11 +4,9 @@
 -- A schedule response is over 1 MB, 20 of them are that large, and every reader of
 -- stg_mlb__games reads this view. Read whole, each was a payload value in a query; read
 -- through a declared structure only the days and their games are kept, and the rest of the
--- response is dropped while it is read. Each game stays one JSON value, because its readers
--- read it with fo_json_*, from the same paths as before.
+-- response is dropped while it is read.
+--
+-- The structure is in the macro fo_capture_structure (macros/capture_structures.sql, spec
+-- 0138, ADR 0111).
 
-{% set structure %}
-{"dates": [{"games": ["JSON"]}]}
-{% endset %}
-
-{{ fo_captures('mlb', 'schedule', structure) }}
+{{ fo_captures('mlb', 'schedule', fo_capture_structure('mlb', 'schedule')) }}

@@ -34,6 +34,31 @@ ROSTER_STRUCTURE = (
 
 SCHEDULE_STRUCTURE = '{"dates": [{"games": ["JSON"]}]}'
 
+# Absent: seasonId (a scalar), eligibleSlots (a list), the stat line's `stats` (a map),
+# team 4's `roster` and entry 12's `playerPoolEntry` (objects). Undeclared: `extra`.
+ABSENT_PATH = "espn/roster_absent/season=2026/fetched_at=20260101T000000Z"
+ABSENT_PAYLOAD = {
+    "id": 5,
+    "extra": 1,
+    "teams": [
+        {
+            "id": 3,
+            "roster": {
+                "entries": [
+                    {
+                        "playerId": 11,
+                        "playerPoolEntry": {
+                            "player": {"fullName": "A", "stats": [{"scoringPeriodId": 1}]}
+                        },
+                    },
+                    {"playerId": 12},
+                ]
+            },
+        },
+        {"id": 4},
+    ],
+}
+
 
 def _capture(root: Path, relative: str, payload: str) -> str:
     """Write a capture's payload (and a sidecar, as the writer does) under `root`."""
@@ -111,6 +136,11 @@ def landing(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[Path, Pa
                 ],
             }
         ),
+    )
+    # Spec 0138 R3.2: a payload lacking a field of every kind the roster declares (a scalar,
+    # a list, a map, an object) and holding one it does not declare.
+    listed_capture(
+        "espn", "roster_absent", ABSENT_PATH, json.dumps(ABSENT_PAYLOAD, separators=(",", ":"))
     )
     # R2.4: espn/matchup_days has nothing at all.
 
@@ -239,3 +269,25 @@ def test_a_landing_root_with_a_quote_in_its_path_is_read(tmp_path, monkeypatch):
     con.close()
     rows = _rows((root, db), monkeypatch, "fo_captures('espn', 'settings')")
     assert [row[6] for row in rows] == [path]
+
+
+def test_a_fixture_gives_what_the_view_gives_for_the_same_file(landing, monkeypatch):
+    """Catches a fixture that treats an absent or an extra field differently from the file it
+    stands for (spec 0138 R3.2): fo_capture_rows must give, for the payload text, the rows
+    fo_captures gives for the file holding it, whatever the payload lacks or adds."""
+    payload = json.dumps(ABSENT_PAYLOAD, separators=(",", ":"))
+    assert "'" not in payload  # it goes into a Jinja string quoted with '
+    view = "fo_captures('espn', 'roster_absent', fo_capture_structure('espn', 'roster'))"
+    fixture = (
+        "fo_capture_rows('espn', 'roster', [{'request_path': '/p', 'request_key': 'k', "
+        "'fetched_at': '20260101T000000Z', 'partitions': '{}', "
+        f"'file_path': '{ABSENT_PATH}/payload.json', 'payload': '{payload}'}}])"
+    )
+    # `source` and `endpoint` differ by construction; nested values are read back as JSON.
+    columns = (
+        "request_path, request_key, fetched_at, partitions::varchar as partitions, file_path, "
+        'id, "seasonId", to_json(teams)::varchar as teams'
+    )
+    from_view = _rows(landing, monkeypatch, view, columns)
+    assert len(from_view) == 1
+    assert _rows(landing, monkeypatch, fixture, columns) == from_view

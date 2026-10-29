@@ -205,11 +205,11 @@ unit_tests:
       - input: ref('stg_raw__mlb_schedule')
         format: sql
         rows: |
-          select
-              'mlb' as source, 'schedule' as endpoint, '/s' as request_path,
-              'season=2026' as request_key, '20260601T000000Z' as fetched_at,
-              '{}'::JSON as partitions, 'schedule.json' as file_path,
-              from_json('[{"games":[{"gamePk":1,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Cancelled"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":1,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":2,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":2,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Cancelled"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Postponed"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Completed Early"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}}]}]', '[{"games": ["JSON"]}]') as dates
+          {% raw %}{{ fo_capture_rows('mlb', 'schedule', [
+            {'request_path': '/s', 'request_key': 'season=2026', 'fetched_at': '20260601T000000Z',
+             'partitions': '{}', 'file_path': 'schedule.json',
+             'payload': '{"copyright": "MLB test fixture", "dates": [{"date": "2026-06-01", "games":[{"gamePk":1,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Cancelled"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":1,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":2,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":2,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Cancelled"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Postponed"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-01","status":{"abstractGameState":"Final","detailedState":"Completed Early"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}}]}]}'}
+          ]) }}{% endraw %}
       - input: ref('mlb_game_states')
         rows:
           - {detailed_state: Final, is_played: true}
@@ -236,11 +236,11 @@ unit_tests:
       - input: ref('stg_raw__mlb_schedule')
         format: sql
         rows: |
-          select
-              'mlb' as source, 'schedule' as endpoint, '/s' as request_path,
-              'season=2026' as request_key, '20260701T000000Z' as fetched_at,
-              '{}'::JSON as partitions, 'schedule.json' as file_path,
-              from_json('[{"games":[{"gamePk":1,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-16T23:15:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":1,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-17T18:00:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}},"resumedFrom":"2026-06-16T23:15:00Z"},{"gamePk":2,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-17T18:00:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}},"resumedFrom":"2026-06-16T23:15:00Z"},{"gamePk":2,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-16T23:15:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-10T23:10:00Z","status":{"abstractGameState":"Final","detailedState":"Postponed"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-16T12:33:00Z","status":{"abstractGameState":"Final","detailedState":"Cancelled"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}}]}]', '[{"games": ["JSON"]}]') as dates
+          {% raw %}{{ fo_capture_rows('mlb', 'schedule', [
+            {'request_path': '/s', 'request_key': 'season=2026', 'fetched_at': '20260701T000000Z',
+             'partitions': '{}', 'file_path': 'schedule.json',
+             'payload': '{"copyright": "MLB test fixture", "dates": [{"date": "2026-06-16", "games":[{"gamePk":1,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-16T23:15:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":1,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-17T18:00:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}},"resumedFrom":"2026-06-16T23:15:00Z"},{"gamePk":2,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-17T18:00:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}},"resumedFrom":"2026-06-16T23:15:00Z"},{"gamePk":2,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-16T23:15:00Z","status":{"abstractGameState":"Final","detailedState":"Final"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-10T23:10:00Z","status":{"abstractGameState":"Final","detailedState":"Postponed"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}},{"gamePk":3,"gameType":"R","officialDate":"2026-06-16","gameDate":"2026-06-16T12:33:00Z","status":{"abstractGameState":"Final","detailedState":"Cancelled"},"teams":{"home":{"team":{"id":10}},"away":{"team":{"id":20}}}}]}]}'}
+          ]) }}{% endraw %}
       - input: ref('mlb_game_states')
         rows:
           - {detailed_state: Final, is_played: true}
@@ -259,23 +259,22 @@ unit_tests:
       report the corrected value, not the original.
     model: stg_mlb__pitching_game_logs
     given:
-      # The capture view's rows, `teams` typed as the view declares it (a map of JSON
-      # players). The manifest is given as well: the latest-capture macro chooses on it.
+      # The capture view's rows: each payload parsed with the view's own structure (a map
+      # of JSON players), and carrying a `copyright` key the structure does not declare, as
+      # MLB's responses do. The manifest is given as well: the latest-capture macro chooses
+      # on it.
       - input: ref('stg_raw__mlb_boxscore')
         format: sql
         rows: |
-          select
-              'mlb' as source, 'boxscore' as endpoint, '/b' as request_path,
-              'gamePk=1' as request_key, '20260401T000000Z' as fetched_at,
-              '{"season": 2026}'::JSON as partitions, 'first.json' as file_path,
-              from_json('{"home":{"team":{"id":10},"players":{"ID100":{"person":{"id":100,"fullName":"P One"},"stats":{"pitching":{"gamesPitched":1,"gamesStarted":1,"outs":19,"inningsPitched":"6.1","earnedRuns":3,"runs":3}}}}},"away":{"team":{"id":20},"players":{}}}', '{"home": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, STRUCT(person JSON, position JSON, battingOrder JSON, gameStatus JSON, stats STRUCT(batting JSON, pitching JSON)))"}, "away": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, STRUCT(person JSON, position JSON, battingOrder JSON, gameStatus JSON, stats STRUCT(batting JSON, pitching JSON)))"}}') as teams
-          union all
-          select
-              'mlb', 'boxscore', '/b',
-              'gamePk=1', '20260405T000000Z',
-              '{"season": 2026}'::JSON, 'second.json',
-              from_json('{"home":{"team":{"id":10},"players":{"ID100":{"person":{"id":100,"fullName":"P One"},"stats":{"pitching":{"gamesPitched":1,"gamesStarted":1,"outs":19,"inningsPitched":"6.1","earnedRuns":2,"runs":3}}}}},"away":{"team":{"id":20},"players":{}}}', '{"home": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, STRUCT(person JSON, position JSON, battingOrder JSON, gameStatus JSON, stats STRUCT(batting JSON, pitching JSON)))"}, "away": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, STRUCT(person JSON, position JSON, battingOrder JSON, gameStatus JSON, stats STRUCT(batting JSON, pitching JSON)))"}}')
-      - input: source('raw', 'captures')
+          {% raw %}{{ fo_capture_rows('mlb', 'boxscore', [
+            {'request_path': '/b', 'request_key': 'gamePk=1', 'fetched_at': '20260401T000000Z',
+             'partitions': '{"season": 2026}', 'file_path': 'first.json',
+             'payload': '{"copyright": "MLB test fixture", "teams": {"home":{"team":{"id":10},"players":{"ID100":{"person":{"id":100,"fullName":"P One"},"stats":{"pitching":{"gamesPitched":1,"gamesStarted":1,"outs":19,"inningsPitched":"6.1","earnedRuns":3,"runs":3}}}}},"away":{"team":{"id":20},"players":{}}}}'},
+            {'request_path': '/b', 'request_key': 'gamePk=1', 'fetched_at': '20260405T000000Z',
+             'partitions': '{"season": 2026}', 'file_path': 'second.json',
+             'payload': '{"copyright": "MLB test fixture", "teams": {"home":{"team":{"id":10},"players":{"ID100":{"person":{"id":100,"fullName":"P One"},"stats":{"pitching":{"gamesPitched":1,"gamesStarted":1,"outs":19,"inningsPitched":"6.1","earnedRuns":2,"runs":3}}}}},"away":{"team":{"id":20},"players":{}}}}'}
+          ]) }}{% endraw %}
+      - input: "source('raw', '{{ 'api_responses' if target.type == 'bigquery' else 'captures' }}')"
         rows:
           - {source: mlb, endpoint: boxscore, request_path: /b, request_key: "gamePk=1", fetched_at: "20260401T000000Z", partitions: '{"season": 2026}', file_path: first.json}
           - {source: mlb, endpoint: boxscore, request_path: /b, request_key: "gamePk=1", fetched_at: "20260405T000000Z", partitions: '{"season": 2026}', file_path: second.json}
@@ -298,12 +297,12 @@ unit_tests:
       - input: ref('stg_raw__mlb_boxscore')
         format: sql
         rows: |
-          select
-              'mlb' as source, 'boxscore' as endpoint, '/b' as request_path,
-              'gamePk=2' as request_key, '20260401T000000Z' as fetched_at,
-              '{"season": 2026}'::JSON as partitions, 'bat.json' as file_path,
-              from_json('{"home":{"team":{"id":10},"players":{"ID200":{"person":{"id":200,"fullName":"Starter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":2,"doubles":1,"triples":0,"homeRuns":0,"stolenBases":0}}},"ID201":{"person":{"id":201,"fullName":"Bench"},"stats":{"batting":{}}},"ID202":{"person":{"id":202,"fullName":"Pinch Runner"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":0,"atBats":0,"hits":0,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":1}}}}},"away":{"team":{"id":20},"players":{}}}', '{"home": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, STRUCT(person JSON, position JSON, battingOrder JSON, gameStatus JSON, stats STRUCT(batting JSON, pitching JSON)))"}, "away": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, STRUCT(person JSON, position JSON, battingOrder JSON, gameStatus JSON, stats STRUCT(batting JSON, pitching JSON)))"}}') as teams
-      - input: source('raw', 'captures')
+          {% raw %}{{ fo_capture_rows('mlb', 'boxscore', [
+            {'request_path': '/b', 'request_key': 'gamePk=2', 'fetched_at': '20260401T000000Z',
+             'partitions': '{"season": 2026}', 'file_path': 'bat.json',
+             'payload': '{"teams": {"home":{"team":{"id":10},"players":{"ID200":{"person":{"id":200,"fullName":"Starter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":2,"doubles":1,"triples":0,"homeRuns":0,"stolenBases":0}}},"ID201":{"person":{"id":201,"fullName":"Bench"},"stats":{"batting":{}}},"ID202":{"person":{"id":202,"fullName":"Pinch Runner"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":0,"atBats":0,"hits":0,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":1}}}}},"away":{"team":{"id":20},"players":{}}}}'}
+          ]) }}{% endraw %}
+      - input: "source('raw', '{{ 'api_responses' if target.type == 'bigquery' else 'captures' }}')"
         rows:
           - {source: mlb, endpoint: boxscore, request_path: /b, request_key: "gamePk=2", fetched_at: "20260401T000000Z", partitions: '{"season": 2026}', file_path: bat.json}
     expect:
@@ -329,18 +328,15 @@ unit_tests:
       - input: ref('stg_raw__mlb_boxscore')
         format: sql
         rows: |
-          select
-              'mlb' as source, 'boxscore' as endpoint, '/b' as request_path,
-              'gamePk=3' as request_key, '20260401T000000Z' as fetched_at,
-              '{"season": 2026}'::JSON as partitions, 'older.json' as file_path,
-              from_json('{"home":{"team":{"id":10},"players":{"ID300":{"person":{"id":300,"fullName":"Batter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":3,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":0}}}}},"away":{"team":{"id":20},"players":{}}}', '{"home": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, STRUCT(person JSON, position JSON, battingOrder JSON, gameStatus JSON, stats STRUCT(batting JSON, pitching JSON)))"}, "away": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, STRUCT(person JSON, position JSON, battingOrder JSON, gameStatus JSON, stats STRUCT(batting JSON, pitching JSON)))"}}') as teams
-          union all
-          select
-              'mlb', 'boxscore', '/b',
-              'gamePk=3', '20260405T000000Z',
-              '{"season": 2026}'::JSON, 'newer.json',
-              from_json('{"home":{"team":{"id":10},"players":{"ID300":{"person":{"id":300,"fullName":"Batter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":2,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":0}}}}},"away":{"team":{"id":20},"players":{}}}', '{"home": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, STRUCT(person JSON, position JSON, battingOrder JSON, gameStatus JSON, stats STRUCT(batting JSON, pitching JSON)))"}, "away": {"team": {"id": "BIGINT"}, "teamStats": {"batting": "JSON"}, "players": "MAP(VARCHAR, STRUCT(person JSON, position JSON, battingOrder JSON, gameStatus JSON, stats STRUCT(batting JSON, pitching JSON)))"}}')
-      - input: source('raw', 'captures')
+          {% raw %}{{ fo_capture_rows('mlb', 'boxscore', [
+            {'request_path': '/b', 'request_key': 'gamePk=3', 'fetched_at': '20260401T000000Z',
+             'partitions': '{"season": 2026}', 'file_path': 'older.json',
+             'payload': '{"teams": {"home":{"team":{"id":10},"players":{"ID300":{"person":{"id":300,"fullName":"Batter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":3,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":0}}}}},"away":{"team":{"id":20},"players":{}}}}'},
+            {'request_path': '/b', 'request_key': 'gamePk=3', 'fetched_at': '20260405T000000Z',
+             'partitions': '{"season": 2026}', 'file_path': 'newer.json',
+             'payload': '{"teams": {"home":{"team":{"id":10},"players":{"ID300":{"person":{"id":300,"fullName":"Batter"},"stats":{"batting":{"gamesPlayed":1,"plateAppearances":4,"atBats":4,"hits":2,"doubles":0,"triples":0,"homeRuns":0,"stolenBases":0}}}}},"away":{"team":{"id":20},"players":{}}}}'}
+          ]) }}{% endraw %}
+      - input: "source('raw', '{{ 'api_responses' if target.type == 'bigquery' else 'captures' }}')"
         rows:
           - {source: mlb, endpoint: boxscore, request_path: /b, request_key: "gamePk=3", fetched_at: "20260401T000000Z", partitions: '{"season": 2026}', file_path: older.json}
           - {source: mlb, endpoint: boxscore, request_path: /b, request_key: "gamePk=3", fetched_at: "20260405T000000Z", partitions: '{"season": 2026}', file_path: newer.json}
@@ -383,6 +379,30 @@ unit_tests:
         - {season: 2026, mlbam_player_id: 1, player_name: New Name, primary_position: SS, bats: S, throws: R, birth_date: "1999-06-01", mlb_debut_date: "2023-06-05"}
         - {season: 2026, mlbam_player_id: 2, player_name: Only Older, primary_position: C, bats: R, throws: R, birth_date: "1999-06-01", mlb_debut_date: "2023-06-05"}
         - {season: 2025, mlbam_player_id: 1, player_name: Past Name, primary_position: P, bats: L, throws: L, birth_date: "1999-06-01", mlb_debut_date: "2023-06-05"}
+
+  - name: stg_mlb__players_keep_a_name_exactly_as_mlb_gives_it
+    description: >
+      A name with an apostrophe, and one with an escaped double quote and an escaped
+      backslash in its JSON text, comes out of the model character for character. Catches
+      an apostrophe, a quote or a backslash in a JSON fixture value lost or changed on
+      either warehouse (spec 0138, R4.2): BigQuery unescapes backslashes in a string
+      literal, so a fixture literal written without care loses the escape and the JSON
+      no longer parses to the same name.
+    model: stg_mlb__players
+    given:
+      - input: ref('stg_raw__mlb_players')
+        rows:
+          - source: mlb
+            endpoint: players
+            request_key: "season=2026"
+            fetched_at: "20260901T000000Z"
+            file_path: players-2026-20260901T000000Z.json
+            payload: '{"people":[{"id":1,"fullName":"Travis d''Arnaud","primaryPosition":{"abbreviation":"C"},"batSide":{"code":"R"},"pitchHand":{"code":"R"},"birthDate":"1989-02-10","mlbDebutDate":"2012-08-21"},{"id":2,"fullName":"Bob \"Q\" Back\\slash","primaryPosition":{"abbreviation":"P"},"batSide":{"code":"L"},"pitchHand":{"code":"L"},"birthDate":"1999-06-01","mlbDebutDate":"2023-06-05"}]}'
+    expect:
+      # Double-quoted YAML, so the meaning is explicit: \" is a quote, \\ is one backslash.
+      rows:
+        - {season: 2026, mlbam_player_id: 1, player_name: "Travis d'Arnaud", primary_position: C, bats: R, throws: R, birth_date: "1989-02-10", mlb_debut_date: "2012-08-21"}
+        - {season: 2026, mlbam_player_id: 2, player_name: "Bob \"Q\" Back\\slash", primary_position: P, bats: L, throws: L, birth_date: "1999-06-01", mlb_debut_date: "2023-06-05"}
 
 seeds:
   - name: mlb_game_states

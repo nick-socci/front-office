@@ -73,8 +73,11 @@ than marking the staging tests DuckDB-only.
   and SHALL give no error.
 - R1.3 THE SYSTEM SHALL keep each unit test's name, model and `expect` block as they were.
 - R1.4 WHEN a fixture is rewritten THE SYSTEM SHALL give, on DuckDB, the same rows as the
-  fixture it replaces: equal both ways under `except all`, with the same column names
-  and types. Checked once per rewritten fixture during the build, and recorded on #138.
+  fixture it replaces: equal both ways under `except all`, with JSON columns compared as
+  JSON values, and the same column names and types. A column the view has but the old
+  fixture left out may be added, and it is null in every row. Checked once per rewritten
+  fixture during the build, and recorded on #138. (Amended 2026-10-29; see design.md,
+  Amendments.)
 
 ### R2. The manifest is named by the target
 
@@ -97,7 +100,8 @@ than marking the staging tests DuckDB-only.
   array or a struct of nulls (design.md, C20).
 - R3.3 THE SYSTEM SHALL keep each of the four declared structures in one place, which
   both the view and `fo_capture_rows` read. Each view SHALL compile to the same SQL as on
-  `main` on both targets.
+  `main` on both targets, apart from `--` comment lines. (Amended 2026-10-29; see design.md,
+  Amendments.)
 - R3.4 IF a SQL fixture of a capture view that declares a structure does not go through
   `fo_capture_rows` THEN the gates SHALL fail and name the test.
 
@@ -111,7 +115,8 @@ than marking the staging tests DuckDB-only.
   (`Travis d'Arnaud`), an escaped double quote and a backslash come out exactly as MLB
   gives them.
 - R4.3 WHILE a fixture value is for a column that is not JSON THE SYSTEM SHALL cast it as
-  dbt does today.
+  dbt does today, except that on BigQuery a text holding a backslash keeps its backslashes.
+  (Amended 2026-10-29; see design.md, Amendments.)
 
 ### R5. SQL fixtures are portable
 
@@ -119,8 +124,9 @@ than marking the staging tests DuckDB-only.
   nor in any project macro a fixture calls, directly or through another macro, nor in the
   `safe_cast` override. The list is the one `test_dbt_portable_sql_rule.py` holds for
   models and macros.
-- R5.2 THE SYSTEM SHALL add to that list two constructs found here: a comma join, and a
-  WHERE in a query with no FROM. These apply to models and macros as well as fixtures.
+- R5.2 THE SYSTEM SHALL add to that list the construct found here: a WHERE in a query
+  with no FROM. It applies to models and macros as well as fixtures. (Amended 2026-10-29:
+  a comma join was dropped; see design.md, Amendments.)
 - R5.3 IF a SQL fixture holds a refused construct THEN the gates SHALL fail and name the
   test and the construct.
 - R5.4 WHEN a fixture needs a project macro (a portable type, an integer series,

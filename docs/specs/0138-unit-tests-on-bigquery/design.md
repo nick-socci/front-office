@@ -54,7 +54,7 @@ Logs, prototypes and compiled SQL are kept locally under `data/spec138/` (gitign
 | C1 | The project has 223 unit tests, and the `bigquery` selector takes all of them | `dbt ls --target ci --resource-type unit_test`; the selector leaves out only one data test (`dbt/selectors.yml`) | 223 | 2026-10-29 |
 | C2 | The populated default BigQuery datasets lack the solver function and `int_fantasy__optimal_lineups`. A complete build is in the suffixed `_141` datasets | `bq ls --routines main` (empty); `bq ls intermediate` (no `int_fantasy__optimal_lineups`); `bq ls --routines main_141` | `solve_lineup_period` exists only in `main_141`; `intermediate` has `int_fantasy__lineup_options` but not the optimal lineups | 2026-10-29 |
 | C3 | On BigQuery, against the default datasets: 142 pass, 77 error, 4 fail. Against `_141`: 174 pass, 45 error, 4 fail. The 32 errors that differ are all C2's, and nothing passing regresses | `dbt test --target bq --selector bigquery --resource-type unit_test`, then again with `--vars '{fo_schema_suffix: _141}'`; outcomes compared per test | as stated. The 32: 7 `Function not found: …main.solve_lineup_period`, 25 `Not able to get columns … int_fantasy__optimal_lineups … doesn't exist` | 2026-10-29 |
-| C4 | The 45 by cause. 20: `depends on a source named 'raw.api_responses' which was not found` (they give `source('raw', 'captures')`). 9: JSON given as a string (8 dict fixtures `Invalid cast from STRING to JSON`, 1 SQL fixture `Unclosed string literal`). 16: DuckDB SQL (7 WHERE with no FROM, 4 comma joins, 3 `range()`, 2 `::` casts). The first error each test hits is what is counted | the first run's log, the first error per test | 20 + 9 + 16 = 45. By model: `stg_espn__*` 23, `stg_mlb__*` 6, `stg_idmap__players` 2, `rec_espn__matchup_stat_differences` 8, `rec_espn__player_day_residuals` 3, `rec_fantasy__category_wins_by_group` 3 | 2026-10-29 |
+| C4 | The 45 by cause. 20: `depends on a source named 'raw.api_responses' which was not found` (they give `source('raw', 'captures')`). 9: JSON given as a string (8 dict fixtures `Invalid cast from STRING to JSON`, 1 SQL fixture `Unclosed string literal`). 16: DuckDB SQL (7 WHERE with no FROM, 4 `VALUES` lists, 3 `range()`, 2 `::` casts; the `VALUES` four were first read as comma joins, see Amendments). The first error each test hits is what is counted | the first run's log, the first error per test | 20 + 9 + 16 = 45. By model: `stg_espn__*` 23, `stg_mlb__*` 6, `stg_idmap__players` 2, `rec_espn__matchup_stat_differences` 8, `rec_espn__player_day_residuals` 3, `rec_fantasy__category_wins_by_group` 3 | 2026-10-29 |
 | C5 | A unit-test run on BigQuery bills nothing | `bq ls -j` over the runs' jobs, `totalBytesBilled` | 339 query jobs, 0 bytes billed | 2026-10-29 |
 | C6 | dbt renders a unit test's `rows` when it parses the YAML: a project macro there is undefined, while `target.type` renders. Inside `{% raw %}…{% endraw %}`, the call survives the parse and is rendered when the fixture is compiled, as the target's dispatched form | a fixture with `{{ fo_json_parse(…) }}`, then the same inside `{% raw %}` with `-- {{ target.type }}` after it | `'fo_json_parse' is undefined`; then PASS, with compiled SQL `from_json(json_extract(…)) … -- duckdb` | 2026-10-29 |
 | C7 | A SQL fixture file under `tests/fixtures/` (`fixture:`) is compiled with the project's macros and needs no `{% raw %}` | the same macro call in `dbt/tests/fixtures/zz_experiment_schedule.sql`, given with `fixture:` | PASS on `ci` and on `bq` | 2026-10-29 |
@@ -207,7 +207,7 @@ else (C17).
 
 ### 5. The other SQL fixtures (R5)
 
-The 40 SQL fixtures of C16, less the 14 capture fixtures of §2, leave 26, in 17 tests:
+The 40 SQL fixtures of C16, less the 14 capture fixtures of §2, leave 26, in 16 tests:
 
 - the mock of the ephemeral `rec_espn__matchup_line_totals` in 11 tests
   (`rec_espn__matchup_stat_differences` 8, `rec_espn__player_day_residuals` 3);
@@ -223,8 +223,7 @@ Each is rewritten with the same spellings the models use:
 | `select … where false` (no FROM), for an empty ephemeral mock | `select … limit 0` |
 | `cast(null as varchar)`, `double` | `{% raw %}{{ fo_type_text() }}{% endraw %}`, `{% raw %}{{ fo_type_float() }}{% endraw %}`; `bigint`, `integer`, `boolean` as they are |
 | `from (values (…), (…)) as t(a, b)` | `select … as a, … as b union all select …` |
-| `from a, b` | `from a cross join b` |
-| `from range(1, 101) as t(i)` | `from {{ fo_unnest(fo_int_series(1, 100)) }}`, inside `{% raw %}` |
+| `from range(1, 101) as t(i)` | `from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 100), 'i') }}`, inside `{% raw %}` (corrected in Amendments) |
 | `x::bigint`, `'…'::JSON` | `cast(x as bigint)`; JSON as in §2 |
 
 ### 6. The gate (ADR 0110; R2.2, R3.4, R5.1–R5.3)
@@ -240,10 +239,9 @@ holds the manifest input after the parse has already resolved it:
   included (`fo_unnest(fo_int_series(…))`), become more starting points for the reach.
   Their dispatched forms, and what they call, are scanned as any reached macro is. So is
   `bigquery__safe_cast`, which nothing in the project calls.
-- **R5.2:** two patterns join `_REFUSED`, for models and macros as well: a comma join
-  (`from <relation> [alias] ,`) and a WHERE in a query with no FROM. The second is
-  checked per statement in the blanked text: `select` … `where` with no `from` between
-  them at the same depth of parentheses.
+- **R5.2:** one pattern joins `_REFUSED`, for models and macros as well: a WHERE in a
+  query with no FROM, checked per statement in the blanked text (`select` … `where` with
+  no `from` between them at the same depth of parentheses).
 - **R2.2:** an `input:` that is `source('raw', 'captures')` or `source('raw',
   'api_responses')` fails. Only §3's spelling is accepted.
 - **R3.4:** a `format: sql` fixture whose input is `ref('stg_raw__<x>')`, for a view
@@ -319,3 +317,40 @@ None. C6 to C14 tested each mechanism this design rests on, on both warehouses.
 | design-review | F5 (P3): `fo_type_float` was outside `{% raw %}` in §5's table | Fixed |
 
 ## Amendments
+
+- **2026-10-29, at the start of the build (task 1).** C4 counted four errors, `Expected
+  keyword JOIN but got ","` and `… got ")"`, as comma joins. They are
+  `select * from (values (…)) as t(a, b, …)`: BigQuery stops inside the VALUES list.
+  BigQuery accepts `from a, b`, so a comma-join pattern would refuse valid SQL. It is
+  dropped from R5.2 and §6. The `VALUES` list is already in `_REFUSED` ("values list in
+  from"), and §5 already rewrites it as `union all`. Nothing else changes: the 45 tests,
+  their fixes and the expected values stay as they were.
+- **2026-10-29, task 1.** §5 said its 26 fixtures were in 17 tests. They are in 16:
+  `stg_espn__transactions`' test was counted twice, once for its seed fixture and once
+  for its capture-view fixture. The rule run in task 1 finds 26 fixtures in 16 tests.
+- **2026-10-29, task 2.** §1 moves each structure's field comments into the macro file,
+  and R3.3 asked for identical compiled SQL. dbt keeps `--` comments in compiled output,
+  so the two could not both hold. R3.3 now compares the compiled views without their
+  comment lines, which is what it is there to protect. The 11 views compile identically
+  on `ci` and on `bq` once comment and blank lines are left out.
+- **2026-10-29, task 4.** R4.2's new test failed on BigQuery in its expected rows, not in
+  its JSON. dbt-bigquery writes a STRING value as `'''…'''` without escaping backslashes,
+  so the expected name `Bob "Q" Back\slash` failed as `Illegal escape sequence: \s`. That is
+  C11's flaw in every string column, inputs and expected rows alike. No fixture held a
+  backslash before, which is why it had not shown. `bigquery__safe_cast` (§4) now also
+  rebuilds a non-JSON string whose text holds a backslash, `safe_cast(<fo_sql_string> as
+  <type>)`. Other values still go to the adapter unchanged. R4.3 is amended to say so.
+  `fo_sql_string`'s BigQuery form also writes newlines and carriage returns as `\n` and
+  `\r`: a single-quoted BigQuery literal cannot hold a line break, where dbt's `'''…'''`
+  could. With both, R4.2's test passes on DuckDB and on BigQuery (`_141` datasets).
+- **2026-10-29, task 5.** R1.4's comparison found two differences, neither in what a model
+  reads. (1) `partitions`: the old fixtures cast the text with `::JSON`, which keeps its
+  spacing, and `fo_capture_rows` gives `json(…)`, which normalises it. The JSON values are
+  equal in all 14. (2) The six matchup-days fixtures had left out `scoringPeriodId`, a
+  top-level field of the view's structure. `fo_capture_rows` gives every declared field,
+  as the view does, so the new rows carry it, null in every row as before. R1.4 now
+  compares JSON as values and allows such a column. On those terms all 14 are equal.
+- **2026-10-29, task 7.** §5's table gave `from {{ fo_unnest(fo_int_series(1, 100)) }}`.
+  `fo_unnest(list, alias)` writes a `cross join unnest(…)`, so it takes an alias and needs
+  a FROM before it: `from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 100),
+  'i') }}`. The table now says so. The fixtures were written that way.
