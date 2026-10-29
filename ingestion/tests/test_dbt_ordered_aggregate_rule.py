@@ -35,6 +35,8 @@ from pathlib import Path
 
 import pytest
 
+from _sql_text import NOT_NEWLINE, is_exempt, sql_code
+
 DBT_ROOT = Path(__file__).resolve().parents[2] / "dbt"
 SCANNED_DIRS = ("models", "tests", "macros")
 
@@ -50,8 +52,6 @@ _ORDER_BY = re.compile(r"\border\s+by\b", re.IGNORECASE)
 # in it. An empty or quoted-empty reason, or punctuation, is not one.
 _EXEMPTION = re.compile(r"order-exempt:.*[A-Za-z0-9]")
 
-
-_NOT_NEWLINE = re.compile(r"[^\n]")
 # The BigQuery forms of the three ordered-aggregate macros (ADR 0051, 0053). BigQuery has no
 # way to state the order of a float aggregate, so these three bodies, and no others, hold one
 # without it; a model reaches them only through fo_sum_in_order / fo_avg_in_order /
@@ -62,48 +62,6 @@ _UNORDERED_BY_NECESSITY = re.compile(
     re.DOTALL,
 )
 _JINJA_EXPRESSION = re.compile(r"\{\{.*?\}\}", re.DOTALL)
-
-
-def _code(sql: str) -> str:
-    """`sql` with comments and string literals blanked, character for character.
-
-    One pass, so whichever opens first wins: a `--` inside a string is part of the string, and
-    an apostrophe inside a comment is part of the comment. Newlines are kept, so line numbers
-    stay true. A double-quoted span on one line (an identifier, or a string in Jinja) is kept
-    as it is, so that an apostrophe inside it does not open a string.
-    """
-    out: list[str] = []
-    at, end = 0, len(sql)
-
-    def blanked(stop: int) -> int:
-        out.append(_NOT_NEWLINE.sub(" ", sql[at:stop]))
-        return stop
-
-    def after(closer: str, start: int) -> int:
-        found = sql.find(closer, start)
-        return end if found < 0 else found + len(closer)
-
-    while at < end:
-        if sql.startswith("{#", at):
-            at = blanked(after("#}", at + 2))
-        elif sql.startswith("--", at):
-            newline = sql.find("\n", at)
-            at = blanked(end if newline < 0 else newline)
-        elif sql.startswith("/*", at):
-            at = blanked(after("*/", at + 2))
-        elif sql[at] == "'":
-            close = at + 1
-            while close < end and (sql[close] != "'" or sql.startswith("''", close)):
-                close += 2 if sql[close] == "'" else 1
-            at = blanked(min(close + 1, end))
-        elif sql[at] == '"' and '"' in sql[at + 1 : after("\n", at + 1)]:
-            close = sql.index('"', at + 1)
-            out.append(sql[at : close + 1])
-            at = close + 1
-        else:
-            out.append(sql[at])
-            at += 1
-    return "".join(out)
 
 
 def _arguments(code: str, start: int) -> str:
@@ -128,47 +86,14 @@ def _arguments(code: str, start: int) -> str:
     return _JINJA_EXPRESSION.sub(" ", text)
 
 
-def _line_comment(line: str) -> str | None:
-    """The text after the first `--` that is not inside a string literal, or None.
-
-    Quotes are tracked only up to that point: after it the line is prose, and an apostrophe
-    in it is not a string.
-    """
-    quoted = False
-    for at, char in enumerate(line):
-        if char == "'":
-            quoted = not quoted
-        elif not quoted and line.startswith("--", at):
-            return line[at + 2 :]
-    return None
-
-
-def _is_exempt(lines: list[str], number: int) -> bool:
-    """True when a comment on the call's line, or the comment lines directly above it, claims
-    the exemption and gives a reason."""
-
-    def claims(line: str) -> bool:
-        comment = _line_comment(line)
-        return comment is not None and bool(_EXEMPTION.search(comment))
-
-    if claims(lines[number - 1]):
-        return True
-    above = number - 2
-    while above >= 0 and lines[above].lstrip().startswith("--"):
-        if claims(lines[above]):
-            return True
-        above -= 1
-    return False
-
-
 def unordered_aggregates(sql: str) -> list[tuple[int, str]]:
     """(line number, aggregate) for each statistical aggregate with no order and no exemption."""
-    code = _UNORDERED_BY_NECESSITY.sub(lambda m: _NOT_NEWLINE.sub(" ", m.group()), _code(sql))
+    code = _UNORDERED_BY_NECESSITY.sub(lambda m: NOT_NEWLINE.sub(" ", m.group()), sql_code(sql))
     lines = sql.splitlines()
     found = []
     for match in _AGGREGATE.finditer(code):
         number = code.count("\n", 0, match.start()) + 1
-        if _ORDER_BY.search(_arguments(code, match.end())) or _is_exempt(lines, number):
+        if _ORDER_BY.search(_arguments(code, match.end())) or is_exempt(lines, number, _EXEMPTION):
             continue
         found.append((number, match.group(1).lower()))
     return found
@@ -182,7 +107,7 @@ def test_every_statistical_aggregate_in_dbt_states_its_order() -> None:
     """Catches an `order by` removed from avg, corr or the like, or a new one written
     without it: the regression the last-digit unit tests only catch in most runs."""
     assert _sql_files(), "found no .sql files: DBT_ROOT is wrong"
-    scanned = "\n".join(_code(p.read_text()) for p in _sql_files())
+    scanned = "\n".join(sql_code(p.read_text()) for p in _sql_files())
     assert len(_AGGREGATE.findall(scanned)) >= 3, "the three aggregates of #115 were not found"
     problems = [
         f"{path.relative_to(DBT_ROOT.parent)}:{number}: {name}() has no order by"
@@ -264,6 +189,13 @@ def test_an_exemption_needs_a_reason_and_has_to_be_a_comment() -> None:
     assert unordered_aggregates(blank_reason) == [(3, "avg")]
     assert unordered_aggregates(in_a_string) == [(1, "avg")]
     assert unordered_aggregates(dashes_in_a_string) == [(1, "avg")]
+    dashes_in_double_quotes = 'select "-- order-exempt: an identifier", avg(x) from t'
+    assert unordered_aggregates(dashes_in_double_quotes) == [(1, "avg")]
+    escaped_in_jinja = 'select avg(x), {{ "\'a\\" -- order-exempt: no\'" }} from t'
+    assert unordered_aggregates(escaped_in_jinja) == [(1, "avg")]
+    # a backslash in a SQL string is a plain character, so the string ends at its quote
+    backslash_in_sql = "select avg(x), 'a\\' || '-- order-exempt: a string' from t"
+    assert unordered_aggregates(backslash_in_sql) == [(1, "avg")]
     # an empty quoted value is not a reason, and a reason that contains quotes still is one
     assert unordered_aggregates("select avg(x) -- order-exempt: ''\nfrom t") == [(1, "avg")]
     assert unordered_aggregates("select avg(x) -- order-exempt: '  ' \nfrom t") == [(1, "avg")]

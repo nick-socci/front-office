@@ -42,7 +42,8 @@ from pathlib import Path
 
 import pytest
 
-from test_dbt_ordered_aggregate_rule import _arguments, _code
+from _sql_text import sql_code
+from test_dbt_ordered_aggregate_rule import _arguments
 
 REPO = Path(__file__).resolve().parents[2]
 DBT_ROOT = REPO / "dbt"
@@ -106,7 +107,7 @@ _TYPE_IN_MACRO_ARGUMENT = re.compile(
 
 def refused_constructs(sql: str, *, bigquery_form: bool = False) -> list[tuple[int, str]]:
     """(line number, what) for each construct BigQuery refuses, outside comments and strings."""
-    code = _code(sql)
+    code = sql_code(sql)
     found: list[tuple[int, str]] = []
     for number, line in enumerate(code.splitlines(), start=1):
         for what, pattern in _REFUSED:

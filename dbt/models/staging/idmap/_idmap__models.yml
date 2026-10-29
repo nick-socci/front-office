@@ -35,3 +35,32 @@ unit_tests:
         - {espn_player_id: 39832, mlbam_player_id: 660271, position: P}
         - {espn_player_id: 7, mlbam_player_id: 8, position: P}
 
+  - name: idmap_players_an_espn_id_given_two_mlb_ids_is_not_mapped
+    description: >
+      An ESPN id the newest capture gives to two different MLB ids maps nothing and is
+      left out, so the crosswalk's name fallback decides (ADR 0109); picking one of the two
+      would join a roster to the wrong player's game logs. One MLB id listed under two
+      positions is one mapping and keeps one row. Only the newest capture is read, so an
+      older capture's conflicting row neither drops nor changes an id.
+    model: stg_idmap__players
+    given:
+      - input: ref('stg_raw__idmap_player_id_map')
+        rows:
+          - source: idmap
+            endpoint: player_id_map
+            request_key: ""
+            fetched_at: "20260601T000000Z"
+            file_path: old.json
+            payload: '[{"ESPNID":100,"MLBID":200,"PLAYERNAME":"Old Alpha","TEAM":"BOS","POS":"P","IDFANGRAPHS":11},{"ESPNID":100,"MLBID":300,"PLAYERNAME":"Old Beta","TEAM":"BOS","POS":"P","IDFANGRAPHS":12},{"ESPNID":900,"MLBID":901,"PLAYERNAME":"Old Gamma","TEAM":"SEA","POS":"SS","IDFANGRAPHS":13}]'
+          - source: idmap
+            endpoint: player_id_map
+            request_key: ""
+            fetched_at: "20260701T000000Z"
+            file_path: new.json
+            payload: '[{"ESPNID":100,"MLBID":201,"PLAYERNAME":"New Alpha","TEAM":"BOS","POS":"SS","IDFANGRAPHS":14},{"ESPNID":500,"MLBID":600,"PLAYERNAME":"Shared Left","TEAM":"CHC","POS":"P","IDFANGRAPHS":15},{"ESPNID":500,"MLBID":601,"PLAYERNAME":"Shared Right","TEAM":"CHC","POS":"DH","IDFANGRAPHS":16},{"ESPNID":39832,"MLBID":660271,"PLAYERNAME":"Two Way","TEAM":"LAD","POS":"DH","IDFANGRAPHS":1},{"ESPNID":39832,"MLBID":660271,"PLAYERNAME":"Two Way","TEAM":"LAD","POS":"P","IDFANGRAPHS":1},{"ESPNID":7,"MLBID":8,"PLAYERNAME":"Other Way","TEAM":"NYY","POS":"C","IDFANGRAPHS":2}]'
+    expect:
+      rows:
+        - {espn_player_id: 100, mlbam_player_id: 201, position: SS}
+        - {espn_player_id: 39832, mlbam_player_id: 660271, position: P}
+        - {espn_player_id: 7, mlbam_player_id: 8, position: C}
+

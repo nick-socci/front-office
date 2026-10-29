@@ -140,7 +140,10 @@ The macros that every ranking goes through.
 - R4.2 The same cases SHALL be run once on BigQuery over literal rows (no table read,
   nothing billed), and the result recorded on #141.
 - R4.3 `dbt run --empty` and `dbt test` on the `bigquery` selector into suffixed datasets
-  SHALL pass (AGENTS.md, dbt gotchas).
+  SHALL pass (AGENTS.md, dbt gotchas), except for
+  `int_fantasy__started_days_match_the_starting_slots`, which fails over no rows by design
+  (AGENTS.md). The other tests SHALL give the same result as on `main` (amended
+  2026-10-29).
 
 ### R5. The real season
 

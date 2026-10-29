@@ -78,7 +78,13 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
 4. **Components, never rates.** Store at-bats and hits, not AVG. Store `outs_recorded`, not
    innings — "6.1 innings" means 6⅓ and decimal arithmetic on it is silently wrong.
 5. **Deduplicate at the entity grain**, never per request, and always with a deterministic
-   tie-break. Use `fo_latest_by_entity` / `fo_espn_latest`.
+   tie-break. Use `fo_latest_by_entity` / `fo_espn_latest`. Every ranking goes through
+   `fo_keep_first` (keep *n* rows; `fo_latest_by_entity` is *n* = 1) or `fo_row_number`
+   (number every row). Each one raises on a tie where it cuts, so a tie stops the build, on
+   both warehouses (ADR 0107). Identical rows tie too: make them distinct first.
+   `test_dbt_tie_rule.py` fails a `row_number`, `lag`, `lead` or other order-dependent
+   window written outside them, unless `-- tie-exempt: <reason>` says why ties change
+   nothing there (ADR 0108).
 
 ## dbt gotchas
 

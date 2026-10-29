@@ -20,7 +20,10 @@
 -- non-null name a league-season gave him. `name_source` says which. The five attributes
 -- are MLB's, from the same list row, and null for a player no list holds: borrowing them
 -- from another source would be inventing them. Each "latest" ends in a tie-break that does
--- not depend on input order (AGENTS.md rule 5).
+-- not depend on input order (AGENTS.md rule 5), and goes through fo_keep_first, which stops
+-- the build if two rows still tie where it cuts (ADR 0107). That is why `game_names` is
+-- `select distinct`: a player who batted and pitched in one game has the same row in both
+-- game logs, and two identical rows are a tie no order can break. They are one candidate.
 --
 -- It is defined over everything loaded, so a combined build and a single-league build
 -- differ, which is why the tenant-isolation script exempts it by name and its own tests
@@ -39,16 +42,13 @@ with listed_players as (
         birth_date,
         mlb_debut_date
     from {{ ref('stg_mlb__players') }}
-    qualify row_number() over (
-        partition by mlbam_player_id
-        order by season desc
-    ) = 1
+    {{ fo_keep_first(['mlbam_player_id'], 'season desc') }}
 
 ),
 
 game_names as (
 
-    select
+    select distinct
         logs.mlbam_player_id,
         logs.player_name,
         logs.game_pk,
@@ -78,10 +78,7 @@ latest_game_names as (
         mlbam_player_id,
         player_name
     from game_names
-    qualify row_number() over (
-        partition by mlbam_player_id
-        order by official_date desc, game_pk desc, player_name asc
-    ) = 1
+    {{ fo_keep_first(['mlbam_player_id'], 'official_date desc, game_pk desc, player_name asc') }}
 
 ),
 
@@ -94,12 +91,11 @@ platform_names as (
     where
         mlbam_player_id is not null
         and player_name is not null
-    qualify row_number() over (
-        partition by mlbam_player_id
-        order by
-            season desc, last_rostered_date desc nulls last,
-            league_id asc, platform asc, platform_player_id asc
-    ) = 1
+    {{ fo_keep_first(
+        ['mlbam_player_id'],
+        'season desc, last_rostered_date desc nulls last,'
+        ' league_id asc, platform asc, platform_player_id asc'
+    ) }}
 
 ),
 
