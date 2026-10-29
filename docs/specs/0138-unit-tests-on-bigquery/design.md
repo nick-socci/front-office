@@ -207,7 +207,7 @@ else (C17).
 
 ### 5. The other SQL fixtures (R5)
 
-The 40 SQL fixtures of C16, less the 14 capture fixtures of §2, leave 26, in 17 tests:
+The 40 SQL fixtures of C16, less the 14 capture fixtures of §2, leave 26, in 16 tests:
 
 - the mock of the ephemeral `rec_espn__matchup_line_totals` in 11 tests
   (`rec_espn__matchup_stat_differences` 8, `rec_espn__player_day_residuals` 3);
@@ -325,3 +325,6 @@ None. C6 to C14 tested each mechanism this design rests on, on both warehouses.
   dropped from R5.2 and §6. The `VALUES` list is already in `_REFUSED` ("values list in
   from"), and §5 already rewrites it as `union all`. Nothing else changes: the 45 tests,
   their fixes and the expected values stay as they were.
+- **2026-10-29, task 1.** §5 said its 26 fixtures were in 17 tests. They are in 16:
+  `stg_espn__transactions`' test was counted twice, once for its seed fixture and once
+  for its capture-view fixture. The rule run in task 1 finds 26 fixtures in 16 tests.
