@@ -17,7 +17,10 @@ def sql_code(sql: str) -> str:
     One pass, so whichever opens first wins: a `--` inside a string is part of the string, and
     an apostrophe inside a comment is part of the comment. Newlines are kept, so line numbers
     stay true. A double-quoted span on one line (an identifier, or a string in Jinja) is kept
-    as it is, so that an apostrophe inside it does not open a string.
+    as it is, so that an apostrophe inside it does not open a string. Inside it a backslash
+    takes the next character with it, as Jinja's `\\"` does, so an escaped quote does not end
+    the span and leave the rest of the string to be read as a comment that hides the line's
+    code (#209 review, round 2). The span still ends at the line's end.
     """
     out: list[str] = []
     at, end = 0, len(sql)
@@ -29,6 +32,18 @@ def sql_code(sql: str) -> str:
     def after(closer: str, start: int) -> int:
         found = sql.find(closer, start)
         return end if found < 0 else found + len(closer)
+
+    def closing_double_quote(start: int) -> int | None:
+        """The `"` that closes the span opened at `start`, on the same line, or None."""
+        index = start + 1
+        while index < end and sql[index] != "\n":
+            if sql[index] == "\\" and sql[index + 1 : index + 2] not in ("", "\n"):
+                index += 2
+            elif sql[index] == '"':
+                return index
+            else:
+                index += 1
+        return None
 
     while at < end:
         if sql.startswith("{#", at):
@@ -43,8 +58,7 @@ def sql_code(sql: str) -> str:
             while close < end and (sql[close] != "'" or sql.startswith("''", close)):
                 close += 2 if sql[close] == "'" else 1
             at = blanked(min(close + 1, end))
-        elif sql[at] == '"' and '"' in sql[at + 1 : after("\n", at + 1)]:
-            close = sql.index('"', at + 1)
+        elif sql[at] == '"' and (close := closing_double_quote(at)) is not None:
             out.append(sql[at : close + 1])
             at = close + 1
         else:
@@ -58,13 +72,21 @@ def line_comment(line: str) -> str | None:
 
     Both quotes count: `'…'` is a string, and `"…"` is an identifier or a Jinja string, and a
     `--` inside either is not a comment (#209 review, round 1). One kind of quote inside the
-    other is just a character. Quotes are tracked only up to the comment: after it the line
-    is prose, and an apostrophe in it is not a string.
+    other is just a character, and inside quotes a backslash takes the next character with
+    it, as Jinja's `\"` does (round 2). Where a warehouse reads a backslash as a plain
+    character, the span runs on too far, which only hides a comment and flags its call.
+    Quotes are tracked only up to the comment: after it the line is prose, and an
+    apostrophe in it is not a string.
     """
     quote: str | None = None
+    escaped = False
     for at, char in enumerate(line):
-        if quote:
-            if char == quote:
+        if escaped:
+            escaped = False
+        elif quote:
+            if char == "\\":
+                escaped = True
+            elif char == quote:
                 quote = None
         elif char in "'\"":
             quote = char

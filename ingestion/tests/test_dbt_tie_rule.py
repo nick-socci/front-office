@@ -145,6 +145,14 @@ def test_an_exemption_needs_a_reason_and_has_to_be_a_comment() -> None:
     assert unchecked_windows(dashes_in_double_quotes) == [(1, "row_number")]
     after_a_quoted_identifier = 'select "a""b", lag(x) over w -- tie-exempt: same window\nfrom t'
     assert unchecked_windows(after_a_quoted_identifier) == []
+    escaped_in_jinja = '{{ x("a \\" -- tie-exempt: inside the string") }} row_number() over w'
+    assert unchecked_windows(escaped_in_jinja) == [(1, "row_number")]
+    call_before_escaped = 'select row_number() over w, {{ "\'a\\" -- tie-exempt: no\'" }} from t'
+    assert unchecked_windows(call_before_escaped) == [(1, "row_number")]
+    # a backslash at the end of a line does not carry the span onto the next one, where it
+    # would keep a comment as code
+    trailing_backslash = 'select "a\\\n-- row_number() named in "prose"\nfrom t'
+    assert unchecked_windows(trailing_backslash) == []
     assert unchecked_windows("select lag(x) over w -- tie-exempt: ...") == [(1, "lag")]
     assert unchecked_windows("select lag(x) over w -- tie-exempt: it's equal") == []
 
