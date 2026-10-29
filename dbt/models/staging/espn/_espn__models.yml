@@ -869,20 +869,20 @@ unit_tests:
       - input: ref('stg_raw__espn_transactions')
         format: sql
         rows: |
-          select
+          {% raw %}select
               'espn' as source, 'transactions' as endpoint, '/a' as request_path,
               'x' as request_key, '20261001T000000Z' as fetched_at,
-              '{"season": 2026, "league_id": "A"}'::JSON as partitions, 'a1' as file_path,
-              '{"topics": [{"id": "t1", "date": 1775880933000, "messages": [
+              {{ fo_capture_json('{"season": 2026, "league_id": "A"}') }} as partitions, 'a1' as file_path,
+              {{ fo_capture_json('{"topics": [{"id": "t1", "date": 1775880933000, "messages": [
                   {"id": "m1", "date": 1775880933000, "messageTypeId": 178, "targetId": 1, "to": 3, "from": -1, "for": 0},
                   {"id": "m2", "date": 1775964600000, "messageTypeId": 178, "targetId": 2, "to": 3, "from": -1, "for": 0},
                   {"id": "m3", "date": 1768537800000, "messageTypeId": 178, "targetId": 3, "to": 3, "from": -1, "for": 0}
-              ]}]}'::JSON as payload
+              ]}]}') }} as payload{% endraw %}
       - input: ref('espn_activity_types')
         format: sql
         rows: |
           select
-              178::BIGINT as message_type_id, 'FA ADDED' as activity, true as is_transaction,
+              cast(178 as bigint) as message_type_id, 'FA ADDED' as activity, true as is_transaction,
               'add' as movement, 'free_agent' as method, 'to' as team_field
     expect:
       rows:
@@ -953,9 +953,9 @@ unit_tests:
       - input: ref('espn_stat_ids')
         format: sql
         rows: |
-          select 0::BIGINT as stat_id, false as is_rate
+          select cast(0 as bigint) as stat_id, false as is_rate
           union all
-          select 1::BIGINT, false
+          select cast(1 as bigint), false
     expect:
       rows:
         - {league_id: "1", season: 2026, scoring_period: 6, team_id: 1, espn_player_id: 10, espn_game_id: g1, stat_id: 0, stat_value: 4.0}

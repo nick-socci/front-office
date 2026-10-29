@@ -596,20 +596,20 @@ unit_tests:
       - input: ref('fct_matchup_results')
         format: sql
         rows: |
-          select 'espn' as platform, '1' as league_id, 2026 as season, i as matchup_id, 'HOME' as winner, false as has_unverified_inputs
-          from range(1, 1 + 1) as t(i)
+          {% raw %}select 'espn' as platform, '1' as league_id, 2026 as season, i as matchup_id, 'HOME' as winner, false as has_unverified_inputs
+          from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 1), 'i') }}{% endraw %}
       - input: ref('rec_fantasy__category_wins_added')
         format: sql
         rows: |
-          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, case when i = 1 then null else 0.4 * i end as category_wins_added from range(1, 101) as t(i)
+          {% raw %}select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, case when i = 1 then null else 0.4 * i end as category_wins_added from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 100), 'i') }}{% endraw %}
       - input: ref('dim_player_league_seasons')
         format: sql
         rows: |
-          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 'SP' as replacement_group from range(1, 101) as t(i)
+          {% raw %}select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 'SP' as replacement_group from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 100), 'i') }}{% endraw %}
       - input: ref('fct_player_season_value')
         format: sql
         rows: |
-          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, i::double as total_value from range(1, 101) as t(i)
+          {% raw %}select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, cast(i as {{ fo_type_float() }}) as total_value from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 100), 'i') }}{% endraw %}
     expect:
       rows:
         - {replacement_group: SP, matchups_rescored: 1, pairs: 100, pairs_unmeasured: 1, is_judged: false, problem: 'not checkable: a pair has no value or no wins added'}
@@ -626,20 +626,20 @@ unit_tests:
       - input: ref('fct_matchup_results')
         format: sql
         rows: |
-          select 'espn' as platform, '1' as league_id, 2026 as season, i as matchup_id, 'HOME' as winner, false as has_unverified_inputs
-          from range(1, 100 + 1) as t(i)
+          {% raw %}select 'espn' as platform, '1' as league_id, 2026 as season, i as matchup_id, 'HOME' as winner, false as has_unverified_inputs
+          from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 100), 'i') }}{% endraw %}
       - input: ref('rec_fantasy__category_wins_added')
         format: sql
         rows: |
-          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, 0.3 * i as category_wins_added from range(1, 101) as t(i)
+          {% raw %}select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, 0.3 * i as category_wins_added from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 100), 'i') }}{% endraw %}
       - input: ref('dim_player_league_seasons')
         format: sql
         rows: |
-          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 'SP' as replacement_group from range(1, 101) as t(i)
+          {% raw %}select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 'SP' as replacement_group from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 100), 'i') }}{% endraw %}
       - input: ref('fct_player_season_value')
         format: sql
         rows: |
-          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, i::double as total_value from range(1, 101) as t(i)
+          {% raw %}select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, cast(i as {{ fo_type_float() }}) as total_value from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 100), 'i') }}{% endraw %}
     expect:
       rows:
         - {replacement_group: SP, matchups_rescored: 100, pairs: 100, pairs_unmeasured: 0, slope: 0.3, is_judged: true, problem: 'slope outside 0.34 to 0.47'}
@@ -653,20 +653,20 @@ unit_tests:
       - input: ref('fct_matchup_results')
         format: sql
         rows: |
-          select 'espn' as platform, '1' as league_id, 2026 as season, i as matchup_id, 'HOME' as winner, false as has_unverified_inputs
-          from range(1, 100 + 1) as t(i)
+          {% raw %}select 'espn' as platform, '1' as league_id, 2026 as season, i as matchup_id, 'HOME' as winner, false as has_unverified_inputs
+          from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 100), 'i') }}{% endraw %}
       - input: ref('rec_fantasy__category_wins_added')
         format: sql
         rows: |
-          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, 0.4 * i as category_wins_added from range(1, 101) as t(i)
+          {% raw %}select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, 0.4 * i as category_wins_added from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 100), 'i') }}{% endraw %}
       - input: ref('dim_player_league_seasons')
         format: sql
         rows: |
-          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 'SP' as replacement_group from range(1, 101) as t(i)
+          {% raw %}select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 'SP' as replacement_group from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 100), 'i') }}{% endraw %}
       - input: ref('fct_player_season_value')
         format: sql
         rows: |
-          select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, i::double as total_value from range(1, 101) as t(i)
+          {% raw %}select 'espn' as platform, '1' as league_id, 2026 as season, i as platform_player_id, 1 as fantasy_team_id, cast(i as {{ fo_type_float() }}) as total_value from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 100), 'i') }}{% endraw %}
     expect:
       rows:
         - {replacement_group: SP, matchups_rescored: 100, pairs: 100, pairs_unmeasured: 0, slope: 0.4, is_judged: true, problem: null}

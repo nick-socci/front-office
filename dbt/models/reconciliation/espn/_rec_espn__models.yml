@@ -364,11 +364,11 @@ unit_tests:
       - input: ref('rec_espn__matchup_line_totals')
         format: sql
         rows: |
-          select
-              cast(null as varchar) as league_id, cast(null as integer) as season,
+          {% raw %}select
+              cast(null as {{ fo_type_text() }}) as league_id, cast(null as integer) as season,
               cast(null as bigint) as matchup_id, cast(null as bigint) as fantasy_team_id,
-              cast(null as bigint) as stat_key, cast(null as double) as matchup_line_value
-          where false
+              cast(null as bigint) as stat_key, cast(null as {{ fo_type_float() }}) as matchup_line_value
+          limit 0{% endraw %}
     expect:
       rows:
         - {matchup_id: 7, fantasy_team_id: 1, stat_key: 0, status: unexplained}
@@ -456,11 +456,11 @@ unit_tests:
       - input: ref('rec_espn__matchup_line_totals')
         format: sql
         rows: |
-          select
-              cast(null as varchar) as league_id, cast(null as integer) as season,
+          {% raw %}select
+              cast(null as {{ fo_type_text() }}) as league_id, cast(null as integer) as season,
               cast(null as bigint) as matchup_id, cast(null as bigint) as fantasy_team_id,
-              cast(null as bigint) as stat_key, cast(null as double) as matchup_line_value
-          where false
+              cast(null as bigint) as stat_key, cast(null as {{ fo_type_float() }}) as matchup_line_value
+          limit 0{% endraw %}
     expect:
       rows:
         - {league_id: "1", season: 2026, matchup_id: 7, fantasy_team_id: 2, stat_key: 0, status: match}
@@ -534,11 +534,11 @@ unit_tests:
       - input: ref('rec_espn__matchup_line_totals')
         format: sql
         rows: |
-          select
-              cast(null as varchar) as league_id, cast(null as integer) as season,
+          {% raw %}select
+              cast(null as {{ fo_type_text() }}) as league_id, cast(null as integer) as season,
               cast(null as bigint) as matchup_id, cast(null as bigint) as fantasy_team_id,
-              cast(null as bigint) as stat_key, cast(null as double) as matchup_line_value
-          where false
+              cast(null as bigint) as stat_key, cast(null as {{ fo_type_float() }}) as matchup_line_value
+          limit 0{% endraw %}
     expect:
       rows:
         - {fantasy_team_id: 1, stat_key: 2, status: match, formula_checked: false}
@@ -623,11 +623,11 @@ unit_tests:
       - input: ref('rec_espn__matchup_line_totals')
         format: sql
         rows: |
-          select
-              cast(null as varchar) as league_id, cast(null as integer) as season,
+          {% raw %}select
+              cast(null as {{ fo_type_text() }}) as league_id, cast(null as integer) as season,
               cast(null as bigint) as matchup_id, cast(null as bigint) as fantasy_team_id,
-              cast(null as bigint) as stat_key, cast(null as double) as matchup_line_value
-          where false
+              cast(null as bigint) as stat_key, cast(null as {{ fo_type_float() }}) as matchup_line_value
+          limit 0{% endraw %}
     expect:
       rows:
         - {fantasy_team_id: 1, stat_key: 0, status: match, game_line_difference: null}
@@ -863,11 +863,11 @@ unit_tests:
       - input: ref('rec_espn__matchup_line_totals')
         format: sql
         rows: |
-          select
-              cast(null as varchar) as league_id, cast(null as integer) as season,
+          {% raw %}select
+              cast(null as {{ fo_type_text() }}) as league_id, cast(null as integer) as season,
               cast(null as bigint) as matchup_id, cast(null as bigint) as fantasy_team_id,
-              cast(null as bigint) as stat_key, cast(null as double) as matchup_line_value
-          where false
+              cast(null as bigint) as stat_key, cast(null as {{ fo_type_float() }}) as matchup_line_value
+          limit 0{% endraw %}
     expect:
       rows:
         - {matchup_id: 1, difference_sum: 2, difference_rows: 2, expected_difference: 2, problem: null}
@@ -903,11 +903,11 @@ unit_tests:
       - input: ref('rec_espn__matchup_line_totals')
         format: sql
         rows: |
-          select
-              cast(null as varchar) as league_id, cast(null as integer) as season,
+          {% raw %}select
+              cast(null as {{ fo_type_text() }}) as league_id, cast(null as integer) as season,
               cast(null as bigint) as matchup_id, cast(null as bigint) as fantasy_team_id,
-              cast(null as bigint) as stat_key, cast(null as double) as matchup_line_value
-          where false
+              cast(null as bigint) as stat_key, cast(null as {{ fo_type_float() }}) as matchup_line_value
+          limit 0{% endraw %}
     expect:
       rows:
         - {league_id: "1", season: 2026, matchup_id: 1, difference_sum: 1, expected_difference: 1, problem: null}
@@ -965,15 +965,14 @@ unit_tests:
       - input: ref('rec_espn__matchup_line_totals')
         format: sql
         rows: |
-          select * from (values
-              ('1', 2026, 1, 1, 1, 9.0),
-              ('1', 2026, 2, 1, 45, 42.0),
-              ('1', 2026, 3, 1, 1, 10.0),
-              ('1', 2026, 5, 1, 1, 7.0),
-              ('2', 2026, 5, 1, 1, 9.0),
-              ('1', 2026, 6, 1, 60, 2.0),
-              ('1', 2026, 7, 1, 1, 9.0)
-          ) as t(league_id, season, matchup_id, fantasy_team_id, stat_key, matchup_line_value)
+          select '1' as league_id, 2026 as season, 1 as matchup_id, 1 as fantasy_team_id,
+              1 as stat_key, 9.0 as matchup_line_value
+          union all select '1', 2026, 2, 1, 45, 42.0
+          union all select '1', 2026, 3, 1, 1, 10.0
+          union all select '1', 2026, 5, 1, 1, 7.0
+          union all select '2', 2026, 5, 1, 1, 9.0
+          union all select '1', 2026, 6, 1, 60, 2.0
+          union all select '1', 2026, 7, 1, 1, 9.0
     expect:
       rows:
         - {matchup_id: 1, stat_id: 1, difference_sum: 1, problem: null}
@@ -1152,15 +1151,14 @@ unit_tests:
       - input: ref('rec_espn__matchup_line_totals')
         format: sql
         rows: |
-          select * from (values
-              ('1', 2026, 7, 1, 1, 10.0),
-              ('1', 2026, 7, 2, 1, 10.0),
-              ('1', 2026, 7, 3, 1, 11.0),
-              ('1', 2026, 7, 4, 1, 0.0),
-              ('1', 2026, 7, 6, 1, 9.0),
-              ('1', 2026, 7, 7, 1, 11.0),
-              ('1', 2026, 7, 8, 1, 10.0)
-          ) as t(league_id, season, matchup_id, fantasy_team_id, stat_key, matchup_line_value)
+          select '1' as league_id, 2026 as season, 7 as matchup_id, 1 as fantasy_team_id,
+              1 as stat_key, 10.0 as matchup_line_value
+          union all select '1', 2026, 7, 2, 1, 10.0
+          union all select '1', 2026, 7, 3, 1, 11.0
+          union all select '1', 2026, 7, 4, 1, 0.0
+          union all select '1', 2026, 7, 6, 1, 9.0
+          union all select '1', 2026, 7, 7, 1, 11.0
+          union all select '1', 2026, 7, 8, 1, 10.0
     expect:
       rows:
         - {fantasy_team_id: 1, stat_key: 1, status: explained_by_matchup_lines, matchup_line_value: 10}
@@ -1233,11 +1231,11 @@ unit_tests:
       - input: ref('rec_espn__matchup_line_totals')
         format: sql
         rows: |
-          select
-              cast(null as varchar) as league_id, cast(null as integer) as season,
+          {% raw %}select
+              cast(null as {{ fo_type_text() }}) as league_id, cast(null as integer) as season,
               cast(null as bigint) as matchup_id, cast(null as bigint) as fantasy_team_id,
-              cast(null as bigint) as stat_key, cast(null as double) as matchup_line_value
-          where false
+              cast(null as bigint) as stat_key, cast(null as {{ fo_type_float() }}) as matchup_line_value
+          limit 0{% endraw %}
     expect:
       rows:
         - {fantasy_team_id: 1, stat_key: 57, status: explained_by_game_lines, game_line_difference: -1}
@@ -1299,12 +1297,11 @@ unit_tests:
       - input: ref('rec_espn__matchup_line_totals')
         format: sql
         rows: |
-          select * from (values
-              ('1', 2026, 7, 1, 0, 40.0),
-              ('1', 2026, 7, 1, 1, 10.0),
-              ('1', 2026, 7, 2, 0, 40.0),
-              ('1', 2026, 7, 2, 1, 8.0)
-          ) as t(league_id, season, matchup_id, fantasy_team_id, stat_key, matchup_line_value)
+          select '1' as league_id, 2026 as season, 7 as matchup_id, 1 as fantasy_team_id,
+              0 as stat_key, 40.0 as matchup_line_value
+          union all select '1', 2026, 7, 1, 1, 10.0
+          union all select '1', 2026, 7, 2, 0, 40.0
+          union all select '1', 2026, 7, 2, 1, 8.0
     expect:
       rows:
         - {fantasy_team_id: 1, stat_key: 0, status: match}
@@ -1396,9 +1393,8 @@ unit_tests:
       - input: ref('rec_espn__matchup_line_totals')
         format: sql
         rows: |
-          select * from (values
-              ('1', 2026, 7, 3, 0, 41.0)
-          ) as t(league_id, season, matchup_id, fantasy_team_id, stat_key, matchup_line_value)
+          select '1' as league_id, 2026 as season, 7 as matchup_id, 3 as fantasy_team_id,
+              0 as stat_key, 41.0 as matchup_line_value
     expect:
       rows:
         - {fantasy_team_id: 1, stat_key: 1, status: match, formula_checked: null, recovered_value: null}
