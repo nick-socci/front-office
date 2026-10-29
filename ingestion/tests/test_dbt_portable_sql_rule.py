@@ -786,8 +786,12 @@ def test_a_refused_construct_in_a_sql_fixture_is_named_with_its_line() -> None:
 def test_the_fixture_macros_and_safe_cast_start_the_reach(manifest: dict[str, Any]) -> None:
     """Catches a macro called only from a fixture going unscanned (dbt records no
     dependency for it)."""
-    sources = collect_project_sources(manifest, frozenset({"fo_int_series"}))
-    assert (
-        any("::fo_int_series" in label or "::bigquery__fo_int_series" in label for label in sources)
-        or f"macro.{PROJECT}.fo_int_series" not in manifest["macros"]
-    )
+    # fo_capture_rows is called from fixtures alone, so only the fixtures' start reaches it
+    # (fo_int_series would not do: a model calls it too). bigquery__safe_cast is called by
+    # dbt's fixture SQL alone, and is always a start.
+    without = collect_project_sources(manifest)
+    with_fixtures = collect_project_sources(manifest, frozenset({"fo_capture_rows"}))
+    assert not any(label.endswith("::fo_capture_rows") for label in without)
+    assert any(label.endswith("::fo_capture_rows") for label in with_fixtures)
+    assert any(label.endswith("::bigquery__fo_capture_field") for label in with_fixtures)
+    assert any(label.endswith("::bigquery__safe_cast") for label in without)
