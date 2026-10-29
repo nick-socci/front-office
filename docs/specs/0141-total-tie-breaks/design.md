@@ -131,8 +131,7 @@ order-dependent window. A cut at *n* rows (the replacement pools) and a numberin
 
 - **The message**, from `fo_tie_message`, is
   `concat('<node>: rows tie for place ', cast(<place> as <text>), ' in (', <keys>, ')')`.
-  `<node>` is `this.identifier` (`inline` when `this` is undefined, as under `dbt show
-  --inline`). `<place>` is `rows` for `fo_keep_first`, and the tied row's `rank()` for
+  `<node>` is `this.identifier` (`inline` when `this` is undefined; see *Amendments*). `<place>` is `rows` for `fo_keep_first`, and the tied row's `rank()` for
   `fo_row_number`. `<keys>` is each partition expression as `coalesce(cast(k as
   {{ fo_type_text() }}), 'null')`, joined with `', '`. With no partition, it is the words
   `whole input`. The keys are ids: league, season, game, player. No name, so the message
@@ -232,3 +231,8 @@ same MLB id (C4).
 | design-review | F3: a `rows` that varies within a partition leaves no single cut, and a tie can pass (reproduced by the reviewer on DuckDB) | Added R1.1a: the macro raises when a non-literal `rows` differs within a partition, with an R4.1 case; the design states the second window it takes |
 
 ## Amendments
+
+- **2026-10-29 (build, task 2).** `this` is defined under `dbt show --inline`, and its
+  `identifier` is `inline_query`. The design said it was undefined there. The macro still
+  falls back to `inline` where `this` is undefined, and the tests assert `inline_query`.
+  R1.2's message is unchanged.
