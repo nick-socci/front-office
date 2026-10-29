@@ -223,7 +223,7 @@ Each is rewritten with the same spellings the models use:
 | `select … where false` (no FROM), for an empty ephemeral mock | `select … limit 0` |
 | `cast(null as varchar)`, `double` | `{% raw %}{{ fo_type_text() }}{% endraw %}`, `{% raw %}{{ fo_type_float() }}{% endraw %}`; `bigint`, `integer`, `boolean` as they are |
 | `from (values (…), (…)) as t(a, b)` | `select … as a, … as b union all select …` |
-| `from range(1, 101) as t(i)` | `from {{ fo_unnest(fo_int_series(1, 100)) }}`, inside `{% raw %}` |
+| `from range(1, 101) as t(i)` | `from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 100), 'i') }}`, inside `{% raw %}` (corrected in Amendments) |
 | `x::bigint`, `'…'::JSON` | `cast(x as bigint)`; JSON as in §2 |
 
 ### 6. The gate (ADR 0110; R2.2, R3.4, R5.1–R5.3)
@@ -350,3 +350,7 @@ None. C6 to C14 tested each mechanism this design rests on, on both warehouses.
   top-level field of the view's structure. `fo_capture_rows` gives every declared field,
   as the view does, so the new rows carry it, null in every row as before. R1.4 now
   compares JSON as values and allows such a column. On those terms all 14 are equal.
+- **2026-10-29, task 7.** §5's table gave `from {{ fo_unnest(fo_int_series(1, 100)) }}`.
+  `fo_unnest(list, alias)` writes a `cross join unnest(…)`, so it takes an alias and needs
+  a FROM before it: `from (select 1 as one) as base {{ fo_unnest(fo_int_series(1, 100),
+  'i') }}`. The table now says so. The fixtures were written that way.
