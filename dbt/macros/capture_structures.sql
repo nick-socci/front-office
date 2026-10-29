@@ -173,54 +173,6 @@
 {% endmacro %}
 
 {#
-  A structure part as the JSON that DuckDB's from_json reads as a type: the same part, with
-  each {"__map__": X} replaced by the type string "MAP(VARCHAR, <X's type>)" (a MAP is the
-  one part from_json cannot be given as JSON; the string is the type duckdb__fo_structure_type
-  writes for the view). tojson escapes the quotes inside that type string.
-#}
-{% macro duckdb__fo_structure_as_json(structure) %}
-    {%- if structure is mapping and structure | length == 1 and '__map__' in structure -%}
-        {{ duckdb__fo_structure_type(structure) | trim | tojson }}
-    {%- elif structure is mapping -%}
-        { {%- for field, inner in structure.items() -%}
-            {{ field | tojson }}: {{ duckdb__fo_structure_as_json(inner) }}{{ ', ' if not loop.last }}
-        {%- endfor -%} }
-    {%- elif structure is string -%}
-        {{ structure | tojson }}
-    {%- else -%}
-        [{{ duckdb__fo_structure_as_json(structure[0]) }}]
-    {%- endif -%}
-{% endmacro %}
-
-{# JSON text as a JSON value: json() on DuckDB, parse_json() on BigQuery. #}
-{% macro fo_capture_json(text) %}
-    {{- return(adapter.dispatch('fo_capture_json')(text)) -}}
-{% endmacro %}
-{% macro duckdb__fo_capture_json(text) -%}
-    json({{ fo_sql_string(text) }})
-{%- endmacro %}
-{% macro bigquery__fo_capture_json(text) -%}
-    parse_json({{ fo_sql_string(text) }})
-{%- endmacro %}
-
-{#
-  One top-level field of a payload, parsed with its part of the structure, as the capture
-  view parses it. `payload_sql` is a SQL expression holding the payload as a JSON value.
-  DuckDB uses from_json, not a cast: from_json ignores a key the structure does not name,
-  as the view's read_json does, and a cast refuses it (spec 0138, C12). BigQuery uses the
-  view's own expression, bigquery__fo_json_parse_value.
-#}
-{% macro fo_capture_field(payload_sql, field, structure) %}
-    {{- return(adapter.dispatch('fo_capture_field')(payload_sql, field, structure)) -}}
-{% endmacro %}
-{% macro duckdb__fo_capture_field(payload_sql, field, structure) -%}
-    from_json(json_extract({{ payload_sql }}, '$."{{ field }}"'), {{ fo_sql_string(duckdb__fo_structure_as_json(structure) | trim) }}) as "{{ field }}"
-{%- endmacro %}
-{% macro bigquery__fo_capture_field(payload_sql, field, structure) -%}
-    {{ bigquery__fo_json_parse_value("json_query(" ~ payload_sql ~ ", '$." ~ field ~ "')", structure, 0) }} as {{ field }}
-{%- endmacro %}
-
-{#
   Mocked capture rows for a unit test of a capture view that declares a structure (spec
   0138, ADR 0111): the rows fo_captures gives for those captures, built from the payload
   text a fixture holds, with the view's own structure (fo_capture_structure), so the
