@@ -97,7 +97,8 @@ than marking the staging tests DuckDB-only.
   array or a struct of nulls (design.md, C20).
 - R3.3 THE SYSTEM SHALL keep each of the four declared structures in one place, which
   both the view and `fo_capture_rows` read. Each view SHALL compile to the same SQL as on
-  `main` on both targets.
+  `main` on both targets, apart from `--` comment lines. (Amended 2026-10-29; see design.md,
+  Amendments.)
 - R3.4 IF a SQL fixture of a capture view that declares a structure does not go through
   `fo_capture_rows` THEN the gates SHALL fail and name the test.
 

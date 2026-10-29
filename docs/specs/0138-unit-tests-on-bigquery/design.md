@@ -328,3 +328,8 @@ None. C6 to C14 tested each mechanism this design rests on, on both warehouses.
 - **2026-10-29, task 1.** §5 said its 26 fixtures were in 17 tests. They are in 16:
   `stg_espn__transactions`' test was counted twice, once for its seed fixture and once
   for its capture-view fixture. The rule run in task 1 finds 26 fixtures in 16 tests.
+- **2026-10-29, task 2.** §1 moves each structure's field comments into the macro file,
+  and R3.3 asked for identical compiled SQL. dbt keeps `--` comments in compiled output,
+  so the two could not both hold. R3.3 now compares the compiled views without their
+  comment lines, which is what it is there to protect. The 11 views compile identically
+  on `ci` and on `bq` once comment and blank lines are left out.
