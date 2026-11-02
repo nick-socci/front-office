@@ -643,7 +643,7 @@ unit_tests:
       Four hitters, players 1 to 4, with wins added of 3.4, 3.9, 2.7 and 2.5 and values
       of 8.9, 2.0, 1.2 and null. The fourth pair has no value (the other side of the pair
       from the null wins added of the slope's test): the correlation is that of the
-      other three as if he were absent, 0.18940207604965043 on DuckDB, and he is counted
+      other three as if it were absent, 0.18940207604965043 on DuckDB, and it is counted
       as unmeasured. Catches a null pair entering the fold as a zero or as a term, on
       either side of the pair (spec 0139, R3.2).
     model: rec_fantasy__category_wins_by_group
