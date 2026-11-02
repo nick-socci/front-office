@@ -25,3 +25,38 @@ functions:
         data_type: float64
     returns:
       data_type: "array<struct<scoring_date date, player_id int64, slot_id int64>>"
+
+  - name: sum_in_order
+    description: >
+      The sum of an array of floats, added one at a time from the first, as DuckDB's
+      sum(x order by k) adds them (spec 0139, ADR 0115). The macro fo_sum_in_order hands it
+      array_agg(x ignore nulls order by k) on BigQuery, which can state an order for an
+      array but not for sum. Null for a null or an empty array, as DuckDB's sum of no
+      values is. Its body is sum_in_order.js in this directory. It is disabled on DuckDB,
+      which refuses a JavaScript function, and whose ordered sum needs none.
+    config:
+      enabled: "{{ target.type == 'bigquery' }}"
+      volatility: deterministic
+    arguments:
+      - name: values
+        data_type: "array<float64>"
+    returns:
+      data_type: float64
+
+  - name: corr_in_order
+    description: >
+      The correlation of an array of (y, x) pairs, folded one pair at a time in the order
+      given, as DuckDB's corr(y, x order by k) folds them (spec 0139, ADR 0115): Welford's
+      pass for the co-moment and both variances, then covar_pop over the product of the
+      population standard deviations. A pair with a null side is skipped; with no pair the
+      result is null; a single pair or a zero variance is NaN (0 over 0), as in DuckDB.
+      Its body is corr_in_order.js in this directory, the statement order of
+      probes/m2_corr.py in spec 0139. It is disabled on DuckDB, as sum_in_order is.
+    config:
+      enabled: "{{ target.type == 'bigquery' }}"
+      volatility: deterministic
+    arguments:
+      - name: pairs
+        data_type: "array<struct<y float64, x float64>>"
+    returns:
+      data_type: float64

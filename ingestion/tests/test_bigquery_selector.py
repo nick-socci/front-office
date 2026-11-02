@@ -38,6 +38,11 @@ SOLVER_AND_READERS = {
     "fct_lineup_decision_categories",
 }
 SOLVER_FUNCTION = "function.front_office.solve_lineup_period"
+# The two JavaScript folds BigQuery's float aggregates call (spec 0139, ADR 0115).
+FOLD_FUNCTIONS = [
+    "function.front_office.corr_in_order",
+    "function.front_office.sum_in_order",
+]
 # The one node the selector leaves out: DuckDB's capture glob against the loader's manifest.
 LEFT_OUT_TEST = "stg_raw__capture_views_cover_the_manifest"
 
@@ -311,10 +316,10 @@ def test_the_selector_takes_every_test_but_the_one_left_out(
 def test_the_function_is_in_the_bigquery_selection_and_not_in_the_ci_one(
     target_path: Path, selected: list[dict[str, object]]
 ) -> None:
-    """Catches the solver function missing from BigQuery's DAG, or enabled on DuckDB (R1.3):
-    on `ci` the function is disabled and the selector holds none; on `bq` it holds the
-    function node, so the models that call it are built after it. `dbt ls` opens no
-    connection; the placeholder project only lets the profile render."""
+    """Catches a function missing from BigQuery's DAG, or enabled on DuckDB (R1.3): on `ci`
+    the functions (the solver and the two folds) are disabled and the selector holds none;
+    on `bq` it holds their nodes, so the models that call them are built after them.
+    `dbt ls` opens no connection; the placeholder project only lets the profile render."""
     assert not [r for r in selected if r["resource_type"] == "function"]
     pytest.importorskip("dbt.adapters.bigquery", reason="the bigquery dependency group")
     env_project = os.environ.get("FO_BQ_PROJECT")
@@ -340,7 +345,7 @@ def test_the_function_is_in_the_bigquery_selection_and_not_in_the_ci_one(
             os.environ["FO_BQ_PROJECT"] = env_project
     rows = listed(result)
     functions = [r for r in rows if r["resource_type"] == "function"]
-    assert [r["unique_id"] for r in functions] == [SOLVER_FUNCTION]
+    assert sorted(r["unique_id"] for r in functions) == sorted([SOLVER_FUNCTION, *FOLD_FUNCTIONS])
     assert names(rows, "model") == SELECTED_MODELS
 
 
