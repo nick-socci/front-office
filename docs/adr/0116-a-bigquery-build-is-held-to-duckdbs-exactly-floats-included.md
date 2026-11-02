@@ -1,7 +1,7 @@
 # 0116. A BigQuery build is held to DuckDB's exactly, floats included
 
-- Status: proposed
-- Date: 2026-10-29
+- Status: accepted
+- Date: 2026-11-02
 - Spec: [0139-float-order-on-bigquery](../specs/0139-float-order-on-bigquery/design.md) · Issue: #139
 - Supersedes: [0053](0053-a-bigquery-build-is-held-to-duckdbs-exactly-except-floats-to-a-tolerance.md)
 
