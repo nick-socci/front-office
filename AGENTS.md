@@ -181,8 +181,10 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
   `fo_corr_in_order`: BigQuery states the order too, by folding `array_agg(… order by …)`
   in a JavaScript function (`dbt/functions/*.js`, ADR 0115), so both warehouses give the
   same digits and `compare_bigquery.py` holds every column exactly, floats included (ADR
-  0116). The JavaScript is checked against DuckDB's aggregates by
-  `ingestion/tests/test_float_folds.py`.
+  0116). CI checks a Python mirror of the JavaScript against DuckDB's aggregates
+  (`ingestion/tests/test_float_folds.py`), so a DuckDB upgrade that changes them is caught;
+  it never runs the JavaScript. A change to a `.js` file changes its mirror too, and runs
+  the unit tests on BigQuery by hand.
 
 ## How work is done here
 
