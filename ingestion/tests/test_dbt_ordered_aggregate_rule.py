@@ -35,7 +35,7 @@ from pathlib import Path
 
 import pytest
 
-from _sql_text import NOT_NEWLINE, is_exempt, sql_code
+from _sql_text import is_exempt, sql_code
 
 DBT_ROOT = Path(__file__).resolve().parents[2] / "dbt"
 SCANNED_DIRS = ("models", "tests", "macros")
@@ -52,15 +52,6 @@ _ORDER_BY = re.compile(r"\border\s+by\b", re.IGNORECASE)
 # in it. An empty or quoted-empty reason, or punctuation, is not one.
 _EXEMPTION = re.compile(r"order-exempt:.*[A-Za-z0-9]")
 
-# The BigQuery forms of the three ordered-aggregate macros (ADR 0051, 0053). BigQuery has no
-# way to state the order of a float aggregate, so these three bodies, and no others, hold one
-# without it; a model reaches them only through fo_sum_in_order / fo_avg_in_order /
-# fo_corr_in_order, whose
-# DuckDB forms state the order. Their bodies are not read as SQL here.
-_UNORDERED_BY_NECESSITY = re.compile(
-    r"\{%-?\s*macro\s+bigquery__fo_(?:sum|avg|corr)_in_order\b.*?\{%-?\s*endmacro\s*-?%\}",
-    re.DOTALL,
-)
 _JINJA_EXPRESSION = re.compile(r"\{\{.*?\}\}", re.DOTALL)
 
 
@@ -88,7 +79,7 @@ def _arguments(code: str, start: int) -> str:
 
 def unordered_aggregates(sql: str) -> list[tuple[int, str]]:
     """(line number, aggregate) for each statistical aggregate with no order and no exemption."""
-    code = _UNORDERED_BY_NECESSITY.sub(lambda m: NOT_NEWLINE.sub(" ", m.group()), sql_code(sql))
+    code = sql_code(sql)
     lines = sql.splitlines()
     found = []
     for match in _AGGREGATE.finditer(code):
@@ -108,7 +99,10 @@ def test_every_statistical_aggregate_in_dbt_states_its_order() -> None:
     without it: the regression the last-digit unit tests only catch in most runs."""
     assert _sql_files(), "found no .sql files: DBT_ROOT is wrong"
     scanned = "\n".join(sql_code(p.read_text()) for p in _sql_files())
-    assert len(_AGGREGATE.findall(scanned)) >= 3, "the three aggregates of #115 were not found"
+    # The two statistical aggregates left, each in the one DuckDB form of its macro; the
+    # BigQuery forms fold instead (ADR 0115). `sum` is not read, as the docstring says.
+    found = {name.lower() for name in _AGGREGATE.findall(scanned)}
+    assert found >= {"avg", "corr"}, "the macros' aggregates were not found"
     problems = [
         f"{path.relative_to(DBT_ROOT.parent)}:{number}: {name}() has no order by"
         for path in _sql_files()
@@ -286,30 +280,18 @@ def test_an_aggregate_written_through_the_in_order_macros_is_in_order() -> None:
 
 def test_an_aggregate_written_through_fo_corr_in_order_is_in_order() -> None:
     """Catches the rule flagging a model that states a correlation's order through the macro
-    (spec 0135), or its BigQuery form, which cannot state one, being flagged."""
+    (spec 0135)."""
     model = "select {{ fo_corr_in_order('y', 'x', 'k') }} as r from t"
     assert unordered_aggregates(model) == []
-    bigquery_form = (
-        "{% macro bigquery__fo_corr_in_order(y, x, order_by) %}\n"
-        "    corr({{ y }}, {{ x }})\n"
-        "{%- endmacro %}\n"
-    )
-    assert unordered_aggregates(bigquery_form) == []
 
 
-def test_only_the_three_bigquery_forms_may_leave_the_order_out() -> None:
-    """Catches the allowance widening: BigQuery cannot state the order, so the BigQuery
-    forms of fo_sum_in_order and fo_avg_in_order hold an aggregate without one, and nothing
-    else may, whatever it is named and wherever it stands in the same file."""
-    allowed = (
-        "{% macro bigquery__fo_avg_in_order(expression, order_by) %}\n"
-        "    avg({{ expression }})\n"
-        "{%- endmacro %}\n"
-    )
-    assert unordered_aggregates(allowed) == []
-    other_form = allowed.replace("bigquery__fo_avg_in_order", "bigquery__fo_mean")
-    assert unordered_aggregates(other_form) == [(2, "avg")]
-    duckdb_form = allowed.replace("bigquery__", "duckdb__")
-    assert unordered_aggregates(duckdb_form) == [(2, "avg")]
-    after = allowed + "{% macro fo_other(x) %}\n    avg({{ x }})\n{%- endmacro %}\n"
-    assert unordered_aggregates(after) == [(5, "avg")]
+def test_no_form_of_the_macros_may_leave_the_order_out() -> None:
+    """Catches a BigQuery form going back to its native aggregate: since ADR 0115 BigQuery
+    states the order too, so no macro body may hold an aggregate without one, the three
+    BigQuery forms that used to be allowed included."""
+    for macro, native in (
+        ("bigquery__fo_avg_in_order", "avg({{ expression }})"),
+        ("bigquery__fo_corr_in_order", "corr({{ y }}, {{ x }})"),
+    ):
+        form = f"{{% macro {macro}(a, b) %}}\n    {native}\n{{%- endmacro %}}\n"
+        assert unordered_aggregates(form) == [(2, native[:4].rstrip("("))]

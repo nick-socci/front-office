@@ -40,6 +40,17 @@ models:
       +materialized: table
       +schema: reconciliation
 
+functions:
+  front_office:
+    # The two JavaScript folds exist on BigQuery only (spec 0139, ADR 0115). `enabled` is
+    # also set in functions/_functions.yml, but a properties file applies it after dbt has
+    # parsed the .js file as an enabled function, and dbt refuses a JavaScript function on
+    # DuckDB before that. Set here, it applies as the file is parsed.
+    sum_in_order:
+      +enabled: "{{ target.type == 'bigquery' }}"
+    corr_in_order:
+      +enabled: "{{ target.type == 'bigquery' }}"
+
 vars:
   # When true, league- and team-identifying text is replaced with stable aliases.
   # League members did not opt into appearing in a public repo, so CI (and anything

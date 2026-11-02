@@ -606,7 +606,8 @@ recovered_parts as (
         count(*) as components,
         count(our_component) as ours_present,
         count(matchup_line_value) as lines_present,
-        {{ fo_sum_in_order('our_component', 'component') }} as part_ours,
+        -- order-exempt: whole counts of at most a few hundred, at most two terms a part.
+        sum(our_component) as part_ours,
         {{ fo_sum_in_order('coalesce(game_line_difference, 0)', 'component') }} as part_game_lines,
         {{ fo_sum_in_order('matchup_line_value', 'component') }} as part_matchup_lines
     from recovered_components

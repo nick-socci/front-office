@@ -1,7 +1,7 @@
 # 0115. On BigQuery, a floating-point aggregate is a JavaScript fold over its rows in the stated order
 
-- Status: proposed
-- Date: 2026-10-29
+- Status: accepted
+- Date: 2026-11-02
 - Spec: [0139-float-order-on-bigquery](../specs/0139-float-order-on-bigquery/design.md) · Issue: #139
 - Amends: [0046](0046-an-order-dependent-aggregate-is-computed-in-a-stated-order.md), for BigQuery
 

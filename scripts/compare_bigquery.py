@@ -1,8 +1,8 @@
-"""Compare the BigQuery build with the DuckDB build of the same models.
+"""Compare the BigQuery build with the DuckDB build of the same models, exactly.
 
-Spec 0130, R5.2 to R5.5; ADR 0053. Everything that is not floating-point is held exactly;
-floating-point columns are held to a tolerance, because BigQuery cannot be told the order
-of a float sum and so cannot be made to agree to the last digit.
+Spec 0130, R5.2 to R5.5; spec 0139, R2; ADR 0116. Every scalar column is held to equality,
+floating-point columns included: both warehouses state the order of a float aggregate
+(ADR 0046, ADR 0115), so a float is reproduced to the last digit and there is no tolerance.
 
 Usage:  uv run --group bigquery python scripts/compare_bigquery.py \\
             --db data/warehouse.duckdb --project "$FO_BQ_PROJECT" [--bq-against-bq SUFFIX]
@@ -16,13 +16,15 @@ Usage:  uv run --group bigquery python scripts/compare_bigquery.py \\
 3. Columns are compared by kind, not by type name: INT64 against BIGINT, HUGEINT or
    INTEGER as integers; a TIMESTAMP on either side as an instant in UTC; text, dates and
    booleans as they are. A column on one side only, or of a different kind, fails.
-4. Columns that are not floating-point: EXCEPT ALL both ways, so as multisets.
-5. Floating-point columns: the two sides are joined on the relation's declared unique key
-   (its `unique` or `unique_combination_of_columns` test) and each pair must be equal
-   within a relative 1e-9, or within an absolute 1e-12 where both values are below 1e-3 in
-   magnitude; a null on one side only is a difference, and so is a row with no partner.
-   For each column the count of exactly equal values and the largest differences are
-   printed.
+4. Every scalar column, floats included: EXCEPT ALL both ways, so as multisets of rows.
+   NaN equals NaN and null equals null there, as in a row's identity.
+5. When a relation differs, its counts are printed each way and, for each float column,
+   whether the rows still differ when compared on that column and every non-float column
+   (the other float columns left out). The non-float columns stand in for a row's
+   identity, so a float that only moved between rows is still named; a float column
+   compared alone would miss it, since swapped values make equal multisets. Where the
+   non-float columns do not tell two rows apart, a float that moved between them is not
+   named; the relation still fails.
 
 6. A JSON or nested column (a struct, list or map; a BigQuery RECORD or REPEATED field)
    is neither read back nor compared, and is printed as such: a JSON value is billed whole
@@ -41,8 +43,8 @@ Usage:  uv run --group bigquery python scripts/compare_bigquery.py \\
 
 Exit 0 only if every relation passes. One line per relation either way.
 
-`--bq-against-bq SUFFIX` compares two BigQuery builds with each other instead, exactly,
-floats included: the second is the one built with --vars '{fo_schema_suffix: SUFFIX}'.
+`--bq-against-bq SUFFIX` compares two BigQuery builds with each other instead, the same
+way: the second is the one built with --vars '{fo_schema_suffix: SUFFIX}'.
 
 `--suffix SUFFIX` reads the (first) BigQuery build from the datasets of that suffix, so a
 branch built beside the populated build is compared without replacing it (spec 0156).
@@ -73,9 +75,6 @@ from warehouse_diff import (
 )
 
 SELECTOR = "bigquery"
-RELATIVE_TOLERANCE = 1e-9
-ABSOLUTE_TOLERANCE = 1e-12
-NEAR_ZERO = 1e-3
 # Relations whose differences are listed by group, with the rows of each side (item 8): the
 # columns that name a group. The solver's group is a team-day.
 GROUPS = {
@@ -139,15 +138,6 @@ def _comparable(name: str, column_kind: str) -> str:
 
 
 @dataclass
-class FloatColumn:
-    compared: int
-    exactly_equal: int
-    beyond_tolerance: int
-    largest_absolute: float = 0.0
-    largest_relative: float = 0.0
-
-
-@dataclass
 class GroupDifference:
     """One group (a team-day) whose rows differ, with its rows on each side."""
 
@@ -163,10 +153,11 @@ class Result:
     right_rows: int = 0
     only_left: int = 0
     only_right: int = 0
-    unjoined: int = 0
     problems: list[str] = field(default_factory=list)
     uncompared: list[str] = field(default_factory=list)
-    floats: dict[str, FloatColumn] = field(default_factory=dict)
+    # Per float column, filled only for a relation that differs: True if the rows still
+    # differ when compared on that column and every non-float column (R2.3).
+    float_differs: dict[str, bool] = field(default_factory=dict)
     group_columns: list[str] = field(default_factory=list)
     differing_groups: list[GroupDifference] = field(default_factory=list)
 
@@ -177,8 +168,6 @@ class Result:
             and self.left_rows == self.right_rows
             and self.only_left == 0
             and self.only_right == 0
-            and self.unjoined == 0
-            and all(column.beyond_tolerance == 0 for column in self.floats.values())
         )
 
 
@@ -187,9 +176,7 @@ def compare_relation(
     left: str,
     right: str,
     relation: str,
-    key: list[str] | None,
     *,
-    exact_floats: bool = False,
     left_where: str | None = None,
     left_unread: set[str] | None = None,
     right_unread: set[str] | None = None,
@@ -253,57 +240,38 @@ def compare_relation(
         if name not in left_columns and name not in json_names
     )
 
-    float_names = [] if exact_floats else [n for n, k in shared.items() if k == "float"]
-    exact = {name: k for name, k in shared.items() if name not in float_names}
+    exact = dict(shared)
     if exact:
         selection = ", ".join(f"{_comparable(n, k)} as {quote(n)}" for n, k in exact.items())
         left_sql = f"select {selection} from {left_from}"
         right_sql = f"select {selection} from {qualified(right, relation)}"
         result.only_left = count_except(con, left_sql, right_sql)
         result.only_right = count_except(con, right_sql, left_sql)
-        group_columns = GROUPS.get(relation.split(".")[-1], [])
-        if (
-            group_columns
-            and (result.only_left or result.only_right)
-            and all(n in exact for n in group_columns)
-        ):
-            list_differing_groups(con, result, left_sql, right_sql, group_columns)
-    if not float_names:
-        return result
-    if not key or any(name not in shared for name in key):
-        result.problems.append("float columns and no declared unique key")
-        return result
-
-    on = " and ".join(f"l.{quote(n)} is not distinct from r.{quote(n)}" for n in key)
-    joined = f"from {left_from} as l inner join {qualified(right, relation)} as r on {on}"
-    pairs = int(con.execute(f"select count(*) {joined}").fetchone()[0])  # type: ignore[index]
-    result.unjoined = (result.left_rows - pairs) + (result.right_rows - pairs)
-    for name in float_names:
-        a, b = f"l.{quote(name)}", f"r.{quote(name)}"
-        difference = f"abs({a} - {b})"
-        within = (
-            f"({difference} <= {RELATIVE_TOLERANCE} * greatest(abs({a}), abs({b})) "
-            f"or (abs({a}) < {NEAR_ZERO} and abs({b}) < {NEAR_ZERO} "
-            f"and {difference} <= {ABSOLUTE_TOLERANCE}))"
-        )
-        row = con.execute(
-            f"select count(*), "
-            f"count(case when {a} is not distinct from {b} then 1 end), "
-            f"count(case when ({a} is null) != ({b} is null) "
-            f"or ({a} is not null and {b} is not null and not {within}) then 1 end), "
-            f"coalesce(max({difference}), 0), "
-            f"coalesce(max(case when greatest(abs({a}), abs({b})) > 0 "
-            f"then {difference} / greatest(abs({a}), abs({b})) end), 0) {joined}"
-        ).fetchone()
-        assert row is not None
-        result.floats[name] = FloatColumn(
-            compared=int(row[0]),
-            exactly_equal=int(row[1]),
-            beyond_tolerance=int(row[2]),
-            largest_absolute=float(row[3]),
-            largest_relative=float(row[4]),
-        )
+        if result.only_left or result.only_right:
+            group_columns = GROUPS.get(relation.split(".")[-1], [])
+            if group_columns and all(n in exact for n in group_columns):
+                list_differing_groups(con, result, left_sql, right_sql, group_columns)
+            name_differing_floats(con, result, exact, left_from, qualified(right, relation))
     return result
+
+
+def name_differing_floats(
+    con: duckdb.DuckDBPyConnection,
+    result: Result,
+    exact: dict[str, str],
+    left_from: str,
+    right_from: str,
+) -> None:
+    """For each float column, whether the relations still differ on that column together
+    with every non-float column, the other float columns left out (R2.3)."""
+    others = [n for n, k in exact.items() if k != "float"]
+    for name in (n for n, k in exact.items() if k == "float"):
+        selection = ", ".join(f"{_comparable(n, exact[n])} as {quote(n)}" for n in [*others, name])
+        left_sql = f"select {selection} from {left_from}"
+        right_sql = f"select {selection} from {right_from}"
+        result.float_differs[name] = bool(
+            count_except(con, left_sql, right_sql) or count_except(con, right_sql, left_sql)
+        )
 
 
 def list_differing_groups(
@@ -333,26 +301,12 @@ def list_differing_groups(
         result.differing_groups.append(GroupDifference(tuple(group), sides[0], sides[1]))
 
 
-def unique_key(manifest: dict[str, Any], unique_id: str) -> list[str] | None:
-    """The columns of a model's declared unique key, from its tests in dbt's manifest."""
-    for node in manifest["nodes"].values():
-        if node.get("resource_type") != "test" or node.get("attached_node") != unique_id:
-            continue
-        metadata = node.get("test_metadata") or {}
-        if metadata.get("name") == "unique":
-            return [str(metadata["kwargs"]["column_name"])]
-        if metadata.get("name") == "unique_combination_of_columns":
-            return [str(name) for name in metadata["kwargs"]["combination_of_columns"]]
-    return None
-
-
 # -- what is compared, and reading BigQuery back --------------------------------------------
 
 
-def selected_relations(target_path: Path) -> list[tuple[str, str, list[str] | None]]:
-    """(schema, name, unique key) of every relation the selector selects, from dbt: its models
-    and its seeds (spec 0135). A seed's key is read from its tests as a model's is; a seed with no
-    float column needs none."""
+def selected_relations(target_path: Path) -> list[tuple[str, str]]:
+    """(schema, name) of every relation the selector selects, from dbt: its models and its
+    seeds (spec 0135)."""
     dbt = Path(sys.executable).parent / "dbt"
     listed = subprocess.run(
         [
@@ -366,7 +320,7 @@ def selected_relations(target_path: Path) -> list[tuple[str, str, list[str] | No
             "seed",
         ]
         + ["--output", "json"]
-        + ["--output-keys", "unique_id name schema config", "-q"]
+        + ["--output-keys", "name schema config", "-q"]
         + ["--target", "dev", "--target-path", str(target_path)],
         cwd=DBT_ROOT,
         env={**os.environ, "DBT_PROFILES_DIR": str(DBT_ROOT)},
@@ -374,7 +328,6 @@ def selected_relations(target_path: Path) -> list[tuple[str, str, list[str] | No
         text=True,
         check=True,
     )
-    manifest = json.loads((target_path / "manifest.json").read_text())
     relations = []
     for line in listed.stdout.splitlines():
         if not line.startswith("{"):
@@ -382,8 +335,7 @@ def selected_relations(target_path: Path) -> list[tuple[str, str, list[str] | No
         node = json.loads(line)
         if node["config"]["materialized"] == "ephemeral":
             continue
-        key = unique_key(manifest, node["unique_id"])
-        relations.append((str(node["schema"]), str(node["name"]), key))
+        relations.append((str(node["schema"]), str(node["name"])))
     return sorted(relations)
 
 
@@ -402,7 +354,7 @@ def read_back(
     con: duckdb.DuckDBPyConnection,
     project: str,
     catalog: str,
-    relations: list[tuple[str, str, list[str] | None]],
+    relations: list[tuple[str, str]],
     suffix: str = "",
 ) -> dict[str, set[str]]:
     """Copy each BigQuery relation into `catalog`, under the schema names DuckDB uses.
@@ -412,7 +364,7 @@ def read_back(
     from google.cloud import bigquery
 
     client = bigquery.Client(project=project, location="US")
-    for schema, name, _ in relations:
+    for schema, name in relations:
         table_id = f"{project}.{schema}{suffix}.{name}"
         table = client.get_table(table_id)
         fields = fields_read_back(table.schema)
@@ -439,7 +391,6 @@ def describe(result: Result, left_name: str, right_name: str) -> list[str]:
     lines = [
         f"{status} {result.relation}: rows {result.left_rows} / {result.right_rows}; "
         f"only in {left_name} {result.only_left}, only in {right_name} {result.only_right}"
-        + (f"; rows with no partner on the key {result.unjoined}" if result.unjoined else "")
     ]
     lines.extend(f"       {problem}" for problem in result.problems)
     for difference in result.differing_groups:
@@ -452,11 +403,12 @@ def describe(result: Result, left_name: str, right_name: str) -> list[str]:
             lines.append(f"         {side}: {rows}")
     if result.uncompared:
         lines.append(f"       JSON or nested columns not compared: {', '.join(result.uncompared)}")
-    for name, column in result.floats.items():
+    for name, differs in result.float_differs.items():
         lines.append(
-            f"       float {name}: {column.compared} compared, {column.exactly_equal} "
-            f"exactly equal, {column.beyond_tolerance} beyond tolerance, largest difference "
-            f"{column.largest_absolute:.3g} absolute, {column.largest_relative:.3g} relative"
+            f"       float {name}: the rows still differ with this column and the non-float columns"
+            if differs
+            else f"       float {name}: the rows are equal with this column and the non-float "
+            f"columns"
         )
     return lines
 
@@ -493,14 +445,12 @@ def main(argv: list[str] | None = None) -> int:
             con.execute(f"attach '{args.db}' as {quote(left)} (read_only)")
             right, names = "bq", ("DuckDB", "BigQuery")
         failed = total_rows = 0
-        for schema, name, key in relations:
+        for schema, name in relations:
             result = compare_relation(
                 con,
                 left,
                 right,
                 f"{schema}.{name}",
-                key,
-                exact_floats=bool(args.bq_against_bq),
                 left_unread=left_unread.get(f"{schema}.{name}"),
                 right_unread=unread.get(f"{schema}.{name}"),
                 left_name=names[0],
