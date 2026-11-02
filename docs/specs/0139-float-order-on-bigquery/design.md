@@ -243,3 +243,18 @@ on BigQuery, run by hand (ADR 0110).
 | design-review | F4 (P2): per-model bytes parity is asserted, not measured | the bytes row is a recorded measurement beside free dry runs of `main`'s SQL, with any increase explained; not a gate |
 
 ## Amendments
+
+- 2026-11-02 (build, task 1). One of the 39 calls is of whole numbers, as R1.6 foresaw:
+  `our_component` in `rec_espn__matchup_stat_differences`. The owner approved a plain `sum`
+  with `order-exempt:`, so 38 calls go through the macros (31 sums, 2 means, 1 correlation
+  in the models; 4 sums in the tests). `category_wins_added` and `matchup_wins_added` are
+  decimals on DuckDB and floats on BigQuery, because of how each reads a literal `0.5`.
+  Their values are multiples of a half, exact either way, so they stay in the fold.
+- 2026-11-02 (build, task 6). `enabled` on the folds in `_functions.yml` alone does not work:
+  dbt refuses a JavaScript function on DuckDB when it parses the file, before a properties
+  file disables it. `dbt_project.yml` sets `enabled` for the two as well.
+- 2026-11-02 (build, task 7). `test_dbt_ordered_aggregate_rule.py` exempted the three
+  BigQuery forms, because they could not state an order. Now they do, so the exemption goes
+  and the test is stricter: a BigQuery form back on its native `avg` or `corr` fails. Its
+  floor of three aggregates found becomes both `avg` and `corr` found, since those two are
+  what remain.
