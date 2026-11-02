@@ -99,7 +99,7 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
   column `t`): those are found by `uv run --group bigquery dbt run --target bq --selector
   bigquery --empty --vars '{fo_schema_suffix: _<tag>}'`, then `dbt test` on the same
   datasets (`--exclude-resource-type unit_test`) for the tests' SQL. Into new suffixed
-  datasets, run `dbt seed` and `dbt build --select resource_type:function` with the same
+  datasets, run `dbt seed` and `dbt build --select resource_type:function --exclude-resource-type test` with the same
   vars first: `dbt run` builds neither seeds nor the solver function, and the models read
   both. The run and the seeds bill nothing; the tests bill about 0.5 GB, and the function
   bills its image build. **The suffix is not optional:** without it, `--empty` replaces
@@ -128,7 +128,7 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
   ```bash
   cd dbt && V='{fo_schema_suffix: _<tag>}'   # FO_BQ_PROJECT named explicitly
   uv run --group bigquery dbt seed --target bq --vars "$V"
-  uv run --group bigquery dbt build --target bq --select resource_type:function --vars "$V"
+  uv run --group bigquery dbt build --target bq --select resource_type:function --exclude-resource-type test --vars "$V"
   uv run --group bigquery dbt run --target bq --selector bigquery --empty --vars "$V"
   uv run --group bigquery dbt test --target bq --selector bigquery --resource-type unit_test --vars "$V"
   ```
