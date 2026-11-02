@@ -134,11 +134,25 @@
 
 
 {#
-  A floating-point sum or mean, in a stated order (ADR 0046). The last digit of a float
-  aggregate depends on the order of its rows, so DuckDB is given the order and two DuckDB
-  builds agree exactly. BigQuery has no way to state it, and its form leaves it out: a
-  BigQuery build is held to a tolerance on float columns, not to equality (ADR 0053).
-  `order_by` is what follows `order by`, on the grain's key.
+  A floating-point sum, mean or correlation, in a stated order (ADR 0046, ADR 0115). The
+  last digit of a float aggregate depends on the order of its rows, so both warehouses are
+  given the order, and a build agrees with itself and with the other warehouse exactly
+  (ADR 0116). `order_by` is what follows `order by`, on the grain's key.
+
+  DuckDB states the order inside the aggregate: `sum(e order by k)`, `avg(e order by k)`,
+  `corr(y, x order by k)`. Its ordered sum is a left-to-right fold, its avg is that sum
+  over the count of non-null values, and its corr is one Welford pass.
+
+  BigQuery cannot state an order for an aggregate, but it can gather the rows in one:
+  `array_agg(e ignore nulls order by k)`, which a JavaScript function (dbt/functions/
+  sum_in_order.js, corr_in_order.js) folds from the first value on, in the same
+  statements as DuckDB, on IEEE doubles. So the two warehouses add the same terms in the
+  same order and give the same digits. fo_sum_in_order is that sum; fo_avg_in_order is the
+  sum over `nullif(count(e), 0)`, the non-null values the array holds, as DuckDB divides;
+  fo_corr_in_order folds the (y, x) pairs and skips a pair with a null side as DuckDB
+  does. With no value the array, and so the result, is null; a single pair or a zero
+  variance gives NaN on both. An expression that is INT64 on BigQuery does not fit the
+  array<float64> argument; such a sum needs no order and is a plain `sum` (R1.6).
 #}
 {% macro fo_sum_in_order(expression, order_by) %}
     {{- return(adapter.dispatch('fo_sum_in_order')(expression, order_by)) -}}
@@ -147,7 +161,7 @@
     sum({{ expression }} order by {{ order_by }})
 {%- endmacro %}
 {% macro bigquery__fo_sum_in_order(expression, order_by) -%}
-    sum({{ expression }})
+    {{ function('sum_in_order') }}(array_agg({{ expression }} ignore nulls order by {{ order_by }}))
 {%- endmacro %}
 
 {% macro fo_avg_in_order(expression, order_by) %}
@@ -157,7 +171,8 @@
     avg({{ expression }} order by {{ order_by }})
 {%- endmacro %}
 {% macro bigquery__fo_avg_in_order(expression, order_by) -%}
-    avg({{ expression }})
+    {{ function('sum_in_order') }}(array_agg({{ expression }} ignore nulls order by {{ order_by }}))
+    / nullif(count({{ expression }}), 0)
 {%- endmacro %}
 
 
@@ -173,12 +188,7 @@
 {%- endmacro %}
 
 
-{#
-  A correlation, with the order its float sum is taken in (ADR 0046) stated in DuckDB.
-  BigQuery's corr takes no order, so its form leaves it out, and a BigQuery build is held to
-  the float tolerance on the column, as for fo_sum_in_order. `order_by` is what follows
-  `order by`, on the grain's key.
-#}
+{# A correlation in a stated order: see the comment above fo_sum_in_order. #}
 {% macro fo_corr_in_order(y, x, order_by) %}
     {{- return(adapter.dispatch('fo_corr_in_order')(y, x, order_by)) -}}
 {% endmacro %}
@@ -186,7 +196,9 @@
     corr({{ y }}, {{ x }} order by {{ order_by }})
 {%- endmacro %}
 {% macro bigquery__fo_corr_in_order(y, x, order_by) -%}
-    corr({{ y }}, {{ x }})
+    {{ function('corr_in_order') }}(
+        array_agg(struct({{ y }} as y, {{ x }} as x) order by {{ order_by }})
+    )
 {%- endmacro %}
 
 
