@@ -135,7 +135,6 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
 
   dbt reads the columns of each dict fixture's input from the warehouse, so the unit
   tests need that complete build; the run bills nothing but the function's image build.
-  The four float tests of #139 fail there until #139 is settled.
 - The lineup solver is one file, `dbt/functions/solve_lineup_period.py`: a BigQuery Python
   UDF (a dbt function resource, Python 3.11, scipy and numpy pinned because BigQuery
   constrains numpy<2) and a DuckDB function the `fo_duckdb_functions` plugin registers on
@@ -177,7 +176,13 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
   grain's key inside its parentheses: the last digit depends on row order, row order
   changes between builds, and warehouses are compared exactly. Broken three times
   (`stddev_pop`, `avg`, `corr`); see ADR 0046. Exempt only if exact: integer-valued inputs
-  whose magnitudes sum below 2^53, said in a comment starting `order-exempt:`.
+  whose magnitudes sum below 2^53, said in a comment starting `order-exempt:`. Write the
+  ordered sum, mean and correlation through `fo_sum_in_order`, `fo_avg_in_order` and
+  `fo_corr_in_order`: BigQuery states the order too, by folding `array_agg(… order by …)`
+  in a JavaScript function (`dbt/functions/*.js`, ADR 0115), so both warehouses give the
+  same digits and `compare_bigquery.py` holds every column exactly, floats included (ADR
+  0116). The JavaScript is checked against DuckDB's aggregates by
+  `ingestion/tests/test_float_folds.py`.
 
 ## How work is done here
 
