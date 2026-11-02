@@ -584,6 +584,95 @@ unit_tests:
       rows:
         - {replacement_group: hitter, pairs: 5, pairs_unmeasured: 0, correlation: 0.14953126241169692}
 
+  - name: category_wins_by_group_give_a_single_pair_no_correlation_but_NaN
+    description: >
+      One hitter, with wins added of 3.4 and a value of 8.9. A correlation needs two
+      points: on DuckDB corr over one pair is NaN, not null and not an error. Catches a
+      fold that gives null, 0, or a division by zero where DuckDB gives NaN (spec 0139,
+      R3.2).
+    model: rec_fantasy__category_wins_by_group
+    given:
+      - input: ref('fct_matchup_results')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, winner: HOME, has_unverified_inputs: false}
+      - input: ref('rec_fantasy__category_wins_added')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, category_wins_added: 3.4}
+      - input: ref('dim_player_league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, replacement_group: hitter}
+      - input: ref('fct_player_season_value')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, total_value: 8.9}
+    expect:
+      rows:
+        - {replacement_group: hitter, pairs: 1, correlation: "NaN"}
+
+  - name: category_wins_by_group_give_a_zero_variance_in_value_no_correlation_but_NaN
+    description: >
+      Three hitters with wins added of 3.4, 3.9 and 2.7 and the same value, 2.0, each. A
+      value that never varies has no correlation with anything: on DuckDB corr is NaN
+      (0 over 0), not null. Catches a fold that guards the zero variance and gives null
+      or 0 where DuckDB gives NaN (spec 0139, R3.2).
+    model: rec_fantasy__category_wins_by_group
+    given:
+      - input: ref('fct_matchup_results')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, winner: HOME, has_unverified_inputs: false}
+      - input: ref('rec_fantasy__category_wins_added')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, category_wins_added: 3.4}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, fantasy_team_id: 1, category_wins_added: 3.9}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, fantasy_team_id: 1, category_wins_added: 2.7}
+      - input: ref('dim_player_league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, replacement_group: hitter}
+      - input: ref('fct_player_season_value')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, total_value: 2.0}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, fantasy_team_id: 1, total_value: 2.0}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, fantasy_team_id: 1, total_value: 2.0}
+    expect:
+      rows:
+        - {replacement_group: hitter, pairs: 3, correlation: "NaN"}
+
+  - name: category_wins_by_group_leave_a_pair_with_no_value_out_of_the_correlation
+    description: >
+      Four hitters, players 1 to 4, with wins added of 3.4, 3.9, 2.7 and 2.5 and values
+      of 8.9, 2.0, 1.2 and null. The fourth pair has no value (the other side of the pair
+      from the null wins added of the slope's test): the correlation is that of the
+      other three as if he were absent, 0.18940207604965043 on DuckDB, and he is counted
+      as unmeasured. Catches a null pair entering the fold as a zero or as a term, on
+      either side of the pair (spec 0139, R3.2).
+    model: rec_fantasy__category_wins_by_group
+    given:
+      - input: ref('fct_matchup_results')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 7, winner: HOME, has_unverified_inputs: false}
+      - input: ref('rec_fantasy__category_wins_added')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, category_wins_added: 3.4}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, fantasy_team_id: 1, category_wins_added: 3.9}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, fantasy_team_id: 1, category_wins_added: 2.7}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 4, fantasy_team_id: 1, category_wins_added: 2.5}
+      - input: ref('dim_player_league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, replacement_group: hitter}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 4, replacement_group: hitter}
+      - input: ref('fct_player_season_value')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 1, fantasy_team_id: 1, total_value: 8.9}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 2, fantasy_team_id: 1, total_value: 2.0}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 3, fantasy_team_id: 1, total_value: 1.2}
+          - {platform: espn, league_id: "1", season: 2026, platform_player_id: 4, fantasy_team_id: 1, total_value: null}
+    expect:
+      rows:
+        - {replacement_group: hitter, pairs: 4, pairs_unmeasured: 1, correlation: "0.18940207604965043"}
+
   - name: category_wins_by_group_fail_a_large_group_with_an_unmeasured_pair_however_few_matchups
     description: >
       A hundred starters over a single matchup scored again, each with wins added of 0.4

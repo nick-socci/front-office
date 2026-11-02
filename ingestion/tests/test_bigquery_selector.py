@@ -252,12 +252,13 @@ def test_the_selector_takes_the_tests_counted(selected: list[dict[str, object]])
     # 5 singular). The figures are what `dbt ls --selector bigquery` lists on `ci`.
     assert (len(tests), len(generic), len(tests) - len(generic)) == (491, 413, 78)
     assert LEFT_OUT_TEST not in names(selected, "test")
-    # Every unit test of the project: 224. ADR 0096's selection held 190; 32 more are the
+    # Every unit test of the project: 230. ADR 0096's selection held 190; 32 more are the
     # unit tests of the solver (seven, spec 0137) and of its three readers (24, with spec
     # 0137's missed start tied within float noise, 25), one is the id map's ambiguous-id
     # test (spec 0141, R3.4), and one holds quotes and backslashes in a JSON fixture value
-    # (spec 0138, R4.2).
-    assert len(names(selected, "unit_test")) == 224
+    # (spec 0138, R4.2); six are the folds' edges: three on a side denominator and three on
+    # a correlation (spec 0139, R3.2).
+    assert len(names(selected, "unit_test")) == 230
 
 
 def test_no_selected_test_reads_a_relation_outside_the_selector(
