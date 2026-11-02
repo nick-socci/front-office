@@ -1,4 +1,5 @@
-"""The comparison of a BigQuery build with DuckDB's (spec 0130, R5.2 to R5.5; ADR 0053).
+"""The comparison of a BigQuery build with DuckDB's, exactly (spec 0130, R5.2 to R5.5;
+spec 0139, R2; ADR 0116).
 
 Tested on two small DuckDB databases. The one standing in for BigQuery holds what its
 tables look like once read back: BIGINT for INT64, TIMESTAMP WITH TIME ZONE for TIMESTAMP.
@@ -54,7 +55,7 @@ def fill(con: duckdb.DuckDBPyConnection, local_rows: str = ROWS, bq_rows: str = 
 
 
 def compare(con: duckdb.DuckDBPyConnection, **kwargs: object) -> cmp.Result:
-    return cmp.compare_relation(con, "local", "bq", RELATION, ["id"], **kwargs)  # type: ignore[arg-type]
+    return cmp.compare_relation(con, "local", "bq", RELATION, **kwargs)  # type: ignore[arg-type]
 
 
 def test_an_equal_pair_passes_across_the_two_warehouses_types(
@@ -71,9 +72,7 @@ def test_an_equal_pair_passes_across_the_two_warehouses_types(
         0,
         0,
     )
-    assert result.floats == {
-        "scale": cmp.FloatColumn(compared=3, exactly_equal=3, beyond_tolerance=0)
-    }
+    assert result.float_differs == {}
     assert result.passed
 
 
@@ -101,45 +100,59 @@ def test_a_differing_integer_text_date_or_boolean_fails(con: duckdb.DuckDBPyConn
         assert not result.passed
 
 
-def test_a_float_inside_the_tolerance_passes_and_is_reported(
+def test_a_float_differing_in_the_last_digit_fails_and_names_its_column(
     con: duckdb.DuckDBPyConnection,
 ) -> None:
-    """Catches the last digits of a float sum failing the comparison, and the difference
-    going unreported."""
+    """Catches a tolerance left in (R2.1): the next double above 2.5 is not equal to it, so
+    the relation fails, and the report names the column (R2.3)."""
     fill(con)
-    con.execute(f"update bq.{RELATION} set scale = 2.5 * (1 + 1e-12) where id = 2")
+    con.execute(f"update bq.{RELATION} set scale = nextafter(2.5, 3) where id = 2")
     result = compare(con)
-    column = result.floats["scale"]
-    assert (column.compared, column.exactly_equal, column.beyond_tolerance) == (3, 2, 0)
-    assert column.largest_relative == pytest.approx(1e-12, rel=1e-3)
-    assert column.largest_absolute == pytest.approx(2.5e-12, rel=1e-3)
-    assert result.passed
+    assert (result.only_left, result.only_right) == (1, 1) and not result.passed
+    assert result.float_differs == {"scale": True}
+    printed = "\n".join(cmp.describe(result, "DuckDB", "BigQuery"))
+    assert "only in DuckDB 1, only in BigQuery 1" in printed
+    assert "float scale: the rows still differ" in printed
 
 
-def test_a_float_outside_the_tolerance_fails(con: duckdb.DuckDBPyConnection) -> None:
-    """Catches a wrong number hiding behind the tolerance: a relative 1e-8 is too far."""
+def test_floats_swapped_between_two_rows_fail_and_name_their_column(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Catches R2.3 unmet (design review F1): two rows exchanging their float values leave
+    the column's multiset equal, so only a comparison with the row's other columns sees it."""
     fill(con)
-    con.execute(f"update bq.{RELATION} set scale = 2.5 * (1 + 1e-8) where id = 2")
+    con.execute(f"update bq.{RELATION} set scale = 0.1 where id = 2")
+    con.execute(f"update bq.{RELATION} set scale = 2.5 where id = 1")
     result = compare(con)
-    assert result.floats["scale"].beyond_tolerance == 1
+    assert not result.passed and result.float_differs == {"scale": True}
+    # The column alone is the same multiset on both sides.
+    alone = con.execute(
+        f"select count(*) from ((select scale from local.{RELATION} except all "
+        f"select scale from bq.{RELATION}))"
+    ).fetchone()
+    assert alone == (0,)
+
+
+def test_only_the_float_column_that_differs_is_named(con: duckdb.DuckDBPyConnection) -> None:
+    """Catches the report naming every float column of a relation that differs: with a
+    second float column that is equal, only the one that moved is named."""
+    for name in ("local", "bq"):
+        con.execute(f"create table {name}.{RELATION} (id bigint, a double, b double)")
+        con.execute(f"insert into {name}.{RELATION} values (1, 0.1, 5.0), (2, 0.2, 6.0)")
+    con.execute(f"update bq.{RELATION} set a = 0.30000000000000004 where id = 2")
+    result = compare(con)
     assert not result.passed
+    assert result.float_differs == {"a": True, "b": False}
 
 
-def test_values_near_zero_are_held_to_an_absolute_difference(
-    con: duckdb.DuckDBPyConnection,
-) -> None:
-    """Catches zero against 1e-15 failing on relative difference, which is 1 there, and the
-    absolute rule reaching values that are not near zero."""
+def test_equal_floats_pass_and_nan_equals_nan(con: duckdb.DuckDBPyConnection) -> None:
+    """Catches a NaN that DuckDB and BigQuery both produce (a single-pair corr) failing the
+    comparison, and a pass naming a column."""
     fill(con)
-    con.execute(f"update local.{RELATION} set scale = 0 where id = 1")
-    con.execute(f"update bq.{RELATION} set scale = 1e-15 where id = 1")
-    assert compare(con).passed
-    con.execute(f"update bq.{RELATION} set scale = 1e-9 where id = 1")
-    assert compare(con).floats["scale"].beyond_tolerance == 1
-    # 5e-13 apart is inside the absolute bound, but these are not below 1e-3
-    con.execute(f"update local.{RELATION} set scale = 0.002 where id = 1")
-    con.execute(f"update bq.{RELATION} set scale = 0.002 + 5e-11 where id = 1")
-    assert compare(con).floats["scale"].beyond_tolerance == 1
+    con.execute(f"update local.{RELATION} set scale = 'NaN'::double where id = 1")
+    con.execute(f"update bq.{RELATION} set scale = 'NaN'::double where id = 1")
+    result = compare(con)
+    assert result.passed and result.float_differs == {}
 
 
 def test_a_null_on_one_side_only_is_a_difference(con: duckdb.DuckDBPyConnection) -> None:
@@ -148,20 +161,10 @@ def test_a_null_on_one_side_only_is_a_difference(con: duckdb.DuckDBPyConnection)
     fill(con)
     con.execute(f"update bq.{RELATION} set scale = null where id = 1")
     result = compare(con)
-    assert result.floats["scale"].beyond_tolerance == 1 and not result.passed
+    assert result.float_differs == {"scale": True} and not result.passed
     con.execute(f"update bq.{RELATION} set scale = 0.1 where id = 1")
     con.execute(f"update bq.{RELATION} set scale = 7 where id = 3")
-    assert compare(con).floats["scale"].beyond_tolerance == 1
-
-
-def test_a_key_that_does_not_join_fails(con: duckdb.DuckDBPyConnection) -> None:
-    """Catches float values going uncompared because their rows found no partner."""
-    fill(con)
-    con.execute(f"update bq.{RELATION} set id = 4 where id = 3")
-    result = compare(con)
-    assert result.floats["scale"].compared == 2
-    assert result.unjoined == 2
-    assert not result.passed
+    assert compare(con).float_differs == {"scale": True}
 
 
 def test_a_missing_row_or_a_duplicated_one_fails(con: duckdb.DuckDBPyConnection) -> None:
@@ -192,59 +195,11 @@ def test_a_column_on_one_side_or_of_another_kind_is_a_problem(
     assert not result.passed
 
 
-def test_a_relation_with_floats_and_no_key_is_a_problem(con: duckdb.DuckDBPyConnection) -> None:
-    """Catches float columns passing uncompared because nothing says how to pair the rows."""
-    fill(con)
-    result = cmp.compare_relation(con, "local", "bq", RELATION, None)
-    assert result.problems == ["float columns and no declared unique key"]
-    assert not result.passed
-
-
-def test_exact_mode_holds_floats_to_equality(con: duckdb.DuckDBPyConnection) -> None:
-    """Catches the BigQuery-against-BigQuery comparison (R5.5) using the tolerance: it asks
-    whether BigQuery reproduces itself, exactly."""
-    fill(con)
-    con.execute(f"update bq.{RELATION} set scale = 2.5 * (1 + 1e-12) where id = 2")
-    assert compare(con).passed
-    exact = compare(con, exact_floats=True)
-    assert (exact.only_left, exact.only_right) == (1, 1) and not exact.passed
-
-
-def test_the_unique_key_is_read_from_the_models_tests() -> None:
-    """Catches the key being taken from the wrong model, or a combination being missed."""
-    manifest = {
-        "nodes": {
-            "test.a": {
-                "resource_type": "test",
-                "test_metadata": {"name": "unique", "kwargs": {"column_name": "id"}},
-                "attached_node": "model.front_office.one",
-            },
-            "test.b": {
-                "resource_type": "test",
-                "test_metadata": {
-                    "name": "unique_combination_of_columns",
-                    "kwargs": {"combination_of_columns": ["league_id", "season"]},
-                },
-                "attached_node": "model.front_office.two",
-            },
-            "test.c": {
-                "resource_type": "test",
-                "test_metadata": {"name": "not_null", "kwargs": {"column_name": "x"}},
-                "attached_node": "model.front_office.three",
-            },
-        }
-    }
-    assert cmp.unique_key(manifest, "model.front_office.one") == ["id"]
-    assert cmp.unique_key(manifest, "model.front_office.two") == ["league_id", "season"]
-    assert cmp.unique_key(manifest, "model.front_office.three") is None
-
-
 def test_the_selected_seeds_are_listed_with_the_models(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Catches the comparison leaving the seeds out (spec 0135): dbt is asked for seeds as
-    well as models, a seed is listed with its key from its tests, and an ephemeral model,
-    which is never built, is not."""
+    well as models, and an ephemeral model, which is never built, is not."""
     rows = [
         {
             "unique_id": "model.front_office.one",
@@ -265,18 +220,8 @@ def test_the_selected_seeds_are_listed_with_the_models(
             "config": {"materialized": "seed"},
         },
     ]
-    manifest = {
-        "nodes": {
-            "test.a": {
-                "resource_type": "test",
-                "test_metadata": {"name": "unique", "kwargs": {"column_name": "stat_id"}},
-                "attached_node": "seed.front_office.espn_stat_ids",
-            }
-        }
-    }
     target = tmp_path / "dbt_target"
     target.mkdir()
-    (target / "manifest.json").write_text(json.dumps(manifest))
     commands: list[list[str]] = []
 
     def fake_run(command: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
@@ -287,8 +232,8 @@ def test_the_selected_seeds_are_listed_with_the_models(
 
     monkeypatch.setattr(cmp.subprocess, "run", fake_run)
     assert cmp.selected_relations(target) == [
-        ("marts", "one", None),
-        ("seeds", "espn_stat_ids", ["stat_id"]),
+        ("marts", "one"),
+        ("seeds", "espn_stat_ids"),
     ]
     assert "seed" in commands[0] and "model" in commands[0]
 
@@ -335,7 +280,7 @@ def test_a_json_column_bigquery_does_not_have_is_a_problem(
     assert extra.problems == ["extra: only in BigQuery"] and not extra.passed
 
     both_unread = cmp.compare_relation(
-        con, "bq", "bq", RELATION, ["id"], left_unread={"payload"}, right_unread=set()
+        con, "bq", "bq", RELATION, left_unread={"payload"}, right_unread=set()
     )
     assert both_unread.problems == ["payload: only in DuckDB"]
 
@@ -433,7 +378,7 @@ def test_json_columns_are_held_to_the_same_schema_whichever_side_has_them(
 
     def problems(**unread: set[str]) -> list[str]:
         return cmp.compare_relation(
-            con, "local", "bq", RELATION, ["id"], left_name="A", right_name="B", **unread
+            con, "local", "bq", RELATION, left_name="A", right_name="B", **unread
         ).problems
 
     # JSON in A and not read back; text in B.
@@ -446,7 +391,7 @@ def test_json_columns_are_held_to_the_same_schema_whichever_side_has_them(
     con.execute(f"alter table bq.{RELATION} drop column payload")
     # JSON in both and read back from neither: present on both, not compared, no problem.
     both = cmp.compare_relation(
-        con, "local", "bq", RELATION, ["id"], left_unread={"payload"}, right_unread={"payload"}
+        con, "local", "bq", RELATION, left_unread={"payload"}, right_unread={"payload"}
     )
     assert both.problems == [] and both.uncompared == ["payload"] and both.passed
     # JSON in one only, absent from the other.
@@ -479,7 +424,7 @@ def lineups_pair(
         con.execute(f"create table {name}.{LINEUPS} {LINEUP_DDL}")
         if rows:
             con.execute(f"insert into {name}.{LINEUPS} values {', '.join(rows)}")
-    return cmp.compare_relation(con, "local", "bq", LINEUPS, None, left_name="A", right_name="B")
+    return cmp.compare_relation(con, "local", "bq", LINEUPS, left_name="A", right_name="B")
 
 
 def test_a_differing_lineup_is_printed_as_its_team_day_with_the_rows_of_each_side(
