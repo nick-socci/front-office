@@ -15,7 +15,8 @@
 --    there and copied it twelve times per period (AGENTS.md rule 1).
 --
 -- For the BigQuery migration: the structure of `teams` is declared once, in the view, and
--- the BigQuery variant of the view parses it from the uploaded payload (ADR 0070).
+-- the BigQuery table holds that structure as columns, typed when `front-office upload`
+-- loads it, and the BigQuery variant of the view selects them (ADR 0117).
 --
 -- A plain table: it reads every capture at once, as the view streams them (spec 0150).
 

@@ -6,7 +6,7 @@
 dbt docs site, rebuilt from fixtures on every change to `main`.
 
 A code-first analytics engineering project: real MLB and ESPN fantasy data, ingested as
-raw JSON, transformed with dbt, stored in DuckDB (BigQuery planned), and tested in CI.
+raw JSON, transformed with dbt, stored in DuckDB and BigQuery, and tested in CI.
 
 It exists because I play in a 17-category head-to-head fantasy baseball league and
 wanted to answer questions the ESPN app will not: who was actually on a roster on a
@@ -146,6 +146,20 @@ cd dbt && DBT_PROFILES_DIR=. uv run --group bigquery dbt build --target bq --sel
 It reads its project id from the environment variable `FO_BQ_PROJECT`, set in your shell
 and written nowhere in the repository, and signs in with `gcloud auth application-default
 login`. The default build, CI and the gates use DuckDB and need neither.
+
+BigQuery holds one raw table per endpoint, `raw.<source>_<endpoint>`, and the manifest
+`raw.captures`, as DuckDB does. The four heavy endpoints are typed by their declared
+structure; the other seven hold a JSON `payload` (ADR 0117). `front-office upload` fills
+them from the local landing zone (ADRs 0118, 0119):
+
+```bash
+uv run --group bigquery front-office upload --project "$FO_BQ_PROJECT"
+```
+
+It appends what each table lacks. `--dry-run` sends nothing, and without `--project` it
+runs the local checks only. `--verify` compares every row. After a heavy endpoint's
+declared structure changes, `--rebuild <source>/<endpoint>` replaces that one table
+(ADR 0120).
 
 ### More than one league or season
 

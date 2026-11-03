@@ -5,8 +5,8 @@ The implementer builds against them and the reviewer judges against them, so a p
 rule belongs here, not in one tool's config.
 
 Front Office is a code-first analytics engineering project: real MLB and ESPN fantasy data,
-landed as raw JSON, transformed with dbt, stored in DuckDB (BigQuery planned). **The repo is
-public and the ESPN league is private.**
+landed as raw JSON, transformed with dbt, stored in DuckDB and BigQuery (the latter loaded by
+`front-office upload`). **The repo is public and the ESPN league is private.**
 
 ## Project shape
 
@@ -53,6 +53,7 @@ uv run mypy                                    # strict, on ingestion/src
 FO_CI_DUCKDB_PATH=dbt/ci.duckdb uv run sqlfluff lint dbt/models dbt/tests   # from the repo root
 cd dbt && DBT_PROFILES_DIR=. uv run dbt build --select <model>          # real season
 cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: true}'
+uv run --group bigquery front-office upload --project "$FO_BQ_PROJECT"   # fill BigQuery's raw tables; --dry-run sends nothing
 ```
 
 ## Five rules this project learned the hard way
@@ -149,9 +150,12 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
   the loader's manifest (keys and file paths), and each view reads its endpoint's files
   through `fo_captures`, parsing a heavy endpoint (rosters, matchup days, boxscores,
   schedules) into a declared structure as it reads, so no megabyte JSON value is ever a
-  value in a query.
+  value in a query. On BigQuery each endpoint has its own table, uploaded by
+  `front-office upload`: a heavy one holds its declared structure as columns, the rest
+  their payload (ADR 0117).
   - A field a model needs from a heavy endpoint is added to that view's structure; a
-    model reading an undeclared field fails to compile.
+    model reading an undeclared field fails to compile. BigQuery needs
+    `front-office upload --rebuild <source/endpoint>` before its next build (ADR 0120).
   - The newest capture of an entity is chosen on `raw.captures`' narrow columns and kept
     by a semi-join on `file_path` (`fo_espn_latest`, `fo_latest_boxscore_responses`),
     **never by ranking parsed rows**: a window over eight seasons of parsed rosters ran out
