@@ -1,8 +1,11 @@
 """What may leave the machine for BigQuery, and what it becomes.
 
-Spec 0140; ADRs 0054, 0061, 0093, 0094 and 0095. Pure functions over parsed JSON: nothing
-here reads the landing zone, a warehouse or a credential, and nothing is sent. The run that
-does those things builds a `Row` per capture and hands the rows to `check`.
+Spec 0140; ADRs 0054, 0061, 0093 to 0095 and 0117 to 0120. The first half is pure functions
+over parsed JSON: the allowlist, the projections and the privacy check. The second is the run
+(`upload`): it lists the landing zone, reads what each BigQuery table holds through a
+`Warehouse`, builds and checks every row to send, then appends what each table lacks by load
+jobs, the manifest `raw.captures` last. Nothing reads a credential (R6.6), and nothing imports
+the BigQuery client: `bigquery.py` does, and only a run with a project loads it.
 
 Eight endpoints are uploaded whole (ALLOWLIST; `mlb/players`, MLB's player list, among them,
 ADR 0095). Three hold league members' data and go up as a projection (PROJECTIONS; ADRs 0061
@@ -37,12 +40,30 @@ never the value.
 
 from __future__ import annotations
 
+import fcntl
+import hashlib
+import json
+import os
 import re
-from collections.abc import Iterable, Iterator
+import tempfile
+from collections import Counter
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Protocol
 
 from front_office import privacy
+from front_office.capture_structures import (
+    Column,
+    StructureMismatch,
+    as_columns,
+    columns,
+    read_structures,
+    reduce,
+)
+from front_office.landing import LandedResponse, LandingZone
 
 # The only endpoints that may leave the machine whole (ADR 0054). Not configurable.
 ALLOWLIST: tuple[tuple[str, str], ...] = (
@@ -443,3 +464,582 @@ def check(rows: Iterable[Row], accounts: frozenset[str]) -> dict[tuple[str, str]
     if hits:
         raise PrivacyHit(hits)
     return counts
+
+
+# -- the run -------------------------------------------------------------------------------
+
+DATASET = "raw"
+MANIFEST = "captures"
+MATCHUP_DAYS = ("espn", "matchup_days")
+STAMP_SHAPE = re.compile(r"\d{8}T\d{6}Z")
+STAMP_FORMAT = "%Y%m%dT%H%M%SZ"
+# Every table's key columns, in the order of the capture views and of raw.captures on DuckDB.
+KEYS = (
+    *(Column(name, "STRING") for name in KEY_COLUMNS),
+    Column("partitions", "JSON"),
+    Column("file_path", "STRING"),
+)
+# The owner's remedy for a row already sent that the check now finds (design, *A hit on a row
+# already sent*). A check cannot undo a send, so every run stops until the row is gone.
+REMEDY = (
+    "This row is already uploaded, and every upload stops until it is gone. The remedy is "
+    "the owner's: drop raw.espn_transactions (BigQuery's time travel keeps a dropped table "
+    "for seven days, then it is gone), decide what this capture's row becomes, and run "
+    "`front-office upload --project <id> --rebuild espn/transactions`."
+)
+
+
+class UploadRefused(Exception):
+    """The upload stopped before sending anything. Nothing was sent."""
+
+
+class UploadFailed(Exception):
+    """Something was sent, and the run did not end as it should. Names what differs."""
+
+
+class Warehouse(Protocol):
+    """What the run needs of BigQuery, so that a fake can stand in for it in tests. Tables are
+    named without the dataset; every method reads or writes the `raw` dataset."""
+
+    project: str
+
+    def billing_enabled(self) -> bool:
+        """Whether the project has billing enabled. Read-only."""
+        ...
+
+    def columns(self, table: str) -> list[Column] | None:
+        """The table's columns, or None if it does not exist."""
+        ...
+
+    def stored(self, table: str) -> list[tuple[str, ...]]:
+        """(*key, file_path) of every row, read through the table read API with those fields
+        selected, which bills nothing (R3.2)."""
+        ...
+
+    def create(self, table: str, columns: list[Column]) -> None:
+        """Create an empty table with these columns."""
+        ...
+
+    def load(self, table: str, columns: list[Column], rows: Path, *, replace: bool) -> int:
+        """Append (or with `replace`, replace the table with) the newline-delimited JSON file
+        `rows`, by one load job. Returns the rows the job wrote."""
+        ...
+
+    def rows(self, table: str) -> Iterator[dict[str, Any]]:
+        """Every row, every column, through the table read API, JSON values parsed."""
+        ...
+
+
+def table_name(pair: tuple[str, str]) -> str:
+    return f"{pair[0]}_{pair[1]}"
+
+
+def table_columns(pair: tuple[str, str], structures: dict[tuple[str, str], Any]) -> list[Column]:
+    """A typed endpoint's key columns and its structure's fields; another's, and `payload`."""
+    if pair in structures:
+        return [*KEYS, *columns(structures[pair])]
+    return [*KEYS, Column("payload", "JSON")]
+
+
+@dataclass(frozen=True)
+class Listed:
+    """One committed capture of the run's listing: its key, path and partitions, and the
+    capture itself, whose payload is read only when asked for."""
+
+    pair: tuple[str, str]
+    key: tuple[str, ...]
+    file_path: str
+    partitions: Any
+    landed: LandedResponse
+
+
+@contextmanager
+def upload_lock(zone: LandingZone) -> Iterator[None]:
+    """Hold the upload's own lock, `<root>.upload.lock`, or raise UploadRefused at once (R3.8).
+    Not the landing zone's writer lock, so a fetch can go on while an upload runs."""
+    path = zone.root.with_name(zone.root.name + ".upload.lock")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise UploadRefused(f"another upload holds {path}: nothing was read or sent") from None
+        yield
+    finally:
+        os.close(descriptor)  # closing releases the lock
+
+
+def _masked(text: str) -> str:
+    return privacy.GUID.sub("<guid>", text)
+
+
+def _check_stamp(stamp: object, file_path: str) -> None:
+    """Refuse a fetched_at that `front-office load` would refuse, and dbt fail on (R3.6)."""
+    try:
+        if not isinstance(stamp, str) or not STAMP_SHAPE.fullmatch(stamp):
+            raise ValueError(stamp)
+        datetime.strptime(stamp, STAMP_FORMAT)
+    except ValueError:
+        raise UploadRefused(
+            f"capture {_masked(file_path)} has a fetched_at not of the form {STAMP_FORMAT}. "
+            "Nothing was sent; fix or remove the capture."
+        ) from None
+
+
+def _collision(key: tuple[str, ...], first: str, second: str, where: str) -> UploadRefused:
+    named = ", ".join(f"{column}={value!r}" for column, value in zip(KEY_COLUMNS, key, strict=True))
+    return UploadRefused(
+        _masked(f"two files share one raw key ({named}), {where}: {first} and {second}. ")
+        + "Nothing was sent; remove or fix one of them (ADR 0011)."
+    )
+
+
+def list_zone(zone: LandingZone) -> dict[tuple[str, str], list[Listed]]:
+    """Every committed capture of the uploaded endpoints, read once, from sidecars. Refuses a
+    bad stamp, or two files with one key (R3.5, R3.6)."""
+    listed: dict[tuple[str, str], list[Listed]] = {}
+    seen: dict[tuple[str, ...], str] = {}
+    for pair in sorted(UPLOADED):
+        listed[pair] = []
+        for landed in zone.iter_landed(source=pair[0], endpoint=pair[1]):
+            meta = landed.meta
+            file_path = landed.path.relative_to(zone.root).as_posix()
+            _check_stamp(meta["fetched_at"], file_path)
+            key = (
+                meta["source"],
+                meta["endpoint"],
+                LandingZone.request_path(meta["url"]),
+                meta["request_key"],
+                meta["fetched_at"],
+            )
+            if key in seen:
+                raise _collision(key, seen[key], file_path, "in the landing zone")
+            seen[key] = file_path
+            listed[pair].append(Listed(pair, key, file_path, meta["partitions"], landed))
+    return listed
+
+
+def build(listed: Listed, structures: dict[tuple[str, str], Any]) -> tuple[Row, dict[str, Any]]:
+    """The row to check and the line to send for one capture: the payload projected if its
+    endpoint has a projection, then reduced to its structure if it has one (R1.6), so that a
+    matchup day's marker is an empty object before the structure keeps it."""
+    payload = listed.landed.payload
+    project = PROJECTIONS.get(listed.pair)
+    if project is not None:
+        payload = project(payload)
+    structure = structures.get(listed.pair)
+    label = f"{listed.pair[0]}/{listed.pair[1]} {_masked(listed.file_path)}"
+    if structure is None:
+        document, body = payload, {"payload": payload}
+    else:
+        try:
+            document = reduce(payload, structure)
+        except StructureMismatch as mismatch:
+            raise UploadRefused(
+                f"{label}: does not fit its declared structure {mismatch}. Nothing was sent."
+            ) from None
+        body = as_columns(document, structure)
+    if listed.pair == MATCHUP_DAYS and any(
+        side.get(MARKER) not in (None, {})
+        for matchup in document.get("schedule", [])
+        for side in (matchup.get("home"), matchup.get("away"))
+        if isinstance(side, dict)
+    ):
+        # Only the marker's presence may go up, never the roster inside it (ADR 0061).
+        raise UploadRefused(f"{label}: not what its projection would produce. Nothing was sent.")
+    source, endpoint, request_path, request_key, fetched_at = listed.key
+    row = Row(
+        source,
+        endpoint,
+        request_path,
+        request_key,
+        fetched_at,
+        listed.file_path,
+        listed.partitions,
+        document,
+    )
+    line = {
+        **dict(zip(KEY_COLUMNS, listed.key, strict=True)),
+        "partitions": listed.partitions,
+        "file_path": listed.file_path,
+        **body,
+    }
+    return row, line
+
+
+def _manifest_line(listed: Listed) -> dict[str, Any]:
+    return {
+        **dict(zip(KEY_COLUMNS, listed.key, strict=True)),
+        "partitions": listed.partitions,
+        "file_path": listed.file_path,
+    }
+
+
+@dataclass
+class _State:
+    """What BigQuery holds at the start of the run: per table, each key's file path."""
+
+    stored: dict[str, dict[tuple[str, ...], str]]
+    absent: set[str]
+
+
+def _read_state(
+    warehouse: Warehouse,
+    listed: dict[tuple[str, str], list[Listed]],
+    structures: dict[tuple[str, str], Any],
+    rebuild: tuple[str, str] | None,
+) -> _State:
+    """Each table's schema and stored keys, refused if they disagree with the listing (R3.5,
+    R4.1). A rebuilt table's are not read: it is replaced whatever it holds."""
+    state = _State({}, set())
+    wanted = {table_name(pair): table_columns(pair, structures) for pair in listed}
+    wanted[MANIFEST] = list(KEYS)
+    zone_paths = {
+        table_name(pair): {c.key: c.file_path for c in captures}
+        for pair, captures in listed.items()
+    }
+    zone_paths[MANIFEST] = {
+        key: path for paths in zone_paths.values() for key, path in paths.items()
+    }
+    for table, expected in wanted.items():
+        if rebuild is not None and table == table_name(rebuild):
+            state.stored[table] = {}
+            continue
+        found = warehouse.columns(table)
+        if found is None:
+            state.absent.add(table)
+            state.stored[table] = {}
+            continue
+        if found != expected:
+            command = (
+                "no rebuild exists for the manifest; nothing in it can be lost, so recreate it "
+                "from the endpoint tables by hand"
+                if table == MANIFEST
+                else f"rebuild it: front-office upload --project {warehouse.project} --rebuild "
+                + table.replace("_", "/", 1)
+            )
+            raise UploadRefused(
+                f"{DATASET}.{table}'s columns are not what its structure gives, so nothing is "
+                f"appended to it: {command}. Nothing was sent."
+            )
+        stored: dict[tuple[str, ...], str] = {}
+        for *key_parts, file_path in warehouse.stored(table):
+            key = tuple(key_parts)
+            if key in stored:
+                raise UploadRefused(
+                    f"{DATASET}.{table} holds one key twice ({_masked(stored[key])}). "
+                    "Nothing was sent; rebuild the table."
+                )
+            zone_path = zone_paths[table].get(key)
+            if zone_path is None:
+                raise UploadRefused(
+                    f"{DATASET}.{table} holds a capture the landing zone has not committed "
+                    f"({_masked(file_path)}). Nothing was sent."
+                )
+            if zone_path != file_path:
+                raise _collision(key, file_path, zone_path, f"{DATASET}.{table} against the zone")
+            stored[key] = file_path
+        state.stored[table] = stored
+    return state
+
+
+def _check_rows(
+    rows: Iterable[tuple[Row, bool]], accounts: frozenset[str]
+) -> tuple[dict[tuple[str, str], int], list[str], list[str]]:
+    """Rows per endpoint, the hits on rows to send, and the hits on rows already sent."""
+    counts: dict[tuple[str, str], int] = {}
+    new: list[str] = []
+    sent: list[str] = []
+    for row, already in rows:
+        try:
+            for pair, count in check([row], accounts).items():
+                counts[pair] = counts.get(pair, 0) + count
+        except PrivacyHit as hit:
+            if already:
+                table = f"{DATASET}.{table_name((row.source, row.endpoint))}"
+                where = f"in {table}, capture {_masked(row.file_path)}"
+                sent.extend(f"{found} ({where})" for found in hit.hits)
+            else:
+                new.extend(hit.hits)
+    return counts, new, sent
+
+
+def upload(
+    zone: LandingZone,
+    warehouse: Warehouse | None,
+    *,
+    work_dir: Path,
+    dry_run: bool = False,
+    rebuild: tuple[str, str] | None = None,
+    verify: bool = False,
+    structures: dict[tuple[str, str], Any] | None = None,
+    say: Callable[[str], None] = print,
+) -> None:
+    """One upload: list, read what each table holds, build and check every row to send, then
+    append by load jobs, the manifest last, and check what the tables hold (design, *One
+    run*). Raises UploadRefused when it stops before sending, UploadFailed after."""
+    structures = read_structures() if structures is None else structures
+    if rebuild is not None and rebuild not in UPLOADED:
+        raise UploadRefused(f"{rebuild[0]}/{rebuild[1]} is not uploaded: nothing to rebuild")
+    if warehouse is None and (verify or not dry_run):
+        raise UploadRefused("--project is required, except for --dry-run. Nothing was sent.")
+    with upload_lock(zone):
+        listed = list_zone(zone)
+        if rebuild is not None and not listed[rebuild]:
+            raise UploadRefused(
+                f"no committed captures of {rebuild[0]}/{rebuild[1]} to rebuild from"
+            )
+        accounts = frozenset().union(
+            *(
+                account_ids(*capture.pair, capture.landed.payload)
+                for pair in (TEAMS, TRANSACTIONS)
+                for capture in listed[pair]
+            )
+        )
+        if warehouse is None:
+            say("no --project: the remote checks (schemas, stored keys) did not run")
+            nothing: dict[str, dict[tuple[str, ...], str]] = {table_name(p): {} for p in listed}
+            state = _State({**nothing, MANIFEST: {}}, set())
+        else:
+            state = _read_state(warehouse, listed, structures, rebuild)
+        work_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=work_dir, prefix="upload-") as scratch:
+            to_send = _build_and_check(
+                listed, structures, state, accounts, Path(scratch), say, dry_run
+            )
+            if dry_run:
+                say("dry run: nothing sent")
+            elif warehouse is not None:
+                _send(warehouse, listed, structures, state, to_send, rebuild, Path(scratch), say)
+        if verify and warehouse is not None:
+            _verify(warehouse, listed, structures, say)
+
+
+def _build_and_check(
+    listed: dict[tuple[str, str], list[Listed]],
+    structures: dict[tuple[str, str], Any],
+    state: _State,
+    accounts: frozenset[str],
+    scratch: Path,
+    say: Callable[[str], None],
+    dry_run: bool,
+) -> dict[tuple[str, str], int]:
+    """Build every row to send, and every transaction row already sent, and check them all
+    before any job runs (R6.3, R6.4). The rows to send are written to one file per table
+    under `scratch` (not in a dry run). Returns the rows to send per endpoint."""
+    to_send: dict[tuple[str, str], int] = {}
+    exempt = 0
+
+    def rows() -> Iterator[tuple[Row, bool]]:
+        nonlocal exempt
+        for pair, captures in listed.items():
+            stored = state.stored[table_name(pair)]
+            sending = [capture for capture in captures if capture.key not in stored]
+            to_send[pair] = len(sending)
+            # Every transaction capture is checked on every run, so that an account first
+            # seen today is checked against the ids sent earlier (R6.4).
+            checked = captures if pair == TRANSACTIONS else sending
+            handle = (
+                None
+                if dry_run or not sending
+                else (scratch / f"{table_name(pair)}.ndjson").open("w")
+            )
+            try:
+                for capture in checked:
+                    row, line = build(capture, structures)
+                    exempt += exempt_ids_checked(row)
+                    already = capture.key in stored
+                    if handle is not None and not already:
+                        handle.write(json.dumps(line) + "\n")
+                    yield row, already
+            finally:
+                if handle is not None:
+                    handle.close()
+
+    _, new_hits, sent_hits = _check_rows(rows(), accounts)
+    if sent_hits:
+        raise UploadRefused("\n".join([*sent_hits, *new_hits, REMEDY, "Nothing was sent."]))
+    if new_hits:
+        raise UploadRefused(
+            "\n".join([*new_hits, f"{len(new_hits)} privacy hit(s). Nothing was sent."])
+        )
+    for pair, count in to_send.items():
+        held = len(state.stored[table_name(pair)])
+        say(
+            f"{DATASET}.{table_name(pair)}: {len(listed[pair])} committed, {held} stored, "
+            f"{count} to send"
+        )
+    say(f"known account ids: {len(accounts)}; exempt transaction ids checked: {exempt}")
+    return to_send
+
+
+def _send(
+    warehouse: Warehouse,
+    listed: dict[tuple[str, str], list[Listed]],
+    structures: dict[tuple[str, str], Any],
+    state: _State,
+    to_send: dict[tuple[str, str], int],
+    rebuild: tuple[str, str] | None,
+    scratch: Path,
+    say: Callable[[str], None],
+) -> None:
+    """Steps 4 to 6 of *One run*: billing, missing tables, one load job per endpoint with rows
+    to send, the manifest's rows for what the endpoint tables now hold, and the checks."""
+    manifest_new = [
+        capture
+        for pair, captures in listed.items()
+        for capture in captures
+        if capture.key in state.stored[table_name(pair)]
+        and capture.key not in state.stored[MANIFEST]
+    ]
+    if not any(to_send.values()) and not manifest_new and not state.absent:
+        say("nothing to send")
+        return
+    if not warehouse.billing_enabled():
+        raise UploadRefused(
+            f"billing is not enabled on {warehouse.project}: no job is run (R6.5). "
+            "Nothing was sent."
+        )
+    for table in sorted(state.absent):
+        pair = next((p for p in listed if table_name(p) == table), None)
+        warehouse.create(table, list(KEYS) if pair is None else table_columns(pair, structures))
+        say(f"created {DATASET}.{table}")
+    failed: str | None = None
+    for pair, count in sorted(to_send.items()):
+        if not count:
+            continue
+        table = table_name(pair)
+        try:
+            written = warehouse.load(
+                table,
+                table_columns(pair, structures),
+                scratch / f"{table}.ndjson",
+                replace=pair == rebuild,
+            )
+        except Exception as error:  # noqa: BLE001 - a job's failure is reported, and the run stops
+            failed = f"{DATASET}.{table}: the load job failed: {error}"
+            break
+        if written != count:
+            raise UploadFailed(
+                f"{DATASET}.{table}: the load job wrote {written} rows, not {count}. Nothing "
+                "more was sent, and the manifest was not appended."
+            )
+        say(f"{'replaced' if pair == rebuild else 'appended'} {DATASET}.{table}: {written} rows")
+        sent = [capture for capture in listed[pair] if capture.key not in state.stored[table]]
+        manifest_new.extend(c for c in sent if c.key not in state.stored[MANIFEST])
+        state.stored[table].update({capture.key: capture.file_path for capture in sent})
+    # The manifest last, and only for captures their endpoint's table now holds (R3.4).
+    if manifest_new:
+        path = scratch / f"{MANIFEST}.ndjson"
+        with path.open("w") as handle:
+            for capture in manifest_new:
+                handle.write(json.dumps(_manifest_line(capture)) + "\n")
+        try:
+            written = warehouse.load(MANIFEST, list(KEYS), path, replace=False)
+        except Exception as error:  # noqa: BLE001 - reported; the next run appends it again
+            raise UploadFailed(
+                f"{DATASET}.{MANIFEST}: the load job failed: {error}. The endpoint tables hold "
+                "their captures; the next upload adds what the manifest lacks."
+            ) from error
+        if written != len(manifest_new):
+            raise UploadFailed(
+                f"{DATASET}.{MANIFEST}: the load job wrote {written} rows, not {len(manifest_new)}"
+            )
+        say(f"appended {DATASET}.{MANIFEST}: {written} rows")
+    if failed is not None:
+        # The tables that were appended are whole, and the manifest names only what they
+        # hold; the next run finds what each lacks (R3.3).
+        raise UploadFailed(f"{failed}. The next upload adds what each table lacks.")
+    problems = _check_tables(warehouse, listed)
+    if problems:
+        raise UploadFailed("\n".join(problems))
+    say("every table holds each committed capture once, and the manifest names each")
+
+
+def _check_tables(warehouse: Warehouse, listed: dict[tuple[str, str], list[Listed]]) -> list[str]:
+    """What differs between each table, the manifest and the listing: every key once, with
+    the zone's file path, and nothing else (R4.3)."""
+    problems: list[str] = []
+    manifest = Counter((*key, path) for *key, path in warehouse.stored(MANIFEST))
+    for pair, captures in sorted(listed.items()):
+        table = table_name(pair)
+        expected = Counter((*capture.key, capture.file_path) for capture in captures)
+        for name, found in (
+            (table, Counter(tuple(row) for row in warehouse.stored(table))),
+            (MANIFEST, Counter({row: n for row, n in manifest.items() if row[:2] == pair})),
+        ):
+            if found == expected:
+                continue
+            repeated = sum(1 for row, n in found.items() if n > 1)
+            missing = len(expected - found)
+            extra = len(found - expected) - sum(n - 1 for n in found.values() if n > 1)
+            problems.append(
+                f"{DATASET}.{name}, {pair[0]}/{pair[1]}: {missing} committed captures missing, "
+                f"{extra} rows the zone lacks, {repeated} keys stored more than once"
+            )
+    return problems
+
+
+def _normal(node: Any) -> Any:
+    """A parsed value with a whole float as an integer, so that 1 and 1.0, which a JSON value
+    may come back as, compare equal."""
+    if isinstance(node, dict):
+        return {key: _normal(value) for key, value in node.items()}
+    if isinstance(node, list):
+        return [_normal(value) for value in node]
+    if isinstance(node, float) and node.is_integer():
+        return int(node)
+    return node
+
+
+def _digest(line: dict[str, Any]) -> str:
+    text = json.dumps(_normal(line), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _verify(
+    warehouse: Warehouse,
+    listed: dict[tuple[str, str], list[Listed]],
+    structures: dict[tuple[str, str], Any],
+    say: Callable[[str], None],
+) -> None:
+    """Read back every row of every table and compare it, as parsed values, with what this
+    run would send for it (R4.4). Only digests of the expected rows are kept."""
+    problems: list[str] = []
+    for pair, captures in sorted(listed.items()):
+        table = table_name(pair)
+        expected = {capture.key: _digest(build(capture, structures)[1]) for capture in captures}
+        differ = only_stored = 0
+        for row in warehouse.rows(table):
+            key = tuple(str(row[name]) for name in KEY_COLUMNS)
+            digest = expected.pop(key, None)
+            if digest is None:
+                only_stored += 1
+            elif digest != _digest(row):
+                differ += 1
+        say(
+            f"verify {DATASET}.{table}: {len(captures) - len(expected) - differ} equal, "
+            f"{differ} differ, {len(expected)} missing, {only_stored} only stored"
+        )
+        if differ or expected or only_stored:
+            problems.append(f"{DATASET}.{table} does not equal what would be sent")
+    expected = {
+        capture.key: _digest(_manifest_line(capture))
+        for captures in listed.values()
+        for capture in captures
+    }
+    differ = only_stored = 0
+    for row in warehouse.rows(MANIFEST):
+        digest = expected.pop(tuple(str(row[name]) for name in KEY_COLUMNS), None)
+        only_stored += digest is None
+        differ += digest is not None and digest != _digest(row)
+    say(
+        f"verify {DATASET}.{MANIFEST}: {differ} differ, {len(expected)} missing, "
+        f"{only_stored} only stored"
+    )
+    if differ or expected or only_stored:
+        problems.append(f"{DATASET}.{MANIFEST} does not equal what would be sent")
+    if problems:
+        raise UploadFailed("\n".join(problems))
+    say("verify: every row of every table equals what would be sent")
