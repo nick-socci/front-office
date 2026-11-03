@@ -471,7 +471,9 @@ def test_a_dry_run_without_a_project_imports_no_google_and_says_what_it_did_not_
     zone: LandingZone, tmp_path: Path
 ) -> None:
     """Catches a job by accident, a dry run that needs the bigquery group, and the upload
-    reading an ESPN credential (R6.5, R6.6, R7.1): run in a fresh interpreter."""
+    reading an ESPN credential (R6.5, R6.6, R7.1): run in a fresh interpreter. The client's
+    modules are named, not every `google*` one: with the bigquery group installed, its
+    namespace packages are loaded when the interpreter starts."""
     script = (
         "import sys\n"
         "from pathlib import Path\n"
@@ -480,7 +482,8 @@ def test_a_dry_run_without_a_project_imports_no_google_and_says_what_it_did_not_
         f"upload.upload(LandingZone(Path({str(zone.root)!r})), None, dry_run=True,\n"
         f"              work_dir=Path({str(tmp_path / 'work')!r}))\n"
         "credentials = 'front_office.espn.client'\n"
-        "loaded = [m for m in sys.modules if m.startswith('google') or m == credentials]\n"
+        "client = ('google.cloud.bigquery', 'google.auth', 'google.api_core')\n"
+        "loaded = [m for m in sys.modules if m.startswith(client) or m == credentials]\n"
         "print('loaded:', loaded)\n"
     )
     done = subprocess.run(

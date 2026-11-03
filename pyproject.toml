@@ -63,6 +63,17 @@ files = ["ingestion/src"]
 module = "tests.*"
 disallow_untyped_defs = false
 
+# The BigQuery client is in the `bigquery` group only; CI's mypy runs without it.
+[[tool.mypy.overrides]]
+module = ["google.*"]
+ignore_missing_imports = true
+
+# With the group installed, google-auth's AuthorizedSession is an untyped call; without it,
+# the import is Any and there is nothing to flag.
+[[tool.mypy.overrides]]
+module = "front_office.bigquery"
+disable_error_code = ["no-untyped-call"]
+
 [tool.pytest.ini_options]
 testpaths = ["ingestion/tests"]
 pythonpath = ["ingestion/src", "scripts", "dbt/python_modules", "dbt/functions"]

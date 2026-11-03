@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -18,6 +19,8 @@ import httpx
 import typer
 
 from front_office import audit as landing_audit
+from front_office import upload as landing_upload
+from front_office.capture_structures import StructureUnreadable
 from front_office.espn import matchup_days as espn_matchup_days
 from front_office.espn import matchups as espn_matchups
 from front_office.espn import pro_schedule as espn_pro_schedule
@@ -53,6 +56,8 @@ from front_office.mlb import schedule as mlb_schedule
 
 DEFAULT_RAW_ROOT = Path("data/raw")
 DEFAULT_DB = Path("data/warehouse.duckdb")
+# A GCP project id: 6 to 30 characters, lower case, digits and hyphens.
+PROJECT_ID = re.compile(r"[a-z][a-z0-9-]{4,28}[a-z0-9]")
 
 app = typer.Typer(
     help="Front Office ingestion: fetch raw data, land it, load it.", no_args_is_help=True
@@ -515,6 +520,74 @@ def load(raw_root: RawRoot = DEFAULT_RAW_ROOT, db: DbPath = DEFAULT_DB) -> None:
             typer.echo(str(error), err=True)
             raise typer.Exit(code=1) from None
     typer.echo(f"listed {inserted} new capture(s) in {db}")
+
+
+@app.command("upload")
+def upload_command(
+    project: Annotated[
+        str | None,
+        typer.Option("--project", help="GCP project id to upload to. Never defaulted."),
+    ] = None,
+    raw_root: RawRoot = DEFAULT_RAW_ROOT,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Send nothing; without --project, run the local checks only.",
+        ),
+    ] = False,
+    rebuild: Annotated[
+        str | None,
+        typer.Option("--rebuild", help="Replace one endpoint's table, as SOURCE/ENDPOINT."),
+    ] = None,
+    verify: Annotated[
+        bool, typer.Option("--verify", help="Read every row back and compare it.")
+    ] = False,
+    work_dir: Annotated[
+        Path, typer.Option("--work-dir", help="Where the run writes its temporary files.")
+    ] = Path("data"),
+) -> None:
+    """Upload committed captures to BigQuery's raw dataset, appending what each table lacks."""
+
+    def refuse(message: str) -> typer.Exit:
+        typer.echo(message, err=True)
+        return typer.Exit(code=1)
+
+    if project is not None and not PROJECT_ID.fullmatch(project):
+        raise refuse(f"--project {project!r} is not a project id ({PROJECT_ID.pattern})")
+    rebuild_pair: tuple[str, str] | None = None
+    if rebuild is not None:
+        source, _, endpoint = rebuild.partition("/")
+        if not source or not endpoint or "/" in endpoint:
+            raise refuse(f"--rebuild {rebuild!r} is not SOURCE/ENDPOINT, e.g. mlb/boxscore")
+        rebuild_pair = (source, endpoint)
+    warehouse: landing_upload.Warehouse | None = None
+    if project is not None:
+        try:
+            from front_office.bigquery import BigQueryWarehouse
+
+            warehouse = BigQueryWarehouse(project)
+        except ImportError:
+            raise refuse(
+                "this command needs the bigquery dependency group: "
+                "uv run --group bigquery front-office upload ..."
+            ) from None
+    try:
+        landing_upload.upload(
+            LandingZone(root=raw_root),
+            warehouse,
+            work_dir=work_dir,
+            dry_run=dry_run,
+            rebuild=rebuild_pair,
+            verify=verify,
+            say=typer.echo,
+        )
+    except (
+        landing_upload.UploadRefused,
+        landing_upload.UploadFailed,
+        StructureUnreadable,
+    ) as error:
+        raise refuse(str(error)) from None
 
 
 @app.command("audit")
