@@ -242,3 +242,14 @@ BigQuery: the client is a fake holding rows and schemas.
 | design-review | F5: a credential-free dry run cannot do the remote checks | R7.1 states what each form checks, and it says so when it runs |
 
 ## Amendments
+
+### 2026-11-03: a number in a text leaf is stored only when whole
+
+R5.4 says a number in a `VARCHAR` leaf is stored as its text, as `lax_string` reads it. The case
+seen is the league `id`, a whole number (C7), and for it Python's digits, `lax_string` and DuckDB's
+`read_json` agree; `test_capture_structures.py` holds the three to that on a written file. A
+fraction has no such agreement: DuckDB keeps the text as written in the file, and once Python has
+parsed the payload that text is gone (`0.10` and `0.1` are one float). A boolean is no number. So
+the reduction stores a whole number's digits, and refuses a fraction or a boolean in a `VARCHAR`
+leaf under R5.3, naming the path. None has been seen; one that appears is seen, not guessed at,
+as the design's *Reduction, against the view* asks. No goal, no-go or requirement's intent moves.
