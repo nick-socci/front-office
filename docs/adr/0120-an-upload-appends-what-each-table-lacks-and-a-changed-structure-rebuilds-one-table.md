@@ -1,6 +1,6 @@
 # 0120. An upload appends what each table lacks, and a changed structure rebuilds one table
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-02
 - Spec: [0140-production-raw-loader](../specs/0140-production-raw-loader/design.md) · Issue: #140
 

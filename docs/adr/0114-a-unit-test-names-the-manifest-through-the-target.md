@@ -1,6 +1,6 @@
 # 0114. A unit test names the manifest through the target
 
-- Status: accepted
+- Status: superseded by [0117](0117-bigquery-holds-one-raw-table-per-endpoint-the-heavy-four-typed.md)
 - Date: 2026-10-29
 - Spec: [0138-unit-tests-on-bigquery](../specs/0138-unit-tests-on-bigquery/design.md) · Issue: #138
 

@@ -1,6 +1,6 @@
 # 0117. BigQuery holds one raw table per endpoint, the heavy four typed, and `raw.captures` is the manifest on both warehouses
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-02
 - Spec: [0140-production-raw-loader](../specs/0140-production-raw-loader/design.md) · Issue: #140
 - Supersedes: [0052](0052-the-spike-loads-raw-rows-into-a-native-bigquery-table-with-a-json-payload.md), [0114](0114-a-unit-test-names-the-manifest-through-the-target.md)
