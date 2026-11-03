@@ -27,6 +27,10 @@ from zoneinfo import ZoneInfo
 
 from front_office.landing import LandingZone
 
+# The wanted fields of `espn/teams` and of a transaction message: one list per endpoint
+# serves the fixtures and the upload (ADR 0093), so they are defined in the upload.
+from front_office.upload import ESPN_TEAM_FIELDS, ESPN_TRANSACTION_MESSAGE_FIELDS
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RAW_ROOT = REPO_ROOT / "data/raw"
 FIXTURE_ROOT = REPO_ROOT / "fixtures/landing"
@@ -238,18 +242,6 @@ ESPN_SETTINGS_FIELDS = (
     "settings.rosterSettings.lineupSlotStatLimits",
 )
 ESPN_SCORING_ITEM_FIELDS = ("statId", "isReverseItem", "points")
-ESPN_TEAM_FIELDS = (
-    "id",
-    "abbrev",
-    "name",
-    "playoffSeed",
-    "eliminated",
-    "record.overall.wins",
-    "record.overall.losses",
-    "record.overall.ties",
-    "record.overall.streakLength",
-    "record.overall.streakType",
-)
 # Matchup numbers only. scoreByStat is copied wholesale: it is stat ids and numbers.
 ESPN_MATCHUP_FIELDS = (
     "id",
@@ -273,9 +265,6 @@ ESPN_MATCHUP_FIELDS = (
 )
 FIXTURE_MATCHUPS = 2
 
-# Transaction messages: what moved, where to. `for` is the acting team on a type-239 drop
-# (ADR 0004). Never `author`, which is the ESPN account GUID of the member who made the move.
-ESPN_TRANSACTION_MESSAGE_FIELDS = ("date", "messageTypeId", "targetId", "to", "from", "for")
 FIXTURE_TRANSACTION_TOPICS = 6
 # Message types that move a player, per dbt/seeds/espn_activity_types.csv. The fixture
 # takes topics carrying one of these, plus one topic of lineup moves only (type 188), so
