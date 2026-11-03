@@ -69,12 +69,13 @@ class BigQueryWarehouse:
 
     def billing_enabled(self) -> bool:
         """Whether the project has a billing account linked. Read-only: this never creates,
-        changes or removes one."""
+        changes or removes one. `cloud-platform` is one of the scopes `getBillingInfo`
+        accepts, and the one the BigQuery client's credentials already carry."""
         import google.auth
         from google.auth.transport.requests import AuthorizedSession
 
         credentials, _ = google.auth.default(
-            scopes=["https://www.googleapis.com/auth/cloud-platform.read-only"]
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
         )
         response = AuthorizedSession(credentials).get(
             f"https://cloudbilling.googleapis.com/v1/projects/{self.project}/billingInfo",

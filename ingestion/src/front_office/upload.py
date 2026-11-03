@@ -623,22 +623,30 @@ def list_zone(zone: LandingZone) -> dict[tuple[str, str], list[Listed]]:
 def build(listed: Listed, structures: dict[tuple[str, str], Any]) -> tuple[Row, dict[str, Any]]:
     """The row to check and the line to send for one capture: the payload projected if its
     endpoint has a projection, then reduced to its structure if it has one (R1.6), so that a
-    matchup day's marker is an empty object before the structure keeps it."""
+    matchup day's marker is an empty object before the structure keeps it. A payload with both
+    is held to its structure before the projection too: the projection drops what it cannot
+    use, and a misfit it dropped would go up as an empty list instead of being refused (R5.3)."""
     payload = listed.landed.payload
     project = PROJECTIONS.get(listed.pair)
-    if project is not None:
-        payload = project(payload)
     structure = structures.get(listed.pair)
     label = f"{listed.pair[0]}/{listed.pair[1]} {_masked(listed.file_path)}"
-    if structure is None:
-        document, body = payload, {"payload": payload}
-    else:
+
+    def reduced(value: Any, structure: dict[str, Any]) -> Any:
         try:
-            document = reduce(payload, structure)
+            return reduce(value, structure)
         except StructureMismatch as mismatch:
             raise UploadRefused(
                 f"{label}: does not fit its declared structure {mismatch}. Nothing was sent."
             ) from None
+
+    if project is not None:
+        if structure is not None:
+            reduced(payload, structure)
+        payload = project(payload)
+    if structure is None:
+        document, body = payload, {"payload": payload}
+    else:
+        document = reduced(payload, structure)
         body = as_columns(document, structure)
     if listed.pair == MATCHUP_DAYS and any(
         side.get(MARKER) not in (None, {})

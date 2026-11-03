@@ -10,7 +10,9 @@ landed as raw JSON, transformed with dbt, stored in DuckDB and BigQuery (the lat
 
 ## Project shape
 
-- `ingestion/src/front_office/` — Python, fetch-and-save only. It never interprets data.
+- `ingestion/src/front_office/` — Python, fetch-and-save, and the upload to BigQuery. It
+  never interprets data: the upload only cuts a capture to the fields its capture view
+  declares or its projection keeps, refusing one that does not fit (ADR 0118).
 - `dbt/models/staging/{mlb,espn,idmap}/` — one model per source concept; `intermediate/`
   and `marts/` build on them.
 - `dbt/macros/` — all JSON access goes through `fo_json_*`, and every read of a payload file

@@ -11,7 +11,7 @@ import copy
 import json
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -430,6 +430,34 @@ def test_a_payload_that_does_not_fit_is_refused_naming_the_capture_and_path(
         run(zone, warehouse)
     message = str(refused.value)
     assert "fetched_at=20260927T162300Z" in message and "$.teams.home.team.id" in message
+    assert "A Member" not in message
+    assert warehouse.jobs == []
+
+
+@pytest.mark.parametrize(
+    ("misfit", "path"),
+    [
+        (lambda day: day.update(schedule={"id": 10}), "$.schedule"),
+        (
+            lambda day: day["schedule"][0].update(matchupPeriodId="A Member"),
+            "$.schedule[0].matchupPeriodId",
+        ),
+        (lambda day: day["schedule"][0]["home"].update(teamId=1.5), "$.schedule[0].home.teamId"),
+    ],
+)
+def test_a_matchup_day_that_does_not_fit_is_refused_before_its_projection(
+    zone: LandingZone, misfit: Callable[[dict[str, Any]], None], path: str
+) -> None:
+    """Catches the projection turning a misfit into what fits: a schedule that is not a list
+    sent as an empty one, an id that is not a whole number dropped to null (R5.3)."""
+    day = payloads(1)[("espn", "matchup_days")]
+    misfit(day)
+    land(zone, {("espn", "matchup_days"): day}, stamp="20260927T162300Z")
+    warehouse = FakeWarehouse()
+    with pytest.raises(UploadRefused, match="does not fit its declared structure") as refused:
+        run(zone, warehouse)
+    message = str(refused.value)
+    assert "fetched_at=20260927T162300Z" in message and path in message
     assert "A Member" not in message
     assert warehouse.jobs == []
 
