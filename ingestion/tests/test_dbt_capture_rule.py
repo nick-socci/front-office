@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from front_office.upload import UPLOADED
+
 DBT_ROOT = Path(__file__).resolve().parents[2] / "dbt"
 JSON_MACROS = DBT_ROOT / "macros" / "json.sql"
 
@@ -29,16 +31,23 @@ _COMMENT = re.compile(r"\{#.*?#\}|--[^\n]*", re.DOTALL)
 _YAML_COMMENT = re.compile(r"#[^\n]*")
 
 _READ_FILES = ("read_json / read_json_objects", re.compile(r"\bread_json\w*", re.IGNORECASE))
-_RAW_TABLES = (
-    "raw.api_responses / raw.captures",
-    re.compile(r"\braw[\"'`]?\s*\.\s*[\"'`]?(api_responses|captures)\b", re.IGNORECASE),
+# Every raw table a model could name: the manifest, the old BigQuery table, and the eleven
+# endpoint tables of BigQuery (ADR 0117), built from what is uploaded so they cannot drift.
+_RAW_NAMES = "|".join(
+    ["api_responses", "captures", *(f"{source}_{endpoint}" for source, endpoint in UPLOADED)]
 )
-# source('raw', 'api_responses') in any spacing and quoting; a Jinja call can also pass the
+_RAW_LABEL = "raw.captures / raw.<source>_<endpoint> / raw.api_responses"
+_RAW_TABLES = (
+    _RAW_LABEL,
+    re.compile(rf"\braw[\"'`]?\s*\.\s*[\"'`]?({_RAW_NAMES})\b", re.IGNORECASE),
+)
+# source('raw', 'captures') in any spacing and quoting; a Jinja call can also pass the
 # names by keyword or on two lines, so the whitespace class includes newlines.
+_RAW_SOURCES_LABEL = "source('raw', <manifest, endpoint table or api_responses>)"
 _RAW_SOURCES = (
-    "source('raw', 'api_responses' / 'captures')",
+    _RAW_SOURCES_LABEL,
     re.compile(
-        r"\bsource\s*\(\s*[\"']raw[\"']\s*,\s*[\"'](api_responses|captures)[\"']\s*\)",
+        rf"\bsource\s*\(\s*[\"']raw[\"']\s*,\s*[\"']({_RAW_NAMES})[\"']\s*\)",
         re.IGNORECASE,
     ),
 )
@@ -133,11 +142,13 @@ def test_no_model_is_built_a_season_at_a_time() -> None:
     [
         ("select * from read_json('a')", "read_json / read_json_objects"),
         ("select * from READ_JSON_OBJECTS('a')", "read_json / read_json_objects"),
-        ("select * from raw.api_responses", "raw.api_responses / raw.captures"),
-        ("select * from raw . captures", "raw.api_responses / raw.captures"),
-        ('select * from "raw"."captures"', "raw.api_responses / raw.captures"),
-        ("{{ source('raw', 'api_responses') }}", "source('raw', 'api_responses' / 'captures')"),
-        ('{{ source( "raw" ,"captures" ) }}', "source('raw', 'api_responses' / 'captures')"),
+        ("select * from raw.api_responses", _RAW_LABEL),
+        ("select * from raw . captures", _RAW_LABEL),
+        ('select * from "raw"."captures"', _RAW_LABEL),
+        ("select * from raw.espn_roster", _RAW_LABEL),
+        ("{{ source('raw', 'api_responses') }}", _RAW_SOURCES_LABEL),
+        ('{{ source( "raw" ,"captures" ) }}', _RAW_SOURCES_LABEL),
+        ("{{ source('raw', 'mlb_boxscore') }}", _RAW_SOURCES_LABEL),
     ],
 )
 def test_each_way_of_naming_a_raw_table_is_caught_with_its_line_number(sql: str, what: str) -> None:

@@ -3,15 +3,17 @@ version: 2
 sources:
   - name: raw
     description: >
-      Raw API responses, one row per response, loaded by `front-office load`.
-      dbt did not create this table; declaring it as a source is how dbt knows which
-      models depend on it. Note that dbt renders these descriptions as Jinja, so
+      Raw API responses: the loader's manifest (`raw.captures`) on both warehouses, and on
+      BigQuery one table per endpoint, uploaded by `front-office upload`. On DuckDB the
+      manifest is loaded by `front-office load`. dbt did not create these tables;
+      declaring them as sources is how dbt knows which models depend on them. Note that dbt renders these descriptions as Jinja, so
       curly braces here would be executed rather than displayed.
     schema: raw
     tables:
       - name: captures
         description: >-
-          The loader's manifest, on DuckDB: one row per committed capture of the landing
+          The loader's manifest, on both warehouses (`front-office load` on DuckDB,
+          `front-office upload` on BigQuery, ADR 0117): one row per committed capture of the landing
           zone, append-only, with its key and its payload's path and no payload (spec 0150,
           ADR 0066). The payloads are read from their files by the capture views
           (stg_raw__*), which are the only readers of this table.
@@ -35,28 +37,60 @@ sources:
               The payload's path relative to the landing root, e.g.
               mlb/boxscore/season=2026/game_pk=1/fetched_at=…Z/payload.json.
 
-      - name: api_responses
+        # Source freshness is declared per feed in _raw_feeds__sources.yml, not on these
+        # tables: one age for a table would be the age of whichever feed ran last (spec 0114, ADR 0050).
+
+      - name: espn_roster
         description: >-
-          On BigQuery only: the uploaded responses, payloads included (ADR 0070). The
-          capture views read it there; on DuckDB the payloads stay in their files.
-        # Source freshness is declared per feed in _raw_feeds__sources.yml, not here: one
-        # age for this table would be the age of whichever feed ran last (spec 0114, ADR 0050).
-        columns:
-          - name: source
-            description: mlb / espn / idmap.
-          - name: endpoint
-            description: Which endpoint produced the response, e.g. schedule, boxscore.
-          - name: request_path
-            description: URL path of the request, no host or query string; part of the key.
-          - name: request_key
-            description: Canonical (sorted) request parameters.
-          - name: fetched_at
-            description: UTC stamp, matching the landing filename.
-          - name: partitions
-            description: >-
-              Landing partitions as JSON, e.g. league_id and season for ESPN; staging
-              reads league and season from here.
-          - name: payload
-            description: The response body, unmodified.
-          - name: file_path
-            description: Landing-zone path, for tracing a row back to its file.
+          On BigQuery only: the uploaded captures of espn/roster, typed as its declared structure; read only by
+          its capture view (ADR 0117).
+
+      - name: espn_matchup_days
+        description: >-
+          On BigQuery only: the uploaded captures of espn/matchup_days, typed as its declared structure; read only by
+          its capture view (ADR 0117).
+
+      - name: mlb_boxscore
+        description: >-
+          On BigQuery only: the uploaded captures of mlb/boxscore, typed as its declared structure; read only by
+          its capture view (ADR 0117).
+
+      - name: mlb_schedule
+        description: >-
+          On BigQuery only: the uploaded captures of mlb/schedule, typed as its declared structure; read only by
+          its capture view (ADR 0117).
+
+      - name: espn_settings
+        description: >-
+          On BigQuery only: the uploaded captures of espn/settings, with its payload as JSON; read only by
+          its capture view (ADR 0117).
+
+      - name: espn_teams
+        description: >-
+          On BigQuery only: the uploaded captures of espn/teams, with its payload as JSON; read only by
+          its capture view (ADR 0117).
+
+      - name: espn_matchups
+        description: >-
+          On BigQuery only: the uploaded captures of espn/matchups, with its payload as JSON; read only by
+          its capture view (ADR 0117).
+
+      - name: espn_pro_schedule
+        description: >-
+          On BigQuery only: the uploaded captures of espn/pro_schedule, with its payload as JSON; read only by
+          its capture view (ADR 0117).
+
+      - name: espn_transactions
+        description: >-
+          On BigQuery only: the uploaded captures of espn/transactions, with its payload as JSON; read only by
+          its capture view (ADR 0117).
+
+      - name: mlb_players
+        description: >-
+          On BigQuery only: the uploaded captures of mlb/players, with its payload as JSON; read only by
+          its capture view (ADR 0117).
+
+      - name: idmap_player_id_map
+        description: >-
+          On BigQuery only: the uploaded captures of idmap/player_id_map, with its payload as JSON; read only by
+          its capture view (ADR 0117).

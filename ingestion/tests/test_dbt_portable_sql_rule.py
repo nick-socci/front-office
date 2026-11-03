@@ -20,8 +20,9 @@ manifest, which holds an input only after the parse has resolved it. For each ``
   a Jinja string does not end one), goes through ``refused_constructs`` (R5.1, R5.3);
 * the macros its ``{{ ... }}`` call start the reach of macros scanned, as dbt records no
   dependency for a fixture, and so does dbt's ``bigquery__safe_cast`` override;
-* an ``input`` naming ``source('raw', 'captures')`` or ``source('raw', 'api_responses')``
-  fails, as each exists on one warehouse only (R2.2);
+* an ``input`` naming a source must name exactly ``source('raw', 'captures')``, the manifest,
+  which exists on both warehouses (R2.3 of spec 0140, ADR 0117, superseding ADR 0114's
+  target-dependent spelling); ``api_responses``, the old spelling and any other source fail;
 * a SQL fixture of a capture view that declares a structure must call ``fo_capture_rows(``
   (R3.4).
 
@@ -503,10 +504,11 @@ def test_the_struct_and_solver_macros_keep_duckdb_syntax_in_the_duckdb_form() ->
 
 # -- unit-test fixtures, from the YAML text (spec 0138, ADR 0110) -------------------------
 
-# The two sources a unit test must not name literally: they exist on one warehouse each.
-_LITERAL_MANIFEST_INPUT = re.compile(
-    r"^\s*source\(\s*['\"]raw['\"]\s*,\s*['\"](?:captures|api_responses)['\"]\s*\)\s*$"
-)
+# A unit test's source input: only the manifest, which exists on both warehouses (spec 0140,
+# R2.3). Any other input that starts `source(` (api_responses, the old target-dependent
+# spelling, an endpoint table) is refused.
+_SOURCE_INPUT = re.compile(r"^\s*source\(")
+_MANIFEST_INPUT = re.compile(r"^\s*source\(\s*['\"]raw['\"]\s*,\s*['\"]captures['\"]\s*\)\s*$")
 _CAPTURE_VIEW_INPUT = re.compile(r"^\s*ref\(\s*['\"](stg_raw__\w+)['\"]\s*\)\s*$")
 _RAW_TAG = re.compile(r"\{%-?\s*(?:end)?raw\s*-?%\}")
 _MACRO_CALL = re.compile(r"(?<![\w.])([A-Za-z_]\w*)\(")
@@ -604,16 +606,16 @@ def fixture_macro_names(fixtures: Iterator[Fixture]) -> frozenset[str]:
 
 
 def fixture_problems(fixtures: Iterator[Fixture], capture_views: set[str]) -> list[str]:
-    """The fixtures that name a manifest input literally (R2.2), hold a construct BigQuery
-    refuses (R5.3), or give a capture view's rows without fo_capture_rows (R3.4), as
-    `<yaml>::<unit test>::<input>:<line>: <what>`."""
+    """The fixtures whose source input is not `source('raw', 'captures')` (R2.3), hold a
+    construct BigQuery refuses (R5.3), or give a capture view's rows without
+    fo_capture_rows (R3.4), as `<yaml>::<unit test>::<input>:<line>: <what>`."""
     problems: list[str] = []
     for fixture in fixtures:
         where = f"{fixture.path}::{fixture.test}::{fixture.input}"
-        if _LITERAL_MANIFEST_INPUT.match(fixture.input):
+        if _SOURCE_INPUT.match(fixture.input) and not _MANIFEST_INPUT.match(fixture.input):
             problems.append(
-                f"{where}:1: manifest input named literally (use the target-dependent "
-                "spelling of spec 0138, design 3)"
+                f"{where}:1: source input other than source('raw', 'captures'), the "
+                "manifest, which both warehouses have (spec 0140 R2.3, ADR 0117)"
             )
         if fixture.file:
             problems.append(
@@ -739,28 +741,26 @@ def test_macro_names_are_taken_from_nested_calls_outside_strings() -> None:
     ) == {"fo_a", "fo_b", "fo_c"}
 
 
-_TARGET_INPUT = (
-    "source('raw', '{{ 'api_responses' if target.type == 'bigquery' else 'captures' }}')"
-)
-
-
 @pytest.mark.parametrize(
     "given",
     [
-        "source('raw', 'captures')",
+        "source('raw', 'api_responses')",
         'source("raw", "api_responses")',
-        "source( 'raw' ,'captures' )",
+        "source('raw', '{{ 'api_responses' if target.type == 'bigquery' else 'captures' }}')",
+        "source('raw', 'mlb_boxscore')",
     ],
 )
-def test_a_source_named_literally_is_refused_and_the_target_spelling_passes(given: str) -> None:
-    """Catches a unit test that names raw.captures or raw.api_responses, each of which
-    exists on one warehouse only (R2.2), and the accepted spelling flagged."""
+def test_a_source_other_than_the_manifest_is_refused_and_the_manifest_passes(given: str) -> None:
+    """Catches a unit test that names raw.api_responses, the old target-dependent spelling or
+    an endpoint table, none of which is the manifest both warehouses have (R2.3 of spec 0140,
+    ADR 0117 superseding 0114), and the manifest, in any spacing or quoting, flagged."""
     refused = Fixture("dbt/models/m.yml", "a_test", given, "dict", [])
-    allowed = Fixture("dbt/models/m.yml", "a_test", _TARGET_INPUT, "dict", [])
     problems = fixture_problems(iter([refused]), set())
     assert len(problems) == 1
     assert problems[0].startswith(f"dbt/models/m.yml::a_test::{given}:")
-    assert fixture_problems(iter([allowed]), set()) == []
+    for manifest_input in ("source('raw', 'captures')", 'source( "raw" ,"captures" )'):
+        allowed = Fixture("dbt/models/m.yml", "a_test", manifest_input, "dict", [])
+        assert fixture_problems(iter([allowed]), set()) == []
 
 
 def test_a_capture_fixture_must_go_through_fo_capture_rows() -> None:

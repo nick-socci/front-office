@@ -468,9 +468,12 @@
 {%- endmacro %}
 
 {#
-  BigQuery: the uploaded table, which holds the payloads (ADR 0070). The same columns:
-  the structure is parsed from the JSON payload with bigquery__fo_json_parse_value, field
-  by field.
+  BigQuery: the endpoint's uploaded table, raw.<source>_<endpoint>, which already holds the
+  declared structure as columns, typed at load (spec 0140, ADRs 0117, 0118), so the view
+  only selects: the key columns, then each top-level field of the structure by name, or
+  `payload`. The table holds one endpoint, so there is no WHERE. The types are the ones
+  bigquery__fo_json_parse_value gives, which fo_capture_rows fixtures still use, so the
+  unit tests on BigQuery remain the check on them.
 #}
 {% macro bigquery__fo_captures(source_name, endpoint, structure) %}
     {%- set fields = fromjson(structure | trim) if structure else none %}
@@ -483,15 +486,13 @@
         partitions,
         file_path,
         {%- if fields %}
-        {%- for field, inner in fields.items() %}
-        {{ bigquery__fo_json_parse_value("json_query(payload, '$." ~ field ~ "')", inner, 0) }} as {{ field }}
-            {{- ',' if not loop.last }}
+        {%- for field in fields %}
+        {{ field }}{{ ',' if not loop.last }}
         {%- endfor %}
         {%- else %}
         payload
         {%- endif %}
-    from {{ source('raw', 'api_responses') }}
-    where source = '{{ source_name }}' and endpoint = '{{ endpoint }}'
+    from {{ source('raw', source_name ~ '_' ~ endpoint) }}
 {%- endmacro %}
 
 {#
@@ -522,14 +523,10 @@
 
 {#
   The manifest's rows, to choose captures on narrow columns (spec 0150, R3.6): raw.captures
-  on DuckDB; on BigQuery the uploaded table, whose key columns and file_path are the same
-  (ADR 0070). Only the latest-capture macros and the capture views read it.
+  on both warehouses, with the same columns (spec 0140, R2.3; ADR 0117). Only the
+  latest-capture macros and the capture views read it.
 #}
-{% macro fo_capture_keys() %}
-    {{- return(adapter.dispatch('fo_capture_keys')()) -}}
-{% endmacro %}
-{% macro duckdb__fo_capture_keys() %}{{ source('raw', 'captures') }}{% endmacro %}
-{% macro bigquery__fo_capture_keys() %}{{ source('raw', 'api_responses') }}{% endmacro %}
+{% macro fo_capture_keys() %}{{ source('raw', 'captures') }}{% endmacro %}
 
 
 {# The DuckDB and BigQuery JSON spellings of fo_capture_rows (dbt/macros/capture_structures.sql,

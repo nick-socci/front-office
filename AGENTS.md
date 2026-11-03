@@ -115,8 +115,7 @@ cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: tr
     `{% raw %}{{ fo_capture_rows('espn', 'roster', [{'request_key': …, 'fetched_at': …,
     'file_path': …, 'partitions': '<JSON>', 'payload': '<JSON>'}]) }}{% endraw %}`, which
     parses it with the view's own structure (`fo_capture_structure`);
-  - the manifest: `- input: "source('raw', '{{ 'api_responses' if target.type ==
-    'bigquery' else 'captures' }}')"`, never either source by name;
+  - the manifest: `- input: source('raw', 'captures')`, on both warehouses (spec 0140);
   - a JSON column in a dict fixture: JSON text in a YAML string, as it lands. The project's
     `bigquery__safe_cast` parses it on BigQuery;
   - any other SQL fixture: SQL both warehouses take (`limit 0`, not `where false` with no
