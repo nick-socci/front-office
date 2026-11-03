@@ -253,3 +253,5 @@ parsed the payload that text is gone (`0.10` and `0.1` are one float). A boolean
 the reduction stores a whole number's digits, and refuses a fraction or a boolean in a `VARCHAR`
 leaf under R5.3, naming the path. None has been seen; one that appears is seen, not guessed at,
 as the design's *Reduction, against the view* asks. No goal, no-go or requirement's intent moves.
+
+R5.4's statement was reworded to match, at the owner's choice in the PR #215 review (round 1, F1).

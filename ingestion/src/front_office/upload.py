@@ -735,8 +735,9 @@ def _read_state(
         for *key_parts, file_path in warehouse.stored(table):
             key = tuple(key_parts)
             if key in stored:
+                both = " and ".join(_masked(path) for path in sorted({stored[key], file_path}))
                 raise UploadRefused(
-                    f"{DATASET}.{table} holds one key twice ({_masked(stored[key])}). "
+                    f"{DATASET}.{table} holds one key twice ({both}). "
                     "Nothing was sent; rebuild the table."
                 )
             zone_path = zone_paths[table].get(key)
@@ -794,10 +795,6 @@ def upload(
         raise UploadRefused("--project is required, except for --dry-run. Nothing was sent.")
     with upload_lock(zone):
         listed = list_zone(zone)
-        if rebuild is not None and not listed[rebuild]:
-            raise UploadRefused(
-                f"no committed captures of {rebuild[0]}/{rebuild[1]} to rebuild from"
-            )
         accounts = frozenset().union(
             *(
                 account_ids(*capture.pair, capture.landed.payload)
@@ -901,7 +898,7 @@ def _send(
         if capture.key in state.stored[table_name(pair)]
         and capture.key not in state.stored[MANIFEST]
     ]
-    if not any(to_send.values()) and not manifest_new and not state.absent:
+    if not any(to_send.values()) and not manifest_new and not state.absent and rebuild is None:
         say("nothing to send")
         return
     if not warehouse.billing_enabled():
@@ -915,15 +912,16 @@ def _send(
         say(f"created {DATASET}.{table}")
     failed: str | None = None
     for pair, count in sorted(to_send.items()):
-        if not count:
+        if not count and pair != rebuild:
             continue
         table = table_name(pair)
+        rows = scratch / f"{table}.ndjson"
+        # An endpoint with no captures is rebuilt too, from an empty file: its table then has
+        # the structure's schema and no rows, and the next run's schema check passes.
+        rows.touch()
         try:
             written = warehouse.load(
-                table,
-                table_columns(pair, structures),
-                scratch / f"{table}.ndjson",
-                replace=pair == rebuild,
+                table, table_columns(pair, structures), rows, replace=pair == rebuild
             )
         except Exception as error:  # noqa: BLE001 - a job's failure is reported, and the run stops
             failed = f"{DATASET}.{table}: the load job failed: {error}"

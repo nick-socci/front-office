@@ -400,6 +400,21 @@ def test_a_key_stored_with_another_file_is_refused_naming_both(zone: LandingZone
     assert warehouse.jobs == jobs
 
 
+def test_one_key_stored_twice_from_two_files_is_refused_naming_both(zone: LandingZone) -> None:
+    """Catches the refusal naming one of two stored files that claim a key, so the second
+    cannot be found (R3.5)."""
+    warehouse = FakeWarehouse()
+    run(zone, warehouse)
+    rows = rows_of(warehouse, "espn_settings")
+    rows.append(dict(rows[0], file_path="espn/settings/season=2026/other/payload.json"))
+    jobs = list(warehouse.jobs)
+    with pytest.raises(UploadRefused, match="holds one key twice") as refused:
+        run(zone, warehouse)
+    assert "other/payload.json" in str(refused.value)
+    assert "fetched_at=20260926T162300Z/payload.json" in str(refused.value)
+    assert warehouse.jobs == jobs
+
+
 def test_a_stored_row_the_zone_lacks_is_refused(zone: LandingZone) -> None:
     warehouse = FakeWarehouse()
     run(zone, warehouse)
@@ -554,6 +569,27 @@ def test_a_rebuild_replaces_the_table_in_one_job_from_every_capture(zone: Landin
     )
     assert len(rows_of(warehouse, "mlb_boxscore")) == 2
     assert len(rows_of(warehouse, MANIFEST)) == 11
+
+
+def test_an_endpoint_with_no_captures_is_rebuilt_to_its_schema_and_no_rows(
+    zone: LandingZone,
+) -> None:
+    """Catches an empty table with an old schema that no run can repair: every run refuses
+    it, and a rebuild with nothing to load must still replace it (R4.1, R4.2)."""
+    warehouse = FakeWarehouse()
+    run(zone, warehouse)
+    columns, rows = warehouse.tables["espn_pro_schedule"]
+    warehouse.tables["espn_pro_schedule"] = (columns[:-1], rows)
+    with pytest.raises(UploadRefused, match="--rebuild espn/pro_schedule"):
+        run(zone, warehouse)
+    jobs = len(warehouse.jobs)
+    run(zone, warehouse, rebuild=("espn", "pro_schedule"))
+    assert warehouse.jobs[jobs:] == [("replace", "espn_pro_schedule")]
+    assert warehouse.tables["espn_pro_schedule"] == (
+        upload.table_columns(("espn", "pro_schedule"), STRUCTURES),
+        [],
+    )
+    assert "nothing to send" in run(zone, warehouse)
 
 
 # -- the checks after a run, and --verify -----------------------------------------------------
