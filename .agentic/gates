@@ -11,7 +11,7 @@ step "lint (ruff)";          uv run ruff check
 step "format (ruff)";        uv run ruff format --check
 step "types (mypy, strict)"; uv run mypy
 step "tests (pytest)";       uv run pytest
-# CI starts from an empty warehouse; raw.api_responses is append-only, so a leftover
+# CI starts from an empty warehouse; raw.captures, the manifest, is append-only, so a leftover
 # ci.duckdb would build on stale rows.
 rm -f dbt/ci.duckdb dbt/ci.duckdb.wal
 # The site builder refuses a non-empty output directory, and a leftover one would be stale.

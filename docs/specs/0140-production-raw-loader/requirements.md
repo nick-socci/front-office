@@ -119,8 +119,9 @@ clustering reads whole blocks shared with boxscores (C5).
   list, a list holds a `null`, or a present non-null value is not the container its structure
   declares (an object for a list, a list for an object or map), THEN THE SYSTEM SHALL send nothing
   and SHALL name the capture and the path, never the value.
-- R5.4 WHEN a `VARCHAR` leaf holds a number THE SYSTEM SHALL store its text, as `lax_string` reads
-  it (the league `id`, C7).
+- R5.4 WHEN a `VARCHAR` leaf holds a whole number THE SYSTEM SHALL store its digits, as
+  `lax_string` reads it (the league `id`, C7). IF it holds a fraction or a boolean THEN THE SYSTEM
+  SHALL refuse it as R5.3 does (Amendments, 2026-11-03).
 
 ### R6. What may leave the machine
 

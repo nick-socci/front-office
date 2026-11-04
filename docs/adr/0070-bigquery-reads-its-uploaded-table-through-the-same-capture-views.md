@@ -1,6 +1,6 @@
 # 0070. BigQuery reads its uploaded table through the same capture views, and the upload reads the landing zone
 
-- Status: accepted; amends [0052](0052-the-spike-loads-raw-rows-into-a-native-bigquery-table-with-a-json-payload.md)
+- Status: accepted; amends [0052](0052-the-spike-loads-raw-rows-into-a-native-bigquery-table-with-a-json-payload.md); amended by [0117](0117-bigquery-holds-one-raw-table-per-endpoint-the-heavy-four-typed.md)
 - Date: 2026-10-14
 - Spec: [0150-staging-reads-payload-files](../specs/0150-staging-reads-payload-files/design.md) · Issue: #150
 

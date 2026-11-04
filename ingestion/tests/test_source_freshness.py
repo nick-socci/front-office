@@ -20,6 +20,7 @@ import pytest
 import yaml
 
 from front_office.landing import LandingZone
+from front_office.upload import UPLOADED
 
 REPO = Path(__file__).resolve().parents[2]
 STAGING = REPO / "dbt/models/staging"
@@ -224,16 +225,24 @@ def marker_problems(source):
     ] + [f"unexpected feed {feed} declared" for feed in sorted(set(found) - set(MARKERS))]
 
 
+ENDPOINT_TABLES = sorted(f"{source}_{endpoint}" for source, endpoint in UPLOADED)
+
+
 def raw_table_problems(source):
-    """R1.3: raw.api_responses carries no freshness and no loaded_at_field."""
-    tables = [t for t in source.get("tables") or [] if t.get("name") == "api_responses"]
-    if not tables:
-        return ["raw.api_responses is not declared"]
-    return [
-        f"api_responses still has {key}"
-        for key in ("freshness", "loaded_at_field")
-        if key in tables[0]
-    ]
+    """R1.3: each BigQuery endpoint table is declared and carries no freshness and no
+    loaded_at_field: freshness is per feed, over raw.captures."""
+    declared_tables = {t.get("name"): t for t in source.get("tables") or []}
+    problems = []
+    for name in ENDPOINT_TABLES:
+        if name not in declared_tables:
+            problems.append(f"raw.{name} is not declared")
+            continue
+        problems += [
+            f"{name} still has {key}"
+            for key in ("freshness", "loaded_at_field")
+            if key in declared_tables[name]
+        ]
+    return problems
 
 
 def threshold_problems(source):
@@ -335,8 +344,9 @@ def test_the_run_markers_are_schedule_settings_and_player_id_map():
     assert marker_problems(load_raw_feeds()) == []
 
 
-def test_raw_api_responses_has_no_freshness_of_its_own():
-    """Catches the whole-table age coming back beside the three (R1.3)."""
+def test_the_raw_endpoint_tables_have_no_freshness_of_their_own():
+    """Catches the whole-table age coming back beside the three (R1.3), or an endpoint
+    table (ADR 0117) left undeclared."""
     assert raw_table_problems(load_raw()) == []
 
 
@@ -471,13 +481,17 @@ def test_a_changed_marker_is_reported():
     assert "espn" in problems[0]
 
 
-def test_api_responses_keeping_freshness_or_loaded_at_field_is_reported():
-    """Catches raw_table_problems missing either key left on api_responses (R1.3)."""
-    raw = {
-        "name": "raw",
-        "tables": [{"name": "api_responses", "freshness": {}, "loaded_at_field": "x"}],
-    }
-    assert len(raw_table_problems(raw)) == 2
+def test_an_endpoint_table_keeping_freshness_or_missing_is_reported():
+    """Catches raw_table_problems missing either key left on an endpoint table, or a table
+    not declared (R1.3)."""
+    tables = [{"name": name} for name in ENDPOINT_TABLES[1:]]
+    tables[0] = {"name": tables[0]["name"], "freshness": {}, "loaded_at_field": "x"}
+    raw = {"name": "raw", "tables": tables}
+    assert raw_table_problems(raw) == [
+        f"raw.{ENDPOINT_TABLES[0]} is not declared",
+        f"{tables[0]['name']} still has freshness",
+        f"{tables[0]['name']} still has loaded_at_field",
+    ]
 
 
 def test_a_changed_threshold_and_an_idmap_error_threshold_are_reported():
