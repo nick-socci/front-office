@@ -1,6 +1,6 @@
 # 0124. The run reads the ESPN cookies and a BigQuery service account key from files on the NAS
 
-- Status: proposed (the owner's decision: AGENTS.md puts credentials outside an agent's choice)
+- Status: accepted (the owner decided at the 2026-11-05 walkthrough; AGENTS.md puts credentials outside an agent's choice)
 - Date: 2026-11-04
 - Spec: [0216-where-the-daily-run-runs](../specs/0216-where-the-daily-run-runs/design.md) · Issue: #216
 

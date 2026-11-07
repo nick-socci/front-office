@@ -1,6 +1,6 @@
 # 0121. The daily run runs on the NAS in a container, and the landing zone moves there
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-04
 - Spec: [0216-where-the-daily-run-runs](../specs/0216-where-the-daily-run-runs/design.md) · Issue: #216
 - Amends: [0119](0119-the-loader-reads-a-local-landing-zone-and-no-bucket-is-created.md)
