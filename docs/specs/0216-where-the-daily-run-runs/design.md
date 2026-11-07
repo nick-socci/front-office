@@ -199,3 +199,26 @@ free space against that.
 | design-review | F8 (P2): "06:00 is late enough" has no evidence | Fixed: the claim is removed. A game not final at the hour arrives next run (R1.2), and the hour is #218's |
 
 ## Amendments
+
+### 2026-11-07: the NAS is too small, and the pre-spike moves to an Oracle A1 VM
+
+- **Finding (task 1, #216):** the DS220+ has 1,753 MB usable, 497 MB available with its services
+  running, and 1.5 GB of swap in use. C15 ("4 to 6 GB") was wrong. Daemon plus UI are 854 MB
+  (C8). **R6.2's condition holds on the NAS.** The spike on the NAS (old tasks 2 to 4) is not run.
+- **Owner's direction:** a mini PC, as a shared home server for this project, the NAS's services
+  and later ones, bought before the 2027 season, with the NAS as storage and backup. Dagster
+  stays in production (ADR 0122 is not brought back: R6.2 asks for the owner's decision, and
+  it is that the host changes).
+- **Changed:** tasks 2 to 4 and R6.4, above. A pre-spike on a second Always Free A1 VM
+  (Oracle, arm64), apart from `hermes`, holds no league data, so R2.3 is not triggered, and
+  does no real upload (it would add a second writer's captures to the shared raw dataset).
+  The image is built for both architectures, so the home server's can differ.
+- **Not changed, still owed:** R6.1's production spike on the home server; task 5, and the
+  superseding ADR for 0121 (host) and the reshaping of 0125 (backup), which name the home server
+  once it is chosen; the landing zone on its local disk, never on a network mount (ADR 0014
+  publishes by one rename); a memory limit per container on a shared host; ADR 0124's key files
+  readable by the run's user only. Until that ADR, ADR 0121's NAS host stands as written but
+  unbuilt.
+- **ADR 0124 for the spike:** its key file sits on an Oracle VM, not the NAS. Temporary, narrow
+  roles, deleted after task 4.
+
