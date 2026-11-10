@@ -1,6 +1,6 @@
 # 0125. The landing zone joins the NAS's backup to its external drive
 
-- Status: accepted (the owner decided at the 2026-11-05 walkthrough; AGENTS.md puts the NAS backup outside an agent's choice)
+- Status: accepted (the owner decided at the 2026-11-05 walkthrough; AGENTS.md puts the NAS backup outside an agent's choice), amended by [0126](0126-the-daily-run-runs-on-the-mothership-vm-until-home-hardware-exists.md)
 - Date: 2026-11-04
 - Spec: [0216-where-the-daily-run-runs](../specs/0216-where-the-daily-run-runs/design.md) · Issue: #216
 

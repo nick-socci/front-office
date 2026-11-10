@@ -1,6 +1,6 @@
 # 0126. The daily run runs on the `mothership` VM until home hardware exists
 
-- Status: proposed (the owner's decision: it reverses ADR 0054's premise for captures, and AGENTS.md puts credentials and the NAS backup outside an agent's choice)
+- Status: accepted (the owner accepted it as drafted, 2026-11-10: it reverses ADR 0054's premise for captures, and AGENTS.md puts credentials and the NAS backup outside an agent's choice)
 - Date: 2026-11-10
 - Spec: [0216-where-the-daily-run-runs](../specs/0216-where-the-daily-run-runs/design.md) · Issue: #216
 - Amends: [0121](0121-the-daily-run-runs-on-the-nas-and-the-landing-zone-moves-there.md), [0054](0054-only-endpoints-without-member-data-are-uploaded-and-whole.md), [0124](0124-the-run-reads-its-credentials-from-files-on-the-nas.md), [0125](0125-the-landing-zone-joins-the-nas-backup-to-its-external-drive.md)
