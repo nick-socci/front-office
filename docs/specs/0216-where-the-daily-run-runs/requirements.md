@@ -118,7 +118,8 @@ The data has to be current **by morning, before lineups are set** (owner, 2026-1
 
 - R6.4 *(added 2026-11-07)* WHILE the host is not yet chosen THE SYSTEM SHALL measure Dagster's
   daemon and UI, a fetch of MLB data, an `upload --dry-run` and a `_216` build on a VM that holds
-  no league data, with images that build for `linux/amd64` and `linux/arm64`. This does not
+  no league data, with images that build for `linux/amd64` and `linux/arm64`. The one exception is the owner-approved ESPN reachability test of 2026-11-10 (design.md,
+  Amendments), whose scratch captures stay on the VM until the owner removes them. This does not
   satisfy R6.1, and R2.3 is not triggered: nothing from ESPN reaches the VM.
 
 ## Expected values

@@ -278,3 +278,20 @@ task 3 forbade; the owner approved it for the test, and the copy was removed aft
   `--rm`. A names-only search found the cookie names nowhere on the VM but the repo's own source.
   The scratch landing zone (`~/espn-test/landing`, settings, matchups and the pro schedule) is
   left for the owner to decide.
+
+### 2026-11-10: the pre-PR review's triage
+
+Codex reviewed `git diff origin/main...HEAD` before the PR (2 min 10 s, 4 findings).
+
+- **R5.3 under ADR 0126 (P1, fixed):** the second device in the home is the NAS after the pull, the
+  external drive the third. Worst case to the drive: the pull's interval plus up to 24 hours. ADR
+  0126's backup paragraph says so; the decision is unchanged, and the owner accepted it before this
+  wording was clarified.
+- **Task 4's verification (P2, fixed):** `upload --dry-run --project` refuses a landing zone that is
+  not the writer's, so the verification names the local-only dry-run and the refusal.
+- **R6.4 and task 3 (P2, fixed):** both name the one exception, the ESPN reachability test and its
+  scratch captures.
+- **R6.1's host check before #217 (P1, escalated to the owner):** the goal says the chosen host is
+  shown to run one real daily run before #217 starts. ADR 0126 makes `mothership` the host, and only
+  the pre-spike has run on it. Whether to run R6.1 on it now, or let #217 start and #218 carry it, is
+  the owner's.

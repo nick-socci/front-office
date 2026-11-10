@@ -29,14 +29,14 @@ repeated on the home server when it exists, and tasks 5 to 7 wait for it.
    from the owner's address, Dagster's UI reached through an SSH tunnel. The owner creates a
    service account with ADR 0124's starting roles and puts its key on the VM, mode 0400 for the
    run's user. **No ESPN cookies, no copy of the laptop's landing zone, and no ESPN capture is
-   ever on the VM**: its landing zone starts empty — `judgment` (the owner, for the VM and the
+   ever on the VM** (one owner-approved exception, 2026-11-10: design.md, Amendments): its landing zone starts empty — `judgment` (the owner, for the VM and the
    credentials) — R5.1, R6.4
    - Verify: `ss -tlnp` shows no listener but sshd; no `.env` and no `espn/` directory under the
      VM's landing zone after task 4; the image history and the run's log hold neither the key's
      `private_key_id` nor a cookie name.
 4. Run on the VM by hand: Dagster's daemon and UI idle (C8's probe), then, beside them:
-   `backfill mlb --season 2026 --limit 200`, `backfill idmap`, `upload --dry-run --project
-   "$FO_BQ_PROJECT"` against that landing zone, and `dbt build --target bq --selector bigquery
+   `backfill mlb --season 2026 --limit 200`, `backfill idmap`, `upload --dry-run` (local checks
+   only: with `--project` it refuses this landing zone by design, R2.1) against that landing zone, and `dbt build --target bq --selector bigquery
    --exclude-resource-type unit_test` into `_216` datasets (`dbt seed` and the functions first,
    as AGENTS.md says) with the spike account. **No real upload**: `upload` appends to the shared
    raw dataset, so a second landing zone would add captures the laptop's copy lacks and make
@@ -48,8 +48,8 @@ repeated on the home server when it exists, and tasks 5 to 7 wait for it.
    R4.2, R5.2, R6.2, R6.4
    - Verify: peak PSS summed over the container (daemon, UI and run), wall time per step and
      bytes billed (from `run_results.json`), recorded on #216, and C8 repeated with the real
-     manifest's failure recorded (R6.3). Every relation exact. The `upload --dry-run` reports the
-     MLB captures it would send, and exits 0. The account's final roles recorded. The result is
+     manifest's failure recorded (R6.3). Every relation exact. `upload --dry-run` without `--project`
+     exits 0; with `--project` it refuses this landing zone and sends nothing (R2.1). The account's final roles recorded. The result is
      labelled arm64, and says what it does not show: a real upload, a landed capture in raw, the
      writer moved, ESPN, the NAS backup, and the home server's own memory.
 5. (Waits for the home server's host ADR.) Once accepted, set ADR 0119's status to "amended by 0121"; reword AGENTS.md's rule 3 as ADR

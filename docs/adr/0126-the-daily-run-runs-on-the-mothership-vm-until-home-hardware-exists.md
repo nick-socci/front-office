@@ -69,8 +69,10 @@ writer home and removes the Oracle copy. Until then:
   is worded accordingly (spec task 5).
 - **Backup (amends ADR 0125).** The NAS's external-drive job no longer covers the primary copy. The
   second device in the home is a pull of the landing zone onto the NAS (and the laptop), started by
-  the NAS or the laptop, since `mothership` starts nothing on the tailnet. R5.3's gap is then the
-  pull's interval. The NAS's existing job carries the pulled copy to the external drive.
+  the NAS or the laptop, since `mothership` starts nothing on the tailnet. R5.3's gap is then
+  two: a capture landed since the last pull is on `mothership` alone, and one pulled since the NAS
+  job's last 03:00 run is not yet on the external drive. The worst case to reach the drive is the
+  pull's interval plus up to 24 hours. The NAS's existing job carries the pulled copy to the drive.
 
 ## Consequences
 
