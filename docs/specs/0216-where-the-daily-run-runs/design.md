@@ -255,3 +255,25 @@ amended on 2026-11-07. Evidence is on #216.
   enable-linger` is on; the landing zone must be mounted one level above its root, because the
   writer lock `raw.lock` sits beside it; `front-office load` must run before a DuckDB build,
   because the capture views read `raw.captures`.
+
+### 2026-11-10: ESPN answers a cloud address (owner's test)
+
+At the owner's request, on `mothership` (Oracle, `150.136.79.16`), in a throwaway container with
+`.env` mounted read-only and a scratch landing zone, to answer the spec's open question whether
+ESPN treats a cloud address differently. This is the one use of the cookies on that VM that
+task 3 forbade; the owner approved it for the test, and the copy was removed after.
+
+- `backfill espn --season 2026 --only pro-schedule` (public, no credentials): landed, 944 KB.
+- `backfill espn --season 2026 --only matchups` (authenticated; fetches the pro schedule,
+  settings and matchups, and no teams, transactions or rosters): all three landed, exit 0,
+  `scoring periods: latest=188 final=180`. Settings 5.9 KB, matchups 926 KB, valid JSON, no
+  `primaryOwner`, `members` or `owners` key in either (`firstName` and `lastName` appear 215
+  times in matchups, probably players' names; not checked).
+- **Shows:** one authenticated league call from a datacenter address is accepted.
+- **Does not show:** rosters or teams (the member-data endpoints), the volume of a full day's
+  run, repeated daily calls, in-season responses, or that ESPN will not later flag the address.
+  A single success is not a guarantee about an unofficial API.
+- **Cleanup:** the `.env` copy was removed from the VM, and the container that mounted it was
+  `--rm`. A names-only search found the cookie names nowhere on the VM but the repo's own source.
+  The scratch landing zone (`~/espn-test/landing`, settings, matchups and the pro schedule) is
+  left for the owner to decide.
