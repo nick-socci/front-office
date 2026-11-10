@@ -222,3 +222,36 @@ free space against that.
 - **ADR 0124 for the spike:** its key file sits on an Oracle VM, not the NAS. Temporary, narrow
   roles, deleted after task 4.
 
+
+### 2026-11-09: the pre-spike's results (task 4)
+
+Run by hand on `mothership` (Oracle A1, arm64, 2 OCPU / 12 GB, no swap, podman rootless), as
+amended on 2026-11-07. Evidence is on #216.
+
+- **Memory (R3.2, R6.2):** Dagster's daemon and UI idle peak at 882 MB PSS over 9 processes; with
+  `backfill mlb` (200 boxscores) and `backfill idmap` beside them, 957 MB; with the `_216` `dbt
+  build` (579 nodes), **1,180 MB over 12 processes**, host MemAvailable never below 10,024 MB, no
+  swap. R6.3 stands: the manifest is C8's filtered one. These do not fit the DS220+ (497 MB
+  available) and fit any host with 4 GB or more free.
+- **Build (R4.1):** `dbt build --target bq --selector bigquery --exclude-resource-type unit_test`
+  into `_216`: PASS=574, ERROR=0, 319 s; bytes billed 16.16 GB, as C12.
+- **Equality (R4.1, R4.2):** `compare_bigquery.py --suffix _216` against a fresh DuckDB build on
+  the laptop (`front-office load`, then `dbt run`: 73 models, 80 s): 80 relations, 13,832,390
+  rows, 80 pass, 0 fail.
+- **Account (R5.2):** `fo-spike216` needed `roles/bigquery.user` on the project and **READER
+  (Data Viewer) on the `raw` dataset**, which `upload --dry-run --project` proved: `Permission
+  bigquery.tables.get denied on raw.espn_matchup_days`. `bq add-iam-policy-binding` cannot change a
+  dataset's IAM ("requires allowlisting"); the grant was made with `bq update --source` on the
+  dataset's access list. No other role was needed for `seed`, the functions build or the build.
+- **The upload guard (R2.1):** `upload --dry-run --project` on a landing zone that is not the
+  writer's refuses ("raw.espn_matchup_days holds a capture the landing zone has not committed")
+  and sends nothing. So a second landing zone cannot upload to production `raw`, which is the
+  rule R2.1 states. Without `--project` the dry-run is a local check only, and passed.
+- **Not shown, and owed to the home server's spike (R6.1):** a capture this run landed found in
+  `raw.captures`, its endpoint's raw table and a `_216` staging model; the writer moved; ESPN's
+  fetch; the NAS backup; a missed day catching up; the host's own memory. This is arm64 on a
+  12 GB VM, not the home server.
+- **Setup lessons for #218:** user containers die with the SSH session unless `loginctl
+  enable-linger` is on; the landing zone must be mounted one level above its root, because the
+  writer lock `raw.lock` sits beside it; `front-office load` must run before a DuckDB build,
+  because the capture views read `raw.captures`.
