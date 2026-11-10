@@ -295,3 +295,7 @@ Codex reviewed `git diff origin/main...HEAD` before the PR (2 min 10 s, 4 findin
   shown to run one real daily run before #217 starts. ADR 0126 makes `mothership` the host, and only
   the pre-spike has run on it. Whether to run R6.1 on it now, or let #217 start and #218 carry it, is
   the owner's.
+
+- **R6.1's gate (decided by the owner, 2026-11-10):** run it on `mothership` now, as task 7, before
+  #217 starts. This puts the real season's captures, with members' data, on the Oracle VM under ADR
+  0126, and the laptop stops fetching against production from then on.

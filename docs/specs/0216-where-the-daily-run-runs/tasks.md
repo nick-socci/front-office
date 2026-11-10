@@ -61,7 +61,25 @@ repeated on the home server when it exists, and tasks 5 to 7 wait for it.
    design-review F5 (the in-season steps) to #217; R1.2, R2.2, R5.1 to R5.3 to #218; R1.3 to
    #219 and #220; C16's bytes to #220 — `impl` — R1.2, R1.3, R2.2, R3.1, R5.1 to R5.3, R6.3
    - Verify: each issue's comment links this spec and names its requirements.
-7. (last) Verify every acceptance criterion and expected value that this spec can check (R1.4,
+7. Production spike on `mothership`, R6.1 as written — `judgment` (the owner, for the credentials) — R2.1, R5.1, R5.2, R5.3, R6.1
+   *(added 2026-11-10, the owner's choice at the pre-PR review: run the gate before #217 starts)*
+   - Stop fetching on the laptop against production from here on. Copy the laptop's landing zone to
+     `mothership` (`rsync --archive`, into a new directory, nothing fetching on either side), and
+     run `front-office repair --dry-run --deep` there. Put `.env` (read-only to the run) and a new
+     key for a service account with ADR 0124's roles on it. Then, on `mothership`, by hand: the
+     fetch of every endpoint the daily run uses (`backfill mlb`, `backfill espn` including teams
+     and rosters, `backfill idmap`), a real `upload --project`, and `dbt build --target bq
+     --selector bigquery --exclude-resource-type unit_test` into `_216` datasets.
+   - Verify: the dry run moves nothing, and the copy's capture count equals the laptop's
+     (`LandingZone.iter_landed`); one capture this run landed is found by its `file_path` in
+     `raw.captures` and its endpoint's raw table, and its rows in the `_216` staging model that reads
+     it; peak PSS over the containers, wall time per step and bytes billed recorded on #216; the
+     account's final roles recorded (a refused step gets the narrowest role, as in task 4); teams
+     and rosters answered from this address, or the refusal recorded; `docker image history` and the
+     logs hold neither cookie's value nor the key's `private_key_id`. A refusal from ESPN stops the
+     task and goes to the owner (ADR 0126's fallback).
+8. (last) Verify every acceptance criterion and expected value that this spec can check (R1.4,
    R2.3, R2.4, R3.2, R4, R6) against task 1's and task 4's records, and post the cost per service.
    The rest is checked where task 6 sent it — `judgment` — all
-   - Verify: record the results as a comment on #216.
+   - Verify: record the results as a comment on #216. Repeated after task 7, whose results replace the
+     R6.1 row (task 7's first posting is the pre-spike's).
