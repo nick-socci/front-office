@@ -109,6 +109,7 @@ reverses ADR 0054 and fills its free disk in about two seasons (C6, C9).
 | [0123](../../adr/0123-bigquery-is-built-each-day-and-duckdb-on-the-laptop-on-demand.md) | Each run builds BigQuery; DuckDB is built on the laptop from its copy, when wanted | proposed |
 | [0124](../../adr/0124-the-run-reads-its-credentials-from-files-on-the-nas.md) | The run reads the ESPN cookies and a BigQuery service account key from files on the NAS, and rule 3 is reworded to say where Google credentials live | proposed: the owner's |
 | [0125](../../adr/0125-the-landing-zone-joins-the-nas-backup-to-its-external-drive.md) | The landing zone joins the NAS's backup job to its external drive; the laptop's pull is a third copy | proposed: the owner's |
+| [0126](../../adr/0126-the-daily-run-runs-on-the-mothership-vm-until-home-hardware-exists.md) | The daily run runs on the `mothership` VM until home hardware exists; amends 0121, 0054, 0124 and 0125 *(added 2026-11-10)* | proposed: the owner's |
 
 ADR 0121 amends ADR 0119: the loader still reads a local landing zone, on the host that holds it.
 
