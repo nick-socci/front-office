@@ -3,13 +3,14 @@
 -- Rows missing either id are dropped: a crosswalk entry that maps nothing is not a
 -- mapping. Roughly half of the source rows are historical players with no ESPN id.
 --
--- For the same reason, an ESPN id the capture gives to more than one MLB player is dropped:
+-- For the same reason, an ESPN id the capture gives to more than one player is dropped:
 -- an entry that names two players does not say which one the id is. The real map gave
 -- ESPN 5214984 to Jonah Tong and to Michael Tonkin, both pitchers, so no order could choose,
 -- and a warehouse that kept Tonkin would have credited Tong's league days to him. Left out,
 -- the id goes to int_fantasy__player_crosswalk's name fallback, which matches only a name
 -- held by one MLB player that season and says so in `resolution`, or leaves the player
--- unresolved, never wrong (the owner, 2026-10-28; ADR 0109).
+-- unresolved, never wrong (the owner, 2026-10-28; ADR 0109). The same holds for one MLB id
+-- listed under two teams (#223, below).
 
 with latest as (
 
@@ -52,17 +53,6 @@ with_ids as (
 
 ),
 
-ambiguous_ids as (
-
-    select espn_player_id
-    from with_ids
-    where espn_player_id is not null
-    group by espn_player_id
-    -- Qualified: BigQuery reads a bare name in HAVING as a select alias.
-    having count(distinct with_ids.mlbam_player_id) > 1
-
-),
-
 kept_columns as (
 
     select
@@ -77,7 +67,36 @@ kept_columns as (
     where
         espn_player_id is not null
         and mlbam_player_id is not null
-        and espn_player_id not in (select ambiguous_ids.espn_player_id from ambiguous_ids)
+
+),
+
+-- An ESPN id is ambiguous when the capture gives it to more than one entry that differs in
+-- anything but position: another MLB id (Tong and Tonkin), or the same MLB id under two teams
+-- (Matt Wilkinson, SF and CLE, on 2026-11-10, with two Baseball-Reference ids behind one MLB
+-- id). Position alone does not make an id ambiguous: a two-way player is listed once per
+-- position, and the rule at the foot of this model chooses between those rows. The ids are
+-- left out whole (the owner, 2026-11-13, #223), as for Tong and Tonkin above.
+ambiguous_ids as (
+
+    select entries.espn_player_id
+    from (
+        select
+            espn_player_id,
+            mlbam_player_id,
+            player_name,
+            team,
+            fangraphs_id
+        from kept_columns
+        group by
+            espn_player_id,
+            mlbam_player_id,
+            player_name,
+            team,
+            fangraphs_id
+    ) as entries
+    group by entries.espn_player_id
+    -- Qualified: BigQuery reads a bare name in HAVING as a select alias.
+    having count(*) > 1
 
 ),
 
@@ -99,6 +118,7 @@ distinct_rows as (
         fangraphs_id,
         fetched_at
     from kept_columns
+    where espn_player_id not in (select ambiguous_ids.espn_player_id from ambiguous_ids)
     group by
         espn_player_id,
         mlbam_player_id,
