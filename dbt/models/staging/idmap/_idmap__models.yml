@@ -35,6 +35,29 @@ unit_tests:
         - {espn_player_id: 39832, mlbam_player_id: 660271, position: P}
         - {espn_player_id: 7, mlbam_player_id: 8, position: P}
 
+  - name: idmap_players_rows_alike_in_every_kept_column_are_one_row
+    description: >
+      The 2026-11-10 map listed one two-way player twice under the same position, the two
+      rows differing only in columns this model does not read (the player's own id string and
+      a Yahoo id). Ranked as they were, the two rows tied and the tie rule stopped the build
+      (#223). Rows alike in every column the model keeps are one row, so the player keeps one.
+      Two rows that differ in a kept column (the team, say) still tie, and still stop the
+      build: that is a conflict the model must not choose between.
+    model: stg_idmap__players
+    given:
+      - input: ref('stg_raw__idmap_player_id_map')
+        rows:
+          - source: idmap
+            endpoint: player_id_map
+            request_key: ""
+            fetched_at: "20261110T000000Z"
+            file_path: map.json
+            payload: '[{"ESPNID":39832,"MLBID":660271,"PLAYERNAME":"Two Way","TEAM":"LAD","POS":"DH","IDFANGRAPHS":1,"IDPLAYER":"a","YAHOOID":"1"},{"ESPNID":39832,"MLBID":660271,"PLAYERNAME":"Two Way","TEAM":"LAD","POS":"DH","IDFANGRAPHS":1,"IDPLAYER":"ap","YAHOOID":"2"},{"ESPNID":7,"MLBID":8,"PLAYERNAME":"Other Way","TEAM":"NYY","POS":"P","IDFANGRAPHS":2,"IDPLAYER":"b","YAHOOID":"3"}]'
+    expect:
+      rows:
+        - {espn_player_id: 39832, mlbam_player_id: 660271, position: DH}
+        - {espn_player_id: 7, mlbam_player_id: 8, position: P}
+
   - name: idmap_players_an_espn_id_given_two_mlb_ids_is_not_mapped
     description: >
       An ESPN id the newest capture gives to two different MLB ids maps nothing and is

@@ -61,26 +61,69 @@ ambiguous_ids as (
     -- Qualified: BigQuery reads a bare name in HAVING as a select alias.
     having count(distinct with_ids.mlbam_player_id) > 1
 
+),
+
+kept_columns as (
+
+    select
+        espn_player_id,
+        mlbam_player_id,
+        {{ fo_json_text('row_json', '$.PLAYERNAME') }} as player_name,
+        {{ fo_json_text('row_json', '$.TEAM') }} as team,
+        {{ fo_json_text('row_json', '$.POS') }} as position,
+        {{ fo_json_int('row_json', '$.IDFANGRAPHS') }} as fangraphs_id,
+        fetched_at
+    from with_ids
+    where
+        espn_player_id is not null
+        and mlbam_player_id is not null
+        and espn_player_id not in (select ambiguous_ids.espn_player_id from ambiguous_ids)
+
+),
+
+-- The map lists some players on more than one row, and the rows can be alike in every column
+-- this model keeps: on 2026-11-10 Shohei Ohtani had two `DH` rows that differed only in
+-- columns read nowhere here (his own id string and a Yahoo id), and the tie rule stopped the
+-- build (#223). Rows alike in every kept column are one row, so they are grouped (`GROUP BY`
+-- over every column, `NULL`s grouping together, the same on both warehouses). Rows that
+-- differ in a kept column are not grouped, and still tie below: that is a conflict, not
+-- a repeat.
+distinct_rows as (
+
+    select
+        espn_player_id,
+        mlbam_player_id,
+        player_name,
+        team,
+        position,
+        fangraphs_id,
+        fetched_at
+    from kept_columns
+    group by
+        espn_player_id,
+        mlbam_player_id,
+        player_name,
+        team,
+        position,
+        fangraphs_id,
+        fetched_at
+
 )
 
 select
     espn_player_id,
     mlbam_player_id,
-    {{ fo_json_text('row_json', '$.PLAYERNAME') }} as player_name,
-    {{ fo_json_text('row_json', '$.TEAM') }} as team,
-    {{ fo_json_text('row_json', '$.POS') }} as position,
-    {{ fo_json_int('row_json', '$.IDFANGRAPHS') }} as fangraphs_id,
+    player_name,
+    team,
+    position,
+    fangraphs_id,
     {{ fo_parse_fetched_at() }} as fetched_at
-from with_ids
-where
-    espn_player_id is not null
-    and mlbam_player_id is not null
-    and espn_player_id not in (select ambiguous_ids.espn_player_id from ambiguous_ids)
+from distinct_rows
 -- The map lists a two-way player once per position under one ESPN id and one MLB id
 -- (Shohei Ohtani as P and as DH), in one capture, so recency cannot choose. The later
 -- position in text order wins, P before DH: a rule to make the choice the same on every
 -- warehouse, not a claim about the player (the owner, 2026-10-11; spec 0130).
 {{ fo_latest_by_entity(
     ['espn_player_id'],
-    order_by="fetched_at desc, " ~ fo_json_text('row_json', '$.POS') ~ " desc"
+    order_by="fetched_at desc, position desc"
 ) }}
