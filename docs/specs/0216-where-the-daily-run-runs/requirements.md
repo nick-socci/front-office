@@ -116,6 +116,12 @@ The data has to be current **by morning, before lineups are set** (owner, 2026-1
 - R6.3 THE SYSTEM SHALL treat C8 as a lower bound: it was measured on a manifest with the unit
   tests and dbt functions removed. #217 measures again with its real definitions.
 
+- R6.4 *(added 2026-11-07)* WHILE the host is not yet chosen THE SYSTEM SHALL measure Dagster's
+  daemon and UI, a fetch of MLB data, an `upload --dry-run` and a `_216` build on a VM that holds
+  no league data, with images that build for `linux/amd64` and `linux/arm64`. The one exception is the owner-approved ESPN reachability test of 2026-11-10 (design.md,
+  Amendments), whose scratch captures stay on the VM until the owner removes them. This does not
+  satisfy R6.1, and R2.3 is not triggered: nothing from ESPN reaches the VM.
+
 ## Expected values
 
 | Check | Expected | How to verify |

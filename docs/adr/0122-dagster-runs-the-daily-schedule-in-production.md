@@ -1,6 +1,6 @@
 # 0122. Dagster's daemon runs the daily schedule in production
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-04
 - Spec: [0216-where-the-daily-run-runs](../specs/0216-where-the-daily-run-runs/design.md) · Issue: #216
 

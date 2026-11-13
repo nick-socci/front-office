@@ -320,8 +320,9 @@ Built: ingestion, staging, the intermediate layer, the nine marts
 1. **BigQuery migration** — adapter-specific JSON and SQL need a representative
    migration spike; portability is not yet verified. The lineup solver is a Python
    function that is a BigQuery UDF there (ADRs 0039, 0103).
-2. **Orchestration** — Dagster asset definitions locally, Cloud Scheduler + Cloud Run in
-   production.
+2. **Orchestration** — Dagster asset definitions, run in production by Dagster's own
+   daemon on an Always Free VM in the owner's Oracle account until a home server replaces
+   it (ADRs 0122, 0126). No Cloud Scheduler or Cloud Run.
 3. **Dashboard** — Streamlit: standings, projections, waiver targets, player trends.
    dbt already knows it is coming: it is declared as an exposure over the nine marts, so
    `dbt build --select +exposure:front_office_dashboard` builds everything it will need.
