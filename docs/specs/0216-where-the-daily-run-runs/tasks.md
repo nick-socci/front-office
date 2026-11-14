@@ -75,8 +75,8 @@ repeated on the home server when it exists, and tasks 5 to 7 wait for it.
      `raw.captures` and its endpoint's raw table, and its rows in the `_216` staging model that reads
      it; peak PSS over the containers, wall time per step and bytes billed recorded on #216; the
      account's final roles recorded (a refused step gets the narrowest role, as in task 4); teams
-     and rosters answered from this address, or the refusal recorded; `docker image history` and the
-     logs hold neither cookie's value nor the key's `private_key_id`. A refusal from ESPN stops the
+     and rosters answered from this address, or the refusal recorded (rosters waived 2026-11-14 by the owner: every period was already landed, so none was fetched; #218's first in-season run confirms them); `docker image history` and the
+     logs hold neither cookie's value nor the key's `private_key_id`; `.env`, the key file and the key's directory are readable by the run's user only (`stat`: 400, 400, 700, owned by that user; R5.1). A refusal from ESPN stops the
      task and goes to the owner (ADR 0126's fallback).
 8. (last) Verify every acceptance criterion and expected value that this spec can check (R1.4,
    R2.3, R2.4, R3.2, R4, R6) against task 1's and task 4's records, and post the cost per service.

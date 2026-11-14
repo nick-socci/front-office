@@ -56,7 +56,7 @@ The data has to be current **by morning, before lineups are set** (owner, 2026-1
 
 ### R1. A host that runs without the laptop
 
-- R1.1 THE SYSTEM SHALL run the daily pipeline on one host chosen in ADR 0121, with the laptop
+- R1.1 THE SYSTEM SHALL run the daily pipeline on one host chosen in ADR 0126 (which amends ADR 0121), with the laptop
   asleep, off or away.
 - R1.2 WHILE the 2027 season is being played THE SYSTEM SHALL complete each day's run by 09:00
   in the owner's timezone (America/New_York). A game not final when the run fetches arrives on
@@ -99,10 +99,12 @@ The data has to be current **by morning, before lineups are set** (owner, 2026-1
 - R5.2 THE SYSTEM SHALL give the BigQuery credential no more access than a real upload and a
   suffixed build use, as task 4 finds them: no role on another project, and no access to the
   owner's other Google data.
-- R5.3 THE SYSTEM SHALL copy every committed capture to a second device in the home, the NAS's
-  external backup drive, on the NAS backup job's schedule, without needing the laptop (ADR
-  0125). A capture landed since the job's last run is on the NAS alone. The job's schedule bounds
-  that gap.
+- R5.3 THE SYSTEM SHALL copy every committed capture to a second device in the home, the NAS,
+  by a pull the NAS starts on a schedule of its own, without needing the laptop, and the NAS's
+  backup job (ADR 0125) then carries the pulled copy to its external drive. A capture landed
+  since the last pull is on `mothership` alone, and one pulled since the job's last run is not
+  yet on the external drive. The worst case to reach the drive is the pull's interval plus up
+  to 24 hours (ADR 0126). #218 sets the interval and tests one restore.
 
 ### R6. The spike
 
@@ -118,9 +120,11 @@ The data has to be current **by morning, before lineups are set** (owner, 2026-1
 
 - R6.4 *(added 2026-11-07)* WHILE the host is not yet chosen THE SYSTEM SHALL measure Dagster's
   daemon and UI, a fetch of MLB data, an `upload --dry-run` and a `_216` build on a VM that holds
-  no league data, with images that build for `linux/amd64` and `linux/arm64`. The one exception is the owner-approved ESPN reachability test of 2026-11-10 (design.md,
-  Amendments), whose scratch captures stay on the VM until the owner removes them. This does not
-  satisfy R6.1, and R2.3 is not triggered: nothing from ESPN reaches the VM.
+  no league data, with images that build for `linux/amd64` and `linux/arm64`. The one exception
+  is the owner-approved ESPN reachability test of 2026-11-10 (design.md, Amendments): ESPN's
+  scratch captures, which hold members' data, reached the VM and stay there until the owner
+  removes them. That test is the only time R2.3 was not yet met; ADR 0126 now accepts whole
+  captures on `mothership`. This does not satisfy R6.1.
 
 ## Expected values
 
