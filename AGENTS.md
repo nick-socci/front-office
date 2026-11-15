@@ -76,8 +76,11 @@ uv run --group bigquery front-office upload --project "$FO_BQ_PROJECT"   # fill 
    any model, fixture, seed or doc. Fixtures are rebuilt from an allowlist of wanted fields,
    never scrubbed of unwanted ones. The patterns live in `front_office/privacy.py`; the
    fixture test and `.agentic/pre-commit-guard` (the git pre-commit hook) both use them.
-3. **Credentials live only in `.env`.** `espn/client.py` is the only module that reads them.
-   They never reach a landing file, a sidecar, a log line, or a test.
+3. **The ESPN credentials live only in `.env`**, and `espn/client.py` is the only module that
+   reads them. Google credentials are found by Google's client: the owner's login, or a key
+   file on the production host named by `GOOGLE_APPLICATION_CREDENTIALS` (ADRs 0124, 0126). No
+   credential ever reaches the repository, an image, a landing file, a sidecar, a log line or
+   a test.
 4. **Components, never rates.** Store at-bats and hits, not AVG. Store `outs_recorded`, not
    innings — "6.1 innings" means 6⅓ and decimal arithmetic on it is silently wrong.
 5. **Deduplicate at the entity grain**, never per request, and always with a deterministic

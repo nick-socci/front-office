@@ -1,6 +1,6 @@
 # 0123. Each run builds BigQuery; DuckDB is built on the laptop when wanted
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-04
 - Spec: [0216-where-the-daily-run-runs](../specs/0216-where-the-daily-run-runs/design.md) · Issue: #216
 

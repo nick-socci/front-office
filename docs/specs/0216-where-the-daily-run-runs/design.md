@@ -4,6 +4,11 @@ Issue: #216 · Requirements: [requirements.md](requirements.md) · Tasks: [tasks
 
 ## Overview
 
+> **Superseded in part, 2026-11-10:** the host is the Oracle VM `mothership`, not the NAS, and
+> whole captures leave the home (ADR 0126, which amends ADRs 0121, 0054, 0124 and 0125). This
+> overview and the Claims ledger record what was decided on 2026-11-05; the Amendments below say
+> what changed, and the diagram shows the host as it now stands.
+
 The daily run moves to the owner's Synology NAS, in a container, and the production landing
 zone moves with it. The NAS is always on, and captures stay in the house, so ADR 0054 holds as
 written. Dagster's daemon runs the schedule there, so the definitions #217 writes are also what
@@ -22,21 +27,23 @@ spike: the NAS's memory (task 4, R6.2) and the service account's final roles (ta
 
 ```mermaid
 flowchart LR
-  subgraph home["Owner's home"]
-    subgraph nas["Synology NAS (Container Manager)"]
-      dag["Dagster daemon + UI<br/>schedule 06:00 ET"]
-      run["daily run<br/>fetch · upload · dbt build --target bq"]
-      lz[("landing zone<br/>(the one writer)")]
-      env[".env and BigQuery key<br/>(ADR 0124)"]
-    end
-    laptop["Laptop<br/>copy of the landing zone<br/>DuckDB builds on demand"]
-    usb[("External drive<br/>NAS backup job (ADR 0125)")]
+  subgraph oracle["mothership (Oracle Always Free VM, ADR 0126)"]
+    dag["Dagster daemon + UI<br/>schedule 06:00 ET"]
+    run["daily run<br/>fetch · upload · dbt build --target bq"]
+    lz[("landing zone<br/>(the one writer)")]
+    env[".env and BigQuery key<br/>(ADR 0124, 0126)"]
   end
-  lz -- "backup job" --> usb
+  subgraph home["Owner's home"]
+    laptop["Laptop<br/>copy of the landing zone<br/>DuckDB builds on demand"]
+    nas["Synology NAS<br/>pulled copy"]
+    usb[("External drive<br/>NAS backup job (ADR 0125, 0126)")]
+  end
+  nas -- "backup job" --> usb
   espn["ESPN, MLB, SFBB"] --> run
   dag --> run
   env -.-> run
   run --> lz
+  lz -- "pull (rsync), started from home" --> nas
   lz -- "pull (rsync)" --> laptop
   run -- "load jobs, then dbt build" --> bq[("BigQuery<br/>raw + build datasets")]
 ```
@@ -109,6 +116,7 @@ reverses ADR 0054 and fills its free disk in about two seasons (C6, C9).
 | [0123](../../adr/0123-bigquery-is-built-each-day-and-duckdb-on-the-laptop-on-demand.md) | Each run builds BigQuery; DuckDB is built on the laptop from its copy, when wanted | proposed |
 | [0124](../../adr/0124-the-run-reads-its-credentials-from-files-on-the-nas.md) | The run reads the ESPN cookies and a BigQuery service account key from files on the NAS, and rule 3 is reworded to say where Google credentials live | proposed: the owner's |
 | [0125](../../adr/0125-the-landing-zone-joins-the-nas-backup-to-its-external-drive.md) | The landing zone joins the NAS's backup job to its external drive; the laptop's pull is a third copy | proposed: the owner's |
+| [0126](../../adr/0126-the-daily-run-runs-on-the-mothership-vm-until-home-hardware-exists.md) | The daily run runs on the `mothership` VM until home hardware exists; amends 0121, 0054, 0124 and 0125 *(added 2026-11-10)* | proposed: the owner's |
 
 ADR 0121 amends ADR 0119: the loader still reads a local landing zone, on the host that holds it.
 
@@ -199,3 +207,119 @@ free space against that.
 | design-review | F8 (P2): "06:00 is late enough" has no evidence | Fixed: the claim is removed. A game not final at the hour arrives next run (R1.2), and the hour is #218's |
 
 ## Amendments
+
+### 2026-11-07: the NAS is too small, and the pre-spike moves to an Oracle A1 VM
+
+- **Finding (task 1, #216):** the DS220+ has 1,753 MB usable, 497 MB available with its services
+  running, and 1.5 GB of swap in use. C15 ("4 to 6 GB") was wrong. Daemon plus UI are 854 MB
+  (C8). **R6.2's condition holds on the NAS.** The spike on the NAS (old tasks 2 to 4) is not run.
+- **Owner's direction:** a mini PC, as a shared home server for this project, the NAS's services
+  and later ones, bought before the 2027 season, with the NAS as storage and backup. Dagster
+  stays in production (ADR 0122 is not brought back: R6.2 asks for the owner's decision, and
+  it is that the host changes).
+- **Changed:** tasks 2 to 4 and R6.4, above. A pre-spike on a second Always Free A1 VM
+  (Oracle, arm64), apart from `hermes`, holds no league data, so R2.3 is not triggered, and
+  does no real upload (it would add a second writer's captures to the shared raw dataset).
+  The image is built for both architectures, so the home server's can differ.
+- **Not changed, still owed:** R6.1's production spike on the home server; task 5, and the
+  superseding ADR for 0121 (host) and the reshaping of 0125 (backup), which name the home server
+  once it is chosen; the landing zone on its local disk, never on a network mount (ADR 0014
+  publishes by one rename); a memory limit per container on a shared host; ADR 0124's key files
+  readable by the run's user only. Until that ADR, ADR 0121's NAS host stands as written but
+  unbuilt.
+- **ADR 0124 for the spike:** its key file sits on an Oracle VM, not the NAS. Temporary, narrow
+  roles, deleted after task 4.
+
+
+### 2026-11-09: the pre-spike's results (task 4)
+
+Run by hand on `mothership` (Oracle A1, arm64, 2 OCPU / 12 GB, no swap, podman rootless), as
+amended on 2026-11-07. Evidence is on #216.
+
+- **Memory (R3.2, R6.2):** Dagster's daemon and UI idle peak at 882 MB PSS over 9 processes; with
+  `backfill mlb` (200 boxscores) and `backfill idmap` beside them, 957 MB; with the `_216` `dbt
+  build` (579 nodes), **1,180 MB over 12 processes**, host MemAvailable never below 10,024 MB, no
+  swap. R6.3 stands: the manifest is C8's filtered one. These do not fit the DS220+ (497 MB
+  available) and fit any host with 4 GB or more free.
+- **Build (R4.1):** `dbt build --target bq --selector bigquery --exclude-resource-type unit_test`
+  into `_216`: PASS=574, ERROR=0, 319 s; bytes billed 16.16 GB, as C12.
+- **Equality (R4.1, R4.2):** `compare_bigquery.py --suffix _216` against a fresh DuckDB build on
+  the laptop (`front-office load`, then `dbt run`: 73 models, 80 s): 80 relations, 13,832,390
+  rows, 80 pass, 0 fail.
+- **Account (R5.2):** `fo-spike216` needed `roles/bigquery.user` on the project and **READER
+  (Data Viewer) on the `raw` dataset**, which `upload --dry-run --project` proved: `Permission
+  bigquery.tables.get denied on raw.espn_matchup_days`. `bq add-iam-policy-binding` cannot change a
+  dataset's IAM ("requires allowlisting"); the grant was made with `bq update --source` on the
+  dataset's access list. No other role was needed for `seed`, the functions build or the build.
+- **The upload guard (R2.1):** `upload --dry-run --project` on a landing zone that is not the
+  writer's refuses ("raw.espn_matchup_days holds a capture the landing zone has not committed")
+  and sends nothing. So a stale or partial landing zone cannot upload to production
+  `raw`. The guard does not stop a complete copy that holds a new capture: one writer (R2.1) is
+  kept by the setup (one host fetches, and nothing fetches on the laptop against production, as
+  task 7 states), not by the guard alone. Without `--project` the dry-run is a local check only, and passed.
+- **Not shown, and owed to the home server's spike (R6.1):** a capture this run landed found in
+  `raw.captures`, its endpoint's raw table and a `_216` staging model; the writer moved; ESPN's
+  fetch; the NAS backup; a missed day catching up; the host's own memory. This is arm64 on a
+  12 GB VM, not the home server.
+- **Setup lessons for #218:** user containers die with the SSH session unless `loginctl
+  enable-linger` is on; the landing zone must be mounted one level above its root, because the
+  writer lock `raw.lock` sits beside it; `front-office load` must run before a DuckDB build,
+  because the capture views read `raw.captures`.
+
+### 2026-11-10: ESPN answers a cloud address (owner's test)
+
+At the owner's request, on `mothership` (Oracle, `150.136.79.16`), in a throwaway container with
+`.env` mounted read-only and a scratch landing zone, to answer the spec's open question whether
+ESPN treats a cloud address differently. This is the one use of the cookies on that VM that
+task 3 forbade; the owner approved it for the test, and the copy was removed after.
+
+- `backfill espn --season 2026 --only pro-schedule` (public, no credentials): landed, 944 KB.
+- `backfill espn --season 2026 --only matchups` (authenticated; fetches the pro schedule,
+  settings and matchups, and no teams, transactions or rosters): all three landed, exit 0,
+  `scoring periods: latest=188 final=180`. Settings 5.9 KB, matchups 926 KB, valid JSON, no
+  `primaryOwner`, `members` or `owners` key in either (`firstName` and `lastName` appear 215
+  times in matchups, probably players' names; not checked).
+- **Shows:** one authenticated league call from a datacenter address is accepted.
+- **Does not show:** rosters or teams (the member-data endpoints), the volume of a full day's
+  run, repeated daily calls, in-season responses, or that ESPN will not later flag the address.
+  A single success is not a guarantee about an unofficial API.
+- **Cleanup:** the `.env` copy was removed from the VM, and the container that mounted it was
+  `--rm`. A names-only search found the cookie names nowhere on the VM but the repo's own source.
+  The scratch landing zone (`~/espn-test/landing`, settings, matchups and the pro schedule) is
+  left for the owner to decide.
+
+### 2026-11-10: the pre-PR review's triage
+
+Codex reviewed `git diff origin/main...HEAD` before the PR (2 min 10 s, 4 findings).
+
+- **R5.3 under ADR 0126 (P1, fixed):** the second device in the home is the NAS after the pull, the
+  external drive the third. Worst case to the drive: the pull's interval plus up to 24 hours. ADR
+  0126's backup paragraph says so; the decision is unchanged, and the owner accepted it before this
+  wording was clarified.
+- **Task 4's verification (P2, fixed):** `upload --dry-run --project` refuses a landing zone that is
+  not the writer's, so the verification names the local-only dry-run and the refusal.
+- **R6.4 and task 3 (P2, fixed):** both name the one exception, the ESPN reachability test and its
+  scratch captures.
+- **R6.1's host check before #217 (P1, escalated to the owner):** the goal says the chosen host is
+  shown to run one real daily run before #217 starts. ADR 0126 makes `mothership` the host, and only
+  the pre-spike has run on it. Whether to run R6.1 on it now, or let #217 start and #218 carry it, is
+  the owner's.
+
+- **R6.1's gate (decided by the owner, 2026-11-10):** run it on `mothership` now, as task 7, before
+  #217 starts. This puts the real season's captures, with members' data, on the Oracle VM under ADR
+  0126, and the laptop stops fetching against production from then on.
+
+### 2026-11-14: task 7 passed, and the review of this PR
+
+- **Task 7 (R6.1), passed after #223 (PR #225):** the `_216` build gave 574 passed and 0 errors, billed
+  16.18 GB, and `compare_bigquery.py` shows 80 of 80 relations exact against a fresh DuckDB build
+  (evidence on #216). ESPN rosters were not exercised, since every period was already landed. The owner
+  counted R6.1 as passed, and #218's first in-season run confirms rosters.
+- **Review round 1 of this PR (Codex, 6 findings):** F1 (P1, R5.3 against ADR 0126's backup): the
+  owner chose to reword R5.3 to ADR 0126's two-part gap. F2 (P1): R1.1, the overview and the diagram
+  still named the NAS as host; they now name `mothership` and say what was superseded. F3 (P2): task 7
+  now checks that `.env`, the key and its directory are readable by the run's user only; they are
+  (400, 400, 700, owned by `ubuntu`). F4 (P2): the owner waived rosters for task 7, recorded in the task.
+  F5 (P2): R6.4's contradictory sentence now says the ESPN test's scratch captures did reach the VM.
+  F6 (P2): the guard stops a stale or partial landing zone, not a complete copy with a new capture;
+  the owner chose to say so and keep one writer by the setup.
