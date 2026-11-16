@@ -37,6 +37,8 @@ data/*.json
 
 # Dagster
 .dagster_home/
+.tmp_dagster_home_*/
+data/dagster_home*/
 
 # OS
 .DS_Store
