@@ -226,4 +226,11 @@ The real-season run (task 5) is the acceptance test; the fixtures cannot show a 
 
 ## Amendments
 
-None yet.
+- **2026-11-16 (task 2): `season.is_over` reads the settings through `LandingZone`; no CLI
+  subcommand.** Within the goals and no-gos (R1.1 already names `front_office.landing`). The
+  settings folder is keyed by league id, which only the credentials carry and the orchestration
+  must not read (R2.4), so `is_over(landing_root, season)` walks the espn settings captures,
+  keeps those whose sidecar `partitions.season` matches, and takes the newest by stamp then
+  path. If the season's captures belong to more than one league it raises `AmbiguousLeague`
+  rather than choose: a run has one league, and a silent mix of two would decide the gate on
+  the wrong one. No capture, or a status without both periods, is "not over".
