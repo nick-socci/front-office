@@ -38,6 +38,7 @@ FRONT_OFFICE = ("front-office",)
 # may hold after a fixed prefix: no control characters.
 _PATH = r"[^\x00-\x1f]+"
 _LIST = r"\[[\d, ]*\]"
+_URL = r"https?://[^\s\x00-\x1f]+"
 _COUNTS = r"fetched=\d+ skipped=\d+ failed=\d+"
 
 ALLOWLIST: tuple[re.Pattern[str], ...] = tuple(
@@ -52,7 +53,14 @@ ALLOWLIST: tuple[re.Pattern[str], ...] = tuple(
         rf"failed scoring periods: {_LIST}",
         rf"unproven scoring periods: {_LIST}",
         rf"listed \d+ new capture\(s\) in {_PATH}",
-        rf"(?:player list|pro schedule|transactions): {_PATH}",
+        # The HTTP client's give-up message (`http_client.py`): a URL and a status, no payload.
+        rf"(?:player list|pro schedule): [a-z]+: gave up on {_URL} after \d+ attempts "
+        r"\(last failure: [^()\x00-\x1f]*\)",
+        # `TransactionLogIncomplete`'s messages with a fixed text. The third one carries a topic
+        # id read from the payload, so it is deliberately not here: it is withheld (R2.4).
+        r"transactions: the page at offset \d+ has no valid `topics` list; page landed, but "
+        r"the log is not shown complete",
+        r"transactions: transaction log still full after \d+ pages of \d+; stopped",
         r"warning: a backfill is in progress; the result may be incomplete",
         # `ESPN returned 401: cookies expired — refresh ESPN_S2/SWID in .env …` names the
         # variables, never a value; the other sources' line is `<source> returned …`.
@@ -76,8 +84,8 @@ ALLOWLIST: tuple[re.Pattern[str], ...] = tuple(
     )
 )
 
-# The allowlist's free-text tails (`player list: …`) could in principle carry a pasted
-# credential, so a cookie variable followed by a value is refused whatever the prefix.
+# Free text remains only after `landed … ->`, a path, and in the HTTP give-up message's
+# `last failure`; a cookie variable followed by a value is refused whatever the prefix.
 _CREDENTIAL_ASSIGNMENT = re.compile(r"(?:ESPN_S2|SWID)\s*[=:]\s*\S")
 
 

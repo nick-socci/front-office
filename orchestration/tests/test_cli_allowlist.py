@@ -57,7 +57,9 @@ CLI_LINES = [
     "listed 22 new capture(s) in /tmp/x/w.duckdb",
     "player list: mlb: gave up on https://statsapi.mlb.com/x after 4 attempts (last failure: 500)",
     "pro schedule: espn: gave up on https://x/y after 4 attempts (last failure: 503)",
-    "transactions: the log is incomplete: 2 page(s) missing",
+    "transactions: the page at offset 50 has no valid `topics` list; page landed, but "
+    "the log is not shown complete",
+    "transactions: transaction log still full after 50 pages of 100; stopped",
     "warning: a backfill is in progress; the result may be incomplete",
     "ESPN returned 401: cookies expired — refresh ESPN_S2/SWID in .env "
     "from a logged-in browser session",
@@ -93,6 +95,14 @@ def test_each_shape_the_cli_prints_is_kept(line: str) -> None:
         f"scoring periods: latest=1 final=2 {GUID}",
         "landed teams -> x with firstName in it",
         "transactions: displayName=Someone",
+        # `TransactionLogIncomplete` prints a topic id taken from the payload (`short[0]`): a
+        # name there must not reach a log, so this line is withheld whole (R2.4).
+        "transactions: 1 transaction topic(s) do not hold exactly totalMessageCount messages, "
+        "or state no valid count (e.g. Alice Smith); pages landed, but the log is not shown "
+        "complete",
+        "transactions: Alice Smith",
+        "player list: Alice Smith",
+        "pro schedule: Alice Smith",
         "player list: ESPN_S2=abc",
         "player list: members",
         "primaryOwner: x",
