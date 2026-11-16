@@ -62,6 +62,12 @@ def test_over_when_latest_period_passes_the_final_one(tmp_path: Path) -> None:
     assert season.is_over(tmp_path, 2026) is True
 
 
+def test_not_over_while_the_final_period_is_the_latest(tmp_path: Path) -> None:
+    """latest == final means the last period is still being played: no matchup days yet."""
+    _land_settings(tmp_path, year=2026, league="1", stamp="20260930T120000Z", latest=180, final=180)
+    assert season.is_over(tmp_path, 2026) is False
+
+
 def test_not_over_while_latest_is_inside_the_season(tmp_path: Path) -> None:
     _land_settings(tmp_path, year=2026, league="1", stamp="20260601T120000Z", latest=120, final=180)
     assert season.is_over(tmp_path, 2026) is False
