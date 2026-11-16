@@ -49,6 +49,21 @@ BIGQUERY_PREFIX = ("uv", "run", "--group", "bigquery", *cli.FRONT_OFFICE)
 FetchResults = Generator[MaterializeResult[None] | AssetCheckResult]
 
 
+_SEASON_OF_RUN: dict[str, int] = {}
+
+
+def _season(context: AssetExecutionContext) -> int:
+    """The season of this run, read from the clock once: the first step to ask decides it.
+
+    A run that starts before New York midnight on 31 December and runs past it must not fetch
+    2026 for one step and 2027 for the next (R3.1, ADR 0130).
+    """
+    run_id = context.run.run_id
+    if run_id not in _SEASON_OF_RUN:
+        _SEASON_OF_RUN[run_id] = season.current()
+    return _SEASON_OF_RUN[run_id]
+
+
 def _fetch_complete(key: str) -> AssetCheckSpec:
     # `blocking=False` is the default; it is stated because ADR 0129 depends on it.
     return AssetCheckSpec(FETCH_COMPLETE, asset=key, blocking=False)
@@ -83,7 +98,7 @@ def _fetch(
     name="mlb_captures",
 )
 def mlb_captures(context: AssetExecutionContext) -> FetchResults:
-    root, year = settings.landing_root(), season.current()
+    root, year = settings.landing_root(), _season(context)
     yield from _fetch(
         context,
         "mlb_captures",
@@ -97,7 +112,7 @@ def mlb_captures(context: AssetExecutionContext) -> FetchResults:
     name="espn_captures",
 )
 def espn_captures(context: AssetExecutionContext) -> FetchResults:
-    root, year = settings.landing_root(), season.current()
+    root, year = settings.landing_root(), _season(context)
     yield from _fetch(
         context,
         "espn_captures",
@@ -113,7 +128,7 @@ def espn_captures(context: AssetExecutionContext) -> FetchResults:
 def espn_matchup_days(context: AssetExecutionContext) -> FetchResults:
     """Fetch matchup days once the season is over (R3.3); until then, no request is made."""
     settings.check_ready()
-    root, year = settings.landing_root(), season.current()
+    root, year = settings.landing_root(), _season(context)
     if not season.is_over(root, year):
         context.log.info(f"season {year} is not over: no matchup days to fetch")
         yield from _fetch_results(

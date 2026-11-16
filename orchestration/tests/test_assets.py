@@ -306,3 +306,16 @@ def test_the_fetches_run_in_the_declared_order() -> None:
     assert deps(assets.espn_captures) == {"mlb_captures"}
     assert deps(assets.espn_matchup_days) == {"espn_captures"}
     assert {"espn_matchup_days"} <= deps(assets.raw_in_warehouse)
+
+
+def test_a_run_uses_one_season_even_if_the_clock_crosses_new_years(
+    monkeypatch: pytest.MonkeyPatch, recorder: Recorder
+) -> None:
+    """R3.1, ADR 0130: a run that starts on 2026-12-31 and passes New York midnight fetches
+    one season in every step, not 2026 for MLB and 2027 for ESPN."""
+    years = iter([2026, 2027, 2027, 2027])
+    monkeypatch.setattr(season, "current", lambda **_: next(years))
+    result, _ = run([assets.mlb_captures, assets.espn_captures, assets.espn_matchup_days])
+    assert result.success
+    seasons = {args[args.index("--season") + 1] for args in recorder.commands}
+    assert seasons == {"2026"}

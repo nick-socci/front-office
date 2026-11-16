@@ -18,6 +18,7 @@ depends on it. dbt gets the one landing root in its environment (R3.6).
 """
 
 import functools
+import importlib.util
 import json
 import os
 import shutil
@@ -65,9 +66,24 @@ def manifest_target(*, environ: Mapping[str, str] | None = None) -> str:
     return settings.dbt_target(environ=env)
 
 
+def require_adapter(target: str) -> None:
+    """Stop with the group to install if the target's dbt adapter is missing.
+
+    `dbt-bigquery` is in the `bigquery` group, not `orchestration`, so a host that runs
+    `FO_WAREHOUSE=bigquery` installs both (`uv sync --locked --group orchestration --group
+    bigquery`); without it dbt's own error names a missing adapter only after a parse.
+    """
+    if target == "bq" and importlib.util.find_spec("dbt.adapters.bigquery") is None:
+        raise RuntimeError(
+            "FO_WAREHOUSE=bigquery needs the dbt-bigquery adapter: install it with "
+            "`uv sync --locked --group orchestration --group bigquery` (--group bigquery)"
+        )
+
+
 @functools.cache
 def load_manifest(target: str) -> dict[str, Any]:
     """Run `dbt parse --target <target>` into a temporary directory and read its manifest."""
+    require_adapter(target)
     with tempfile.TemporaryDirectory(prefix="fo-dbt-manifest-") as directory:
         command = [
             _dbt_executable(),

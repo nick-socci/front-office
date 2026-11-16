@@ -4,6 +4,7 @@ These load the real dbt manifest (`dbt parse`, cached for the session) and build
 under different settings. Nothing is executed.
 """
 
+import importlib.util
 from typing import Any
 
 import pytest
@@ -145,3 +146,14 @@ def test_the_dbt_resource_is_the_repositorys_project() -> None:
     defs = front_office_pipeline.build_defs()
     assert defs.resources is not None and "dbt" in defs.resources
     assert str(settings.DBT_DIR) == defs.resources["dbt"].project_dir
+
+
+def test_a_bigquery_manifest_without_the_adapter_says_which_group_to_install(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The adapter is in the `bigquery` group, not `orchestration`: parsing the `bq` target
+    without it must stop with the group's name, not an opaque dbt error at start-up."""
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: None)
+    with pytest.raises(RuntimeError, match="--group bigquery"):
+        dbt_assets.require_adapter("bq")
+    dbt_assets.require_adapter("dev")  # DuckDB's adapter is in the default group
