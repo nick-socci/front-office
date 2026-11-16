@@ -53,9 +53,10 @@ ALLOWLIST: tuple[re.Pattern[str], ...] = tuple(
         rf"failed scoring periods: {_LIST}",
         rf"unproven scoring periods: {_LIST}",
         rf"listed \d+ new capture\(s\) in {_PATH}",
-        # The HTTP client's give-up message (`http_client.py`): a URL and a status, no payload.
+        # The HTTP client's give-up message: a URL, then `none`, `status NNN` or an
+        # exception class name as the last failure.
         rf"(?:player list|pro schedule): [a-z]+: gave up on {_URL} after \d+ attempts "
-        r"\(last failure: [^()\x00-\x1f]*\)",
+        r"\(last failure: (?:none|status \d{3}|[A-Za-z_][A-Za-z0-9_]*)\)",
         # `TransactionLogIncomplete`'s messages with a fixed text. The third one carries a topic
         # id read from the payload, so it is deliberately not here: it is withheld (R2.4).
         r"transactions: the page at offset \d+ has no valid `topics` list; page landed, but "

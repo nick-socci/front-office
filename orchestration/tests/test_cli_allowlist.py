@@ -55,8 +55,9 @@ CLI_LINES = [
     "failed scoring periods: [3, 4]",
     "unproven scoring periods: [7]",
     "listed 22 new capture(s) in /tmp/x/w.duckdb",
-    "player list: mlb: gave up on https://statsapi.mlb.com/x after 4 attempts (last failure: 500)",
-    "pro schedule: espn: gave up on https://x/y after 4 attempts (last failure: 503)",
+    "player list: mlb: gave up on https://statsapi.mlb.com/x after 4 attempts "
+    "(last failure: status 500)",
+    "pro schedule: espn: gave up on https://x/y after 4 attempts (last failure: ReadTimeout)",
     "transactions: the page at offset 50 has no valid `topics` list; page landed, but "
     "the log is not shown complete",
     "transactions: transaction log still full after 50 pages of 100; stopped",
@@ -102,6 +103,9 @@ def test_each_shape_the_cli_prints_is_kept(line: str) -> None:
         "complete",
         "transactions: Alice Smith",
         "player list: Alice Smith",
+        # `last failure` is `none`, an exception class name or `status NNN`; nothing else.
+        "player list: mlb: gave up on https://x/y after 4 attempts (last failure: Alice Smith)",
+        "pro schedule: espn: gave up on https://x/y after 4 attempts (last failure: status 5)",
         "pro schedule: Alice Smith",
         "player list: ESPN_S2=abc",
         "player list: members",
