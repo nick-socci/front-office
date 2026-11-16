@@ -157,8 +157,7 @@ the two fetches never hold the writer lock together (C7); the dbt build's own th
 and the stderr tail as metadata. The check's severity is `ERROR` (a `WARN` failure would not read as
 a failure) and it is non-blocking (`blocking=False`, Dagster's default), so `raw_in_warehouse` and
 the dbt assets still run. The failed check shows in the UI and in GraphQL (`assetCheckExecutions`),
-which is what #219 reads; task 6 confirms that a run with a failed check is not reported as plainly
-green. `raw_in_warehouse` and the dbt assets raise on failure, as ordinary asset failures.
+which is what #219 reads. The run itself still ends `SUCCESS` (Amendments, 2026-11-16). `raw_in_warehouse` and the dbt assets raise on failure, as ordinary asset failures.
 
 **Running it.** `dagster dev -m front_office_pipeline` for the UI; `dagster job execute -m
 front_office_pipeline -j daily` runs it once, without the daemon, which is how the verification task and #220's rehearsal run it.
@@ -234,3 +233,23 @@ The real-season run (task 5) is the acceptance test; the fixtures cannot show a 
   path. If the season's captures belong to more than one league it raises `AmbiguousLeague`
   rather than choose: a run has one league, and a silent mix of two would decide the gate on
   the wrong one. No capture, or a status without both periods, is "not over".
+- **2026-11-16 (task 6, decided by the owner): a failed fetch is read from its failed check, not
+  from the run's status.** With an invalid `ESPN_S2`, `daily` ended `RUN_SUCCESS`: `espn_captures`
+  materialized, `fetch_complete` is `FAILED` (severity ERROR) with ESPN's 401 line as metadata,
+  and upload, the build and freshness ran. Dagster does not mark a run failed for a failed
+  non-blocking check, so "not reported as plainly green" cannot hold at the run level without a
+  step that raises, which the owner declined. ADR 0129 stands (non-blocking, the run goes on);
+  R2.3, the *Failure* paragraph and the Expected values row now say what holds: the failure is
+  visible on the asset's checks in the UI and read as `FAILED` through the instance's asset-check
+  executions (GraphQL `assetCheckExecutions`), which is what #219 alerts on.
+- **2026-11-16 (task 6): `dagster` loads the working directory's `.env` over the process
+  environment.** `dagster dev` and `dagster job execute` inject `./.env` (logging only the
+  variable names), overriding an exported `ESPN_S2`, so task 6's method (export it in the run's
+  environment) had no effect from the repository root. The orchestration locates everything from
+  `REPO_ROOT`, not the working directory, so task 6 ran from another directory
+  (`uv run --project <repo> dagster job execute …`): Dagster then injects nothing, the CLI (run in
+  the repository root) calls `load_dotenv` without override, and the exported value reached ESPN.
+  Consequence for #218: Dagster started in the repository root puts the `.env` credentials in the
+  environment of its processes and so of every command; that is the file rule 3 names, and nothing
+  logs a value (task 5's scan), but a host with the credentials elsewhere should start Dagster
+  from a directory with no `.env`.

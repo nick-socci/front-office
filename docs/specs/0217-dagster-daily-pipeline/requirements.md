@@ -67,8 +67,9 @@ the running-season steps (its F5).
   metadata, so that upload and build still run (ADR 0129).
 - R2.2 IF `upload` or the `dbt build` exits non-zero THEN THE SYSTEM SHALL fail that asset and skip
   what depends on it.
-- R2.3 THE SYSTEM SHALL end a run in which any `fetch_complete` failed in a state a person can see
-  as failed or warned in the UI and read by `dagster` GraphQL, which is what #219 reads.
+- R2.3 THE SYSTEM SHALL leave a failed `fetch_complete` visible as failed on its asset in the UI and
+  readable as `FAILED` through `dagster` GraphQL (`assetCheckExecutions`), which is what #219 reads.
+  The run's own status stays `SUCCESS` (design.md, Amendments 2026-11-16).
 - R2.4 THE SYSTEM SHALL write no ESPN credential, cookie, member name or account id to a Dagster
   log, event or metadata (AGENTS.md rules 2 and 3): the orchestration reads no credential file.
   What it records of a command is its arguments, its exit code and only the output lines that
@@ -121,7 +122,7 @@ the running-season steps (its F5).
 | dbt assets loaded from the real manifest | 80: 73 non-ephemeral models and 7 seeds of the 2026-11-14 manifest (C1, C2) | `len(defs.get_asset_graph().get_all_asset_keys())` minus the 6 hand-written ones, recorded in task 5 |
 | Hand-written assets | 6: `mlb_captures`, `espn_captures`, `espn_matchup_days`, `idmap_capture`, `raw_in_warehouse`, `source_freshness` | same listing |
 | One local `daily` run on the real season, `FO_WAREHOUSE=duckdb` | every step succeeds; the dbt step passes as many nodes as `cd dbt && dbt build --exclude-resource-type unit_test` run directly just after (task 5 records both numbers) | the run's event log, recorded on #217 |
-| A `daily` run with the ESPN command failing (cookies blanked in a copy) | `espn_captures` materialized, `fetch_complete` failed, upload and build still ran, run not reported green | task 6 |
+| A `daily` run with the ESPN command failing (cookies blanked in a copy) | `espn_captures` materialized, `fetch_complete` failed, upload and build still ran, check readable as `FAILED` (run status `SUCCESS`) | task 6 |
 | Season on 2027-01-01 05:00 ET | 2027 (and 2026 on 2026-12-31 23:00 ET) | unit test on `season.py` |
 | `espn_matchup_days` gate on 2026's newest settings (188 > 180) / 2025's (196 > 188) | runs for both; a settings capture with latest 120, final 180 skips | unit test, and C3 |
 | Memory | daemon + UI + a run under the VM's limit with 2 GB spare | task 7 |
