@@ -83,11 +83,11 @@ fetched again per asset (extra captures, and the freshness marker is the first c
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0127](../../adr/0127-an-asset-is-one-cli-command-and-one-dbt-model.md) | An asset is one CLI command or one dbt model | proposed |
-| [0128](../../adr/0128-dagster-reads-the-real-dbt-manifest-through-dagster-dbt-0-29-30.md) | Dagster reads the real dbt manifest through dagster-dbt 0.29.30 | proposed |
-| [0129](../../adr/0129-a-failed-fetch-fails-a-check-and-the-run-goes-on.md) | A failed fetch fails a non-blocking check and the run goes on | proposed |
-| [0130](../../adr/0130-a-run-fetches-the-current-calendar-year-and-matchup-days-once-the-season-is-over.md) | A run fetches the current calendar year, and matchup days once the season is over | proposed |
-| [0131](../../adr/0131-one-definition-set-the-warehouse-chosen-by-a-setting.md) | One definition set, the warehouse chosen by a setting | proposed |
+| [0127](../../adr/0127-an-asset-is-one-cli-command-and-one-dbt-model.md) | An asset is one CLI command or one dbt model | accepted |
+| [0128](../../adr/0128-dagster-reads-the-real-dbt-manifest-through-dagster-dbt-0-29-30.md) | Dagster reads the real dbt manifest through dagster-dbt 0.29.30 | accepted |
+| [0129](../../adr/0129-a-failed-fetch-fails-a-check-and-the-run-goes-on.md) | A failed fetch fails a non-blocking check and the run goes on | accepted |
+| [0130](../../adr/0130-a-run-fetches-the-current-calendar-year-and-matchup-days-once-the-season-is-over.md) | A run fetches the current calendar year, and matchup days once the season is over | accepted |
+| [0131](../../adr/0131-one-definition-set-the-warehouse-chosen-by-a-setting.md) | One definition set, the warehouse chosen by a setting | accepted |
 
 ## Detailed design
 
