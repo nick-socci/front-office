@@ -1,0 +1,30 @@
+# Dagster's UI on `mothership` (spec 0218, ADR 0133). It holds no credential: `dbt parse` for
+# the BigQuery target needs none (spec C15), so it mounts the instance's volume and nothing else.
+#
+# The webserver listens on 0.0.0.0 inside its container, and the host publishes it on its own
+# loopback only, so an SSH tunnel (`ssh -L 3000:127.0.0.1:3000 mothership`) is the one way in.
+# See front-office-daemon.container for the install steps and for `PodmanArgs` and `WorkingDir`.
+
+[Unit]
+Description=Front Office: Dagster UI
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=localhost/front-office:current
+ContainerName=front-office-ui
+WorkingDir=/dagster_home
+Exec=dagster-webserver -h 0.0.0.0 -p 3000 -w /app/deploy/workspace.yaml
+EnvironmentFile=%h/config/front-office.env
+Environment=FO_WAREHOUSE=bigquery
+Volume=%h/dagster_home:/dagster_home:rw
+PublishPort=127.0.0.1:3000:3000
+PodmanArgs=--memory=1g
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

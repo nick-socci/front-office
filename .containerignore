@@ -1,0 +1,39 @@
+# What `podman build -f deploy/Containerfile .` may send as its build context (spec 0218, R2.4).
+#
+# Podman reads this file from the context directory, which is the repository root, so it lives
+# here and not under deploy/ (design review F3). The image holds code and dbt's project and
+# nothing else: no credential, no landing zone, no warehouse, no history. The units mount the
+# ESPN `.env` and the Google key at run time. tests/test_deploy_files.py reads this file.
+
+# credentials
+.env
+*.env
+**/.env
+**/*.env
+secrets
+**/secrets
+*.pem
+*.p12
+**/*service-account*.json
+**/*google-key*.json
+**/fo-key-*.json
+**/application_default_credentials.json
+
+# the real season and every warehouse
+data
+**/*.duckdb
+**/*.duckdb.wal
+**/*.duckdb.tmp
+
+# not needed to run, and large or private
+.git
+.review
+.venv
+site
+docs
+fixtures
+dashboard
+**/__pycache__
+dbt/target
+dbt/logs
+dbt/dbt_packages

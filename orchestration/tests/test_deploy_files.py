@@ -1,0 +1,234 @@
+"""R2.1, R2.3, R2.4, R4.2, R5.1: the deployment files keep credentials out and the pull additive.
+
+Catches: a credential in the build context (a `.containerignore` that is not at the root, or that
+lost `.env`); a writable or missing credential mount; the UI container seeing a credential; a unit
+key that Podman 4.9's Quadlet rejects (`Memory=`, a pod, systemd's `WorkingDirectory=`: spec C19);
+a port published beyond the host's loopback; a pull that deletes or that marks a failed run good.
+
+The generator itself runs on `mothership` (task 3 and 6); these tests hold the files to what it
+accepted there.
+"""
+
+import os
+import re
+import stat
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from front_office_pipeline import settings
+
+ROOT = settings.REPO_ROOT
+DEPLOY = ROOT / "deploy"
+UNITS = DEPLOY / "quadlet"
+DAEMON = UNITS / "front-office-daemon.container"
+UI = UNITS / "front-office-ui.container"
+
+# The [Container] keys Podman 4.9.3's Quadlet accepted on `mothership` (spec C19) or documents
+# since 4.4. `Memory` and the `[Pod]` group are not among them.
+ACCEPTED_CONTAINER_KEYS = {
+    "Image",
+    "ContainerName",
+    "WorkingDir",
+    "Exec",
+    "Environment",
+    "EnvironmentFile",
+    "Volume",
+    "PublishPort",
+    "PodmanArgs",
+}
+# `front-office.env` (the non-secret EnvironmentFile) is allowed; the ESPN `.env` is not.
+CREDENTIAL_WORDS = ("secrets", "/app/.env", "google-key", "GOOGLE_APPLICATION_CREDENTIALS")
+
+
+def unit_lines(path: Path) -> list[tuple[str, str, str]]:
+    """(group, key, value) for each assignment, comments and blank lines dropped."""
+    group = ""
+    found = []
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            group = line[1:-1]
+            continue
+        key, _, value = line.partition("=")
+        found.append((group, key, value))
+    return found
+
+
+def values(path: Path, group: str, key: str) -> list[str]:
+    return [v for g, k, v in unit_lines(path) if g == group and k == key]
+
+
+def ignore_patterns() -> set[str]:
+    return {
+        line.strip()
+        for line in (ROOT / ".containerignore").read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+
+
+def test_containerignore_is_at_the_root_and_keeps_credentials_and_data_out() -> None:
+    """Podman reads `.containerignore` from the build context, the repository root (F3)."""
+    assert not (DEPLOY / ".containerignore").exists()
+    patterns = ignore_patterns()
+    for needed in (
+        ".env",
+        "**/.env",
+        "*.env",
+        "secrets",
+        "data",
+        ".git",
+        ".review",
+        "**/*.duckdb",
+    ):
+        assert needed in patterns, f".containerignore must exclude {needed}"
+    assert any("google-key" in p or "key" in p for p in patterns)
+
+
+def test_containerfile_copies_no_credential_and_labels_its_commit() -> None:
+    text = (DEPLOY / "Containerfile").read_text()
+    instructions = [
+        line
+        for line in text.splitlines()
+        if re.match(r"\s*(COPY|ADD|ENV|ARG)\b", line) and not line.strip().startswith("#")
+    ]
+    joined = "\n".join(instructions)
+    assert ".env" not in joined.replace("UV_PROJECT_ENVIRONMENT", "")
+    for cookie_name in ("ESPN_S2", "SWID", "GOOGLE_APPLICATION_CREDENTIALS"):
+        assert cookie_name not in joined
+    assert "ARG GIT_COMMIT" in text and "org.opencontainers.image.revision" in text
+    assert "--locked" in text
+    assert 'ENTRYPOINT ["/app/deploy/entrypoint.sh"]' in text
+
+
+def test_units_only_use_keys_podman_4_9_accepts() -> None:
+    for unit in (DAEMON, UI):
+        groups = {g for g, _, _ in unit_lines(unit)}
+        assert groups <= {"Unit", "Container", "Service", "Install"}, "Quadlet 4.9 has no [Pod]"
+        keys = {k for g, k, _ in unit_lines(unit) if g == "Container"}
+        assert keys <= ACCEPTED_CONTAINER_KEYS, keys - ACCEPTED_CONTAINER_KEYS
+        assert not any(k == "WorkingDirectory" for g, k, _ in unit_lines(unit) if g == "Container")
+        assert values(unit, "Container", "WorkingDir") == ["/dagster_home"]
+
+
+def test_each_unit_has_a_memory_limit_a_restart_and_starts_at_boot() -> None:
+    for unit in (DAEMON, UI):
+        limits = [v for v in values(unit, "Container", "PodmanArgs") if v.startswith("--memory=")]
+        assert len(limits) == 1
+        assert values(unit, "Service", "Restart") == ["always"]
+        assert values(unit, "Install", "WantedBy") == ["default.target"]
+
+
+def test_the_daemon_mounts_the_credentials_read_only() -> None:
+    mounts = values(DAEMON, "Container", "Volume")
+    for needle in ("/app/.env", "/run/secrets/google-key.json"):
+        matching = [m for m in mounts if m.split(":")[1] == needle]
+        assert len(matching) == 1, needle
+        assert matching[0].endswith(":ro"), f"{needle} must be mounted read-only"
+    environment = values(DAEMON, "Container", "Environment")
+    assert "GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/google-key.json" in environment
+    assert "FO_LANDING_ROOT=/data/raw" in environment
+    # the landing zone is mounted one level above its root: the writer lock sits beside it
+    assert any(m.startswith("%h/data:/data:") for m in mounts)
+
+
+def test_the_ui_unit_sees_no_credential_and_publishes_on_loopback_only() -> None:
+    text = UI.read_text()
+    code = "\n".join(
+        line for line in text.splitlines() if line.strip() and not line.strip().startswith("#")
+    )
+    for word in CREDENTIAL_WORDS:
+        assert word not in code, f"the UI unit must not mention {word}"
+    assert values(UI, "Container", "PublishPort") == ["127.0.0.1:3000:3000"]
+    # it listens on every address of its own container, or the published port reaches nothing
+    assert "-h 0.0.0.0" in values(UI, "Container", "Exec")[0]
+
+
+def test_no_unit_holds_a_cookie_value_or_a_project() -> None:
+    for unit in (DAEMON, UI):
+        for _, key, value in unit_lines(unit):
+            if key == "Environment":
+                assert not re.match(r"(ESPN_S2|SWID|LEAGUE_ID|FO_BQ_PROJECT)=", value), value
+
+
+def test_the_entrypoint_copies_the_images_instance_file_then_execs() -> None:
+    script = DEPLOY / "entrypoint.sh"
+    assert os.access(script, os.X_OK)
+    text = script.read_text()
+    assert 'cp /app/deploy/dagster.yaml "$DAGSTER_HOME/dagster.yaml"' in text
+    assert 'exec "$@"' in text
+
+
+# --- the pull ---------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def fake_rsync(tmp_path: Path) -> tuple[dict[str, str], Path]:
+    """A `rsync` first on PATH that records its arguments and exits as FAKE_RSYNC_EXIT says."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    record = tmp_path / "rsync.args"
+    stub = bin_dir / "rsync"
+    stub.write_text(
+        '#!/bin/sh\nprintf "%s\\n" "$@" > "$FAKE_RSYNC_RECORD"\nexit "${FAKE_RSYNC_EXIT:-0}"\n'
+    )
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "FAKE_RSYNC_RECORD": str(record),
+    }
+    return env, record
+
+
+def pull(env: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(DEPLOY / "pull_landing.sh"), *args], env=env, capture_output=True, text=True
+    )
+
+
+def test_the_pull_adds_and_never_deletes(
+    fake_rsync: tuple[dict[str, str], Path], tmp_path: Path
+) -> None:
+    env, record = fake_rsync
+    result = pull(env, "front-office@mothership:./", str(tmp_path / "copy" / "raw"))
+    assert result.returncode == 0, result.stderr
+    args = record.read_text().splitlines()
+    assert "--archive" in args and "--ignore-existing" in args
+    assert "--exclude" in args and "*.tmp-*" in args
+    assert not any(a.startswith("--delete") for a in args)
+    assert args[-2:] == ["front-office@mothership:./", str(tmp_path / "copy" / "raw") + "/"]
+
+
+def test_the_pull_refuses_an_option_that_deletes(
+    fake_rsync: tuple[dict[str, str], Path], tmp_path: Path
+) -> None:
+    env, record = fake_rsync
+    for option in ("--delete", "--delete-after", "--remove-source-files"):
+        result = pull(env, "src:./", str(tmp_path / "raw"), option)
+        assert result.returncode == 2, option
+        assert not record.exists(), "rsync must not run"
+
+
+def test_last_pull_ok_is_written_after_a_good_run_and_not_after_a_failed_one(
+    fake_rsync: tuple[dict[str, str], Path], tmp_path: Path
+) -> None:
+    env, _ = fake_rsync
+    marker = tmp_path / "last_pull_ok"
+    failed = pull({**env, "FAKE_RSYNC_EXIT": "23"}, "src:./", str(tmp_path / "raw"))
+    assert failed.returncode == 23
+    assert not marker.exists()
+    good = pull(env, "src:./", str(tmp_path / "raw"))
+    assert good.returncode == 0
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\n", marker.read_text())
+
+
+def test_a_dry_run_leaves_no_marker(
+    fake_rsync: tuple[dict[str, str], Path], tmp_path: Path
+) -> None:
+    env, _ = fake_rsync
+    assert pull(env, "src:./", str(tmp_path / "raw"), "-n").returncode == 0
+    assert not (tmp_path / "last_pull_ok").exists()
