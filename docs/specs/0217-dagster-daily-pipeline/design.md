@@ -253,3 +253,25 @@ The real-season run (task 5) is the acceptance test; the fixtures cannot show a 
   environment of its processes and so of every command; that is the file rule 3 names, and nothing
   logs a value (task 5's scan), but a host with the credentials elsewhere should start Dagster
   from a directory with no `.env`.
+- **2026-11-17 (task 7): R4.3 measured on arm64 `mothership`; the run's key gained write access
+  to the five model datasets; two defects found only on the BigQuery target.**
+  - *Memory.* `FO_WAREHOUSE=bigquery`, 2 OCPU, 11.9 GB, summed PSS once a second over the whole
+    process tree: daemon, UI and code server idle **674 MB** (7 processes); with a full `daily`
+    run beside them (fetches, `upload`, the 579-node `dbt build`, 17 processes, 9 min 30 s)
+    **1,395 MB**. Under R4.3's 2 GB; no return to the owner is needed.
+  - *Permissions (owner's instruction, 2026-11-17; ADR 0124 starts the key at BigQuery User and
+    adds what a refused step proves).* The build was refused creating tables and routines in
+    `main` and `staging`. The key's service account (`fo-spike216`) was given dataset access
+    `WRITER` (the data-editor rights) on exactly the five datasets the build writes: `main`
+    (seeds and the three functions), `staging`, `intermediate`, `marts`, `reconciliation`; one
+    access entry added to each, nothing removed, no project-level role. It already had
+    BigQuery User on the project and `WRITER` on `raw`.
+  - *Defect: the BigQuery manifest has models that read the `raw.*` sources,* so 15 sources
+    shared the key `raw_in_warehouse` and dagster-dbt refused to load. Fixed with
+    `enable_duplicate_source_asset_keys`.
+  - *Defect: two lineup tests depend on the dbt function `sum_in_order` on the BigQuery target,*
+    and dagster-dbt 0.29.30 crashes on a function parent. Fixed by handing Dagster a manifest
+    copy without function parents of tests; dbt still runs every test.
+  - Neither defect shows on the DuckDB manifest, so no DuckDB run or fixture test could find
+    them: the first showed as a failed load, the second only in a real BigQuery build.
+
