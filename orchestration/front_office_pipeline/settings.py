@@ -5,7 +5,7 @@ Why one module: the landing root must be one path for the CLI (`--raw-root`), fo
 dbt's capture views read the files of another. Every place that needs it asks here. Each
 function takes `environ` (default `os.environ`) so a test names its own settings.
 
-Nothing here reads a file or a credential: it reads six environment variables.
+Nothing here reads a file or a credential: it reads seven environment variables.
 """
 
 from __future__ import annotations
@@ -74,6 +74,11 @@ def duckdb_path(*, environ: Mapping[str, str] | None = None) -> Path:
         # `load --db` resolves it in the repository root, dbt's profile in `dbt/`.
         raise ValueError(f"FO_DUCKDB_PATH must be an absolute path, not {named!r}")
     return path
+
+
+def daily_cron_override(*, environ: Mapping[str, str] | None = None) -> str | None:
+    """`FO_DAILY_CRON` for a rehearsal (spec 0218, R1.7); None when unset or empty."""
+    return _env(environ).get("FO_DAILY_CRON") or None
 
 
 def dbt_target(*, environ: Mapping[str, str] | None = None) -> str:
