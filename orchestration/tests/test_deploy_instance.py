@@ -59,7 +59,18 @@ def test_the_instance_keeps_dagsters_default_sqlite_storage() -> None:
     assert not {"storage", "run_storage", "event_log_storage", "schedule_storage"} & set(config)
 
 
-def test_the_workspace_loads_the_code_location_module() -> None:
-    """R1.3. Catches a workspace that names another module, or a file path."""
+def test_the_workspace_loads_the_code_location_from_the_shared_code_server() -> None:
+    """R1.3, ADR 0138. Catches a workspace that loads its own module (a code server per process, on
+    a unix socket the other process cannot reach), or one that names another host or location."""
     workspace = yaml.safe_load((DEPLOY / "workspace.yaml").read_text())
-    assert workspace == {"load_from": [{"python_module": "front_office_pipeline"}]}
+    assert workspace == {
+        "load_from": [
+            {
+                "grpc_server": {
+                    "host": "127.0.0.1",
+                    "port": 4266,
+                    "location_name": "front_office_pipeline",
+                }
+            }
+        ]
+    }

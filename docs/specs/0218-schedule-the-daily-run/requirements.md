@@ -81,7 +81,7 @@ Explicitly out of scope. Work that drifts here is escalated, not done.
 
 ### R2. The host runs it
 
-- R2.1 THE SYSTEM SHALL run Dagster's daemon and UI as two rootless Podman containers of one image,
+- R2.1 THE SYSTEM SHALL run Dagster's code server, daemon and UI as three rootless Podman containers of one image (ADRs 0133, 0138),
   as the `front-office` user, started by that user's systemd, restarted after a crash and
   after the host reboots, with no login session open (ADR 0133).
 - R2.2 THE SYSTEM SHALL give each container a memory limit, such that the measured peak of a

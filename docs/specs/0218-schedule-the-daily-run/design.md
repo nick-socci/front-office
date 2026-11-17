@@ -4,24 +4,33 @@ Issue: #218 · Requirements: [requirements.md](requirements.md) · Tasks: [tasks
 
 ## Overview
 
-On `mothership`, as the `front-office` user, two Podman containers built from one image run
-Dagster: the **daemon** (which holds the schedule and launches each run as a subprocess) and the
-**UI**. Systemd's user instance starts and restarts them (two Quadlet `.container` files kept in
-`deploy/`), and `loginctl enable-linger` keeps them up with nobody logged in. The code location
-gains two schedules: `daily` at 06:00 America/New_York from March 1 to October 31, and the id map
+> **Amended 2026-11-17 (ADR 0138):** the first rehearsal showed that two containers each loading the
+> code on their own unix socket cannot cancel each other's runs. There are now **three** containers: a
+> code server that loads the code once and in which runs execute, and the daemon and the UI, which
+> connect to it over the host's loopback. The text below says three where it first said two; the
+> *Amendments* entry has the evidence.
+
+On `mothership`, as the `front-office` user, three Podman containers built from one image run
+Dagster: the **code server** (it loads the code location once, and every run executes in it), the
+**daemon** (which holds the schedules and the run queue and launches runs through the code server) and
+the **UI**. Systemd's user instance starts and restarts them (three Quadlet `.container` files kept
+in `deploy/`), and `loginctl enable-linger` keeps them up with nobody logged in.
+The code location gains two schedules: `daily` at 06:00 America/New_York from March 1 to October 31, and the id map
 on Mondays at 05:00 in the same months. Both start `RUNNING`, so a new instance needs no click.
 The instance's own settings (`deploy/dagster.yaml`) allow one run at a time and end a run after two
-hours; a missed stretch of ticks already becomes one run (C2). The landing zone, the ESPN `.env` and the Google key
-move from `ubuntu`'s home to `front-office`'s, under a new service account. The NAS pulls the
-landing zone hourly over the tailnet with a key that can only read it, and its existing 03:00
-Hyper Backup job carries the pulled folder to the external drive.
+hours; a missed stretch of ticks already becomes one run (C2). The landing zone, the ESPN `.env` and
+the Google key move from `ubuntu`'s home to `front-office`'s, under a new service account, and only the
+code server's container mounts them. The NAS pulls the landing zone hourly over the tailnet with a key
+that can only read it, and its existing 03:00 Hyper Backup job carries the pulled folder to the
+external drive.
 
 ```mermaid
 flowchart LR
   subgraph vm["mothership, user front-office"]
     subgraph units["Quadlet .container units (systemd user, linger)"]
-      dae["daemon<br/>schedules · launches runs<br/>memory limit"]
-      ui["UI<br/>published on host 127.0.0.1 only<br/>memory limit"]
+      code["code server 127.0.0.1:4266<br/>loads the code once<br/>runs execute here"]
+      dae["daemon<br/>schedules · run queue"]
+      ui["UI 127.0.0.1:3000"]
     end
     inst[("dagster_home<br/>SQLite instance")]
     lz[("data/raw<br/>landing zone<br/>(the one writer)")]
@@ -29,10 +38,13 @@ flowchart LR
   end
   dae --- inst
   ui --- inst
-  dae -- "fetch · upload · dbt build" --> lz
-  sec -. "read-only mounts, daemon only" .-> dae
-  dae --> bq[("BigQuery")]
-  espn["ESPN · MLB · SFBB"] --> dae
+  code --- inst
+  dae -- "launch" --> code
+  ui -- "load · cancel" --> code
+  code -- "fetch · upload · dbt build" --> lz
+  sec -. "read-only mounts, code server only" .-> code
+  code --> bq[("BigQuery")]
+  espn["ESPN · MLB · SFBB"] --> code
   nas["NAS (diskstation)"] -- "rsync pull, hourly, restricted key" --> lz
   nas -- "Hyper Backup 03:00" --> usb[("external drive")]
   laptop["laptop"] -- "rsync pull, on demand" --> lz
@@ -63,6 +75,7 @@ All run on 2026-11-17 unless another date is given.
 | C16 | The latest start of a played 2026 regular-season game was 22:15 ET; 103 of 2,430 started at or after 22:00 ET. | DuckDB over `data/raw/mlb/schedule/season=2026/game_type=R/fetched_at=20261116T201325Z/payload.json`: games with `gameType = 'R'` and `codedGameState = 'F'`, `gameDate` converted to America/New_York | 2,430 games (2026-03-25 to 2026-09-27); latest start 22:15 ET; 103 at or after 22:00 ET. A game of three and a half hours from 22:15 ends about 01:45 ET | 2026-11-17 |
 | C17 | `mothership` has `rrsync` and a newer rsync than the NAS, and what listens on it is sshd, rpcbind and Tailscale. | `ssh mothership 'which rrsync; rsync --version; ss -tlnp'` | `/usr/bin/rrsync`; rsync 3.2.7 (NAS 3.1.2, both protocol 31); listeners: DNS stubs on loopback, sshd on 22 (0.0.0.0 and ::), rpcbind on 111, Tailscale's own ports on its interface | 2026-11-17 |
 | C18 | `front-office`'s home is mode 0700 and `/srv` is root's. | `ssh mothership 'ls -ld ~ /srv'` | `drwx------ front-office`; `/srv` is `root:root` 0755 | 2026-11-17 |
+| C20 | A run launched through the UI could not be cancelled, and its worker ran on, because each process's code server listens on a unix socket in its own container's `/tmp`. | on `mothership`, rehearsal 2026-11-17: `launchRun` then `terminateRun` over the UI's GraphQL; `podman exec front-office-daemon ls -la /tmp` and the same in the UI container | `PythonError: DagsterUserCodeUnreachableError: Could not reach user code server. gRPC Error code: UNAVAILABLE`; the run stayed `CANCELING`, its `front-office upload` and `dbt build` ran to the end; sockets `tmp…` (type `s`) in the daemon container's `/tmp`, none in the UI's | 2026-11-17 |
 | C19 | Podman 4.9.3's Quadlet loads `.container` files, ignores `.pod`, rejects `Memory=` and accepts `PodmanArgs=--memory=` and `WorkingDir=`. | on `mothership`: `QUADLET_UNIT_DIRS=<scratch> /usr/lib/systemd/system-generators/podman-system-generator --user --dryrun` over a `.container` with `PodmanArgs=--memory=3g`, `WorkingDir=/dagster_home`, `PublishPort=127.0.0.1:3000:3000`, a `.pod`, and a `.container` with `Memory=3g` | "Loading source unit file" for the two `.container` files only; `converting "m.container": unsupported key 'Memory' in group 'Container'`; the first unit's `ExecStart` held `-w=/dagster_home`, `--publish 127.0.0.1:3000:3000`, `--memory=3g`; `Restart=always` and `WantedBy=default.target` passed through. (The design review, F1 and F2, said so from the 4.9.3 reference; this is the generator itself) | 2026-11-17 |
 
 C17 shows rpcbind on port 111, beside sshd and Tailscale. ADR 0126 says no public port is open (the
@@ -173,6 +186,7 @@ second copy, while the pull succeeds, from up to a day to up to an hour, for a l
 | ADR | Decision | Status |
 |---|---|---|
 | [0133](../../adr/0133-dagster-runs-as-two-containers-under-the-run-user.md) | Dagster runs as two containers under `front-office`, from units kept in the repository | proposed |
+| [0138](../../adr/0138-dagsters-code-runs-in-its-own-container-and-the-daemon-and-ui-connect-to-it.md) | Dagster's code runs in its own container, and the daemon and the UI connect to it (amends 0133) | accepted: the owner chose it during the build |
 | [0134](../../adr/0134-daily-runs-at-06-00-et-from-march-to-october-one-at-a-time.md) | `daily` runs at 06:00 ET from March 1 to October 31, one at a time, with a two-hour limit | proposed |
 | [0135](../../adr/0135-the-daily-run-has-its-own-google-service-account.md) | The daily run has its own Google service account, and the spike account is retired | proposed: the owner's |
 | [0136](../../adr/0136-the-id-map-is-refreshed-weekly-on-its-own-schedule.md) | The id map is refreshed weekly on its own schedule | proposed |
@@ -203,8 +217,7 @@ them.
 default), `runs.max_concurrent_runs: 1`, run monitoring enabled with a two-hour limit, and telemetry
 off. It sets nothing for catching up: neither schedule has a partition set, so after an outage each
 launches its latest tick only (C2). With one concurrent run, a second `daily` queues behind the
-first; the instance's run coordinator, not a lock, holds it. `deploy/workspace.yaml` names the
-module `front_office_pipeline`, loaded in each process.
+first; the instance's run coordinator, not a lock, holds it. `deploy/workspace.yaml` points each process at the code server's gRPC address (ADR 0138).
 
 **The image.** Python 3.13 on arm64 with `uv sync --locked --group orchestration --group bigquery`,
 `dbt deps` run at build, and the repository at the built commit, whose hash is an image label
@@ -214,22 +227,26 @@ the build context cannot carry a credential. The build is always `podman build -
 -t <tag> .` from the root, and the test reads the root file and the command in the runbook. The entrypoint is `dagster-daemon run` or
 `dagster-webserver`, chosen by the unit.
 
-**The containers.** Two `.container` files (C19). Both set `FO_WAREHOUSE=bigquery`, `FO_BQ_PROJECT`,
-`FO_LANDING_ROOT=/data/raw` and `DAGSTER_HOME=/dagster_home`, and `WorkingDir=/dagster_home` in
-`[Container]` (not `WorkingDirectory=`, which is systemd's, for the service on the host), a
-directory with no `.env` (R2.4, C14). Task 6 reads the running process's directory with `podman exec
-… pwd`, not the file. The **daemon** mounts: the host's `data/` at `/data` read-write (one level above the
-landing root, because the writer lock sits beside it: 0216 *Lessons*), `dagster_home` read-write,
-`secrets/.env` at `/app/.env` read-only (the CLI, run in `/app`, finds it itself: C14) and
-`secrets/google-key.json` read-only, named by `GOOGLE_APPLICATION_CREDENTIALS`. The **UI** mounts
-`dagster_home` and nothing else. `dagster-webserver` listens on `0.0.0.0` inside its container, and
-the unit publishes it as `PublishPort=127.0.0.1:3000:3000`, so on the host only loopback holds the
-port and only an SSH tunnel reaches it (R2.3); a binding to the container's own loopback would not be
-reachable through the published port. It needs no credential, because `dbt parse` for the BigQuery target does not (C15). Each
-has `PodmanArgs=--memory=` set from task 6's measurement; the provisional values are 3 GB for the daemon (1.4 GB
-was measured for daemon, UI and a run together, C9) and 1 GB for the UI.
-`Restart=always`, and the units are `WantedBy=default.target`, which with linger starts them at
-boot (C4).
+**The containers.** Three `.container` files (C19, ADR 0138), all on the host's network
+(`Network=host`) and all with `WorkingDir=/dagster_home` in `[Container]` (not `WorkingDirectory=`,
+which is systemd's, for the service on the host), a directory with no `.env` (R2.4, C14); the
+entrypoint copies the instance file in. The **code server** runs `dagster api grpc -m
+front_office_pipeline -h 127.0.0.1 -p 4266`, and every run executes as its subprocess, so it is the one
+container with `FO_WAREHOUSE=bigquery`, `FO_BQ_PROJECT`, `FO_LANDING_ROOT=/data/raw`, the host's
+`data/` at `/data` read-write (one level above the landing root, because the writer lock sits beside
+it: 0216 *Lessons*), `dagster_home`, `dbt_target`, `secrets/.env` at `/app/.env` read-only (the CLI, run
+in `/app`, finds it itself: C14) and `secrets/google-key.json` read-only, named by
+`GOOGLE_APPLICATION_CREDENTIALS`. The schedules are defined in the code location, so
+`FO_DAILY_CRON` is read here too. The **daemon** runs `dagster-daemon run -w
+/app/deploy/workspace.yaml` and the **UI** `dagster-webserver -h 127.0.0.1 -p 3000 -w …`: each mounts
+`dagster_home` and nothing else, and `workspace.yaml` points both at the code server's
+`grpc_server` (127.0.0.1:4266). The UI's SSH tunnel is the one way in (R2.3). Neither needs a
+credential, because `dbt parse` for the BigQuery target does not (C15), and they never load the code
+themselves. Each has `PodmanArgs=--memory=` and `--init` set from task 6's measurement; the provisional
+limits are 3 GB for the code server (1.4 GB was measured for daemon, UI and a run together, C9), 1 GB for
+the daemon and 1 GB for the UI. The daemon and the UI start after the code server and show the location
+as errored for a few seconds until it is up. `Restart=always`, and the units are
+`WantedBy=default.target`, which with linger starts them at boot (C4).
 
 **The host's layout.** Under `/home/front-office`: `src/front-office` (a clone of the public
 repository, at the commit being built), `data/raw` (the landing zone; `data/raw.lock` and
@@ -283,7 +300,7 @@ issue. If the CLI cannot say, the Oracle console does.
 | R1.3, R1.4 | task 6 on the host: stop the daemon across 3 ticks (`FO_DAILY_CRON` each minute), start it, see 1 run and the log line "has no partition set, so not trying to catch up"; launch a second `daily` during one and see it queued | the settings are in the file but not in effect |
 | R2.4 | a test that reads the root `.containerignore` (excludes `.env`, `data`, `*.json` keys, `.git`) and the Quadlet units (the `.env` and key mounts are read-only, the UI unit mounts neither, no `Environment=` holds a cookie name's value, `WorkingDir=` is not the repository), and the dry-run of C19's generator over them | a credential in the build context; a writable credential mount; an unsupported key (C19) | a credential in the build context; a writable credential mount |
 | R2.1, R2.2, R2.6 | task 6: kill the daemon's process (it restarts); reboot `mothership`, `systemctl --user` shows both units up with nobody logged in; peak PSS per container from `measure.sh` against its `--memory` limit | a unit that does not start at boot; a limit under the real peak |
-| R2.3 | `ss -tlnp` on `mothership` after the units are up; the UI reached through an SSH tunnel to `127.0.0.1:3000`; a curl of port 3000 at `mothership`'s tailnet address from the laptop, which must be refused | a published port; a UI that is up but not reachable through the tunnel |
+| R2.3 | `ss -tlnp` on `mothership` after the units are up (3000 and 4266 on 127.0.0.1 only); the UI reached through an SSH tunnel to `127.0.0.1:3000`; a curl of port 3000 at `mothership`'s tailnet address from the laptop, which must be refused | a published port; a UI that is up but not reachable through the tunnel |
 | R3.1, R3.4 | the scan of 0217's task 5 over `dagster_home`, `podman image history`, the units and `journalctl --user`, and `stat` of the files | a cookie or key in the instance, the image or a log; a mode wider than 0400 |
 | R3.2 | `gcloud` (the owner's) listing the account's roles and each dataset's access entries; a `dbt build` and an `upload` as it | a role missing (a refused step) or too many (another dataset, a project role) |
 | R4.1 | counts per endpoint and `repair --dry-run --deep` as the Expected values say | a capture lost in the move |
@@ -421,3 +438,20 @@ this moves scope, a no-go or an ADR decision.
 - **dbt's `target/`.** dagster-dbt writes each run's results into its own subdirectory of the volume
   (`front_office_dbt-<run id prefix>-<hash>/run_results.json`), not into `target/` itself: the bytes
   billed of a run are read there (#220).
+
+### 2026-11-17: the second rehearsal changes the layout to three containers (ADR 0138)
+
+- **Found (C20).** A run launched through the UI's GraphQL started and ran; cancelling it returned
+  `DagsterUserCodeUnreachableError: Could not reach user code server. gRPC Error code: UNAVAILABLE`, the
+  run stayed `CANCELING`, and its `front-office upload` and `dbt build` ran on to the end (another full
+  16 GB build). Each of the daemon's and the UI's processes started its own code server on a unix socket
+  in its own container's `/tmp`; the UI could not reach the daemon's. A run cancelled with
+  `MARK_AS_CANCELED_IMMEDIATELY` (as two of the first rehearsal's were) only changes its status.
+- **Decided (owner, 2026-11-17, AskUserQuestion; ADR 0138 amends 0133):** a third container, a shared
+  code server on the host's loopback, loaded by both through `grpc_server`. The owner's alternatives
+  were keeping two containers and cancelling from the daemon's, or one container.
+- **Changes.** `deploy/workspace.yaml`; a third unit; the credentials and the landing zone move to the
+  code server's unit, away from the daemon's; `Network=host` and loopback binds replace `PublishPort`;
+  tests follow. The runbook says which container to restart for what.
+- The first rehearsal's numbers (memory, run time, bytes billed) were for the two-container shape. The
+  memory is measured again on the three.

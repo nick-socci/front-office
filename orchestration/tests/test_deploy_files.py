@@ -16,14 +16,17 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 
 from front_office_pipeline import settings
 
 ROOT = settings.REPO_ROOT
 DEPLOY = ROOT / "deploy"
 UNITS = DEPLOY / "quadlet"
+CODE = UNITS / "front-office-code.container"
 DAEMON = UNITS / "front-office-daemon.container"
 UI = UNITS / "front-office-ui.container"
+ALL_UNITS = (CODE, DAEMON, UI)
 
 # The [Container] keys Podman 4.9.3's Quadlet accepted on `mothership` (spec C19) or documents
 # since 4.4. `Memory` and the `[Pod]` group are not among them.
@@ -35,7 +38,7 @@ ACCEPTED_CONTAINER_KEYS = {
     "Environment",
     "EnvironmentFile",
     "Volume",
-    "PublishPort",
+    "Network",
     "PodmanArgs",
 }
 # `front-office.env` (the non-secret EnvironmentFile) is allowed; the ESPN `.env` is not.
@@ -105,7 +108,7 @@ def test_containerfile_copies_no_credential_and_labels_its_commit() -> None:
 
 
 def test_units_only_use_keys_podman_4_9_accepts() -> None:
-    for unit in (DAEMON, UI):
+    for unit in ALL_UNITS:
         groups = {g for g, _, _ in unit_lines(unit)}
         assert groups <= {"Unit", "Container", "Service", "Install"}, "Quadlet 4.9 has no [Pod]"
         keys = {k for g, k, _ in unit_lines(unit) if g == "Container"}
@@ -115,7 +118,7 @@ def test_units_only_use_keys_podman_4_9_accepts() -> None:
 
 
 def test_each_unit_has_a_memory_limit_a_restart_and_starts_at_boot() -> None:
-    for unit in (DAEMON, UI):
+    for unit in ALL_UNITS:
         limits = [v for v in values(unit, "Container", "PodmanArgs") if v.startswith("--memory=")]
         assert len(limits) == 1
         # dagster-daemon as PID 1 does not reap children: the first rehearsal on `mothership`
@@ -125,33 +128,53 @@ def test_each_unit_has_a_memory_limit_a_restart_and_starts_at_boot() -> None:
         assert values(unit, "Install", "WantedBy") == ["default.target"]
 
 
-def test_the_daemon_mounts_the_credentials_read_only() -> None:
-    mounts = values(DAEMON, "Container", "Volume")
+def test_the_code_server_mounts_the_credentials_read_only() -> None:
+    """Runs execute in the code server's container (ADR 0138), so it is the one that holds them."""
+    mounts = values(CODE, "Container", "Volume")
     for needle in ("/app/.env", "/run/secrets/google-key.json"):
         matching = [m for m in mounts if m.split(":")[1] == needle]
         assert len(matching) == 1, needle
         assert matching[0].endswith(":ro"), f"{needle} must be mounted read-only"
-    environment = values(DAEMON, "Container", "Environment")
+    environment = values(CODE, "Container", "Environment")
     assert "GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/google-key.json" in environment
     assert "FO_LANDING_ROOT=/data/raw" in environment
     # the landing zone is mounted one level above its root: the writer lock sits beside it
     assert any(m.startswith("%h/data:/data:") for m in mounts)
 
 
-def test_the_ui_unit_sees_no_credential_and_publishes_on_loopback_only() -> None:
-    text = UI.read_text()
-    code = "\n".join(
-        line for line in text.splitlines() if line.strip() and not line.strip().startswith("#")
-    )
-    for word in CREDENTIAL_WORDS:
-        assert word not in code, f"the UI unit must not mention {word}"
-    assert values(UI, "Container", "PublishPort") == ["127.0.0.1:3000:3000"]
-    # it listens on every address of its own container, or the published port reaches nothing
-    assert "-h 0.0.0.0" in values(UI, "Container", "Exec")[0]
+def test_the_daemon_and_the_ui_see_no_credential_and_listen_on_loopback_only() -> None:
+    for unit in (DAEMON, UI):
+        code = "\n".join(
+            line
+            for line in unit.read_text().splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        )
+        for word in CREDENTIAL_WORDS:
+            assert word not in code, f"{unit.name} must not mention {word}"
+        assert "FO_LANDING_ROOT" not in code and "/data" not in code
+    # on the host's network, the bind address is what keeps a process off every other address
+    assert "-h 127.0.0.1" in values(UI, "Container", "Exec")[0]
+    assert "-h 127.0.0.1" in values(CODE, "Container", "Exec")[0]
+    assert "PublishPort" not in "".join(u.read_text() for u in ALL_UNITS)
+
+
+def test_the_three_units_share_the_hosts_loopback_and_the_code_servers_port() -> None:
+    """ADR 0138. Catches a daemon or UI that loads its own code (code servers on unix sockets that
+    cannot reach each other's runs), or a port that differs between the server and the workspace."""
+    for unit in ALL_UNITS:
+        assert values(unit, "Container", "Network") == ["host"]
+    workspace = yaml.safe_load((DEPLOY / "workspace.yaml").read_text())
+    server = workspace["load_from"][0]["grpc_server"]
+    exec_line = values(CODE, "Container", "Exec")[0]
+    assert f"-p {server['port']}" in exec_line
+    assert f"--location-name {server['location_name']}" in exec_line
+    for unit in (DAEMON, UI):
+        assert "-w /app/deploy/workspace.yaml" in values(unit, "Container", "Exec")[0]
+        assert "front-office-code.service" in values(unit, "Unit", "After")[0]
 
 
 def test_no_unit_holds_a_cookie_value_or_a_project() -> None:
-    for unit in (DAEMON, UI):
+    for unit in ALL_UNITS:
         for _, key, value in unit_lines(unit):
             if key == "Environment":
                 assert not re.match(r"(ESPN_S2|SWID|LEAGUE_ID|FO_BQ_PROJECT)=", value), value

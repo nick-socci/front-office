@@ -1,7 +1,7 @@
 # The daily run on `mothership` — runbook
 
-How to operate what spec 0218 deploys: Dagster's daemon and UI as two containers under the
-`front-office` user (ADR 0133), the schedule (ADRs 0134, 0136), the run's Google identity (ADR 0135)
+How to operate what spec 0218 deploys: Dagster's code server, daemon and UI as three containers under
+the `front-office` user (ADRs 0133, 0138), the schedule (ADRs 0134, 0136), the run's Google identity (ADR 0135)
 and the NAS's pull (ADR 0137). **Draft**: finished after the production run has shown each step
 (spec 0218, tasks 4 and 9). A command here that no one has run on the host says so.
 
@@ -20,15 +20,19 @@ Everything is under `/home/front-office` (mode 0700), as the `front-office` user
 | `dbt_target/` | dbt's `target/` (`run_results.json`, the bytes billed) | |
 | `secrets/.env`, `secrets/google-key.json` | the ESPN cookies, the run's Google key | 0400, in a 0700 directory |
 | `config/front-office.env` | `FO_BQ_PROJECT=<the project>`: not secret, and not in the public repository | |
-| `.config/containers/systemd/` | the two Quadlet units, copied from `deploy/quadlet/` | |
+| `.config/containers/systemd/` | the three Quadlet units (`front-office-code`, `-daemon`, `-ui`), copied from `deploy/quadlet/` | |
 
 ## See the schedule and the last run
 
 ```bash
-ssh mothership 'systemctl --user status front-office-daemon front-office-ui --no-pager'
+ssh mothership 'systemctl --user status front-office-code front-office-daemon front-office-ui --no-pager'
 ssh mothership 'podman exec front-office-daemon dagster schedule list -w /app/deploy/workspace.yaml'
 ssh -L 3000:127.0.0.1:3000 mothership        # then http://localhost:3000 : runs, checks, lineage
 ```
+
+Which container does what: the **code server** loads the code and is where every run executes (it holds
+the credentials and the landing zone); the **daemon** holds the schedules and the run queue; the **UI**
+shows and controls them. All three listen on the host's loopback only (4266, none, 3000).
 
 A day's run is healthy when the run is `SUCCESS` **and** each fetch asset's `fetch_complete` check
 passed: Dagster does not fail a run for a failed non-blocking check (ADR 0129, 0217 *Amendments*).
@@ -41,8 +45,9 @@ ssh mothership 'podman exec front-office-daemon dagster job launch -w /app/deplo
 ```
 
 `launch` queues the run for the daemon, so the instance's one-run-at-a-time limit applies (a second
-`daily` waits for the first). Do not use `dagster job execute` against production: it would run
-beside the daemon and bypass the limit.
+`daily` waits for the first); the UI's Launchpad does the same. Do not use `dagster job execute`
+against production: it would run beside the daemon and bypass the limit. To stop a run, use the UI's
+Terminate: it reaches the code server, which ends the worker (ADR 0138).
 
 ## Deploy a commit
 
@@ -57,8 +62,8 @@ podman build -f deploy/Containerfile --build-arg GIT_COMMIT=$(git rev-parse HEAD
 podman tag localhost/front-office:$sha localhost/front-office:current
 cp deploy/quadlet/*.container ~/.config/containers/systemd/
 systemctl --user daemon-reload
-systemctl --user restart front-office-daemon front-office-ui
-podman inspect front-office-daemon --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+systemctl --user restart front-office-code front-office-daemon front-office-ui
+podman inspect front-office-code --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
 ```
 
 The last line prints the running commit. The landing zone and the instance are volumes: a deploy
@@ -72,36 +77,37 @@ restart both units, as above.
 ## Rehearse a run at another time
 
 `FO_DAILY_CRON`, when set, replaces the daily schedule's cron (the id map's has no override). The
-daemon's unit already reads `~/config/front-office.env`, so the rehearsal is a line in it. (A
+schedule is defined in the code location, so the **code server** reads it; its unit already reads
+`~/config/front-office.env`, so the rehearsal is a line in it. (A
 systemd drop-in does not work: Podman 4.9's Quadlet ignores `.container.d` drop-ins, and a `[Service]
 Environment=` would reach Podman, not the container: spec 0218 *Amendments*, 2026-11-17.)
 
 ```bash
 cp ~/config/front-office.env /tmp/fo-config.bak
 echo "FO_DAILY_CRON=$(TZ=America/New_York date -d '+3 minutes' +'%-M %-H') * * *" >> ~/config/front-office.env
-systemctl --user restart front-office-daemon             # the daemon reads its environment at start
+systemctl --user restart front-office-code front-office-daemon   # read at start; ends a run in flight
 # ... the run starts at that minute. Remove the line AT ONCE, or it fires every day at that minute:
 cp /tmp/fo-config.bak ~/config/front-office.env          # editing the file does not touch the running daemon
 # the next restart (a deploy, a reboot) then has the real cron; check it:
 podman exec front-office-daemon dagster schedule list -w /app/deploy/workspace.yaml
 ```
 
-Never restart the daemon while the rehearsal run is going: it would end the run. A cron that fires
+Never restart the code server while the rehearsal run is going: it would end the run. A cron that fires
 every minute queues a run a minute behind a running one (one at a time, ADR 0134); the first rehearsal
 (2026-11-17) used one to show that, and cancelled what it queued (`terminateRun` in the UI's GraphQL).
 
 ## Replace the Google key (each off-season, ADR 0124; the owner's)
 
 The owner creates the new key for the run's service account, puts it at
-`~/secrets/google-key.json.new` (mode 0400), moves it over `google-key.json`, and restarts the daemon
-(`systemctl --user restart front-office-daemon`; a replaced file is a new inode, which a bind mount
+`~/secrets/google-key.json.new` (mode 0400), moves it over `google-key.json`, and restarts the code server
+(`systemctl --user restart front-office-code`; a replaced file is a new inode, which a bind mount
 does not follow). Launch `daily` by hand and see the upload and the build succeed. Only then does
 the owner delete the old key.
 
 ## Replace the ESPN cookies (when `fetch_complete` fails with "cookies expired")
 
 The owner edits `~/secrets/.env` (`ESPN_S2`, `SWID`), writing in place or moving a new file over it,
-then restarts the daemon, then launches `daily`. Never paste a value into an issue, a log or a chat.
+then restarts the code server, then launches `daily`. Never paste a value into an issue, a log or a chat.
 
 ## Stop and start the schedule
 

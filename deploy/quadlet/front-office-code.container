@@ -1,0 +1,50 @@
+# Dagster's code server on `mothership` (spec 0218, ADRs 0133 and 0138): it loads the code location
+# once and serves it over host loopback (127.0.0.1:4266) to the daemon and the UI. Runs execute here,
+# as subprocesses of the server, so this is the only container that sees the ESPN cookies, the Google
+# key and the landing zone.
+#
+# Install as the `front-office` user: copy deploy/quadlet/*.container to
+# ~/.config/containers/systemd/, then `systemctl --user daemon-reload` and start the three units
+# (the code server first: the daemon and the UI start after it).
+# Podman 4.9's Quadlet has no `Memory=` and no pods (spec C19), so the limit is `PodmanArgs`, and the
+# container's directory is `WorkingDir` (not systemd's `WorkingDirectory`). The working directory
+# holds no `.env`: Dagster loads the one in its own directory over its environment (0217
+# Amendments, 2026-11-16); the CLI, run in /app, finds /app/.env itself.
+# `Network=host` puts the three on the host's loopback, where they find each other without a
+# network of their own; nothing here listens on another address.
+#
+# Host layout (the runbook): ~/data (the landing zone is ~/data/raw, with its locks beside it),
+# ~/dagster_home, ~/dbt_target, ~/secrets (0700: `.env` and `google-key.json`, 0400) and
+# ~/config/front-office.env (not secret: FO_BQ_PROJECT=<the project>).
+
+[Unit]
+Description=Front Office: Dagster code server (runs execute here)
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=localhost/front-office:current
+ContainerName=front-office-code
+WorkingDir=/dagster_home
+Exec=dagster api grpc -m front_office_pipeline --location-name front_office_pipeline -h 127.0.0.1 -p 4266
+EnvironmentFile=%h/config/front-office.env
+Environment=FO_WAREHOUSE=bigquery
+Environment=FO_LANDING_ROOT=/data/raw
+Environment=GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/google-key.json
+Volume=%h/data:/data:rw
+Volume=%h/dagster_home:/dagster_home:rw
+Volume=%h/dbt_target:/app/dbt/target:rw
+Volume=%h/secrets/.env:/app/.env:ro
+Volume=%h/secrets/google-key.json:/run/secrets/google-key.json:ro
+Network=host
+PodmanArgs=--memory=3g
+# PID 1 must reap its children: a run leaves zombies otherwise (spec 0218 *Amendments*).
+PodmanArgs=--init
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target
