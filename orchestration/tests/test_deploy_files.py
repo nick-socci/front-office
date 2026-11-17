@@ -259,12 +259,24 @@ def test_last_pull_ok_is_written_after_a_good_run_and_not_after_a_failed_one(
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\n", marker.read_text())
 
 
+@pytest.mark.parametrize("option", ["-n", "--dry-run", "-an", "-nv", "-vvn"])
 def test_a_dry_run_leaves_no_marker(
-    fake_rsync: tuple[dict[str, str], Path], tmp_path: Path
+    fake_rsync: tuple[dict[str, str], Path], tmp_path: Path, option: str
 ) -> None:
+    """Catches a marker written after a run that copied nothing, whichever way `-n` is spelled."""
     env, _ = fake_rsync
-    assert pull(env, "src:./", str(tmp_path / "raw"), "-n").returncode == 0
+    assert pull(env, "src:./", str(tmp_path / "raw"), option).returncode == 0
     assert not (tmp_path / "last_pull_ok").exists()
+
+
+@pytest.mark.parametrize("option", ["-v", "-av", "--progress", "--bwlimit=100"])
+def test_other_options_still_mark_a_good_pull(
+    fake_rsync: tuple[dict[str, str], Path], tmp_path: Path, option: str
+) -> None:
+    """No `n` among the short options, or an `n` only inside a long option, is not a dry run."""
+    env, _ = fake_rsync
+    assert pull(env, "src:./", str(tmp_path / "raw"), option).returncode == 0
+    assert (tmp_path / "last_pull_ok").exists()
 
 
 def test_the_pull_needs_a_source_and_a_destination(

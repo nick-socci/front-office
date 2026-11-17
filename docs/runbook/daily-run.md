@@ -141,11 +141,18 @@ last success. The hourly pull and the daily job are intervals, not bounds.
 the laptop: pull the NAS's copy to the laptop, then push it to the host with the owner's key:
 
 ```bash
-rsync --archive --ignore-existing --exclude '*.tmp-*' <NAS copy>/ mothership:data/raw/
+NAS_COPY=/path/to/the/laptops/copy/of/the/NAS/raw        # the path itself, no angle brackets
+rsync --archive --ignore-existing --exclude '*.tmp-*' "$NAS_COPY"/ mothership:data/raw/
 ```
 
-Then `front-office repair --dry-run --deep --raw-root` on the host's copy must report nothing to
-move. (Not yet exercised: task 8 restores one capture from the external drive.)
+Then check the host's copy: it must report nothing to move.
+
+```bash
+ssh mothership 'podman run --rm -v ~/data:/data localhost/front-office:current \
+    front-office repair --raw-root /data/raw --dry-run --deep'
+```
+
+(Not yet exercised end to end: task 8 restores one capture from the external drive.)
 
 ## Pull a copy to the laptop
 

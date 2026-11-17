@@ -34,7 +34,13 @@ mkdir -p "$destination"
 
 rsync --archive --ignore-existing --exclude '*.tmp-*' "$@" "$source_path" "$destination/"
 
-case " $* " in
-  *" -n "*|*" --dry-run "*) exit 0 ;;
-esac
+# A dry run copies nothing and must not mark a pull good: `--dry-run`, `-n`, or `n` inside a
+# cluster of short options such as `-an` or `-nv`.
+for option in "$@"; do
+  case "$option" in
+    --dry-run) exit 0 ;;
+    --*) ;;
+    -*n*) exit 0 ;;
+  esac
+done
 date -u +%Y-%m-%dT%H:%M:%SZ > "$(dirname "$(realpath "$destination")")/last_pull_ok"
