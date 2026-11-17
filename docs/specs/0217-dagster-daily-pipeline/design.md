@@ -88,6 +88,7 @@ fetched again per asset (extra captures, and the freshness marker is the first c
 | [0129](../../adr/0129-a-failed-fetch-fails-a-check-and-the-run-goes-on.md) | A failed fetch fails a non-blocking check and the run goes on | accepted |
 | [0130](../../adr/0130-a-run-fetches-the-current-calendar-year-and-matchup-days-once-the-season-is-over.md) | A run fetches the current calendar year, and matchup days once the season is over | accepted |
 | [0131](../../adr/0131-one-definition-set-the-warehouse-chosen-by-a-setting.md) | One definition set, the warehouse chosen by a setting | accepted |
+| [0132](../../adr/0132-dagsters-copy-of-the-dbt-manifest-drops-the-edges-from-tests-to-dbt-functions.md) | Dagster's copy of the dbt manifest drops the edges from tests to dbt functions (amends 0128) | accepted |
 
 ## Detailed design
 
@@ -274,4 +275,4 @@ The real-season run (task 5) is the acceptance test; the fixtures cannot show a 
     copy without function parents of tests; dbt still runs every test.
   - Neither defect shows on the DuckDB manifest, so no DuckDB run or fixture test could find
     them: the first showed as a failed load, the second only in a real BigQuery build.
-
+  - *Decided (Codex round 4, owner, 2026-11-17):* the test-to-function edge workaround amends ADR 0128; recorded in ADR 0132.

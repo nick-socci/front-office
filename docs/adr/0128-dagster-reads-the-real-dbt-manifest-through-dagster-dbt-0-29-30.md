@@ -1,6 +1,6 @@
 # 0128. Dagster reads the real dbt manifest through dagster-dbt 0.29.30
 
-- Status: accepted
+- Status: accepted; amended by [0132](0132-dagsters-copy-of-the-dbt-manifest-drops-the-edges-from-tests-to-dbt-functions.md)
 - Date: 2026-11-15
 - Spec: [0217-dagster-daily-pipeline](../specs/0217-dagster-daily-pipeline/design.md) · Issue: #217
 

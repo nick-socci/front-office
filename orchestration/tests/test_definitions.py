@@ -8,8 +8,10 @@ import copy
 import importlib.util
 from typing import Any
 
+import dagster_dbt
 import pytest
 from dagster import AssetKey, Definitions, in_process_executor
+from dagster_dbt.core.dbt_cli_event import DbtCoreCliEventMessage
 
 import front_office_pipeline
 from front_office_pipeline import dbt_assets, settings
@@ -186,31 +188,51 @@ def test_sources_that_models_read_share_one_asset_key_as_on_bigquery() -> None:
     }
 
 
-def test_dagsters_manifest_drops_function_parents_of_tests_and_dbt_keeps_them() -> None:
+def test_the_manifest_dagster_gets_survives_a_test_event_whose_parent_is_a_function(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """dagster-dbt 0.29.30 looks each parent of a singular test up in `nodes` or `sources` and
     crashes (`'NoneType' object has no attribute 'get'`) on a dbt function. On the BigQuery
     target two lineup tests depend on `sum_in_order`, which stopped the real build on
-    mothership at node 539 of 579. The copy handed to Dagster drops function parents of tests;
-    the manifest itself, which dbt never reads from here, is left as it was."""
+    mothership at node 539 of 579. This captures the manifest `build_dbt_assets` really hands
+    to `@dbt_assets`, then runs dagster-dbt's own test-event conversion over it: it must not
+    crash, and dbt's manifest (never read from here) keeps its edges."""
     manifest = copy.deepcopy(dbt_assets.load_manifest("dev"))
     test = next(n for n in manifest["nodes"].values() if n["resource_type"] == "test")
     function_id = "function.front_office.sum_in_order"
     test["depends_on"]["nodes"] = [*test["depends_on"]["nodes"], function_id]
-    manifest["parent_map"][test["unique_id"]] = [
-        *manifest["parent_map"][test["unique_id"]],
-        function_id,
-    ]
 
-    cleaned = dbt_assets.without_function_parents(manifest)
+    handed: list[Any] = []
+    real_decorator = dagster_dbt.dbt_assets
 
-    assert function_id not in cleaned["nodes"][test["unique_id"]]["depends_on"]["nodes"]
-    assert function_id not in cleaned["parent_map"][test["unique_id"]]
+    def spy(**kwargs: Any) -> Any:
+        handed.append(kwargs["manifest"])
+        return real_decorator(**kwargs)
+
+    monkeypatch.setattr("front_office_pipeline.dbt_assets.dbt_assets", spy)
+    dbt_assets.build_dbt_assets(manifest)
+    given = handed[0]
+
+    translator = dbt_assets.SourceToRawInWarehouse()
+    event = DbtCoreCliEventMessage(
+        raw_event={"data": {"node_info": {"unique_id": test["unique_id"]}}, "info": {}},
+        event_history_metadata={},
+    )
+
+    def convert(manifest_given: Any) -> list[Any]:
+        return list(event._to_observation_events_for_test(None, translator, manifest_given, {}))
+
+    assert len(convert(given)) == len(test["depends_on"]["nodes"]) - 1
     assert function_id in manifest["nodes"][test["unique_id"]]["depends_on"]["nodes"]
-    other = next(
-        n
-        for n in cleaned["nodes"].values()
-        if n["resource_type"] == "test" and n is not cleaned["nodes"][test["unique_id"]]
-    )
-    assert (
-        other["depends_on"]["nodes"] == manifest["nodes"][other["unique_id"]]["depends_on"]["nodes"]
-    )
+    # The control: without the workaround dagster-dbt fails as it did on mothership. If this
+    # stops raising, dagster-dbt has fixed it and `without_function_parents` can go.
+    with pytest.raises(AttributeError):
+        convert(manifest)
+
+
+def test_without_function_parents_leaves_other_tests_alone() -> None:
+    manifest = copy.deepcopy(dbt_assets.load_manifest("dev"))
+    tests = [n for n in manifest["nodes"].values() if n["resource_type"] == "test"]
+    cleaned = dbt_assets.without_function_parents(manifest)
+    for node in tests:
+        assert cleaned["nodes"][node["unique_id"]]["depends_on"] == node["depends_on"]

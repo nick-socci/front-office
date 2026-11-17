@@ -56,7 +56,8 @@ the running-season steps (its F5).
   `dagster-dbt`, and `source_freshness` (`dbt source freshness`, in `daily` only when `FO_WAREHOUSE=duckdb`, R3.5)
   (ADR 0127).
 - R1.3 THE SYSTEM SHALL read the real dbt manifest, unfiltered, with `dagster-dbt` pinned at 0.29.30
-  or newer, one asset per model (ADR 0128).
+  or newer, one asset per model (ADR 0128), except that Dagster's copy leaves out the edges from
+  tests to dbt functions, which dagster-dbt cannot read (ADR 0132).
 - R1.4 THE SYSTEM SHALL run the steps one at a time, because two writers of the landing zone make
   the second fail with `LandingLocked`.
 
