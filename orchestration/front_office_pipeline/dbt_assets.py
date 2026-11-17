@@ -148,8 +148,36 @@ def dbt_environment() -> Iterator[None]:
                 os.environ[name] = value
 
 
+def without_function_parents(manifest: Mapping[str, Any]) -> dict[str, Any]:
+    """A copy of `manifest` whose tests no longer name a dbt function as a parent.
+
+    Why: `dagster-dbt` 0.29.30 looks every parent of a singular test up in `nodes` or
+    `sources`; a function is in neither, the lookup gives `None`, and the step dies with
+    `'NoneType' object has no attribute 'get'` mid-build. On the BigQuery target two lineup
+    tests read `sum_in_order`, so the real build stopped at node 539 of 579 (task 7). The copy is
+    only Dagster's description of the project: dbt reads its own project, and every test still
+    runs. Only the edges of tests that name a function are rewritten.
+    """
+    nodes = dict(manifest["nodes"])
+    parent_map = dict(manifest.get("parent_map", {}))
+    for unique_id, node in manifest["nodes"].items():
+        if node["resource_type"] != "test":
+            continue
+        parents = node["depends_on"].get("nodes", [])
+        if not any(parent.startswith("function.") for parent in parents):
+            continue
+        kept = [parent for parent in parents if not parent.startswith("function.")]
+        nodes[unique_id] = {**node, "depends_on": {**node["depends_on"], "nodes": kept}}
+        if unique_id in parent_map:
+            parent_map[unique_id] = [
+                p for p in parent_map[unique_id] if not p.startswith("function.")
+            ]
+    return {**manifest, "nodes": nodes, "parent_map": parent_map}
+
+
 def build_dbt_assets(manifest: Mapping[str, Any]) -> AssetsDefinition:
     """One asset per model and seed of `manifest`, built by one streamed `dbt build`."""
+    manifest = without_function_parents(manifest)
 
     @dbt_assets(
         manifest=manifest,

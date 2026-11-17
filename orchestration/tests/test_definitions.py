@@ -184,3 +184,33 @@ def test_sources_that_models_read_share_one_asset_key_as_on_bigquery() -> None:
     assert AssetKey("raw_in_warehouse") in {
         dep for spec in definition.specs for dep in (d.asset_key for d in spec.deps)
     }
+
+
+def test_dagsters_manifest_drops_function_parents_of_tests_and_dbt_keeps_them() -> None:
+    """dagster-dbt 0.29.30 looks each parent of a singular test up in `nodes` or `sources` and
+    crashes (`'NoneType' object has no attribute 'get'`) on a dbt function. On the BigQuery
+    target two lineup tests depend on `sum_in_order`, which stopped the real build on
+    mothership at node 539 of 579. The copy handed to Dagster drops function parents of tests;
+    the manifest itself, which dbt never reads from here, is left as it was."""
+    manifest = copy.deepcopy(dbt_assets.load_manifest("dev"))
+    test = next(n for n in manifest["nodes"].values() if n["resource_type"] == "test")
+    function_id = "function.front_office.sum_in_order"
+    test["depends_on"]["nodes"] = [*test["depends_on"]["nodes"], function_id]
+    manifest["parent_map"][test["unique_id"]] = [
+        *manifest["parent_map"][test["unique_id"]],
+        function_id,
+    ]
+
+    cleaned = dbt_assets.without_function_parents(manifest)
+
+    assert function_id not in cleaned["nodes"][test["unique_id"]]["depends_on"]["nodes"]
+    assert function_id not in cleaned["parent_map"][test["unique_id"]]
+    assert function_id in manifest["nodes"][test["unique_id"]]["depends_on"]["nodes"]
+    other = next(
+        n
+        for n in cleaned["nodes"].values()
+        if n["resource_type"] == "test" and n is not cleaned["nodes"][test["unique_id"]]
+    )
+    assert (
+        other["depends_on"]["nodes"] == manifest["nodes"][other["unique_id"]]["depends_on"]["nodes"]
+    )
