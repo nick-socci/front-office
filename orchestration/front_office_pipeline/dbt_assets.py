@@ -31,7 +31,12 @@ from pathlib import Path
 from typing import Any
 
 from dagster import AssetExecutionContext, AssetKey, AssetsDefinition
-from dagster_dbt import DagsterDbtTranslator, DbtCliResource, dbt_assets
+from dagster_dbt import (
+    DagsterDbtTranslator,
+    DagsterDbtTranslatorSettings,
+    DbtCliResource,
+    dbt_assets,
+)
 
 from front_office_pipeline import settings
 
@@ -148,7 +153,11 @@ def build_dbt_assets(manifest: Mapping[str, Any]) -> AssetsDefinition:
 
     @dbt_assets(
         manifest=manifest,
-        dagster_dbt_translator=SourceToRawInWarehouse(),
+        dagster_dbt_translator=SourceToRawInWarehouse(
+            # Many sources, one key: on BigQuery the models read the `raw.*` sources, and
+            # dagster-dbt refuses two dbt resources with one asset key unless told this.
+            settings=DagsterDbtTranslatorSettings(enable_duplicate_source_asset_keys=True)
+        ),
         name="front_office_dbt",
     )
     def front_office_dbt(context: AssetExecutionContext, dbt: DbtCliResource) -> Iterator[Any]:

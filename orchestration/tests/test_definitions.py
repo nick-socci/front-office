@@ -4,6 +4,7 @@ These load the real dbt manifest (`dbt parse`, cached for the session) and build
 under different settings. Nothing is executed.
 """
 
+import copy
 import importlib.util
 from typing import Any
 
@@ -157,3 +158,29 @@ def test_a_bigquery_manifest_without_the_adapter_says_which_group_to_install(
     with pytest.raises(RuntimeError, match="--group bigquery"):
         dbt_assets.require_adapter("bq")
     dbt_assets.require_adapter("dev")  # DuckDB's adapter is in the default group
+
+
+def test_sources_that_models_read_share_one_asset_key_as_on_bigquery() -> None:
+    """On BigQuery the models read the `raw.*` sources, so dagster-dbt sees 15 sources the
+    translator maps to one key (`raw_in_warehouse`) and refuses unless duplicate source keys
+    are allowed. On DuckDB no model reads a source, so every other test misses this: give a
+    model the sources as parents, as the BigQuery manifest does."""
+    manifest = copy.deepcopy(dbt_assets.load_manifest("dev"))
+    sources = [unique_id for unique_id in manifest["sources"]]
+    model = next(n for n in manifest["nodes"].values() if n["name"] == "stg_mlb__games")
+    model["depends_on"]["nodes"] = [*model["depends_on"]["nodes"], *sources]
+    for unique_id in sources:
+        manifest["child_map"][unique_id] = [
+            *manifest["child_map"].get(unique_id, []),
+            model["unique_id"],
+        ]
+    manifest["parent_map"][model["unique_id"]] = [
+        *manifest["parent_map"][model["unique_id"]],
+        *sources,
+    ]
+
+    definition = dbt_assets.build_dbt_assets(manifest)
+
+    assert AssetKey("raw_in_warehouse") in {
+        dep for spec in definition.specs for dep in (d.asset_key for d in spec.deps)
+    }
