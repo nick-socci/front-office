@@ -91,6 +91,13 @@ def test_containerignore_is_at_the_root_and_keeps_credentials_and_data_out() -> 
     assert any("google-key" in p or "key" in p for p in patterns)
 
 
+def test_containerignore_never_re_includes_a_path() -> None:
+    """A `!pattern` line puts back what an earlier line left out: `!.env` would undo the credential
+    exclusion without any other line changing."""
+    lines = (ROOT / ".containerignore").read_text().splitlines()
+    assert not [line for line in lines if line.strip().startswith("!")]
+
+
 def test_containerfile_copies_no_credential_and_labels_its_commit() -> None:
     text = (DEPLOY / "Containerfile").read_text()
     instructions = [
@@ -258,3 +265,14 @@ def test_a_dry_run_leaves_no_marker(
     env, _ = fake_rsync
     assert pull(env, "src:./", str(tmp_path / "raw"), "-n").returncode == 0
     assert not (tmp_path / "last_pull_ok").exists()
+
+
+def test_the_pull_needs_a_source_and_a_destination(
+    fake_rsync: tuple[dict[str, str], Path], tmp_path: Path
+) -> None:
+    env, record = fake_rsync
+    for args in ((), ("only-a-source:./",)):
+        result = pull(env, *args)
+        assert result.returncode == 2, args
+        assert "usage" in result.stderr
+        assert not record.exists(), "rsync must not run without a destination"
