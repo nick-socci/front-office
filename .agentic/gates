@@ -6,7 +6,13 @@ cd "$(git rev-parse --show-toplevel)"
 
 step() { printf '\n== %s\n' "$1"; }
 
-step "dependencies (uv sync --locked)"; uv sync --locked
+step "dependencies (uv sync --locked --group orchestration)"; uv sync --locked --group orchestration
+(
+  cd dbt
+  export DBT_PROFILES_DIR=.
+  # Before the tests: importing the Dagster code location runs `dbt parse` (spec 0217).
+  step "dbt deps"; uv run dbt deps
+)
 step "lint (ruff)";          uv run ruff check
 step "format (ruff)";        uv run ruff format --check
 step "types (mypy, strict)"; uv run mypy
@@ -17,11 +23,6 @@ rm -f dbt/ci.duckdb dbt/ci.duckdb.wal
 # The site builder refuses a non-empty output directory, and a leftover one would be stale.
 rm -rf site
 step "fixture warehouse";    uv run front-office load --raw-root fixtures/landing --db dbt/ci.duckdb
-(
-  cd dbt
-  export DBT_PROFILES_DIR=.
-  step "dbt deps"; uv run dbt deps
-)
 # The dbt templater opens the `ci` target, whose path is relative; without the variable,
 # run from the root, it would create an empty ci.duckdb in the root instead of using the
 # fixture warehouse.

@@ -17,6 +17,11 @@ front-office = "front_office.cli:app"
 bigquery = [
     "dbt-bigquery>=1.11",
 ]
+orchestration = [
+    "dagster",
+    "dagster-dbt>=0.29.30",
+    "dagster-webserver",
+]
 dev = [
     "pytest>=8.3",
     "ruff>=0.8",
@@ -35,7 +40,8 @@ dev = [
 ]
 
 [tool.uv]
-# `uv sync --locked`, which CI and the gates run, installs these and no other group.
+# A bare `uv sync --locked` installs these and no other group; CI and the gates add
+# `--group orchestration` explicitly, and `bigquery` stays opt-in.
 default-groups = ["dev"]
 
 [build-system]
@@ -43,11 +49,11 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["ingestion/src/front_office"]
+packages = ["ingestion/src/front_office", "orchestration/front_office_pipeline"]
 
 [tool.ruff]
 line-length = 100
-src = ["ingestion/src", "ingestion/tests", "scripts", "dbt/python_modules", "dbt/functions"]
+src = ["ingestion/src", "ingestion/tests", "scripts", "dbt/python_modules", "dbt/functions", "orchestration"]
 # BigQuery runs the function file on Python 3.11; keep ruff from rewriting it to newer syntax.
 per-file-target-version = { "dbt/functions/**" = "py311" }
 
@@ -57,7 +63,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "PTH"]
 [tool.mypy]
 python_version = "3.13"
 strict = true
-files = ["ingestion/src"]
+files = ["ingestion/src", "orchestration"]
 
 [[tool.mypy.overrides]]
 module = "tests.*"
@@ -75,6 +81,6 @@ module = "front_office.bigquery"
 disable_error_code = ["no-untyped-call"]
 
 [tool.pytest.ini_options]
-testpaths = ["ingestion/tests"]
+testpaths = ["ingestion/tests", "orchestration/tests"]
 pythonpath = ["ingestion/src", "scripts", "dbt/python_modules", "dbt/functions"]
 addopts = "-q"

@@ -51,11 +51,15 @@ Once per clone: `git config core.hooksPath .githooks` (enables the privacy guard
 .agentic/gates                                 # everything CI runs, in CI's order
 uv run pytest
 uv run ruff check && uv run ruff format --check
-uv run mypy                                    # strict, on ingestion/src
+uv run mypy                                    # strict, on ingestion/src and orchestration
 FO_CI_DUCKDB_PATH=dbt/ci.duckdb uv run sqlfluff lint dbt/models dbt/tests   # from the repo root
 cd dbt && DBT_PROFILES_DIR=. uv run dbt build --select <model>          # real season
 cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: true}'
 uv run --group bigquery front-office upload --project "$FO_BQ_PROJECT"   # fill BigQuery's raw tables; --dry-run sends nothing
+uv sync --locked --group orchestration         # Dagster; the gates and CI install it too (add --group bigquery for FO_WAREHOUSE=bigquery)
+uv run dagster definitions validate -m front_office_pipeline      # the code location loads (from the repo root)
+uv run dagster job execute -m front_office_pipeline -j daily      # one daily run, no daemon; FO_WAREHOUSE, FO_SEASON, FO_LANDING_ROOT
+uv run dagster dev -m front_office_pipeline                       # the UI and the lineage
 ```
 
 ## Five rules this project learned the hard way

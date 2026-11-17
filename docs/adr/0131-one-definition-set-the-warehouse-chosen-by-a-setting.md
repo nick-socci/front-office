@@ -1,6 +1,6 @@
 # 0131. One definition set, the warehouse chosen by a setting
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-15
 - Spec: [0217-dagster-daily-pipeline](../specs/0217-dagster-daily-pipeline/design.md) · Issue: #217
 

@@ -29,7 +29,15 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --locked
+        run: uv sync --locked --group orchestration
+
+      # Before the tests: importing the Dagster code location runs `dbt parse`, which needs
+      # the packages (spec 0217).
+      - name: dbt deps
+        run: uv run dbt deps
+        working-directory: dbt
+        env:
+          DBT_PROFILES_DIR: .
 
       - name: Lint (ruff)
         run: uv run ruff check
@@ -45,12 +53,6 @@ jobs:
 
       - name: Build fixture warehouse
         run: uv run front-office load --raw-root fixtures/landing --db dbt/ci.duckdb
-
-      - name: dbt deps
-        run: uv run dbt deps
-        working-directory: dbt
-        env:
-          DBT_PROFILES_DIR: .
 
       - name: Lint SQL (sqlfluff)
         # The dbt templater opens the relative `ci` target; without the variable, run

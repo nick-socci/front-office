@@ -322,7 +322,10 @@ Built: ingestion, staging, the intermediate layer, the nine marts
    function that is a BigQuery UDF there (ADRs 0039, 0103).
 2. **Orchestration** — Dagster asset definitions, run in production by Dagster's own
    daemon on an Always Free VM in the owner's Oracle account until a home server replaces
-   it (ADRs 0122, 0126). No Cloud Scheduler or Cloud Run.
+   it (ADRs 0122, 0126). No Cloud Scheduler or Cloud Run. The pipeline is defined, as six
+   assets over the CLI plus the 80 dbt models, and runs once locally with
+   `dagster job execute -m front_office_pipeline -j daily` (spec 0217); deploying and
+   scheduling it is next.
 3. **Dashboard** — Streamlit: standings, projections, waiver targets, player trends.
    dbt already knows it is coming: it is declared as an exposure over the nine marts, so
    `dbt build --select +exposure:front_office_dashboard` builds everything it will need.

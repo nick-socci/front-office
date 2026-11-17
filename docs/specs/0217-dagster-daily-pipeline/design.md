@@ -83,11 +83,12 @@ fetched again per asset (extra captures, and the freshness marker is the first c
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0127](../../adr/0127-an-asset-is-one-cli-command-and-one-dbt-model.md) | An asset is one CLI command or one dbt model | proposed |
-| [0128](../../adr/0128-dagster-reads-the-real-dbt-manifest-through-dagster-dbt-0-29-30.md) | Dagster reads the real dbt manifest through dagster-dbt 0.29.30 | proposed |
-| [0129](../../adr/0129-a-failed-fetch-fails-a-check-and-the-run-goes-on.md) | A failed fetch fails a non-blocking check and the run goes on | proposed |
-| [0130](../../adr/0130-a-run-fetches-the-current-calendar-year-and-matchup-days-once-the-season-is-over.md) | A run fetches the current calendar year, and matchup days once the season is over | proposed |
-| [0131](../../adr/0131-one-definition-set-the-warehouse-chosen-by-a-setting.md) | One definition set, the warehouse chosen by a setting | proposed |
+| [0127](../../adr/0127-an-asset-is-one-cli-command-and-one-dbt-model.md) | An asset is one CLI command or one dbt model | accepted |
+| [0128](../../adr/0128-dagster-reads-the-real-dbt-manifest-through-dagster-dbt-0-29-30.md) | Dagster reads the real dbt manifest through dagster-dbt 0.29.30 | accepted |
+| [0129](../../adr/0129-a-failed-fetch-fails-a-check-and-the-run-goes-on.md) | A failed fetch fails a non-blocking check and the run goes on | accepted |
+| [0130](../../adr/0130-a-run-fetches-the-current-calendar-year-and-matchup-days-once-the-season-is-over.md) | A run fetches the current calendar year, and matchup days once the season is over | accepted |
+| [0131](../../adr/0131-one-definition-set-the-warehouse-chosen-by-a-setting.md) | One definition set, the warehouse chosen by a setting | accepted |
+| [0132](../../adr/0132-dagsters-copy-of-the-dbt-manifest-drops-the-edges-from-tests-to-dbt-functions.md) | Dagster's copy of the dbt manifest drops the edges from tests to dbt functions (amends 0128) | accepted |
 
 ## Detailed design
 
@@ -157,8 +158,7 @@ the two fetches never hold the writer lock together (C7); the dbt build's own th
 and the stderr tail as metadata. The check's severity is `ERROR` (a `WARN` failure would not read as
 a failure) and it is non-blocking (`blocking=False`, Dagster's default), so `raw_in_warehouse` and
 the dbt assets still run. The failed check shows in the UI and in GraphQL (`assetCheckExecutions`),
-which is what #219 reads; task 6 confirms that a run with a failed check is not reported as plainly
-green. `raw_in_warehouse` and the dbt assets raise on failure, as ordinary asset failures.
+which is what #219 reads. The run itself still ends `SUCCESS` (Amendments, 2026-11-16). `raw_in_warehouse` and the dbt assets raise on failure, as ordinary asset failures.
 
 **Running it.** `dagster dev -m front_office_pipeline` for the UI; `dagster job execute -m
 front_office_pipeline -j daily` runs it once, without the daemon, which is how the verification task and #220's rehearsal run it.
@@ -226,4 +226,53 @@ The real-season run (task 5) is the acceptance test; the fixtures cannot show a 
 
 ## Amendments
 
-None yet.
+- **2026-11-16 (task 2): `season.is_over` reads the settings through `LandingZone`; no CLI
+  subcommand.** Within the goals and no-gos (R1.1 already names `front_office.landing`). The
+  settings folder is keyed by league id, which only the credentials carry and the orchestration
+  must not read (R2.4), so `is_over(landing_root, season)` walks the espn settings captures,
+  keeps those whose sidecar `partitions.season` matches, and takes the newest by stamp then
+  path. If the season's captures belong to more than one league it raises `AmbiguousLeague`
+  rather than choose: a run has one league, and a silent mix of two would decide the gate on
+  the wrong one. No capture, or a status without both periods, is "not over".
+- **2026-11-16 (task 6, decided by the owner): a failed fetch is read from its failed check, not
+  from the run's status.** With an invalid `ESPN_S2`, `daily` ended `RUN_SUCCESS`: `espn_captures`
+  materialized, `fetch_complete` is `FAILED` (severity ERROR) with ESPN's 401 line as metadata,
+  and upload, the build and freshness ran. Dagster does not mark a run failed for a failed
+  non-blocking check, so "not reported as plainly green" cannot hold at the run level without a
+  step that raises, which the owner declined. ADR 0129 stands (non-blocking, the run goes on);
+  R2.3, the *Failure* paragraph and the Expected values row now say what holds: the failure is
+  visible on the asset's checks in the UI and read as `FAILED` through the instance's asset-check
+  executions (GraphQL `assetCheckExecutions`), which is what #219 alerts on.
+- **2026-11-16 (task 6): `dagster` loads the working directory's `.env` over the process
+  environment.** `dagster dev` and `dagster job execute` inject `./.env` (logging only the
+  variable names), overriding an exported `ESPN_S2`, so task 6's method (export it in the run's
+  environment) had no effect from the repository root. The orchestration locates everything from
+  `REPO_ROOT`, not the working directory, so task 6 ran from another directory
+  (`uv run --project <repo> dagster job execute …`): Dagster then injects nothing, the CLI (run in
+  the repository root) calls `load_dotenv` without override, and the exported value reached ESPN.
+  Consequence for #218: Dagster started in the repository root puts the `.env` credentials in the
+  environment of its processes and so of every command; that is the file rule 3 names, and nothing
+  logs a value (task 5's scan), but a host with the credentials elsewhere should start Dagster
+  from a directory with no `.env`.
+- **2026-11-17 (task 7): R4.3 measured on arm64 `mothership`; the run's key gained write access
+  to the five model datasets; two defects found only on the BigQuery target.**
+  - *Memory.* `FO_WAREHOUSE=bigquery`, 2 OCPU, 11.9 GB, summed PSS once a second over the whole
+    process tree: daemon, UI and code server idle **674 MB** (7 processes); with a full `daily`
+    run beside them (fetches, `upload`, the 579-node `dbt build`, 17 processes, 9 min 30 s)
+    **1,395 MB**. Under R4.3's 2 GB; no return to the owner is needed.
+  - *Permissions (owner's instruction, 2026-11-17; ADR 0124 starts the key at BigQuery User and
+    adds what a refused step proves).* The build was refused creating tables and routines in
+    `main` and `staging`. The key's service account (`fo-spike216`) was given dataset access
+    `WRITER` (the data-editor rights) on exactly the five datasets the build writes: `main`
+    (seeds and the three functions), `staging`, `intermediate`, `marts`, `reconciliation`; one
+    access entry added to each, nothing removed, no project-level role. It already had
+    BigQuery User on the project and `WRITER` on `raw`.
+  - *Defect: the BigQuery manifest has models that read the `raw.*` sources,* so 15 sources
+    shared the key `raw_in_warehouse` and dagster-dbt refused to load. Fixed with
+    `enable_duplicate_source_asset_keys`.
+  - *Defect: two lineup tests depend on the dbt function `sum_in_order` on the BigQuery target,*
+    and dagster-dbt 0.29.30 crashes on a function parent. Fixed by handing Dagster a manifest
+    copy without function parents of tests; dbt still runs every test.
+  - Neither defect shows on the DuckDB manifest, so no DuckDB run or fixture test could find
+    them: the first showed as a failed load, the second only in a real BigQuery build.
+  - *Decided (Codex round 4, owner, 2026-11-17):* the test-to-function edge workaround amends ADR 0128; recorded in ADR 0132.
