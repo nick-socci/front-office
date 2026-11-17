@@ -455,3 +455,38 @@ this moves scope, a no-go or an ADR decision.
   tests follow. The runbook says which container to restart for what.
 - The first rehearsal's numbers (memory, run time, bytes billed) were for the two-container shape. The
   memory is measured again on the three.
+
+### 2026-11-17: task 6 on the three-container shape (image `942fb27`, arm64)
+
+- **Cancel works (R1.4, C20).** A run launched through the UI's GraphQL, cancelled at 45 s with
+  `SAFE_TERMINATE`: `TerminateRunSuccess`, `CANCELED`, 0 run processes left in the code server's
+  container, 0 zombies. (Before ADR 0138: `PythonError`, the worker ran on.)
+- **Restarts (R2.1).** `podman kill` of the code server: it came back in under 25 s and the daemon
+  listed both schedules again without being restarted. `podman kill` of the daemon: back in under 25 s,
+  0 errors in its log, the UI `200` and the location `LOADED`.
+- **A full run (R1.1, R2.2).** Launched from the UI, run by the daemon through the code server:
+  `RUN_SUCCESS` in **537.6 s**; the dbt step 579 nodes (83 success, 491 pass, 5 no-op), 398.9 s,
+  **16.58 GB billed**; `fetch_complete` passed on all three fetch assets; 0 zombies. Peak memory by
+  `podman stats` every 3 s: code server **855 MB** (limit 3 GB), daemon **139 MB** (1 GB), UI **149 MB**
+  (1 GB), 1,143 MB together (C9: 1,395 MB for one process tree), each under a third of its limit, so the
+  limits stay. After the run, `repair --dry-run --deep` on the 44,505 captures: 0 items; no `*.tmp-*`
+  left by the cancelled runs.
+- **A run over its limit (R1.5).** On a scratch instance on the laptop with `max_runtime_seconds: 20`
+  and a job that sleeps: the daemon logged "has exceeded maximum runtime of 20.0 seconds: terminating
+  run" and the run ended `FAILURE` ("Exceeded maximum runtime of 20 seconds"). The production limit is
+  the same setting at 7,200.
+- **Reboot (R2.6).** `systemctl reboot` of `mothership`: ssh was back in about 30 s; with no login
+  session of `front-office`'s own open, all three units and containers were up within a minute, both
+  schedules `RUNNING`, and 127.0.0.1:3000 and :4266 listening.
+- **Listeners and reach (R2.3).** The tailnet address refuses ports 3000 and 4266 and accepts 22 (the
+  control); the UI answers `200` through an SSH tunnel to 127.0.0.1:3000. rpcbind (111) was there
+  before and is untouched: the owner's to close or keep.
+- **Secrets (R3.4).** The scan read the cookie values and the key's `private_key_id` inside the image
+  and printed counts only: 0 occurrences in `dagster_home` (28 files) and `dbt_target` (4,608 files),
+  0 forbidden keys; 0 in the image history, the units, the user journal and the three containers' logs.
+  `privacy.GUID` matched 9 strings in `dagster_home`: all lowercase version-4 UUIDs of the kind Dagster
+  makes for run ids, caught with a trailing `}` (the pattern's optional brace), none braced or upper
+  case like a SWID. Not exempted in the scan by value, but by shape, as in 0217's task 5.
+- **Not repeated on the new shape:** the one-at-a-time queueing (an instance setting, shown in the
+  first rehearsal: the second run `QUEUED` while the first ran), the missed-stretch log line (the
+  daemon's behaviour), and the ESPN fetches, which the full run above shows passing.
