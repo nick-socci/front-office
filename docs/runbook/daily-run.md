@@ -87,12 +87,15 @@ cp ~/config/front-office.env /tmp/fo-config.bak
 echo "FO_DAILY_CRON=$(TZ=America/New_York date -d '+3 minutes' +'%-M %-H') * * *" >> ~/config/front-office.env
 systemctl --user restart front-office-code front-office-daemon   # read at start; ends a run in flight
 # ... the run starts at that minute. Remove the line AT ONCE, or it fires every day at that minute:
-cp /tmp/fo-config.bak ~/config/front-office.env          # editing the file does not touch the running daemon
-# the next restart (a deploy, a reboot) then has the real cron; check it:
+cp /tmp/fo-config.bak ~/config/front-office.env          # the running code server keeps the rehearsal cron
+# until it restarts: restart it once no run is going, then check the real cron is back
+systemctl --user restart front-office-code
 podman exec front-office-daemon dagster schedule list -w /app/deploy/workspace.yaml
 ```
 
-Never restart the code server while the rehearsal run is going: it would end the run. A cron that fires
+Never restart the code server while a run is going: it would end the run. Until it restarts, the
+schedule list still shows the rehearsal cron (the file is read at start): that is how to tell the line
+is still in force. A cron that fires
 every minute queues a run a minute behind a running one (one at a time, ADR 0134); the first rehearsal
 (2026-11-17) used one to show that, and cancelled what it queued (`terminateRun` in the UI's GraphQL).
 
@@ -115,6 +118,15 @@ Nothing to do for the off-season: both schedules have cron month ranges, March t
 (ADR 0134). To stop one before then: `dagster schedule stop <name> -w /app/deploy/workspace.yaml`
 in the daemon's container, and `dagster schedule start` to resume. A schedule is `RUNNING` on a new
 instance without a click; a stopped one stays stopped across restarts, as it is in the instance.
+
+## A pull caught mid-capture
+
+`rsync` copies a capture's two files one after the other, so a pull (or a Hyper Backup run) can see a
+capture directory with `meta.json` and no `payload.json` yet. The landing zone calls that not
+committed ("not exactly payload.json and meta.json": `LandingZone.check`), the loader and the capture
+views skip it, and the next pull adds the other file; `rsync` writes each file whole or not at all. So
+nothing needs doing, except not running `front-office repair` (without `--dry-run`) on a copy while a
+pull is going: it would quarantine the half capture, which the next pull then fetches again.
 
 ## Is the second copy current? (the NAS's pull and the backup)
 

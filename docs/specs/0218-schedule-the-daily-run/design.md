@@ -490,3 +490,21 @@ this moves scope, a no-go or an ADR decision.
 - **Not repeated on the new shape:** the one-at-a-time queueing (an instance setting, shown in the
   first rehearsal: the second run `QUEUED` while the first ran), the missed-stretch log line (the
   daemon's behaviour), and the ESPN fetches, which the full run above shows passing.
+
+### 2026-11-17: the pre-PR review's triage (Codex, 4 findings)
+
+- **F1 (P1, fixed):** after removing the rehearsal line from `front-office.env`, the code server still
+  holds the rehearsal cron until it restarts. The runbook now restarts it (when no run is going) and
+  says the schedule list shows the rehearsal cron until then.
+- **F2 (P1, disputed):** a pull copies a capture's two files one after the other, so a reader can see
+  a directory with only `meta.json`. Shown on a scratch landing zone: `LandingZone.check` says "not
+  exactly payload.json and meta.json" and `committed()` lists 0, so it is not a capture to the loader,
+  the views or a restore; `rsync` writes each file whole or not at all and the next pull adds the other.
+  The one hazard is running `repair` (not `--dry-run`) on a copy mid-pull, which quarantines the half
+  capture; the runbook says so.
+- **F3 (P2, requirement reworded):** R1.2 said no run starts outside the window, but a tick missed on
+  October 31 launches on the daemon's return (one run, C2), which is the catch-up R1.3 wants. R1.2 now
+  says the schedule creates no tick outside the window and that one missed in-window tick may launch late.
+- **F4 (P2, fixed):** the instance test only read the limit. It now also starts a daemon on a scratch
+  instance built from `deploy/dagster.yaml` with the limit cut to 10 s, launches a job that sleeps, and
+  asserts the run ends `FAILURE` ("Exceeded maximum runtime").
