@@ -380,3 +380,44 @@ None moves scope, a no-go or a decision of an ADR.
   the UI container runs with no credential mounted, answers `/server_info` 200 and holds 342 MB idle.
   This answers the open question on the UI. The arm64 build and the generator's dry run are task 3's
   verification on `mothership`.
+
+### 2026-11-17: task 6's first rehearsal on `mothership`
+
+Run as `front-office`, on the new service account, from the image built at `a40a20b` (arm64). None of
+this moves scope, a no-go or an ADR decision.
+
+- **Up and reachable (R2.1, R2.3, R2.4).** Both units `active`; `podman exec … pwd` names
+  `/dagster_home` in both; `dagster schedule list` shows `daily_schedule` (`0 6 * 3-10 *`) and
+  `idmap_schedule` (`0 5 * 3-10 1`) `RUNNING` on the new instance with no click (C1); `ss -tlnp` adds one
+  listener, `127.0.0.1:3000` (`rootlessport`); the UI container has no `/app/.env` and no secrets mount.
+  rpcbind (111) was already there and is left to the owner (*Open questions*).
+- **The daemon starts a run by itself (R1.1).** With a one-shot cron three minutes ahead, the daemon
+  launched `daily` at 14:26 ET: `RUN_SUCCESS` in 10 min 15 s (614.8 s); the dbt step's `run_results.json`:
+  579 nodes (83 success, 491 pass, 5 no-op), 437.7 s, **16.42 GB billed** (the expectation: about 16 GB,
+  at most 20). `fetch_complete` passed on `mlb_captures`, `espn_captures` and `espn_matchup_days`; no step
+  failed. The run landed ESPN settings, matchups, pro schedule, **teams and transactions** from this
+  address (rosters were all settled, so none were requested): a first piece of R7.1, not the whole.
+- **A missed stretch is one run (R1.3, C2).** Daemon stopped across about three ticks of an
+  every-minute cron, then started: `daily_schedule has no partition set, so not trying to catch up`,
+  and one evaluation, at the latest tick; the next run was the next ordinary tick.
+- **One at a time (R1.4).** A second `daily` launched during the run was `QUEUED`, and started when the
+  first ended. (That second run was meant to be cancelled and was not, because of a quoting slip in the
+  cancelling command; it ran in full.) Cancelling an in-progress run through the UI's GraphQL
+  (`terminateRun`, `SAFE_TERMINATE`) returned a `PythonError` and left the run `CANCELING` with its
+  worker alive: not investigated, noted.
+- **Memory (R2.2).** `podman stats` every 3 s over the run (and the second run's start): daemon
+  **996 MB** peak, UI **329 MB**; with the limits `3g` and `1g`, each is under a third of its limit, so the
+  limits stay (R2.2 asks for at least half again). The sum is about 1,325 MB, beside #217's 1,395 MB for
+  one process tree.
+- **Defect found: zombie processes.** `dagster-daemon` as the container's PID 1 does not reap its
+  children, and 27 `<defunct>` processes had built up after a few runs (the container's process limit is
+  2,048, and a season is about 245 days of runs). Both units gain `PodmanArgs=--init` (catatonit is on
+  the host: `/usr/libexec/podman/catatonit`), with a test.
+- **Rehearsal switch.** Quadlet 4.9 ignores `.container.d` drop-ins, and a systemd `[Service]
+  Environment=` reaches Podman, not the container (confirmed with the generator's dry run). The
+  rehearsal is a `FO_DAILY_CRON=<cron>` line in `~/config/front-office.env`, which the daemon's unit
+  already reads; the runbook says so, and says to remove the line at once after the tick. Editing the
+  file does not change a running daemon's environment.
+- **dbt's `target/`.** dagster-dbt writes each run's results into its own subdirectory of the volume
+  (`front_office_dbt-<run id prefix>-<hash>/run_results.json`), not into `target/` itself: the bytes
+  billed of a run are read there (#220).

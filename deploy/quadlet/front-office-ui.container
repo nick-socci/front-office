@@ -20,6 +20,8 @@ Environment=FO_WAREHOUSE=bigquery
 Volume=%h/dagster_home:/dagster_home:rw
 PublishPort=127.0.0.1:3000:3000
 PodmanArgs=--memory=1g
+# PID 1 must reap its children: dagster-daemon does not, and a run leaves zombies (spec 0218 *Amendments*).
+PodmanArgs=--init
 
 [Service]
 Restart=always

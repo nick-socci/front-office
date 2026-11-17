@@ -71,20 +71,24 @@ restart both units, as above.
 
 ## Rehearse a run at another time
 
-A drop-in sets the cron for the daemon only, so the production unit is not edited:
+`FO_DAILY_CRON`, when set, replaces the daily schedule's cron (the id map's has no override). The
+daemon's unit already reads `~/config/front-office.env`, so the rehearsal is a line in it. (A
+systemd drop-in does not work: Podman 4.9's Quadlet ignores `.container.d` drop-ins, and a `[Service]
+Environment=` would reach Podman, not the container: spec 0218 *Amendments*, 2026-11-17.)
 
 ```bash
-mkdir -p ~/.config/systemd/user/front-office-daemon.service.d
-printf '[Service]\nEnvironment=FO_DAILY_CRON=*/5 * * * *\n' \
-    > ~/.config/systemd/user/front-office-daemon.service.d/rehearsal.conf
-systemctl --user daemon-reload && systemctl --user restart front-office-daemon
-# ... watch the run ...
-rm ~/.config/systemd/user/front-office-daemon.service.d/rehearsal.conf
-systemctl --user daemon-reload && systemctl --user restart front-office-daemon
-podman exec front-office-daemon dagster schedule list -w /app/deploy/workspace.yaml   # the real cron again
+cp ~/config/front-office.env /tmp/fo-config.bak
+echo "FO_DAILY_CRON=$(TZ=America/New_York date -d '+3 minutes' +'%-M %-H') * * *" >> ~/config/front-office.env
+systemctl --user restart front-office-daemon             # the daemon reads its environment at start
+# ... the run starts at that minute. Remove the line AT ONCE, or it fires every day at that minute:
+cp /tmp/fo-config.bak ~/config/front-office.env          # editing the file does not touch the running daemon
+# the next restart (a deploy, a reboot) then has the real cron; check it:
+podman exec front-office-daemon dagster schedule list -w /app/deploy/workspace.yaml
 ```
 
-(Not yet run on the host: task 6 does it, and corrects this if the drop-in has to differ.)
+Never restart the daemon while the rehearsal run is going: it would end the run. A cron that fires
+every minute queues a run a minute behind a running one (one at a time, ADR 0134); the first rehearsal
+(2026-11-17) used one to show that, and cancelled what it queued (`terminateRun` in the UI's GraphQL).
 
 ## Replace the Google key (each off-season, ADR 0124; the owner's)
 

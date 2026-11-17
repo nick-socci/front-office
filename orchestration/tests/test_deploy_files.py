@@ -118,6 +118,9 @@ def test_each_unit_has_a_memory_limit_a_restart_and_starts_at_boot() -> None:
     for unit in (DAEMON, UI):
         limits = [v for v in values(unit, "Container", "PodmanArgs") if v.startswith("--memory=")]
         assert len(limits) == 1
+        # dagster-daemon as PID 1 does not reap children: the first rehearsal on `mothership`
+        # showed 27 <defunct> processes after a few runs, against a 2,048-process limit
+        assert "--init" in values(unit, "Container", "PodmanArgs")
         assert values(unit, "Service", "Restart") == ["always"]
         assert values(unit, "Install", "WantedBy") == ["default.target"]
 

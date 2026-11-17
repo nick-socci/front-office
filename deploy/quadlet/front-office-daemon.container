@@ -32,6 +32,8 @@ Volume=%h/dbt_target:/app/dbt/target:rw
 Volume=%h/secrets/.env:/app/.env:ro
 Volume=%h/secrets/google-key.json:/run/secrets/google-key.json:ro
 PodmanArgs=--memory=3g
+# PID 1 must reap its children: dagster-daemon does not, and a run leaves zombies (spec 0218 *Amendments*).
+PodmanArgs=--init
 
 [Service]
 Restart=always
