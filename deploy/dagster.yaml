@@ -1,0 +1,19 @@
+# The Dagster instance on mothership (spec 0218, R1.3 to R1.5; ADRs 0134, 0133).
+#
+# No `storage` block: the default is SQLite under DAGSTER_HOME, which the daemon and the UI share.
+# Nothing here sets catching up: neither schedule has a partition set, so after an outage each
+# launches its latest tick only (design claim C2), so no catch-up setting would apply.
+
+telemetry:
+  enabled: false
+
+# One run at a time: a second `daily` queues behind the first, rather than starting beside it
+# and failing its fetch on the landing zone's writer lock.
+concurrency:
+  runs:
+    max_concurrent_runs: 1
+
+# A run is about ten minutes; two hours ends one that hangs.
+run_monitoring:
+  enabled: true
+  max_runtime_seconds: 7200

@@ -354,4 +354,29 @@ as evidence on the issue.
 
 ## Amendments
 
-Empty until the build.
+### 2026-11-17: details the build settled (tasks 1 to 3)
+
+None moves scope, a no-go or a decision of an ADR.
+
+- **The instance key.** Dagster 1.13.30 rejects `runs: {max_concurrent_runs: 1}` ("unexpected config
+  entry runs"); the valid form is `concurrency: {runs: {max_concurrent_runs: 1}}`, which is what
+  `deploy/dagster.yaml` has. The test reads the limit from `instance.get_concurrency_config()`, which
+  is what the queued-run daemon reads (`run_coordinator.get_run_queue_config()` still says 10).
+- **The schedules' names** are `daily_schedule` and `idmap_schedule`. The ticks test uses Dagster's
+  own cron iterator (`dagster._utils.schedules.cron_string_iterator`, the one the daemon uses,
+  private to Dagster), not `croniter`, so no dependency was added; a Dagster upgrade that moves it
+  breaks that test, loudly.
+- **The instance file reaches the container by the entrypoint.** `$DAGSTER_HOME` is a volume, so
+  `deploy/entrypoint.sh` copies the image's `deploy/dagster.yaml` into it on every start: the
+  settings follow the commit that was built.
+- **dbt's `target/` is a volume** (`~/dbt_target`), so `run_results.json` (the bytes billed, #220)
+  survives a restart.
+- **`FO_BQ_PROJECT` is in a non-secret `EnvironmentFile`** (`~/config/front-office.env`) on the host,
+  not in the unit files, so the public repository holds no project id.
+- **`.containerignore` patterns need `**/`** to match below the root: the first local image build held
+  `dbt/ci.duckdb` until `**/*.duckdb` replaced `*.duckdb`.
+- **Local image check (x86_64, the laptop):** the image builds; the code location validates for
+  `FO_WAREHOUSE=bigquery`; the CLI finds `/app/.env` when it is mounted and not when it is not (C14);
+  the UI container runs with no credential mounted, answers `/server_info` 200 and holds 342 MB idle.
+  This answers the open question on the UI. The arm64 build and the generator's dry run are task 3's
+  verification on `mothership`.

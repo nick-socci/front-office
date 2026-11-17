@@ -1,0 +1,3 @@
+# The code location each Dagster process loads (spec 0218, R1.3).
+load_from:
+  - python_module: front_office_pipeline
