@@ -1,6 +1,6 @@
 # 0137. The NAS pulls the landing zone hourly with a key that can only read it
 
-- Status: proposed (the owner's: the NAS backup)
+- Status: accepted (the owner decided at the 2026-11-17 walkthrough; AGENTS.md puts the NAS backup outside an agent's choice)
 - Date: 2026-11-17
 - Spec: [0218-schedule-the-daily-run](../specs/0218-schedule-the-daily-run/design.md) · Issue: #218
 

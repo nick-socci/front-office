@@ -1,6 +1,6 @@
 # 0133. Dagster runs as two containers under the run's user, from units kept in the repository
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-17
 - Spec: [0218-schedule-the-daily-run](../specs/0218-schedule-the-daily-run/design.md) · Issue: #218
 
