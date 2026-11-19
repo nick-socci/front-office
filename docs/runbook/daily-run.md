@@ -130,10 +130,13 @@ pull is going: it would quarantine the half capture, which the next pull then fe
 
 ## Is the second copy current? (the NAS's pull and the backup)
 
-The pull writes `last_pull_ok` beside the NAS's copy after each good run. On the NAS, read its
-age; more than a couple of hours is a failed pull and the gap before a second device is open
-(ADR 0137). The external drive's copy is the NAS's Hyper Backup job at 03:00: read DSM's log for the
-last success. The hourly pull and the daily job are intervals, not bounds.
+The pull writes `last_pull_ok` beside the NAS's copy (`/volume1/FrontOffice/last_pull_ok`) after each
+good run. It is a DSM Task Scheduler task that, as set up on 2026-11-18, runs **daily at 00:00**
+(the spec says hourly; change the task if the gap matters). Read the file's age on the NAS: more than
+a day plus a couple of hours is a failed pull, and the gap before a second device is open
+(ADR 0137). The external drive's copy is the NAS's Hyper Backup job, daily at 03:00 and including
+the `FrontOffice` share: read DSM's log for the last success. The pull and the daily job are
+intervals, not bounds.
 
 ## Restore captures to `mothership`
 
@@ -152,7 +155,11 @@ ssh mothership 'podman run --rm -v ~/data:/data localhost/front-office:current \
     front-office repair --raw-root /data/raw --dry-run --deep'
 ```
 
-(Not yet exercised end to end: task 8 restores one capture from the external drive.)
+To restore from the external drive itself (the NAS's own copy lost), use Hyper Backup's Backup
+Explorer on the task, pick a version, and copy `FrontOffice/raw` to a scratch folder on the NAS,
+then compare before trusting it: `sha256sum` each restored `payload.json` and `meta.json` against
+the host's copy of the same path. Exercised on 2026-11-19 (#218): 28 of 28 files from one
+endpoint were identical. A full restore of the share was not tried.
 
 ## Pull a copy to the laptop
 
@@ -162,6 +169,13 @@ deploy/pull_landing.sh mothership:data/raw/ data/raw      # adds; never deletes;
 
 The laptop's fetch commands are never run against production: the host is the one writer
 (spec 0216, R2.1). `data/raw` on the laptop is a copy.
+
+`data/raw` is left out of the laptop's own home backup, because the NAS holds the copy. That
+backup is not in this repository: `~/.local/bin/backup` (a restic wrapper: `backup run`, `backup
+status`), the hourly `backup.timer` in `~/.config/systemd/user/`, and the exclusion list
+`~/.config/restic/excludes`, which names `…/fantasy-baseball-analytics/data/raw` (added 2026-11-19).
+On a new laptop, the exclusion has to be added again. Check it with `backup ls latest
+<repo>/data/raw`, which should list nothing.
 
 ## If ESPN refuses the host's address
 
