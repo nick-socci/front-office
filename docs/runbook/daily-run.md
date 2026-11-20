@@ -51,19 +51,18 @@ Terminate: it reaches the code server, which ends the worker (ADR 0138).
 
 ## Deploy a commit
 
-Not while a run is going: restarting the code server ends it. Check first (`dagster run
-list` cannot tell you: it prints ids and jobs, no status):
+Restarting the code server ends a run in flight, so the restart is guarded by a check that no run is
+queued, starting, running or being cancelled. The check sits on the restart line, not before the
+build: the build takes minutes, and the schedule (06:00 ET in season) or a person can start a run
+meanwhile. (`dagster run list` cannot tell: it prints ids and jobs, no status.)
 
 ```bash
 ssh mothership
-curl -s -H 'Content-Type: application/json' \
-  -d '{"query":"{ runsOrError(filter: {statuses: [QUEUED, STARTING, STARTED, CANCELING]}) { ... on Runs { results { runId status } } } }"}' \
-  http://127.0.0.1:3000/graphql; echo
-```
-
-`{"data":{"runsOrError":{"results":[]}}}` means none is. Then, in the same shell:
-
-```bash
+no_run_going() {
+  curl -s -H 'Content-Type: application/json' \
+    -d '{"query":"{ runsOrError(filter: {statuses: [QUEUED, STARTING, STARTED, CANCELING]}) { ... on Runs { results { runId status } } } }"}' \
+    http://127.0.0.1:3000/graphql | grep -q '"results":\[\]'
+}
 cd ~/src/front-office && git fetch origin && git checkout <commit>    # a "detached HEAD" is expected
 sha=$(git rev-parse --short HEAD)
 podman build -f deploy/Containerfile --build-arg GIT_COMMIT=$(git rev-parse HEAD) \
@@ -71,9 +70,13 @@ podman build -f deploy/Containerfile --build-arg GIT_COMMIT=$(git rev-parse HEAD
 podman tag localhost/front-office:$sha localhost/front-office:current
 cp deploy/quadlet/*.container ~/.config/containers/systemd/
 systemctl --user daemon-reload
-systemctl --user restart front-office-code front-office-daemon front-office-ui
+no_run_going && systemctl --user restart front-office-code front-office-daemon front-office-ui \
+  || echo "NOT RESTARTED: a run is going (or the UI did not answer). Wait for it to end, then run this line again."
 journalctl --user -u front-office-code -f     # Ctrl-C at a new "Started Dagster code server" (about 15 s)
 ```
+
+If the restart line printed `NOT RESTARTED`, the old image still runs: the UI's Runs page shows the
+run; once it has ended, run the `no_run_going && …` line again.
 
 Then check the deploy, every time. **This is the step that shows the deploy happened**: a restart
 after a missed `podman tag` comes back up on the old image and looks just like a deploy (2026-11-20).
@@ -92,8 +95,7 @@ builds the locked dependencies; later builds reuse them while `uv.lock` is uncha
 
 ## Roll back
 
-Older images stay, tagged with their short commit. Check that no run is going (as above), then pick
-one from `podman images localhost/front-office`. If the units changed between that commit and the
+Older images stay, tagged with their short commit. Pick one from `podman images localhost/front-office`. If the units changed between that commit and the
 running one (`git diff --stat <old> HEAD -- deploy/quadlet/`), the old image needs its own units: an
 image from before ADR 0138 (`a40a20b`) does not work with the three-container units.
 
@@ -101,11 +103,13 @@ image from before ADR 0138 (`a40a20b`) does not work with the three-container un
 cd ~/src/front-office && git checkout <old>          # the clone names what runs
 podman tag localhost/front-office:<old> localhost/front-office:current
 cp deploy/quadlet/*.container ~/.config/containers/systemd/ && systemctl --user daemon-reload
-systemctl --user restart front-office-code front-office-daemon front-office-ui
+no_run_going && systemctl --user restart front-office-code front-office-daemon front-office-ui \
+  || echo "NOT RESTARTED: a run is going (or the UI did not answer). Wait for it to end, then run this line again."
 journalctl --user -u front-office-code -f            # Ctrl-C at a new "Started"
 ```
 
-Then the same check as a deploy: each container names `<old>`. Rehearsed on 2026-11-20 by the
+`no_run_going` is the function defined in *Deploy a commit*; define it first in a new shell. Then
+the same check as a deploy: each container names `<old>`. Rehearsed on 2026-11-20 by the
 owner, from `b29c35a` to `942fb27` and back (#218).
 
 ## Rehearse a run at another time
