@@ -51,11 +51,20 @@ Terminate: it reaches the code server, which ends the worker (ADR 0138).
 
 ## Deploy a commit
 
-Not while a run is going (the UI's Runs page, or `dagster run list`): restarting the daemon ends it.
+Not while a run is going: restarting the code server ends it. Check first (`dagster run
+list` cannot tell you: it prints ids and jobs, no status):
 
 ```bash
 ssh mothership
-cd ~/src/front-office && git fetch origin && git checkout <commit>
+curl -s -H 'Content-Type: application/json' \
+  -d '{"query":"{ runsOrError(filter: {statuses: [QUEUED, STARTING, STARTED, CANCELING]}) { ... on Runs { results { runId status } } } }"}' \
+  http://127.0.0.1:3000/graphql; echo
+```
+
+`{"data":{"runsOrError":{"results":[]}}}` means none is. Then, in the same shell:
+
+```bash
+cd ~/src/front-office && git fetch origin && git checkout <commit>    # a "detached HEAD" is expected
 sha=$(git rev-parse --short HEAD)
 podman build -f deploy/Containerfile --build-arg GIT_COMMIT=$(git rev-parse HEAD) \
     -t localhost/front-office:$sha .          # always from the repository root
@@ -63,16 +72,41 @@ podman tag localhost/front-office:$sha localhost/front-office:current
 cp deploy/quadlet/*.container ~/.config/containers/systemd/
 systemctl --user daemon-reload
 systemctl --user restart front-office-code front-office-daemon front-office-ui
-podman inspect front-office-code --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+journalctl --user -u front-office-code -f     # Ctrl-C at a new "Started Dagster code server" (about 15 s)
 ```
 
-The last line prints the running commit. The landing zone and the instance are volumes: a deploy
-touches neither. The first build on a host pulls the base image and builds the locked dependencies.
+Then check the deploy, every time. **This is the step that shows the deploy happened**: a restart
+after a missed `podman tag` comes back up on the old image and looks just like a deploy (2026-11-20).
+
+```bash
+for c in front-office-code front-office-daemon front-office-ui; do
+  podman inspect $c --format "$c {{index .Config.Labels \"org.opencontainers.image.revision\"}}"; done
+podman exec front-office-daemon dagster schedule list -w /app/deploy/workspace.yaml
+```
+
+Each container names the commit you checked out, and both schedules are `[RUNNING]` on their
+crons. Before the code server's `Started` line, `schedule list` fails with "Could not reach user code
+server … 127.0.0.1:4266 … Connection refused": wait and run it again. The landing zone and the
+instance are volumes: a deploy touches neither. The first build on a host pulls the base image and
+builds the locked dependencies; later builds reuse them while `uv.lock` is unchanged.
 
 ## Roll back
 
-Older images stay. `podman images localhost/front-office` lists them; re-tag one as `current` and
-restart the three units, as above.
+Older images stay, tagged with their short commit. Check that no run is going (as above), then pick
+one from `podman images localhost/front-office`. If the units changed between that commit and the
+running one (`git diff --stat <old> HEAD -- deploy/quadlet/`), the old image needs its own units: an
+image from before ADR 0138 (`a40a20b`) does not work with the three-container units.
+
+```bash
+cd ~/src/front-office && git checkout <old>          # the clone names what runs
+podman tag localhost/front-office:<old> localhost/front-office:current
+cp deploy/quadlet/*.container ~/.config/containers/systemd/ && systemctl --user daemon-reload
+systemctl --user restart front-office-code front-office-daemon front-office-ui
+journalctl --user -u front-office-code -f            # Ctrl-C at a new "Started"
+```
+
+Then the same check as a deploy: each container names `<old>`. Rehearsed on 2026-11-20 by the
+owner, from `b29c35a` to `942fb27` and back (#218).
 
 ## Rehearse a run at another time
 
