@@ -2,8 +2,8 @@
 
 How to operate what spec 0218 deploys: Dagster's code server, daemon and UI as three containers under
 the `front-office` user (ADRs 0133, 0138), the schedule (ADRs 0134, 0136), the run's Google identity (ADR 0135)
-and the NAS's pull (ADR 0137). **Draft**: finished after the production run has shown each step
-(spec 0218, tasks 4 and 9). A command here that no one has run on the host says so.
+and the NAS's pull (ADR 0137). Each step was shown on the host during spec 0218's build (the evidence is on
+#218); a command here that no one has run on the host says so.
 
 Nothing in this file is a credential. The values live in `~/secrets` on the host, and an agent
 never creates, copies, rotates or deletes one: the owner does, and says so on the issue.
@@ -72,7 +72,7 @@ touches neither. The first build on a host pulls the base image and builds the l
 ## Roll back
 
 Older images stay. `podman images localhost/front-office` lists them; re-tag one as `current` and
-restart both units, as above.
+restart the three units, as above.
 
 ## Rehearse a run at another time
 
