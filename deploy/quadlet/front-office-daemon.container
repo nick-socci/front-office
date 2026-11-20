@@ -1,0 +1,28 @@
+# Dagster's daemon on `mothership` (spec 0218, ADRs 0133 and 0138): it holds the schedules and the run
+# queue and launches each run through the code server (front-office-code). It holds no credential and
+# no landing zone: runs execute in the code server's container.
+#
+# See front-office-code.container for the install steps, `PodmanArgs`, `WorkingDir` and `Network=host`.
+
+[Unit]
+Description=Front Office: Dagster daemon (schedules and the run queue)
+After=front-office-code.service
+Wants=front-office-code.service
+
+[Container]
+Image=localhost/front-office:current
+ContainerName=front-office-daemon
+WorkingDir=/dagster_home
+Exec=dagster-daemon run -w /app/deploy/workspace.yaml
+Volume=%h/dagster_home:/dagster_home:rw
+Network=host
+PodmanArgs=--memory=1g
+PodmanArgs=--init
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

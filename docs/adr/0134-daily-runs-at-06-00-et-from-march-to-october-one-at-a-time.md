@@ -1,6 +1,6 @@
 # 0134. `daily` runs at 06:00 ET from March 1 to October 31, one at a time, with a two-hour limit
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-17
 - Spec: [0218-schedule-the-daily-run](../specs/0218-schedule-the-daily-run/design.md) · Issue: #218
 

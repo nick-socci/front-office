@@ -1,6 +1,6 @@
 # 0136. The id map is refreshed weekly on its own schedule
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-17
 - Spec: [0218-schedule-the-daily-run](../specs/0218-schedule-the-daily-run/design.md) · Issue: #218
 

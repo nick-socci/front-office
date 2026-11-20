@@ -1,0 +1,11 @@
+# The code location every Dagster process loads (spec 0218, R1.3; ADR 0138).
+#
+# One code server, in its own container, serves it over host loopback: the daemon launches runs
+# through it and the UI cancels them through it. Two processes each starting their own code server
+# on a unix socket cannot reach each other's runs: cancelling from the UI failed with "Could not
+# reach user code server" (spec 0218 *Amendments*, 2026-11-17).
+load_from:
+  - grpc_server:
+      host: 127.0.0.1
+      port: 4266
+      location_name: front_office_pipeline

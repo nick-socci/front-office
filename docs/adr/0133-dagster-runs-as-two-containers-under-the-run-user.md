@@ -1,6 +1,6 @@
 # 0133. Dagster runs as two containers under the run's user, from units kept in the repository
 
-- Status: proposed
+- Status: accepted, amended by [0138](0138-dagsters-code-runs-in-its-own-container-and-the-daemon-and-ui-connect-to-it.md)
 - Date: 2026-11-17
 - Spec: [0218-schedule-the-daily-run](../specs/0218-schedule-the-daily-run/design.md) · Issue: #218
 

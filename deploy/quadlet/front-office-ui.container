@@ -1,0 +1,29 @@
+# Dagster's UI on `mothership` (spec 0218, ADRs 0133 and 0138). It holds no credential: it reads the
+# instance's volume and the code server's definitions.
+#
+# On the host's network it listens on 127.0.0.1 only, so an SSH tunnel
+# (`ssh -L 3000:127.0.0.1:3000 mothership`) is the one way in. See front-office-code.container for the
+# install steps, `PodmanArgs`, `WorkingDir` and `Network=host`.
+
+[Unit]
+Description=Front Office: Dagster UI
+After=front-office-code.service
+Wants=front-office-code.service
+
+[Container]
+Image=localhost/front-office:current
+ContainerName=front-office-ui
+WorkingDir=/dagster_home
+Exec=dagster-webserver -h 127.0.0.1 -p 3000 -w /app/deploy/workspace.yaml
+Volume=%h/dagster_home:/dagster_home:rw
+Network=host
+PodmanArgs=--memory=1g
+PodmanArgs=--init
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

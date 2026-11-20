@@ -64,8 +64,9 @@ Explicitly out of scope. Work that drifts here is escalated, not done.
 - R1.1 THE SYSTEM SHALL start `daily` at 06:00 America/New_York each day from March 1 to October
   31, from a schedule defined in the code location, that is running as soon as an instance
   first loads the code, with no click in the UI (ADR 0134).
-- R1.2 WHILE the date is outside March 1 to October 31 THE SYSTEM SHALL start no `daily` run
-  from a schedule. A person can still run it by hand.
+- R1.2 WHILE the date is outside March 1 to October 31 THE SYSTEM SHALL create no `daily` tick.
+  A tick due inside the window that the daemon was down for may be launched on its return, one run
+  (R1.3), even after October 31. A person can still run `daily` by hand.
 - R1.3 IF the daemon was down when ticks were due THEN THE SYSTEM SHALL, on its return, start one
   run for them, not one per tick (ADR 0134, C2): a run fetches whatever is unsettled (ADRs 0018,
   0019), so one run catches up every missed day.
@@ -81,7 +82,7 @@ Explicitly out of scope. Work that drifts here is escalated, not done.
 
 ### R2. The host runs it
 
-- R2.1 THE SYSTEM SHALL run Dagster's daemon and UI as two rootless Podman containers of one image,
+- R2.1 THE SYSTEM SHALL run Dagster's code server, daemon and UI as three rootless Podman containers of one image (ADRs 0133, 0138),
   as the `front-office` user, started by that user's systemd, restarted after a crash and
   after the host reboots, with no login session open (ADR 0133).
 - R2.2 THE SYSTEM SHALL give each container a memory limit, such that the measured peak of a

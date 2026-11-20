@@ -1,6 +1,6 @@
 # 0135. The daily run has its own Google service account, and the spike account is retired
 
-- Status: proposed (the owner's: credentials)
+- Status: accepted (the owner decided at the 2026-11-17 walkthrough; AGENTS.md puts credentials outside an agent's choice)
 - Date: 2026-11-17
 - Spec: [0218-schedule-the-daily-run](../specs/0218-schedule-the-daily-run/design.md) · Issue: #218
 
