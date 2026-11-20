@@ -165,10 +165,11 @@ pull is going: it would quarantine the half capture, which the next pull then fe
 ## Is the second copy current? (the NAS's pull and the backup)
 
 The pull writes `last_pull_ok` beside the NAS's copy (`/volume1/FrontOffice/last_pull_ok`) after each
-good run. It is a DSM Task Scheduler task that, as set up on 2026-11-18, runs **daily at 00:00**
-(the spec says hourly; change the task if the gap matters). Read the file's age on the NAS: more than
-a day plus a couple of hours is a failed pull, and the gap before a second device is open
-(ADR 0137). The external drive's copy is the NAS's Hyper Backup job, daily at 03:00 and including
+good run. It is a DSM Task Scheduler task that runs **hourly, on the hour** (since 2026-11-19 12:00
+ET; it ran daily at 00:00 before then). Read the file's age on the NAS: more than about two hours is
+a failed pull, and the gap before a second device is open (ADR 0137). `mothership`'s SSH log shows
+each pull as a login for `front-office` from the NAS's tailnet address
+(`sudo journalctl -u ssh | grep 'Accepted publickey for front-office'`, as `ubuntu`). The external drive's copy is the NAS's Hyper Backup job, daily at 03:00 and including
 the `FrontOffice` share: read DSM's log for the last success. The pull and the daily job are
 intervals, not bounds.
 
