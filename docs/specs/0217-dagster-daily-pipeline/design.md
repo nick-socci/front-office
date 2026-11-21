@@ -276,3 +276,6 @@ The real-season run (task 5) is the acceptance test; the fixtures cannot show a 
   - Neither defect shows on the DuckDB manifest, so no DuckDB run or fixture test could find
     them: the first showed as a failed load, the second only in a real BigQuery build.
   - *Decided (Codex round 4, owner, 2026-11-17):* the test-to-function edge workaround amends ADR 0128; recorded in ADR 0132.
+- **2026-11-21 (spec 0219): R3.5 is replaced.** The freshness filters now branch on `target.type`
+  (ADR 0143), so `source_freshness` is in `daily` on BigQuery as on DuckDB (0219 R4.2), and reports
+  each feed as an asset check (0219 R4.3).
