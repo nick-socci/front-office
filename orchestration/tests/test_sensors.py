@@ -142,6 +142,20 @@ def test_the_log_line_names_the_slug_and_result_never_the_key(
     assert lines == ["ping front-office-daily: fail sent"]
 
 
+def test_a_ping_that_was_not_sent_logs_the_slug_and_outcome_only(
+    instance: DagsterInstance, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """R2.5: `ping not sent: <slug> <outcome>`, no URL and no key."""
+    _key_file(tmp_path, monkeypatch)
+    lines: list[str] = []
+    context = _context(instance, _job("daily", False))
+    monkeypatch.setattr(
+        type(context.log), "info", lambda self, message, *a, **k: lines.append(message)
+    )
+    sensors.notify(context, send=lambda slug, body, failed, key: "not sent: HTTP 404")
+    assert lines == ["ping not sent: front-office-daily HTTP 404"]
+
+
 def test_an_unreadable_key_file_raises_so_the_tick_shows_it(
     instance: DagsterInstance, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

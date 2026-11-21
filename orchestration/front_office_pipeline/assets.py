@@ -201,24 +201,26 @@ FRESHNESS_FEEDS = {
 SECONDS_PER_HOUR = 3600.0
 
 
-def freshness_checks(sources: Mapping[str, Any]) -> list[AssetCheckResult]:
-    """One check per feed from the parsed `sources.json`; raises when dbt could not judge a feed.
+def freshness_checks(sources: Mapping[str, Any]) -> tuple[list[AssetCheckResult], list[str]]:
+    """One check per judged feed from the parsed `sources.json`, and the feeds dbt did not judge.
 
     A feed is fresh when dbt's status for it is `pass` (`warn` and `error` are its 36 hour and
     7 day limits). A feed with status `runtime error`, or one missing from the file, is not
-    stale but unknown, so it raises `Failure` (R4.4); the message holds the feed's name and
-    fixed text only, never dbt's own message.
+    stale but unknown (R4.4): it gets no check, and comes back as `"<feed>: <reason>"`, the
+    feed's name and fixed text only, never dbt's own message. The other feeds' checks are
+    still returned, so a stale feed beside a broken one is reported.
     """
     results = {
         str(result.get("unique_id", "")).removeprefix(FRESHNESS_SOURCE_PREFIX): result
         for result in sources.get("results", [])
     }
     checks = []
+    unjudged = []
     for feed, (check_name, severity) in FRESHNESS_FEEDS.items():
         result = results.get(feed)
         if result is None or result.get("status") == "runtime error":
-            reason = "no result" if result is None else "runtime error"
-            raise Failure(description=f"dbt source freshness: {feed}: {reason}")
+            unjudged.append(f"{feed}: {'no result' if result is None else 'runtime error'}")
+            continue
         status = str(result["status"])
         age_seconds = result.get("max_loaded_at_time_ago_in_s")
         metadata: dict[str, Any] = {"status": status}
@@ -233,7 +235,7 @@ def freshness_checks(sources: Mapping[str, Any]) -> list[AssetCheckResult]:
                 metadata=metadata,
             )
         )
-    return checks
+    return checks, unjudged
 
 
 def source_freshness_asset(upstream: Iterable[AssetKey]) -> Any:
@@ -262,7 +264,10 @@ def source_freshness_asset(upstream: Iterable[AssetKey]) -> Any:
             artifact = invocation.get_artifact("sources.json")
         except FileNotFoundError as missing:
             raise Failure(description="dbt source freshness wrote no sources.json") from missing
-        checks = freshness_checks(artifact)
+        checks, unjudged = freshness_checks(artifact)
+        if unjudged:
+            yield from checks
+            raise Failure(description=f"dbt source freshness: {', '.join(unjudged)}")
         yield MaterializeResult(asset_key="source_freshness")
         yield from checks
 

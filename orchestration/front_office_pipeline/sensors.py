@@ -27,6 +27,7 @@ from dagster import (
 from front_office_pipeline import alerts
 
 NO_KEY = "no FO_HEALTHCHECKS_PING_KEY_FILE: nothing sent"
+NOT_SENT = "not sent: "
 SENSORS = {
     "ping_success": DagsterRunStatus.SUCCESS,
     "ping_failure": DagsterRunStatus.FAILURE,
@@ -47,7 +48,10 @@ def notify(
     slug = alerts.SLUGS[context.dagster_run.job_name]
     is_failed = alerts.failed(result)
     sent = send(slug, alerts.report(result), is_failed, key)
-    context.log.info(f"ping {slug}: {'fail' if is_failed else 'ok'} {sent}")
+    if sent.startswith(NOT_SENT):
+        context.log.info(f"ping not sent: {slug} {sent.removeprefix(NOT_SENT)}")
+    else:
+        context.log.info(f"ping {slug}: {'fail' if is_failed else 'ok'} {sent}")
     return None
 
 
