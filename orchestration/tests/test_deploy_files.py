@@ -149,6 +149,18 @@ def test_the_code_server_mounts_the_credentials_read_only() -> None:
     assert any(m.startswith("%h/data:/data:") for m in mounts)
 
 
+def test_the_ping_key_reaches_the_code_server_only_and_read_only() -> None:
+    """R5.1. Catches a writable mount, a wrong path or variable, or the key leaking into the
+    daemon or the UI."""
+    mount = "%h/secrets/healthchecks-ping-key:/run/secrets/healthchecks-ping-key:ro"
+    assert values(CODE, "Container", "Volume").count(mount) == 1
+    assert "FO_HEALTHCHECKS_PING_KEY_FILE=/run/secrets/healthchecks-ping-key" in values(
+        CODE, "Container", "Environment"
+    )
+    for unit in (DAEMON, UI):
+        assert "healthchecks" not in unit.read_text().lower(), unit.name
+
+
 def test_the_daemon_and_the_ui_see_no_credential_and_listen_on_loopback_only() -> None:
     for unit in (DAEMON, UI):
         code = "\n".join(
