@@ -1,14 +1,15 @@
 """The daily pipeline as one Dagster code location (spec 0217, ADRs 0127 to 0131).
 
-Why one function: `build_defs()` reads `FO_WAREHOUSE` to decide what `daily` selects (R3.5) and
-which dbt target the manifest is parsed for, so a test can build the definitions under each
-setting; `defs` is its result for the settings of the process, which is what
-`dagster dev -m front_office_pipeline` and `dagster definitions validate` load.
+Why one function: `build_defs()` reads `FO_WAREHOUSE` to decide which dbt target the manifest is
+parsed for, so a test can build the definitions under each setting; `defs` is its result for the
+settings of the process, which is what `dagster dev -m front_office_pipeline` and
+`dagster definitions validate` load.
 
 `daily` selects every asset but `idmap_capture` (R4.2: the `idmap` job runs it, on its own weekly
-schedule, spec 0218), and but `source_freshness` on BigQuery (R3.5: its filters are DuckDB SQL).
-It runs in `in_process_executor`, so steps run one after another and the two fetches never hold
-the landing zone's writer lock together (R1.4).
+schedule, spec 0218), `source_freshness` included on both warehouses (spec 0219 R4.2: its
+filters are chosen by target type, ADR 0143). Three run-status sensors ping healthchecks.io when
+`daily` or `idmap` ends (`sensors.py`). `daily` runs in `in_process_executor`, so steps run one
+after another and the two fetches never hold the landing zone's writer lock together (R1.4).
 """
 
 from dagster import (
@@ -19,7 +20,7 @@ from dagster import (
 )
 from dagster_dbt import DbtCliResource
 
-from front_office_pipeline import assets, dbt_assets, schedules, settings
+from front_office_pipeline import assets, dbt_assets, schedules, sensors, settings
 
 
 def build_defs() -> Definitions:
@@ -28,8 +29,6 @@ def build_defs() -> Definitions:
     source_freshness = assets.source_freshness_asset(dbt_definition.keys)
 
     selection = AssetSelection.all() - AssetSelection.assets("idmap_capture")
-    if settings.warehouse() == "bigquery":
-        selection = selection - AssetSelection.assets("source_freshness")
     daily = define_asset_job("daily", selection=selection, executor_def=in_process_executor)
     idmap = define_asset_job(
         "idmap",
@@ -47,6 +46,7 @@ def build_defs() -> Definitions:
             source_freshness,
         ],
         jobs=[daily, idmap],
+        sensors=sensors.run_sensors([daily, idmap]),
         schedules=[
             schedules.daily_schedule(schedules.daily_cron()),
             schedules.idmap_schedule(schedules.IDMAP_CRON),

@@ -1,6 +1,6 @@
 # 0141. The alert carries fixed-shape parts only
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-20
 - Spec: [0219-alert-on-the-daily-run](../specs/0219-alert-on-the-daily-run/design.md) · Issue: #219
 

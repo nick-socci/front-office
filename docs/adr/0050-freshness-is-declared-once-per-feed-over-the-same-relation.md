@@ -1,6 +1,6 @@
 # 0050. Freshness is declared once per feed over the same relation, and is the age of the feed's run marker in its latest season
 
-- Status: accepted
+- Status: accepted; amended by [0143](0143-freshness-filters-choose-their-sql-by-target-type-and-each-feed-is-a-check.md)
 - Date: 2026-10-10
 - Spec: [0114-freshness-per-feed](../specs/0114-freshness-per-feed/design.md) · Issue: #114
 

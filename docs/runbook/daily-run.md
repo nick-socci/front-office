@@ -18,7 +18,7 @@ Everything is under `/home/front-office` (mode 0700), as the `front-office` user
 | `data/raw/` | the production landing zone; `data/raw.lock` and `raw.upload.lock` sit beside it | |
 | `dagster_home/` | Dagster's instance: SQLite run history | |
 | `dbt_target/` | dbt's `target/` (`run_results.json`, the bytes billed) | |
-| `secrets/.env`, `secrets/google-key.json` | the ESPN cookies, the run's Google key | 0400, in a 0700 directory |
+| `secrets/.env`, `secrets/google-key.json`, `secrets/healthchecks-ping-key` | the ESPN cookies, the run's Google key, the healthchecks.io ping key | 0400, in a 0700 directory |
 | `config/front-office.env` | `FO_BQ_PROJECT=<the project>`: not secret, and not in the public repository | |
 | `.config/containers/systemd/` | the three Quadlet units (`front-office-code`, `-daemon`, `-ui`), copied from `deploy/quadlet/` | |
 
@@ -36,7 +36,8 @@ shows and controls them. All three listen on the host's loopback only (4266, non
 
 A day's run is healthy when the run is `SUCCESS` **and** each fetch asset's `fetch_complete` check
 passed: Dagster does not fail a run for a failed non-blocking check (ADR 0129, 0217 *Amendments*).
-The failed-fetch and stale-feed alerts are #219's.
+Each run's outcome is also emailed to the owner through healthchecks.io: see *Alerts* and
+*When an alert arrives*.
 
 ## Run `daily` by hand
 
@@ -149,6 +150,65 @@ the owner delete the old key.
 
 The owner edits `~/secrets/.env` (`ESPN_S2`, `SWID`), writing in place or moving a new file over it,
 then restarts the code server, then launches `daily`. Never paste a value into an issue, a log or a chat.
+
+## Alerts (healthchecks.io; the owner sets it up)
+
+When a `daily` or `idmap` run ends, a sensor in the code server sends one ping to healthchecks.io
+with a short report as its body: `/fail` when the run failed or was cancelled, or an `ERROR` check
+failed, and a plain ping otherwise (spec 0219, ADRs 0139 to 0142). healthchecks.io emails the owner
+when a check goes **down** (a `/fail`, or no ping by the cron time plus the grace) and when it comes
+back **up**. While a check is down, a later failure sends no new email; every report is in the
+check's log (its last 100 pings).
+
+The owner's setup, once, in healthchecks.io (Hobbyist plan, $0):
+
+| Check (slug) | Cron | Time zone | Grace |
+|---|---|---|---|
+| `front-office-daily` | `0 6 * 3-10 *` | `America/New_York` | 2 h 30 min |
+| `front-office-idmap` | `0 5 * 3-10 1` | `America/New_York` | 2 h 30 min |
+
+The crons are `DAILY_CRON` and `IDMAP_CRON` in `orchestration/front_office_pipeline/schedules.py`:
+change both together. The email integration is the owner's address; a push to a phone is another
+healthchecks.io integration, set there, with nothing to change here.
+
+The project's **ping key** (in the project's settings in healthchecks.io) goes in `~/secrets/healthchecks-ping-key`
+on the host, one line, mode 0400, written by the owner; restart the code server after (`systemctl
+--user restart front-office-code`, once no run is going: see *Deploy a commit*). It is a credential:
+whoever holds it can mark the checks up and hide a failure. Never paste it into an issue, a log or
+a chat. Without the file the sensors skip with "no FO_HEALTHCHECKS_PING_KEY_FILE: nothing sent",
+and the next morning's missing ping becomes a "down" email: the alerting fails safe.
+
+Rehearsals on the laptop use a second healthchecks.io project with the same two slugs, and its own
+ping key in a file the laptop's `FO_HEALTHCHECKS_PING_KEY_FILE` names, so they never touch the
+production checks.
+
+See the sensors and their last ticks:
+
+```bash
+ssh mothership 'podman exec front-office-daemon dagster sensor list -w /app/deploy/workspace.yaml'
+```
+
+## When an alert arrives
+
+The email holds the report: its first line says `FAILED` or `OK`; then the run's id, times and
+status, one line per failure and per warning, and a pointer here. It never holds a path, the
+league's id or an error message (ADR 0141): the run's page in the UI has those
+(`ssh -L 3000:127.0.0.1:3000 mothership`, then `/runs/<run id>`).
+
+| The report says | What it means | What to do |
+|---|---|---|
+| `espn_captures: fetch_complete` with `ESPN returned 401: cookies expired …` | the ESPN login expired; MLB still landed and BigQuery was built | the owner refreshes the cookies (*Replace the ESPN cookies*), then launches `daily` by hand |
+| another `…: fetch_complete`, with counts or `failed game_pks: […]` | a fetch landed what it could; the rest is fetched on the next run | nothing if the next run is clean; if it repeats, read the step's log in the UI |
+| `front_office_dbt (Failure)` and a `model.…: error` line | a model failed, often a new tie where a ranking cuts (ADR 0107) | read the node's error in the UI; open an issue: a tie is a question about the data, not a retry |
+| `front_office_dbt (Failure)` and a `test.…: fail` line | a dbt test went red | read the test's failing rows in the UI; open an issue |
+| `raw_in_warehouse (Failure)` | the upload stopped (for example `privacy hit(s). Nothing was sent.`) | read the step in the UI; a privacy hit is the owner's to resolve, never by editing the check |
+| `source_freshness: mlb_runs_fresh` or `espn_runs_fresh`, with a status and an age | the feed's run marker is over 36 hours old although the run ran | read that feed's fetch step in the same run: it landed no schedule or settings |
+| `run ended FAILURE` or `CANCELED`, with no step | the run was stopped: cancelled, or ended by the two-hour limit | if no one cancelled it, read the run in the UI for the step that hung |
+| a "down" email with no report (the check is late) | no run happened: the host, the containers or the network | `systemctl --user status front-office-code front-office-daemon front-office-ui`; then the host itself |
+| `WARNING …` lines in an `OK with warnings` report | a warn-severity test, or the id map's age; nothing pages for these | read them when convenient; a warning that should page is raised to `error` in its test |
+| a sensor tick failing with `PingKeyUnreadable` (in `dagster sensor list` or the UI) | the key file is missing or not one line | the owner checks `~/secrets/healthchecks-ping-key` |
+
+A good run after any of these sends the "up" email.
 
 ## Stop and start the schedule
 

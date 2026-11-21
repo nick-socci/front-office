@@ -102,11 +102,11 @@ and ADR 0050's declarations. Two source files enabled per target duplicate every
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0139](../../adr/0139-healthchecks-io-is-told-of-every-run-and-alerts-on-a-missed-one.md) | healthchecks.io gets one ping per run from a sensor, and alerts on a missed one | proposed (channel chosen by the owner, 2026-11-20) |
-| [0140](../../adr/0140-an-error-check-or-a-failed-run-fails-the-ping-and-a-warn-is-reported.md) | an `ERROR` check or a failed run fails the ping; a `WARN` is reported only | proposed (chosen by the owner, 2026-11-20) |
-| [0141](../../adr/0141-the-alert-carries-fixed-shape-parts-only.md) | the report carries fixed-shape parts only: no path, no league id, no error message | proposed (chosen by the owner, 2026-11-20) |
-| [0142](../../adr/0142-the-ping-key-is-a-file-mounted-into-the-code-server-only.md) | the ping key is a file in `~/secrets`, mounted into the code server only | proposed (chosen by the owner, 2026-11-20) |
-| [0143](../../adr/0143-freshness-filters-choose-their-sql-by-target-type-and-each-feed-is-a-check.md) | freshness filters choose their SQL by `target.type`; each feed is a check; freshness runs in `daily` on both warehouses | proposed (chosen by the owner, 2026-11-20) |
+| [0139](../../adr/0139-healthchecks-io-is-told-of-every-run-and-alerts-on-a-missed-one.md) | healthchecks.io gets one ping per run from a sensor, and alerts on a missed one | accepted |
+| [0140](../../adr/0140-an-error-check-or-a-failed-run-fails-the-ping-and-a-warn-is-reported.md) | an `ERROR` check or a failed run fails the ping; a `WARN` is reported only | accepted |
+| [0141](../../adr/0141-the-alert-carries-fixed-shape-parts-only.md) | the report carries fixed-shape parts only: no path, no league id, no error message | accepted |
+| [0142](../../adr/0142-the-ping-key-is-a-file-mounted-into-the-code-server-only.md) | the ping key is a file in `~/secrets`, mounted into the code server only | accepted |
+| [0143](../../adr/0143-freshness-filters-choose-their-sql-by-target-type-and-each-feed-is-a-check.md) | freshness filters choose their SQL by `target.type`; each feed is a check; freshness runs in `daily` on both warehouses | accepted |
 
 ## Detailed design
 
@@ -255,3 +255,18 @@ The fetch assets, `fetch_complete`, `cli.ALLOWLIST`, the schedules and `dagster.
 | design-review | F3 (P2): truncating at an item boundary cannot keep one 500-node item under 10,000 bytes | Fixed: the cut falls at a line boundary inside an item, with the count of lines left out |
 
 ## Amendments
+
+- **2026-11-21 (pre-PR review F1): a dbt test that is not an asset check is read from its
+  observation.** dagster-dbt 0.29.30 turns a singular test with several parents into an
+  `AssetObservation` per parent instead of an asset check (`dbt_cli_event.py`,
+  `_to_observation_events`: "a singular test with multiple dependencies"); the observation's
+  metadata holds the test's `unique_id` and `status`. Three of the nine warn-severity tests are such
+  tests (the review read the real manifest), so R2.2 missed them: a `warn` from one of them left
+  the report saying `OK`. `outcome` now also reads `ASSET_OBSERVATION` events: one per test
+  `unique_id` (an observation repeats per parent), `warn` to warnings, `fail` or `error` to
+  failures unless a step's `failed_nodes` already names it; only a `unique_id` of the fixed shape
+  is kept. Within the goals and no-gos; R2.2 now reads "every failed check or observed dbt test of
+  severity `WARN`".
+- **2026-11-21 (pre-PR review F2): a missing `sources.json` is a `FileNotFoundError`.**
+  `DbtCliInvocation.get_artifact` reads the file directly and raises when it is absent, so R4.4's
+  fixed failure is raised from that exception rather than from a `None`.

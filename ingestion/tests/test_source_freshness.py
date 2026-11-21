@@ -26,8 +26,16 @@ REPO = Path(__file__).resolve().parents[2]
 STAGING = REPO / "dbt/models/staging"
 FIXTURES = REPO / "fixtures/landing"
 
-LOADED_AT = "strptime(fetched_at, '%Y%m%dT%H%M%SZ')"
-SEASON_PATH = "json_extract_string(partitions, '$.season')"
+# The declarations as written in the YAML, Jinja unrendered: they branch on `target.type`
+# (ADR 0143). What each warehouse renders is held by test_freshness_by_target.py.
+LOADED_AT = (
+    "{% if target.type == 'bigquery' %}parse_timestamp('%Y%m%dT%H%M%SZ', fetched_at)"
+    "{% else %}strptime(fetched_at, '%Y%m%dT%H%M%SZ'){% endif %}"
+)
+SEASON_PATH = (
+    "{{ 'json_value' if target.type == 'bigquery' else 'json_extract_string' }}"
+    "(partitions, '$.season')"
+)
 # The feeds whose captures carry a season, and whose marker counts only in the latest one.
 SEASON_SCOPED = {"mlb", "espn"}
 # R1.1: feed -> (declaration name, its run marker's endpoint).

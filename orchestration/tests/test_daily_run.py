@@ -48,12 +48,13 @@ def test_daily_builds_the_fixtures(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     result = job.execute_in_process(instance=DagsterInstance.ephemeral(), raise_on_error=False)
 
     # The fixtures' newest capture is months old by design (`_raw_feeds__sources.yml`), so the
-    # one failure expected is `dbt source freshness` saying so; every other step succeeded.
-    failures = {
-        event.step_key: str(event.event_specific_data) for event in result.get_step_failure_events()
-    }
-    assert set(failures) == {"source_freshness"}, failures
-    assert "ERROR STALE" in failures["source_freshness"]
+    # one failure expected is `dbt source freshness` saying so, as failed checks of
+    # `source_freshness` (spec 0219 R4.4: a stale feed fails its check, not the step); every
+    # step succeeded.
+    assert [event.step_key for event in result.get_step_failure_events()] == []
+    fresh = {e.check_name: e.passed for e in result.get_asset_check_evaluations()}
+    assert fresh["mlb_runs_fresh"] is False
+    assert fresh["espn_runs_fresh"] is False
     assert fetches == [
         ["backfill", "mlb", "--season", "2026", "--raw-root", str(FIXTURES)],
         ["backfill", "espn", "--season", "2026", "--raw-root", str(FIXTURES)],
@@ -64,7 +65,7 @@ def test_daily_builds_the_fixtures(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
         if event.asset_key
     }
     assert {"raw_in_warehouse", "mlb_captures", "espn_matchup_days"} <= materialized
-    assert "source_freshness" not in materialized
+    assert "source_freshness" in materialized
     assert any(name.startswith("marts/") for name in materialized)
     assert "idmap_capture" not in materialized
     # The one landing root: `load` recorded the fixtures' captures, and dbt read the same ones.
