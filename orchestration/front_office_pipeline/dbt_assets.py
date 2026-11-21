@@ -14,7 +14,10 @@ without an asset per endpoint (ADR 0127).
 The body runs one `dbt build --exclude-resource-type unit_test` (CI holds the unit tests, and
 #221 decides whether BigQuery does, R3.4) and streams its events, so each model and test is
 its own materialization or check. A failing node fails its asset and, as dbt does, skips what
-depends on it. dbt gets the one landing root in its environment (R3.6).
+depends on it. When dbt exits non-zero the step raises a `Failure` with fixed text and, as its
+`failed_nodes` metadata, the unique id and status of each node that ended `error` or `fail` in
+that invocation's `run_results.json`, never dbt's own message (R3.4). dbt gets the one landing
+root in its environment (R3.6).
 """
 
 import functools
@@ -30,10 +33,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from dagster import AssetExecutionContext, AssetKey, AssetsDefinition
+from dagster import AssetExecutionContext, AssetKey, AssetsDefinition, Failure, MetadataValue
 from dagster_dbt import (
+    DagsterDbtCliRuntimeError,
     DagsterDbtTranslator,
     DagsterDbtTranslatorSettings,
+    DbtCliInvocation,
     DbtCliResource,
     dbt_assets,
 )
@@ -175,6 +180,39 @@ def without_function_parents(manifest: Mapping[str, Any]) -> dict[str, Any]:
     return {**manifest, "nodes": nodes, "parent_map": parent_map}
 
 
+def failed_nodes(run_results: Mapping[str, Any]) -> str:
+    """One `<unique_id>: <status>` line per node that ended `error` or `fail`, in file order.
+
+    Only the id and the status: a node's `message` can carry SQL or data, and the report goes to
+    an outside service.
+    """
+    return "\n".join(
+        f"{result['unique_id']}: {result['status']}"
+        for result in run_results.get("results", [])
+        if result.get("status") in ("error", "fail")
+    )
+
+
+def stream_build(invocation: DbtCliInvocation) -> Iterator[Any]:
+    """Stream the invocation's events; if dbt exits non-zero, raise a `Failure` naming the nodes.
+
+    The failure's description is fixed text and its metadata the failed nodes (R3.4); dagster-dbt's
+    own error carries dbt's output, which is not for the report. A missing `run_results.json`
+    (dbt died before writing it) leaves the list empty.
+    """
+    try:
+        yield from invocation.stream()
+    except DagsterDbtCliRuntimeError as error:
+        try:
+            run_results: Mapping[str, Any] = invocation.get_artifact("run_results.json")
+        except Exception:  # noqa: BLE001 - any trouble reading it means no list, not a new error
+            run_results = {}
+        raise Failure(
+            description="dbt build failed",
+            metadata={"failed_nodes": MetadataValue.text(failed_nodes(run_results))},
+        ) from error
+
+
 def build_dbt_assets(manifest: Mapping[str, Any]) -> AssetsDefinition:
     """One asset per model and seed of `manifest`, built by one streamed `dbt build`."""
     manifest = without_function_parents(manifest)
@@ -192,6 +230,6 @@ def build_dbt_assets(manifest: Mapping[str, Any]) -> AssetsDefinition:
         settings.check_ready()
         args: Sequence[str] = build_args()
         with dbt_environment():
-            yield from dbt.cli(args, context=context).stream()
+            yield from stream_build(dbt.cli(args, context=context))
 
     return front_office_dbt
