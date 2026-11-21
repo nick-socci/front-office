@@ -314,24 +314,29 @@ Built: ingestion, staging, the intermediate layer, the nine marts
 ([above](#the-marts): `fct_matchup_category_scores`, `fct_matchup_results`,
 `fct_player_season_value`, `fct_player_category_value`, `fct_transaction_impact`,
 `fct_lineup_decisions`, `fct_lineup_decision_categories`, `dim_players`,
-`dim_player_league_seasons`), the reconciliation against ESPN, and the
-[docs site](https://nick-socci.github.io/front-office/). Not built, in order:
+`dim_player_league_seasons`), the reconciliation against ESPN, the
+[docs site](https://nick-socci.github.io/front-office/), and then:
 
-1. **BigQuery migration** — adapter-specific JSON and SQL need a representative
-   migration spike; portability is not yet verified. The lineup solver is a Python
-   function that is a BigQuery UDF there (ADRs 0039, 0103).
-2. **Orchestration** — Dagster asset definitions, run in production by Dagster's own
-   daemon on an Always Free VM in the owner's Oracle account until a home server replaces
-   it (ADRs 0122, 0126). No Cloud Scheduler or Cloud Run. The pipeline is defined, as six
-   assets over the CLI plus the 80 dbt models, and runs once locally with
-   `dagster job execute -m front_office_pipeline -j daily` (spec 0217); deploying and
-   scheduling it is next.
-3. **Dashboard** — Streamlit: standings, projections, waiver targets, player trends.
+- **BigQuery** — every model builds on BigQuery from the same SQL, the lineup solver as a
+  BigQuery Python UDF (ADRs 0051, 0103), and `scripts/compare_bigquery.py` holds every
+  column of both warehouses equal, floats included (ADR 0116).
+- **Orchestration** — Dagster runs the daily pipeline, six assets over the CLI plus the
+  dbt models, on an Always Free VM in the owner's Oracle account until a home server
+  replaces it (ADRs 0122, 0126). It runs at 06:00 ET from March to October (ADR 0134),
+  builds BigQuery each day (ADR 0123), and tells healthchecks.io of every run, which
+  emails the owner when one fails or is missed (ADR 0139). The deploy, rollback and
+  alerts are in the [runbook](docs/runbook/daily-run.md).
+
+Not built, in order:
+
+1. **Dashboard** — Streamlit: standings, projections, waiver targets, player trends.
    dbt already knows it is coming: it is declared as an exposure over the nine marts, so
    `dbt build --select +exposure:front_office_dashboard` builds everything it will need.
-4. **Projections and waiver-wire recommendations** — marts that look forward. Everything
+   The first pages read the marts that exist; projections and waiver targets follow
+   item 2.
+2. **Projections and waiver-wire recommendations** — marts that look forward. Everything
    built so far measures what happened.
-5. **2027 season** — the daily schedule starts running for real, which is when source
+3. **2027 season** — the daily schedule starts running for real, which is when source
    freshness and the settle window stop being theoretical.
 
 Not planned: a multi-user portal. It would mean holding other people's ESPN session
