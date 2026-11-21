@@ -10,7 +10,13 @@ from typing import Any
 
 import dagster_dbt
 import pytest
-from dagster import AssetKey, Definitions, in_process_executor
+from dagster import (
+    AssetKey,
+    DagsterRunStatus,
+    DefaultSensorStatus,
+    Definitions,
+    in_process_executor,
+)
 from dagster_dbt.core.dbt_cli_event import DbtCoreCliEventMessage
 
 import front_office_pipeline
@@ -90,17 +96,38 @@ def test_daily_leaves_out_the_id_map(dev_manifest: dict[str, Any]) -> None:
     assert any(name.startswith("marts/") for name in chosen)
 
 
-def test_daily_has_source_freshness_on_duckdb_only(
+def test_daily_has_source_freshness_under_both_warehouses(
     monkeypatch: pytest.MonkeyPatch, dev_manifest: dict[str, Any]
 ) -> None:
-    """R3.5. Catches a BigQuery run that fails after a good build (the freshness filters are
-    DuckDB SQL)."""
+    """R4.2 (0219, replacing 0217 R3.5). Catches a BigQuery daily run that never checks the
+    feeds' freshness, which is where the alert is needed."""
     assert "source_freshness" in selected(front_office_pipeline.build_defs())
     monkeypatch.setenv("FO_WAREHOUSE", "bigquery")
     monkeypatch.setenv("FO_BQ_PROJECT", "p")
     bigquery = front_office_pipeline.build_defs()
-    assert "source_freshness" not in selected(bigquery)
+    assert "source_freshness" in selected(bigquery)
     assert "mlb_captures" in selected(bigquery)
+
+
+@pytest.mark.parametrize("warehouse", ["duckdb", "bigquery"])
+def test_three_running_sensors_monitor_exactly_the_two_jobs(
+    monkeypatch: pytest.MonkeyPatch, dev_manifest: dict[str, Any], warehouse: str
+) -> None:
+    """R1.3. Catches a sensor missing for one end state, one that starts stopped (Dagster's
+    default), or one that monitors every job."""
+    monkeypatch.setenv("FO_WAREHOUSE", warehouse)
+    monkeypatch.setenv("FO_BQ_PROJECT", "p")
+    defs = front_office_pipeline.build_defs()
+    made: list[Any] = list(defs.sensors or [])
+    assert len(made) == 3
+    assert {s._run_status for s in made} == {
+        DagsterRunStatus.SUCCESS,
+        DagsterRunStatus.FAILURE,
+        DagsterRunStatus.CANCELED,
+    }
+    for sensor in made:
+        assert sensor.default_status == DefaultSensorStatus.RUNNING
+        assert sorted(job.name for job in sensor._monitored_jobs or []) == ["daily", "idmap"]
 
 
 def test_daily_runs_its_steps_one_at_a_time(dev_manifest: dict[str, Any]) -> None:

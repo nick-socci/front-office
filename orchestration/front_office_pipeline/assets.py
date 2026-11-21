@@ -12,7 +12,10 @@ Why they are shaped as they are:
 - `raw_in_warehouse` stands for the warehouse's view of the captures (`upload` or `load`). The
   dbt assets depend on it through the translator, which maps every dbt source to this key. A
   non-zero exit raises, which skips what depends on it (R2.2).
-- `source_freshness` runs `dbt source freshness` after the build; a non-zero exit raises.
+- `source_freshness` runs `dbt source freshness` after the build and reads dbt's `sources.json`
+  (spec 0219): one non-blocking check per feed (`mlb_runs_fresh`, `espn_runs_fresh`,
+  `idmap_runs_fresh`), failed when the feed is not `pass`. A stale feed fails its check, not the
+  asset; only a `runtime error` or a missing `sources.json` raises.
 - The order `mlb_captures` -> `espn_captures` -> `espn_matchup_days` -> `raw_in_warehouse` is
   declared as dependencies that carry no data: the fetches share the landing zone's writer lock,
   and a second writer fails rather than waits (R1.4). `idmap_capture` is upstream of
@@ -22,7 +25,7 @@ Every asset first calls `settings.check_ready`, so a BigQuery run without a proj
 any command has run (R3.2). Settings are read when an asset runs, not when it is defined.
 """
 
-from collections.abc import Generator, Iterable
+from collections.abc import Generator, Iterable, Mapping
 from typing import Any
 
 from dagster import (
@@ -185,17 +188,81 @@ def raw_in_warehouse(context: AssetExecutionContext) -> MaterializeResult[None]:
     return MaterializeResult(metadata={"command": args[0]})
 
 
-def source_freshness_asset(upstream: Iterable[AssetKey]) -> Any:
-    """`dbt source freshness` after the build, downstream of every dbt asset (R1.2, R3.5)."""
+# The feeds dbt reports on (`_raw_feeds__sources.yml`), the check each gets, and its severity
+# when stale (R4.3): `mlb` and `espn` are daily, so a failure there is an alert; `idmap` is
+# weekly, always stale before the season's first Monday, and healthchecks.io already reports a
+# missed id-map run, so its failure is a warning.
+FRESHNESS_SOURCE_PREFIX = "source.front_office.raw_feeds."
+FRESHNESS_FEEDS = {
+    "mlb_runs": ("mlb_runs_fresh", AssetCheckSeverity.ERROR),
+    "espn_runs": ("espn_runs_fresh", AssetCheckSeverity.ERROR),
+    "idmap_runs": ("idmap_runs_fresh", AssetCheckSeverity.WARN),
+}
+SECONDS_PER_HOUR = 3600.0
 
-    @asset(key="source_freshness", deps=list(upstream))
-    def source_freshness(
-        context: AssetExecutionContext, dbt: DbtCliResource
-    ) -> MaterializeResult[None]:
+
+def freshness_checks(sources: Mapping[str, Any]) -> list[AssetCheckResult]:
+    """One check per feed from the parsed `sources.json`; raises when dbt could not judge a feed.
+
+    A feed is fresh when dbt's status for it is `pass` (`warn` and `error` are its 36 hour and
+    7 day limits). A feed with status `runtime error`, or one missing from the file, is not
+    stale but unknown, so it raises `Failure` (R4.4); the message holds the feed's name and
+    fixed text only, never dbt's own message.
+    """
+    results = {
+        str(result.get("unique_id", "")).removeprefix(FRESHNESS_SOURCE_PREFIX): result
+        for result in sources.get("results", [])
+    }
+    checks = []
+    for feed, (check_name, severity) in FRESHNESS_FEEDS.items():
+        result = results.get(feed)
+        if result is None or result.get("status") == "runtime error":
+            reason = "no result" if result is None else "runtime error"
+            raise Failure(description=f"dbt source freshness: {feed}: {reason}")
+        status = str(result["status"])
+        age_seconds = result.get("max_loaded_at_time_ago_in_s")
+        metadata: dict[str, Any] = {"status": status}
+        if age_seconds is not None:
+            metadata["age_hours"] = round(float(age_seconds) / SECONDS_PER_HOUR, 1)
+        checks.append(
+            AssetCheckResult(
+                asset_key=AssetKey("source_freshness"),
+                check_name=check_name,
+                passed=status == "pass",
+                severity=severity,
+                metadata=metadata,
+            )
+        )
+    return checks
+
+
+def source_freshness_asset(upstream: Iterable[AssetKey]) -> Any:
+    """`dbt source freshness` after the build, downstream of every dbt asset (R4.2, R4.3).
+
+    dbt exits non-zero for a stale feed, so the command runs with `raise_on_error=False` and
+    the verdict is read from `sources.json`: a stale feed fails its check, not the asset
+    (R4.4). The checks are non-blocking: nothing is downstream of this asset.
+    """
+
+    @multi_asset(
+        specs=[AssetSpec("source_freshness", deps=list(upstream))],
+        check_specs=[
+            AssetCheckSpec(name, asset="source_freshness", blocking=False)
+            for name, _ in FRESHNESS_FEEDS.values()
+        ],
+        name="source_freshness",
+    )
+    def source_freshness(context: AssetExecutionContext, dbt: DbtCliResource) -> FetchResults:
         settings.check_ready()
         with dbt_environment():
-            # `wait()` raises when dbt exits non-zero, which fails the asset (R2.2).
-            dbt.cli(["source", "freshness", "--target", settings.dbt_target()]).wait()
-        return MaterializeResult()
+            invocation = dbt.cli(
+                ["source", "freshness", "--target", settings.dbt_target()], raise_on_error=False
+            ).wait()
+        artifact = invocation.get_artifact("sources.json")
+        if artifact is None:
+            raise Failure(description="dbt source freshness wrote no sources.json")
+        checks = freshness_checks(artifact)
+        yield MaterializeResult(asset_key="source_freshness")
+        yield from checks
 
     return source_freshness

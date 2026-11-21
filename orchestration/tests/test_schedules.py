@@ -160,12 +160,13 @@ def test_idmap_job_selects_only_the_id_map_and_daily_still_leaves_it_out(
     assert defs.resolve_job_def("idmap").executor_def.name == "in_process"
 
 
-def test_daily_still_leaves_out_source_freshness_on_bigquery(
+def test_daily_selects_source_freshness_on_bigquery_and_still_leaves_out_the_id_map(
     monkeypatch: pytest.MonkeyPatch, dev_manifest: dict[str, Any]
 ) -> None:
-    """R3.5 (0217). Catches the new job changing what `daily` selects on BigQuery."""
+    """R4.2 (0219). Catches `daily` on BigQuery dropping the freshness check, or gaining the
+    id map."""
     monkeypatch.setenv("FO_WAREHOUSE", "bigquery")
     monkeypatch.setenv("FO_BQ_PROJECT", "p")
     daily = keys_of(front_office_pipeline.build_defs(), "daily")
-    assert "source_freshness" not in daily
+    assert "source_freshness" in daily
     assert "idmap_capture" not in daily
