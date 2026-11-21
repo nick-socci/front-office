@@ -102,11 +102,11 @@ and ADR 0050's declarations. Two source files enabled per target duplicate every
 
 | ADR | Decision | Status |
 |---|---|---|
-| [0139](../../adr/0139-healthchecks-io-is-told-of-every-run-and-alerts-on-a-missed-one.md) | healthchecks.io gets one ping per run from a sensor, and alerts on a missed one | proposed (channel chosen by the owner, 2026-11-20) |
-| [0140](../../adr/0140-an-error-check-or-a-failed-run-fails-the-ping-and-a-warn-is-reported.md) | an `ERROR` check or a failed run fails the ping; a `WARN` is reported only | proposed (chosen by the owner, 2026-11-20) |
-| [0141](../../adr/0141-the-alert-carries-fixed-shape-parts-only.md) | the report carries fixed-shape parts only: no path, no league id, no error message | proposed (chosen by the owner, 2026-11-20) |
-| [0142](../../adr/0142-the-ping-key-is-a-file-mounted-into-the-code-server-only.md) | the ping key is a file in `~/secrets`, mounted into the code server only | proposed (chosen by the owner, 2026-11-20) |
-| [0143](../../adr/0143-freshness-filters-choose-their-sql-by-target-type-and-each-feed-is-a-check.md) | freshness filters choose their SQL by `target.type`; each feed is a check; freshness runs in `daily` on both warehouses | proposed (chosen by the owner, 2026-11-20) |
+| [0139](../../adr/0139-healthchecks-io-is-told-of-every-run-and-alerts-on-a-missed-one.md) | healthchecks.io gets one ping per run from a sensor, and alerts on a missed one | accepted |
+| [0140](../../adr/0140-an-error-check-or-a-failed-run-fails-the-ping-and-a-warn-is-reported.md) | an `ERROR` check or a failed run fails the ping; a `WARN` is reported only | accepted |
+| [0141](../../adr/0141-the-alert-carries-fixed-shape-parts-only.md) | the report carries fixed-shape parts only: no path, no league id, no error message | accepted |
+| [0142](../../adr/0142-the-ping-key-is-a-file-mounted-into-the-code-server-only.md) | the ping key is a file in `~/secrets`, mounted into the code server only | accepted |
+| [0143](../../adr/0143-freshness-filters-choose-their-sql-by-target-type-and-each-feed-is-a-check.md) | freshness filters choose their SQL by `target.type`; each feed is a check; freshness runs in `daily` on both warehouses | accepted |
 
 ## Detailed design
 

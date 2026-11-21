@@ -1,6 +1,6 @@
 # 0143. Freshness filters choose their SQL by target type, and each feed is a check
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-20
 - Spec: [0219-alert-on-the-daily-run](../specs/0219-alert-on-the-daily-run/design.md) · Issue: #219
 - Amends: [0050](0050-freshness-is-declared-once-per-feed-over-the-same-relation.md)
