@@ -54,6 +54,8 @@ UI_TUNNEL = "ssh -L 3000:127.0.0.1:3000 mothership"
 _FAILED_NODE = re.compile(
     r"(?:model|seed|snapshot|test|unit_test|source)\.[A-Za-z0-9_]+\.[A-Za-z0-9_.]+: (?:error|fail)"
 )
+# A dbt test's unique id, as an observation's metadata carries it: the id part of `_FAILED_NODE`.
+_TEST_ID = re.compile(r"test\.[A-Za-z0-9_]+\.[A-Za-z0-9_.]+")
 _KEY_SHAPE = re.compile(r"[A-Za-z0-9_-]+")
 _LIST = r"\[[\d, ]*\]"
 
@@ -177,12 +179,16 @@ def _when(timestamp: float | None) -> datetime | None:
 
 
 def outcome(instance: DagsterInstance, run: DagsterRun) -> Outcome:
-    """The run's outcome, built only from its step failures and its failed check evaluations.
+    """The run's outcome, built only from its step failures, failed checks and observed dbt tests.
 
     A step failure gives the step key, the error's class name and the `failed_nodes` and
     `stderr_tail` metadata; its message is never read (ADR 0141). A failed check gives its asset
     key, name and the `stderr_tail`, `exit_code`, `status` and `age_hours` metadata: `ERROR`
-    goes to `failures`, `WARN` to `warnings`.
+    goes to `failures`, `WARN` to `warnings`. A dbt test that dagster-dbt records as an
+    observation instead of a check (a singular test with several parents) gives its `unique_id`
+    and `status`, once however many parents repeat it: `warn` to `warnings`, `fail` or `error` to
+    `failures` unless a step already names it; its description is never read (spec 0219
+    *Amendments*, 2026-11-21).
     """
     failures: list[Item] = []
     warnings: list[Item] = []
@@ -237,6 +243,36 @@ def outcome(instance: DagsterInstance, run: DagsterRun) -> Outcome:
             failures.append(item)
         else:
             warnings.append(item)
+    # dagster-dbt records a singular test with several parents as an observation per parent, not
+    # as an asset check; its metadata holds the test's `unique_id` and `status`. The observation's
+    # description is dagster-dbt's message and is never read (ADR 0141).
+    step_nodes = {
+        line.split(": ")[0] for item in failures if item.kind == "step" for line in item.lines
+    }
+    observed: set[str] = set()
+    observations = instance.get_records_for_run(
+        run.run_id, of_type=DagsterEventType.ASSET_OBSERVATION
+    )
+    for record in observations.records:
+        event = record.event_log_entry.dagster_event
+        if event is None:
+            continue
+        metadata = event.asset_observation_data.asset_observation.metadata
+        unique_id = _meta(metadata, "unique_id")
+        test_status = _meta(metadata, "status")
+        if (
+            not isinstance(unique_id, str)
+            or not _TEST_ID.fullmatch(unique_id)
+            or test_status not in ("warn", "fail", "error")
+            or unique_id in observed
+        ):
+            continue
+        observed.add(unique_id)
+        item = Item("check", unique_id, (f"status {test_status}",))
+        if test_status == "warn":
+            warnings.append(item)
+        elif unique_id not in step_nodes:
+            failures.append(item)
     status_name = run.status.value
     if status_name in ("FAILURE", "CANCELED") and not any(i.kind == "step" for i in failures):
         failures.append(Item("run", f"run ended {status_name}", ()))

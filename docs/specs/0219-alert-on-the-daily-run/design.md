@@ -255,3 +255,18 @@ The fetch assets, `fetch_complete`, `cli.ALLOWLIST`, the schedules and `dagster.
 | design-review | F3 (P2): truncating at an item boundary cannot keep one 500-node item under 10,000 bytes | Fixed: the cut falls at a line boundary inside an item, with the count of lines left out |
 
 ## Amendments
+
+- **2026-11-21 (pre-PR review F1): a dbt test that is not an asset check is read from its
+  observation.** dagster-dbt 0.29.30 turns a singular test with several parents into an
+  `AssetObservation` per parent instead of an asset check (`dbt_cli_event.py`,
+  `_to_observation_events`: "a singular test with multiple dependencies"); the observation's
+  metadata holds the test's `unique_id` and `status`. Three of the nine warn-severity tests are such
+  tests (the review read the real manifest), so R2.2 missed them: a `warn` from one of them left
+  the report saying `OK`. `outcome` now also reads `ASSET_OBSERVATION` events: one per test
+  `unique_id` (an observation repeats per parent), `warn` to warnings, `fail` or `error` to
+  failures unless a step's `failed_nodes` already names it; only a `unique_id` of the fixed shape
+  is kept. Within the goals and no-gos; R2.2 now reads "every failed check or observed dbt test of
+  severity `WARN`".
+- **2026-11-21 (pre-PR review F2): a missing `sources.json` is a `FileNotFoundError`.**
+  `DbtCliInvocation.get_artifact` reads the file directly and raises when it is absent, so R4.4's
+  fixed failure is raised from that exception rather than from a `None`.

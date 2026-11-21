@@ -92,8 +92,11 @@ class FakeInvocation:
     def wait(self) -> "FakeInvocation":
         return self
 
-    def get_artifact(self, name: str) -> dict[str, Any] | None:
+    def get_artifact(self, name: str) -> dict[str, Any]:
+        """As the real one: it reads the file, so an absent one raises, never returns `None`."""
         assert name == "sources.json"
+        if self.artifact is None:
+            raise FileNotFoundError(name)
         return self.artifact
 
 
@@ -138,7 +141,11 @@ def test_no_artifact_fails_the_asset_with_fixed_text(monkeypatch: pytest.MonkeyP
     assert not result.success
     [failure] = result.get_step_failure_events()
     assert failure.step_key == "source_freshness"
-    assert failure.event_specific_data.error.cls_name == "Failure"
+    error = failure.event_specific_data.error
+    assert error.cls_name == "Failure"
+    assert "dbt source freshness wrote no sources.json" in error.message
+    assert error.cause is not None
+    assert error.cause.cls_name == "FileNotFoundError"
 
 
 @pytest.mark.usefixtures("ready")

@@ -258,9 +258,10 @@ def source_freshness_asset(upstream: Iterable[AssetKey]) -> Any:
             invocation = dbt.cli(
                 ["source", "freshness", "--target", settings.dbt_target()], raise_on_error=False
             ).wait()
-        artifact = invocation.get_artifact("sources.json")
-        if artifact is None:
-            raise Failure(description="dbt source freshness wrote no sources.json")
+        try:
+            artifact = invocation.get_artifact("sources.json")
+        except FileNotFoundError as missing:
+            raise Failure(description="dbt source freshness wrote no sources.json") from missing
         checks = freshness_checks(artifact)
         yield MaterializeResult(asset_key="source_freshness")
         yield from checks

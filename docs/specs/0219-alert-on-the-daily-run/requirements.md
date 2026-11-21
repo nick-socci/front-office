@@ -79,8 +79,10 @@ When `daily` or `idmap` ends, its outcome reaches the owner.
 - R2.1 THE SYSTEM SHALL treat as failures: a run that ended `FAILURE` or `CANCELED`; a failed
   `fetch_complete` check; a failed dbt test of severity error; and a failed freshness check of the
   `mlb` or `espn` feed. Each of these is an `ERROR` check or a failed step.
-- R2.2 THE SYSTEM SHALL report, without failing the ping, every failed check of severity `WARN`:
-  dbt tests configured `warn`, and the `idmap` feed's freshness.
+- R2.2 THE SYSTEM SHALL report, without failing the ping, every failed check of severity `WARN`
+  and every observed dbt test with status `warn`: dbt tests configured `warn`, and the `idmap`
+  feed's freshness (amended 2026-11-21: a test dagster-dbt records as an observation, design
+  *Amendments*).
 - R2.3 WHEN no ping reaches a check by its cron time plus its grace time THE SYSTEM (healthchecks.io)
   SHALL email the owner that the check is down: the daily check's cron is `0 6 * 3-10 *` and the
   id map's `0 5 * 3-10 1`, both in `America/New_York`, each with a grace of 2 h 30 min (two hours of

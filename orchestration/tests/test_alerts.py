@@ -25,6 +25,7 @@ from dagster import (
     AssetCheckSeverity,
     AssetCheckSpec,
     AssetKey,
+    AssetObservation,
     AssetSelection,
     AssetSpec,
     DagsterInstance,
@@ -33,6 +34,7 @@ from dagster import (
     JobDefinition,
     MaterializeResult,
     MetadataValue,
+    Output,
     asset,
     define_asset_job,
     in_process_executor,
@@ -222,6 +224,84 @@ def test_a_failing_dbt_test_is_listed_once_by_its_unique_id(instance: DagsterIns
     [step] = [item for item in got.failures if item.kind == "step"]
     assert "test.front_office.not_null_x_id.abc123: fail" in step.lines
     assert "test.front_office.warned_test: fail" in step.lines
+
+
+def _observing(*observations: tuple[Any, Any]) -> Any:
+    """An asset yielding one `AssetObservation` per (unique_id, status), as dagster-dbt does for
+    a singular test with several parents (a `None` unique_id or status leaves the key out)."""
+
+    @asset
+    def observed() -> Any:
+        for unique_id, status in observations:
+            metadata = {
+                key: value
+                for key, value in (("unique_id", unique_id), ("status", status))
+                if value is not None
+            }
+            metadata["description"] = "dagster-dbt's message: /home/x/secret_path"
+            yield AssetObservation(asset_key="observed", metadata=metadata)
+        yield Output(None)
+
+    return observed
+
+
+TEST_ID = "test.front_office.a_singular_test"
+
+
+def test_a_warn_observation_is_one_warning_though_it_repeats_per_parent(
+    instance: DagsterInstance,
+) -> None:
+    """Catches: a warn from a multi-parent singular test (an observation, no check) reported OK,
+    or listed once per parent, or carrying dagster-dbt's description."""
+    got = _run(instance, _job(_observing((TEST_ID, "warn"), (TEST_ID, "warn"))))
+    assert got.failures == []
+    assert got.warnings == [alerts.Item("check", TEST_ID, ("status warn",))]
+    assert not alerts.failed(got)
+    assert alerts.report(got).splitlines()[0] == "front-office daily: OK with warnings"
+    assert "secret_path" not in alerts.report(got)
+
+
+@pytest.mark.parametrize(
+    ("unique_id", "status"),
+    [
+        (TEST_ID, "pass"),
+        (TEST_ID, None),
+        (TEST_ID, "skipped"),
+        (None, "warn"),
+        ("model.front_office.not_a_test", "fail"),
+        ("test.front_office", "fail"),
+        ("test.front_office.bad name: fail", "warn"),
+        ("test.front_office.x\nmodel.a.b", "error"),
+        (7, "warn"),
+    ],
+)
+def test_an_observation_that_is_not_a_failing_test_of_the_fixed_shape_is_ignored(
+    instance: DagsterInstance, unique_id: Any, status: Any
+) -> None:
+    got = _run(instance, _job(_observing((unique_id, status))))
+    assert (got.failures, got.warnings) == ([], [])
+
+
+def test_a_fail_observation_named_by_a_step_is_listed_once_in_the_step(
+    instance: DagsterInstance,
+) -> None:
+    @asset(deps=["observed"])
+    def front_office_dbt() -> None:
+        raise Failure(
+            description="x",
+            metadata={"failed_nodes": MetadataValue.text(f"{TEST_ID}: fail")},
+        )
+
+    got = _run(instance, _job(_observing((TEST_ID, "fail"), (TEST_ID, "fail")), front_office_dbt))
+    [step] = got.failures
+    assert step.kind == "step"
+    assert step.lines == (f"{TEST_ID}: fail",)
+
+
+def test_a_fail_observation_no_step_names_is_a_failure(instance: DagsterInstance) -> None:
+    got = _run(instance, _job(_observing((TEST_ID, "fail"), (TEST_ID, "error"))))
+    assert got.failures == [alerts.Item("check", TEST_ID, ("status fail",))]
+    assert alerts.failed(got)
 
 
 def test_a_step_that_raises_with_a_stderr_tail_keeps_only_the_alert_lines(
