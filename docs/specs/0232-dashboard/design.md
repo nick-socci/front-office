@@ -20,7 +20,7 @@ flowchart LR
     subgraph code["front-office-code (run's key)"]
       dbt["dbt build → BigQuery marts"] --> ex["marts_extract<br/>tabledata.list, 0 bytes billed"]
     end
-    ex -- "write .tmp, rename" --> file[("~/dashboard/marts.duckdb")]
+    ex -- "write .tmp, rename" --> file[("~/dashboard/extract.duckdb")]
     file -- "read-only mount" --> dash["front-office-dashboard<br/>Streamlit, no credential"]
     dash --> lo["127.0.0.1:8501"]
   end
@@ -171,7 +171,7 @@ in `ingestion/src/front_office/extract.py`, with the command in `cli.py`:
    select from `marts.<table>`.
 3. Map types (BigQuery → DuckDB): `INTEGER`→`BIGINT`, `FLOAT`→`DOUBLE`, `STRING`→`VARCHAR`,
    `BOOLEAN`→`BOOLEAN`, `DATE`→`DATE`, `TIMESTAMP`→`TIMESTAMPTZ` (C9). Any other type, or a mode
-   other than `NULLABLE`, stops the extract (R2.5). The DuckDB path copies its types as they are.
+   other than `NULLABLE` or `REQUIRED` (amended 2026-11-22), stops the extract (R2.5). The DuckDB path copies its types as they are.
 4. Write every table into a new DuckDB file, `PATH.tmp-<pid>`, in schema `marts`, under the same
    names, so the page queries run unchanged on the extract and on `dbt/ci.duckdb`.
 5. Write `marts.extract_info`: one row per table (`table_name`, `row_count`, `warehouse_modified_at`
@@ -185,7 +185,7 @@ in `ingestion/src/front_office/extract.py`, with the command in `cli.py`:
 
 **The asset** `marts_extract` (in `assets.py`) depends on the dbt assets of the exposure's
 models, and runs the command with `--project $FO_BQ_PROJECT` or `--db` by `FO_WAREHOUSE` (ADR
-0131), to `$FO_DASHBOARD_EXTRACT` (default `/dashboard/marts.duckdb` in the image). It joins
+0131), to `$FO_DASHBOARD_EXTRACT` (default `/dashboard/extract.duckdb` in the image). It joins
 `daily` with no change to the job (C12). If the dbt step fails, Dagster skips the steps below it,
 so the extract is not made (R2.6). Task 5 proves that on an ephemeral instance. The code server's
 unit gains `Volume=%h/dashboard:/dashboard:rw`.
@@ -239,7 +239,7 @@ Image=localhost/front-office:current
 ContainerName=front-office-dashboard
 WorkingDir=/app/dashboard
 Exec=streamlit run front_office_dashboard/app.py
-Environment=FO_DASHBOARD_EXTRACT=/dashboard/marts.duckdb
+Environment=FO_DASHBOARD_EXTRACT=/dashboard/extract.duckdb
 Volume=%h/dashboard:/dashboard:ro
 PublishPort=127.0.0.1:8501:8501
 PodmanArgs=--memory=<from task 9>
@@ -329,3 +329,21 @@ others; restarting it alone touches no run, R5.4).
 | design-review | F6 (P1): ordering the current season by an unverified seed | True. The seed orders only a completed regular season. A season in progress is ordered by computed wins, then losses, labelled (R3.1, ADR 0148) |
 
 ## Amendments
+
+### 2026-11-22: the extract is `extract.duckdb`, loaded by `read_json` (task 4)
+
+- **The file is `extract.duckdb`, not `marts.duckdb`.** DuckDB names a file's catalog after its
+  stem, so a connection to `marts.duckdb` reads `marts.<table>` as ambiguous between the catalog
+  and the schema ("Ambiguous reference to catalog or schema marts", found by the implementer's
+  tests). `FO_DASHBOARD_EXTRACT` defaults to `/dashboard/extract.duckdb`. The extract writes its
+  temporary file under an explicit catalog name, so the writer was never affected.
+- **`REQUIRED` columns are accepted** beside `NULLABLE`: a required column is still one scalar
+  value. `REPEATED`, `RECORD` and any unmapped type are refused, as before.
+- **Rows are staged as newline-delimited JSON and loaded by one `read_json` per table**, typed
+  by the declared columns, instead of `executemany`. On the real season (`warehouse_232`), the
+  row-by-row load took 4 min 32 s for 185,546 rows; the new one takes 1.7 s at a 243 MB peak.
+  All 11 tables equal their source, `except all` both ways, with the same column types. A NaN
+  or an infinity stops the extract (JSON has no form for one), and a test holds that.
+- **The DuckDB-path tests use a synthetic warehouse**, because the gates run pytest before they
+  build `dbt/ci.duckdb`. The extract of the CI warehouse is checked by
+  `scripts/check_dashboard.py` (task 6), which runs after the build.
