@@ -17,7 +17,7 @@ exposures:
     owner:
       name: Nick Socci
     description: >
-      Planned for sub-project 3 and not built. Declared so that the lineage ends where
+      Planned for sub-project 5 and not built. Declared so that the lineage ends where
       the marts are meant to be read, and so that everything the dashboard will need can
       be selected in one expression. It names every mart, which records that the marts
       are the dashboard's interface and not what any page reads; when the dashboard

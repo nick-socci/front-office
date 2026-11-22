@@ -6,15 +6,19 @@ behind it.
 
 ## Where we are
 
-Sub-projects 1 and 2 are complete: ingestion and staging, then the intermediate layer,
-the marts and the reconciliation against ESPN. Sub-project 3 is not started.
+Sub-projects 1 to 3 are complete: ingestion and staging; the intermediate layer, the
+marts and the reconciliation against ESPN; and the BigQuery build. Sub-project 4, the
+daily run, is built and deployed, with its in-season checks still open. Sub-project 5,
+the dashboard, is next.
 
 | Sub-project | Design | Tracker |
 |---|---|---|
 | 1 — ingestion, staging, CI | [`01-ingestion-and-staging.md`](design/01-ingestion-and-staging.md) | Complete, PRs 1–6 |
 | 2 — intermediate layer and marts | [`02-intermediate-and-marts.md`](design/02-intermediate-and-marts.md), then one spec per unit of work in [`specs/`](specs/) | Complete: [milestone](https://github.com/nick-socci/front-office/milestone/1?closed=1) |
 | Review remediation: ingestion hardening | [code review](reviews/2026-09-27-code-review.md) | Complete: [milestone](https://github.com/nick-socci/front-office/milestone/2?closed=1) |
-| 3 — BigQuery, orchestration, dashboard | not yet written | — |
+| 3 — BigQuery | one spec per unit of work in [`specs/`](specs/) | Complete: [milestone](https://github.com/nick-socci/front-office/milestone/3?closed=1) |
+| 4 — orchestration | one spec per unit of work in [`specs/`](specs/); the [runbook](runbook/daily-run.md) | [Milestone](https://github.com/nick-socci/front-office/milestone/4) |
+| 5 — dashboard | one spec per unit of work in [`specs/`](specs/) | [Milestone](https://github.com/nick-socci/front-office/milestone/5) |
 
 **Live status is in [Issues](https://github.com/nick-socci/front-office/issues), not in
 this repo's markdown.** Design docs say what was decided and what it got wrong; issues
