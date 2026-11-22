@@ -24,6 +24,7 @@ exposures:
       exists this list is rewritten from what it queries (ADR 0045).
     depends_on:
       - ref('dim_player_league_seasons')
+      - ref('dim_fantasy_teams')
       - ref('dim_players')
       - ref('fct_lineup_decision_categories')
       - ref('fct_lineup_decisions')
@@ -31,6 +32,7 @@ exposures:
       - ref('fct_matchup_results')
       - ref('fct_player_category_value')
       - ref('fct_player_season_value')
+      - ref('fct_team_standings')
       - ref('fct_transaction_impact')
 
   - name: roster_day_query

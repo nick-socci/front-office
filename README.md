@@ -50,7 +50,7 @@ flattening JSON, deduplicating at the entity grain, and converting to honest uni
 |---|---|---|
 | Staging (`stg_`) | 18: 4 MLB, 13 ESPN, 1 id crosswalk | One model per thing an API returns: a game, a batting line, a roster entry. Flattens the JSON, keeps one row per entity, converts to honest units. No business rules. |
 | Intermediate (`int_`) | 23: 2 MLB, 21 fantasy | The same facts in the project's own terms and no platform's: a roster day, a player's day in MLB, a matchup side. ESPN's vocabulary stops here. |
-| Marts (`fct_`, `dim_`) | 9 | Shaped like a question. [Listed below](#the-marts). |
+| Marts (`fct_`, `dim_`) | 11 | Shaped like a question. [Listed below](#the-marts). |
 | Reconciliation (`rec_`) | 7 | Our numbers beside ESPN's own, and every difference between them. Nothing reads from here; it exists to be checked. |
 
 Every model's description, columns, SQL and tests are on the
@@ -73,6 +73,8 @@ scoring periods; 737 transactions; 143 head-to-head matchups in 17 scoring categ
 | `fct_lineup_decision_categories` | Would the best lineups have changed a category's result? | matchup, team and scored category | 4,862 |
 | `dim_players` | Who is this player? | MLB player | 1,515 |
 | `dim_player_league_seasons` | Which MLB player is a platform's player, in this league and season? | player, league and season | 498 |
+| `dim_fantasy_teams` | What is this fantasy team called? | team, league and season | 12 |
+| `fct_team_standings` | What was each team's regular-season record, and does it match ESPN's? | team, league and season | 12 |
 
 Value is measured against a replacement-level free agent and expressed in matchup
 margins, so it adds up: the 580 player-seasons sum to 2,245.53, and so do the 2,160
@@ -310,11 +312,11 @@ predicts winning has not been tested on past seasons
 
 ## Roadmap
 
-Built: ingestion, staging, the intermediate layer, the nine marts
+Built: ingestion, staging, the intermediate layer, the eleven marts
 ([above](#the-marts): `fct_matchup_category_scores`, `fct_matchup_results`,
 `fct_player_season_value`, `fct_player_category_value`, `fct_transaction_impact`,
 `fct_lineup_decisions`, `fct_lineup_decision_categories`, `dim_players`,
-`dim_player_league_seasons`), the reconciliation against ESPN, the
+`dim_player_league_seasons`, `dim_fantasy_teams`, `fct_team_standings`), the reconciliation against ESPN, the
 [docs site](https://nick-socci.github.io/front-office/), and then:
 
 - **BigQuery** — every model builds on BigQuery from the same SQL, the lineup solver as a
@@ -330,7 +332,7 @@ Built: ingestion, staging, the intermediate layer, the nine marts
 Not built, in order:
 
 1. **Dashboard** — Streamlit: standings, projections, waiver targets, player trends.
-   dbt already knows it is coming: it is declared as an exposure over the nine marts, so
+   dbt already knows it is coming: it is declared as an exposure over the marts, so
    `dbt build --select +exposure:front_office_dashboard` builds everything it will need.
    The first pages read the marts that exist; projections and waiver targets follow
    item 2.

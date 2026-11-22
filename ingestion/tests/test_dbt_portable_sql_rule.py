@@ -292,8 +292,8 @@ def test_the_slice_and_the_macros_it_reaches_hold_no_sql_bigquery_refuses(
     # (spec 0152), three added by spec 0147 (stg_espn__matchup_player_lines,
     # rec_espn__matchup_line_totals and rec_espn__winner_differences), the lineup solver's
     # model, which was a Python model until spec 0137, and the 26 others are ported by spec
-    # 0135.
-    assert len(models) == 75, "the project's SQL models were not all found"
+    # 0135, and two are the marts of spec 0232 (dim_fantasy_teams, fct_team_standings).
+    assert len(models) == 77, "the project's SQL models were not all found"
     assert any("boxscore_players.sql" in label for label in macros), "macros are not followed"
     assert any("json.sql::bigquery__" in label for label in macros), "bigquery forms not reached"
     assert not any("::duckdb__" in label for label in project_sources)

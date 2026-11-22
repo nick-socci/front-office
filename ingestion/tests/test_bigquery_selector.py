@@ -47,6 +47,7 @@ FOLD_FUNCTIONS = [
 LEFT_OUT_TEST = "stg_raw__capture_views_cover_the_manifest"
 
 SELECTED_MODELS = {
+    "dim_fantasy_teams",
     "dim_player_league_seasons",
     "dim_players",
     "fct_lineup_decision_categories",
@@ -55,6 +56,7 @@ SELECTED_MODELS = {
     "fct_matchup_results",
     "fct_player_category_value",
     "fct_player_season_value",
+    "fct_team_standings",
     "fct_transaction_impact",
     "int_fantasy__candidate_day_values",
     "int_fantasy__categories",
@@ -196,12 +198,13 @@ def names(rows: list[dict[str, object]], resource_type: str) -> set[str]:
     return {str(r["name"]) for r in rows if r["resource_type"] == resource_type}
 
 
-def test_the_selector_is_the_seventy_five_models_and_seven_seeds_of_the_project(
+def test_the_selector_is_the_seventy_seven_models_and_seven_seeds_of_the_project(
     selected: list[dict[str, object]],
 ) -> None:
     """Catches a model or seed joining the selector through a new ref, or leaving it,
     unnoticed. Seventy-one were selected under ADR 0096; the solver and its three readers
-    make seventy-five, which is every model of the project."""
+    make seventy-five, which is every model of the project; the two marts of spec 0232
+    (dim_fantasy_teams, fct_team_standings) make seventy-seven."""
     assert names(selected, "model") == SELECTED_MODELS
     assert names(selected, "seed") == SELECTED_SEEDS
     assert names(selected, "model") >= SOLVER_AND_READERS
@@ -235,16 +238,17 @@ def test_the_selector_has_no_python_model_and_the_materializations_counted(
     models = [r for r in selected if r["resource_type"] == "model"]
     assert all(str(r["original_file_path"]).endswith(".sql") for r in models)
     kinds = sorted(r["config"]["materialized"] for r in models)  # type: ignore[index]
-    # Listed on the ci target: 43 tables, 30 views, and the two ephemeral models
+    # Listed on the ci target: 45 tables, 30 views, and the two ephemeral models
     # int_fantasy__player_crosswalk and rec_espn__matchup_line_totals (spec 0135). The 39
-    # tables of ADR 0096's selection and the four it left out, which are all tables.
+    # tables of ADR 0096's selection and the four it left out, which are all tables, and the two
+    # marts of spec 0232.
     counted = (
         kinds.count("table"),
         kinds.count("incremental"),
         kinds.count("view"),
         kinds.count("ephemeral"),
     )
-    assert counted == (43, 0, 30, 2)
+    assert counted == (45, 0, 30, 2)
 
 
 def test_the_selector_takes_the_tests_counted(selected: list[dict[str, object]]) -> None:
@@ -252,18 +256,20 @@ def test_the_selector_takes_the_tests_counted(selected: list[dict[str, object]])
     tests = [r for r in selected if r["resource_type"] == "test"]
     generic = [r for r in tests if r.get("test_metadata")]
     # Every test of the project but the one that checks DuckDB's capture glob against its
-    # manifest (spec 0135, Amendments): 491 of 492. Under ADR 0096 it was 439 (366 generic
+    # manifest (spec 0135, Amendments): 507 of 508. Under ADR 0096 it was 439 (366 generic
     # and 73 singular); the tests of the solver and its readers make 52 more (47 generic and
-    # 5 singular). The figures are what `dbt ls --selector bigquery` lists on `ci`.
-    assert (len(tests), len(generic), len(tests) - len(generic)) == (491, 413, 78)
+    # 5 singular). The figures are what `dbt ls --selector bigquery` lists on `ci`; the two
+    # marts of spec 0232 add 16 (13 generic, 3 singular).
+    assert (len(tests), len(generic), len(tests) - len(generic)) == (507, 426, 81)
     assert LEFT_OUT_TEST not in names(selected, "test")
-    # Every unit test of the project: 231. ADR 0096's selection held 190; 32 more are the
+    # Every unit test of the project: 233. ADR 0096's selection held 190; 32 more are the
     # unit tests of the solver (seven, spec 0137) and of its three readers (24, with spec
     # 0137's missed start tied within float noise, 25), one is the id map's ambiguous-id
     # test (spec 0141, R3.4), and one holds quotes and backslashes in a JSON fixture value
     # (spec 0138, R4.2); six are the folds' edges: three on a side denominator and three on
-    # a correlation (spec 0139, R3.2); one is the id map's rows alike in every kept column (#223).
-    assert len(names(selected, "unit_test")) == 231
+    # a correlation (spec 0139, R3.2); one is the id map's rows alike in every kept column
+    # (#223); two are fct_team_standings's (spec 0232).
+    assert len(names(selected, "unit_test")) == 233
 
 
 def test_no_selected_test_reads_a_relation_outside_the_selector(

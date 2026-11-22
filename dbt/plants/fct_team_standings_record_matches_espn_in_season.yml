@@ -1,0 +1,18 @@
+# fct_team_standings_record_matches_espn_in_season: the same check for a season in progress,
+# a warning (spec 0232, R1.4). In the CI fixtures no matchup has finished, so every team's
+# computed record is 0 against ESPN's fixture record and the test already warns on all of
+# them; the plants fix how many.
+plants:
+  - name: only_one_team_differs
+    why: a season in progress where every team but one has the record ESPN reports
+    sql: >-
+      update marts.fct_team_standings
+      set reported_wins = wins, reported_losses = losses, reported_ties = ties
+      where fantasy_team_id != 1
+    expect: {status: warn, failures: 1}
+  - name: no_team_differs
+    why: a season in progress whose record is ESPN's everywhere warns of nothing
+    sql: >-
+      update marts.fct_team_standings
+      set reported_wins = wins, reported_losses = losses, reported_ties = ties
+    expect: pass

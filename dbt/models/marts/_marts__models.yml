@@ -94,6 +94,142 @@ models:
           arguments:
             expression: "scored_categories > 0"
 
+  - name: dim_fantasy_teams
+    description: >
+      One row per fantasy team per league-season: its name and abbreviation as the platform
+      gives them, keyed like every team column in the marts. A team's name can change from
+      one season to the next, so the season is part of the key. Names are the owners' own in
+      the real league and are masked in CI (fo_anonymize); the real ones stay out of anything
+      committed. Every team id any mart names has a row here, held by
+      dim_fantasy_teams_has_every_team_the_marts_name.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        description: The fantasy platform, espn today.
+        data_type: string
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: league_id
+        description: The platform's league id.
+        data_type: string
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: season
+        description: The season's year.
+        data_type: bigint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: fantasy_team_id
+        description: The platform's team id, unique within its league-season.
+        data_type: bigint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: team_name
+        description: The team's name in that season.
+        data_type: string
+      - name: team_abbrev
+        description: The team's abbreviation in that season.
+        data_type: string
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, fantasy_team_id]
+
+  - name: fct_team_standings
+    description: >
+      One row per fantasy team per league-season: its regular-season record computed from
+      its finished head-to-head matchups in fct_matchup_results, next to the record ESPN
+      reports (spec 0232). A matchup is finished when no category is undecided and the last
+      scoring period of its matchup period is below the league-season's latest scoring
+      period, so a matchup still being played is never counted. Playoff matchups are never
+      counted. The computed columns are null when the league does not score head-to-head
+      categories (scoring_type is not H2H_MOST_CATEGORIES); the reported columns are carried
+      either way. A team with no finished matchup in a head-to-head league has 0s, not nulls.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: platform
+        description: The fantasy platform, espn today.
+        data_type: string
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: league_id
+        description: The platform's league id.
+        data_type: string
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: season
+        description: The season's year.
+        data_type: bigint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: fantasy_team_id
+        description: The platform's team id, unique within its league-season.
+        data_type: bigint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: scoring_type
+        description: The league's scoring type, from int_fantasy__league_seasons.
+        data_type: string
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: matchups
+        description: >
+          The team's finished regular-season matchups. Null unless scoring_type is
+          H2H_MOST_CATEGORIES.
+        data_type: bigint
+      - name: wins
+        description: Finished regular-season matchups the team won. Null as matchups is.
+        data_type: bigint
+      - name: losses
+        description: Finished regular-season matchups the team lost. Null as matchups is.
+        data_type: bigint
+      - name: ties
+        description: Finished regular-season matchups level on categories. Null as matchups is.
+        data_type: bigint
+      - name: category_wins
+        description: Categories the team won across its finished regular-season matchups. Null as matchups is.
+        data_type: bigint
+      - name: category_losses
+        description: Categories the team lost across its finished regular-season matchups. Null as matchups is.
+        data_type: bigint
+      - name: category_ties
+        description: Categories tied across its finished regular-season matchups. Null as matchups is.
+        data_type: bigint
+      - name: is_regular_season_complete
+        description: >
+          True when the league-season has at least one regular-season matchup and every one
+          is finished. The same on every row of the league-season; it says whether the record
+          is the final one.
+        data_type: boolean
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: reported_wins
+        description: The wins ESPN reports for the team, as reported.
+        data_type: bigint
+      - name: reported_losses
+        description: The losses ESPN reports for the team, as reported.
+        data_type: bigint
+      - name: reported_ties
+        description: The ties ESPN reports for the team, as reported.
+        data_type: bigint
+      - name: reported_playoff_seed
+        description: The playoff seed ESPN reports for the team; null if it reports none.
+        data_type: bigint
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [platform, league_id, season, fantasy_team_id]
+      - dbt_utils.expression_is_true:
+          name: fct_team_standings_record_adds_up
+          arguments:
+            expression: "wins + losses + ties = matchups"
+            config:
+              where: "matchups is not null"
+
   - name: dim_player_league_seasons
     description: >
       One row per player per league and season in which he was rostered or transacted
@@ -3215,3 +3351,72 @@ unit_tests:
         - {scoring_period: 1, actual_value: 1, optimal_value: 4, value_gap: 3, actual_pitcher_starts: 1, optimal_pitcher_starts: 2}
         - {scoring_period: 2, actual_value: 2, optimal_value: 0, value_gap: -2, actual_pitcher_starts: 1, optimal_pitcher_starts: 1}
         - {scoring_period: 3, actual_value: 0, optimal_value: 0, value_gap: 0, actual_pitcher_starts: 1, optimal_pitcher_starts: 1}
+
+  - name: team_standings_count_only_finished_regular_season_matchups
+    description: >
+      Latest scoring period 15. Matchup 1 (period 1, scoring periods 1 to 7) is a decided
+      home win, 6 categories to 3 with 1 level. Matchup 2 (same period) is a tie, 5 to 5.
+      Matchup 3 (period 3, scoring periods 15 to 21) is complete on categories but its
+      period's last scoring period is not below the latest, so it is in progress. Matchup 4
+      is a playoff matchup in a finished period. Only the first two count, so team 1 has 1
+      win, team 2 1 loss, teams 3 and 4 1 tie each, and team 5 (no matchup) has 0s. The
+      season is not complete, since matchup 3 is not finished. ESPN's own record and seed
+      are carried untouched. Catches an in-progress or playoff matchup counted, a side's
+      category counts the wrong way round, a tie counted as a win, and a team with no
+      matchup left out or null.
+    model: fct_team_standings
+    given:
+      - input: ref('fct_matchup_results')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 1, matchup_period: 1, playoff_tier: NONE, home_team_id: 1, away_team_id: 2, home_category_wins: 6, away_category_wins: 3, category_ties: 1, categories_undecided: 0, winner: HOME}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, matchup_period: 1, playoff_tier: NONE, home_team_id: 3, away_team_id: 4, home_category_wins: 5, away_category_wins: 5, category_ties: 0, categories_undecided: 0, winner: TIE}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 3, matchup_period: 3, playoff_tier: NONE, home_team_id: 1, away_team_id: 3, home_category_wins: 2, away_category_wins: 7, category_ties: 1, categories_undecided: 0, winner: AWAY}
+          - {platform: espn, league_id: "1", season: 2026, matchup_id: 4, matchup_period: 2, playoff_tier: WINNERS_BRACKET, home_team_id: 2, away_team_id: 4, home_category_wins: 7, away_category_wins: 3, category_ties: 0, categories_undecided: 0, winner: HOME}
+      - input: ref('int_fantasy__matchup_periods')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_period: 1}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_period: 7}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_period: 8}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_period: 14}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 3, scoring_period: 15}
+          - {platform: espn, league_id: "1", season: 2026, matchup_period: 3, scoring_period: 21}
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_type: H2H_MOST_CATEGORIES, latest_scoring_period: 15}
+      - input: ref('int_fantasy__teams')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1, wins: 9, losses: 3, ties: 0, playoff_seed: 1}
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 2, wins: 8, losses: 4, ties: 0, playoff_seed: 2}
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 3, wins: 6, losses: 5, ties: 1, playoff_seed: 3}
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 4, wins: 5, losses: 6, ties: 1, playoff_seed: 4}
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 5, wins: 0, losses: 0, ties: 0, playoff_seed: null}
+    expect:
+      rows:
+        - {fantasy_team_id: 1, scoring_type: H2H_MOST_CATEGORIES, matchups: 1, wins: 1, losses: 0, ties: 0, category_wins: 6, category_losses: 3, category_ties: 1, is_regular_season_complete: false, reported_wins: 9, reported_losses: 3, reported_ties: 0, reported_playoff_seed: 1}
+        - {fantasy_team_id: 2, scoring_type: H2H_MOST_CATEGORIES, matchups: 1, wins: 0, losses: 1, ties: 0, category_wins: 3, category_losses: 6, category_ties: 1, is_regular_season_complete: false, reported_wins: 8, reported_losses: 4, reported_ties: 0, reported_playoff_seed: 2}
+        - {fantasy_team_id: 3, scoring_type: H2H_MOST_CATEGORIES, matchups: 1, wins: 0, losses: 0, ties: 1, category_wins: 5, category_losses: 5, category_ties: 0, is_regular_season_complete: false, reported_wins: 6, reported_losses: 5, reported_ties: 1, reported_playoff_seed: 3}
+        - {fantasy_team_id: 4, scoring_type: H2H_MOST_CATEGORIES, matchups: 1, wins: 0, losses: 0, ties: 1, category_wins: 5, category_losses: 5, category_ties: 0, is_regular_season_complete: false, reported_wins: 5, reported_losses: 6, reported_ties: 1, reported_playoff_seed: 4}
+        - {fantasy_team_id: 5, scoring_type: H2H_MOST_CATEGORIES, matchups: 0, wins: 0, losses: 0, ties: 0, category_wins: 0, category_losses: 0, category_ties: 0, is_regular_season_complete: false, reported_wins: 0, reported_losses: 0, reported_ties: 0, reported_playoff_seed: null}
+
+  - name: team_standings_are_not_computed_for_a_roto_league
+    description: >
+      A ROTO league-season has no head-to-head record: matchups, wins, losses, ties and the
+      category sums are null, while ESPN's reported record and seed are carried. Catches a
+      0 where there should be no value, and the reported columns dropped (R1.3).
+    model: fct_team_standings
+    given:
+      - input: ref('fct_matchup_results')
+        rows: []
+      - input: ref('int_fantasy__matchup_periods')
+        rows: []
+      - input: ref('int_fantasy__league_seasons')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, scoring_type: ROTO, latest_scoring_period: 15}
+      - input: ref('int_fantasy__teams')
+        rows:
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1, wins: 4, losses: 2, ties: 1, playoff_seed: 1}
+          - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 2, wins: 2, losses: 4, ties: 1, playoff_seed: 2}
+    expect:
+      rows:
+        - {fantasy_team_id: 1, scoring_type: ROTO, matchups: null, wins: null, losses: null, ties: null, category_wins: null, category_losses: null, category_ties: null, reported_wins: 4, reported_losses: 2, reported_ties: 1, reported_playoff_seed: 1}
+        - {fantasy_team_id: 2, scoring_type: ROTO, matchups: null, wins: null, losses: null, ties: null, category_wins: null, category_losses: null, category_ties: null, reported_wins: 2, reported_losses: 4, reported_ties: 1, reported_playoff_seed: 2}

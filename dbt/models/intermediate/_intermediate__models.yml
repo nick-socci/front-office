@@ -66,6 +66,18 @@ models:
       - name: season
         data_type: bigint
         constraints: [{type: not_null}]
+      - name: scoring_type
+        description: >
+          The league's scoring type as ESPN names it (H2H_MOST_CATEGORIES, ROTO, ...),
+          from the settings. fct_team_standings computes a record only for head-to-head
+          categories.
+        data_type: string
+        constraints: [{type: not_null}]
+      - name: latest_scoring_period
+        description: >
+          ESPN's game-wide period counter when the settings were captured. A matchup whose
+          last scoring period is below it is over. Null if the settings do not give it.
+        data_type: bigint
       - name: has_rosters
         description: >
           True when at least one roster entry is loaded for the league-season. Read from
