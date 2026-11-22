@@ -1,6 +1,6 @@
 # 0145. The dashboard is a Streamlit app in the repository
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-21
 - Spec: [0232-dashboard](../specs/0232-dashboard/design.md) · Issue: #232
 

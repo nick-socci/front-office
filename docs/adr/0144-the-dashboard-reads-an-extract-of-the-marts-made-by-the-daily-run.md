@@ -1,6 +1,6 @@
 # 0144. The dashboard reads an extract of the marts, made by the daily run
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-21
 - Spec: [0232-dashboard](../specs/0232-dashboard/design.md) · Issue: #232
 
