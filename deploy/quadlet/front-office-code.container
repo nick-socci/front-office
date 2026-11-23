@@ -4,8 +4,8 @@
 # key and the landing zone.
 #
 # Install as the `front-office` user: copy deploy/quadlet/*.container to
-# ~/.config/containers/systemd/, then `systemctl --user daemon-reload` and start the three units
-# (the code server first: the daemon and the UI start after it).
+# ~/.config/containers/systemd/, then `systemctl --user daemon-reload` and start the units
+# (the code server first: the daemon and the UI start after it; the dashboard unit, the fourth, waits for no one).
 # Podman 4.9's Quadlet has no `Memory=` and no pods (spec C19), so the limit is `PodmanArgs`, and the
 # container's directory is `WorkingDir` (not systemd's `WorkingDirectory`). The working directory
 # holds no `.env`: Dagster loads the one in its own directory over its environment (0217

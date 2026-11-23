@@ -26,6 +26,9 @@ UNITS = DEPLOY / "quadlet"
 CODE = UNITS / "front-office-code.container"
 DAEMON = UNITS / "front-office-daemon.container"
 UI = UNITS / "front-office-ui.container"
+DASHBOARD = UNITS / "front-office-dashboard.container"
+# The three Dagster units share the host's network and the code server's directory; the dashboard
+# is the fourth unit and differs on purpose (its tests are below).
 ALL_UNITS = (CODE, DAEMON, UI)
 
 # The [Container] keys Podman 4.9.3's Quadlet accepted on `mothership` (spec C19) or documents
@@ -40,6 +43,7 @@ ACCEPTED_CONTAINER_KEYS = {
     "Volume",
     "Network",
     "PodmanArgs",
+    "PublishPort",
 }
 # `front-office.env` (the non-secret EnvironmentFile) is allowed; the ESPN `.env` is not.
 CREDENTIAL_WORDS = ("secrets", "/app/.env", "google-key", "GOOGLE_APPLICATION_CREDENTIALS")
@@ -214,6 +218,70 @@ def test_the_entrypoint_copies_the_images_instance_file_then_execs() -> None:
     text = script.read_text()
     assert 'cp /app/deploy/dagster.yaml "$DAGSTER_HOME/dagster.yaml"' in text
     assert 'exec "$@"' in text
+
+
+def test_the_dashboard_unit_mounts_only_the_extract_and_holds_no_credential() -> None:
+    """Spec 0232 R5.1, rule 3. Catches a second mount (data, secrets, dagster_home), a writable
+    extract, a config env file, or any credential word in the unit."""
+    assert DASHBOARD.exists()
+    assert values(DASHBOARD, "Container", "Volume") == ["%h/dashboard:/dashboard:ro"]
+    assert values(DASHBOARD, "Container", "EnvironmentFile") == []
+    assert values(DASHBOARD, "Container", "Environment") == [
+        "FO_DASHBOARD_EXTRACT=/dashboard/extract.duckdb"
+    ]
+    code = "\n".join(f"{k}={v}" for _, k, v in unit_lines(DASHBOARD))
+    for word in (*CREDENTIAL_WORDS, "healthchecks", "FO_BQ_PROJECT", "/data", "dagster_home"):
+        assert word not in code, word
+
+
+def test_the_dashboard_unit_is_on_loopback_only_and_off_the_hosts_network() -> None:
+    """ADR 0146, R5.1. Catches `Network=host` (it would reach the code server's 4266 and the UI's
+    3000 on the host's loopback) or a port published beyond 127.0.0.1."""
+    assert values(DASHBOARD, "Container", "Network") == []
+    assert values(DASHBOARD, "Container", "PublishPort") == ["127.0.0.1:8501:8501"]
+
+
+def test_the_dashboard_unit_runs_the_app_and_is_limited_restarted_and_independent() -> None:
+    """R5.1, R5.4. Catches a missing limit or `--init`, a different entry point, a working
+    directory that hides `.streamlit/config.toml`, and a dependency on the code server (the
+    dashboard must run without it)."""
+    exec_line = values(DASHBOARD, "Container", "Exec")
+    assert len(exec_line) == 1
+    assert exec_line[0].startswith("streamlit run front_office_dashboard/app.py")
+    assert "--server.address=0.0.0.0" in exec_line[0]
+    assert values(DASHBOARD, "Container", "WorkingDir") == ["/app/dashboard"]
+    assert values(DASHBOARD, "Container", "Image") == ["localhost/front-office:current"]
+    assert values(DASHBOARD, "Container", "ContainerName") == ["front-office-dashboard"]
+    podman_args = values(DASHBOARD, "Container", "PodmanArgs")
+    assert len([a for a in podman_args if a.startswith("--memory=")]) == 1
+    assert "--init" in podman_args
+    assert values(DASHBOARD, "Service", "Restart") == ["always"]
+    assert values(DASHBOARD, "Install", "WantedBy") == ["default.target"]
+    for key in ("After", "Wants", "Requires", "BindsTo"):
+        assert "front-office-code" not in "".join(values(DASHBOARD, "Unit", key)), key
+
+
+def test_the_dashboard_unit_uses_only_keys_podman_4_9_accepts() -> None:
+    groups = {g for g, _, _ in unit_lines(DASHBOARD)}
+    assert groups <= {"Unit", "Container", "Service", "Install"}
+    keys = {k for g, k, _ in unit_lines(DASHBOARD) if g == "Container"}
+    assert keys <= ACCEPTED_CONTAINER_KEYS, keys - ACCEPTED_CONTAINER_KEYS
+
+
+def test_the_image_serves_the_dashboard() -> None:
+    """R5.1, C20. Catches an image built without the app (the `.containerignore` line, the
+    dependency group, or the smoke check gone) and an extract that cannot name its commit."""
+    text = (DEPLOY / "Containerfile").read_text()
+    code = [line for line in text.splitlines() if not line.strip().startswith("#")]
+    syncs = [line for line in code if "uv sync" in line]
+    assert len(syncs) == 2 and all("--group dashboard" in line for line in syncs)
+    assert "ENV FO_GIT_COMMIT=$GIT_COMMIT" in code
+    assert code.index("ARG GIT_COMMIT=unknown") < code.index("ENV FO_GIT_COMMIT=$GIT_COMMIT")
+    assert any(line.startswith("RUN") and "front_office_dashboard.data" in line for line in code), (
+        "the build must import the app"
+    )
+    assert any("front_office_dashboard.labels" in line for line in code)
+    assert "dashboard" not in ignore_patterns()
 
 
 # --- the pull ---------------------------------------------------------------------------------
