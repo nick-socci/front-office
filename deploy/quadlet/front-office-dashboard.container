@@ -11,7 +11,8 @@
 #
 # Same Quadlet limits as the others (Podman 4.9 has no `Memory=` and no pods, spec C19): the limit is
 # `PodmanArgs`, and the directory is `WorkingDir`, which is where Streamlit reads `.streamlit/config.toml`.
-# The 1g limit is provisional: the runbook's task replaces it with the peak measured on the host.
+# The 512m limit is about three times the peak measured on `mothership` on 2026-11-23 (#232):
+# 161 MB over every page for every season (40 views), headless renderer included; 45 MB idle.
 
 [Unit]
 Description=Front Office: dashboard (Streamlit over the marts extract, loopback only)
@@ -24,7 +25,7 @@ Exec=streamlit run front_office_dashboard/app.py --server.address=0.0.0.0
 Environment=FO_DASHBOARD_EXTRACT=/dashboard/extract.duckdb
 Volume=%h/dashboard:/dashboard:ro
 PublishPort=127.0.0.1:8501:8501
-PodmanArgs=--memory=1g
+PodmanArgs=--memory=512m
 # PID 1 must reap its children (spec 0218 *Amendments*).
 PodmanArgs=--init
 
