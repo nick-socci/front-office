@@ -19,6 +19,10 @@ The rules, read from the parsed query (sqlglot), CTEs and subqueries included:
   R4.3  the marts the queries read are exactly the `front_office_dashboard` exposure's refs.
   R7.1  an extract of --db is made, as the app's is, and every query runs on it with its
         example parameters, and returns a row unless it says may-be-empty.
+  R7.2  when the queries sit beside an `app.py` (the dashboard's), every page is rendered
+        headless (Streamlit's AppTest) over that extract: no exception, no error element, the
+        freshness banner on each, no stale warning on a fresh extract; and an extract planted
+        37 hours old, at a fixed time in May, shows the stale warning (R6.2).
 
 Without a `queries/` directory there is nothing to check yet: it says so and exits 0. A
 directory that exists and holds no query is a failure. Every problem is printed, not just the
@@ -32,8 +36,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import sys
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -211,9 +219,12 @@ def check_exposure(reports: list[QueryReport], exposures: Path) -> list[str]:
     return problems
 
 
-def run_queries(db: Path, reports: list[QueryReport], exposures: Path) -> list[str]:
+def run_queries(
+    db: Path, reports: list[QueryReport], exposures: Path, app: Path | None = None
+) -> list[str]:
     """R7.1: extract --db as the app's extract is made, open it read-only, run each query that
-    passed the static rules with its example, and require a row unless it may be empty."""
+    passed the static rules with its example, and require a row unless it may be empty. With an
+    `app`, and every query clean, R7.2 then renders its pages over the same extract."""
     runnable = [r for r in reports if not r.problems]
     if not runnable:
         return []
@@ -226,7 +237,10 @@ def run_queries(db: Path, reports: list[QueryReport], exposures: Path) -> list[s
                 extract(reader, tables, out)
             finally:
                 reader.close()
-            return _run_on(out, runnable)
+            problems = _run_on(out, runnable)
+            if app is not None and len(runnable) == len(reports):
+                problems += render_pages(out, app)
+            return problems
     except ExtractRefused as error:
         return [f"extract of {db} refused: {error}"]
 
@@ -248,7 +262,94 @@ def _run_on(extract_file: Path, reports: list[QueryReport]) -> list[str]:
     return problems
 
 
-def check_all(db: Path, queries_dir: Path, exposures: Path) -> tuple[int, list[str]]:
+BANNER = "Extract made"
+STALE_WARNING = "may be stale"
+# A fixed in-season "now" (the app reads it from FO_DASHBOARD_NOW) and an extract 37 hours before.
+PLANTED_NOW = "2026-05-20T12:00:00+00:00"
+PLANTED_AGE_HOURS = 37
+
+
+@contextmanager
+def _environment(**values: str) -> Iterator[None]:
+    saved = {k: os.environ.get(k) for k in values}
+    os.environ.update(values)
+    try:
+        yield
+    finally:
+        for key, old in saved.items():
+            if old is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = old
+
+
+def _page_problems(label: str, at: Any) -> list[str]:
+    problems = [f"page {label}: exception: {str(e.value).splitlines()[0]}" for e in at.exception]
+    problems += [f"page {label}: error shown: {str(e.value)[:80]}" for e in at.error]
+    if not any(str(c.value).startswith(BANNER) for c in at.caption):
+        problems.append(f"page {label}: no freshness banner")
+    return problems
+
+
+def _warned(at: Any) -> bool:
+    return any(STALE_WARNING in str(w.value) for w in at.warning)
+
+
+def render_pages(extract_file: Path, app: Path) -> list[str]:
+    """R7.2 and R6.2: render the app and each page of `pages/` headless over the extract, then
+    plant an old `extracted_at` and require the stale warning. The extract is edited in place, so
+    it must be the gate's own temporary copy."""
+    try:
+        from streamlit.testing.v1 import AppTest
+    except ImportError:
+        return ["cannot render the pages: streamlit is not installed (uv sync --group dashboard)"]
+    pages = sorted(p.name for p in (app.parent / "pages").glob("*.py"))
+    problems: list[str] = []
+    if not pages:
+        return [f"{app.parent / 'pages'}: no pages to render"]
+    sys.path.insert(0, str(app.parent.parent))
+    try:
+        with _environment(FO_DASHBOARD_EXTRACT=str(extract_file)):
+            os.environ.pop("FO_DASHBOARD_NOW", None)
+            at = AppTest.from_file(str(app), default_timeout=120).run()
+            problems += _page_problems("(first)", at)
+            if _warned(at):
+                problems.append("a stale warning on an extract made a moment ago")
+            for page in pages:
+                at.switch_page(f"pages/{page}").run()
+                problems += _page_problems(page, at)
+            problems += _plant_stale(extract_file, app, AppTest)
+    finally:
+        sys.path.remove(str(app.parent.parent))
+    return problems
+
+
+def _plant_stale(extract_file: Path, app: Path, app_test: Any) -> list[str]:
+    import streamlit as st
+
+    con = duckdb.connect(str(extract_file))
+    try:
+        con.execute(
+            "update marts.extract_info set extracted_at ="
+            f" timestamptz '{PLANTED_NOW}' - interval '{PLANTED_AGE_HOURS} hours'"
+        )
+        con.execute("checkpoint")
+    finally:
+        con.close()
+    st.cache_data.clear()
+    with _environment(FO_DASHBOARD_NOW=PLANTED_NOW):
+        at = app_test.from_file(str(app), default_timeout=120).run()
+    problems = _page_problems("(planted)", at)
+    if not _warned(at):
+        problems.append(
+            f"an extract {PLANTED_AGE_HOURS} hours old in May shows no stale warning (R6.2)"
+        )
+    return problems
+
+
+def check_all(
+    db: Path, queries_dir: Path, exposures: Path, app: Path | None = None
+) -> tuple[int, list[str]]:
     """The number of queries checked and every problem, from all four rules."""
     loaded = load_queries(queries_dir)
     if loaded is None:
@@ -258,7 +359,7 @@ def check_all(db: Path, queries_dir: Path, exposures: Path) -> tuple[int, list[s
         problems.extend(report.problems)
     if reports:
         problems.extend(check_exposure(reports, exposures))
-        problems.extend(run_queries(db, reports, exposures))
+        problems.extend(run_queries(db, reports, exposures, app))
     return len(reports), problems
 
 
@@ -271,7 +372,10 @@ def main(argv: list[str] | None = None) -> int:
     if not args.queries_dir.is_dir():
         print("no dashboard queries yet")
         return 0
-    checked, problems = check_all(args.db, args.queries_dir, args.exposures)
+    app = args.queries_dir.parent / "app.py"
+    checked, problems = check_all(
+        args.db, args.queries_dir, args.exposures, app if app.is_file() else None
+    )
     for problem in problems:
         print(problem)
     if problems:

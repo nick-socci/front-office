@@ -296,3 +296,98 @@ def test_main_lists_every_failure_and_exits_1(tmp_path, warehouse, capsys):
     out = capsys.readouterr().out
     assert code == 1
     assert "a.sql: group by" in out and "a.sql: aggregate" in out
+
+
+# R7.2: the pages rendered headless. A tiny app in tmp_path stands for the dashboard's.
+APP = """
+import streamlit as st
+import duckdb, os, sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import shared
+
+if not Path(os.environ["FO_DASHBOARD_EXTRACT"]).exists():
+    st.stop()
+st.navigation([st.Page("pages/one.py", title="One", default=True)]).run()
+"""
+SHARED = """
+import datetime as dt
+import os
+import duckdb
+import streamlit as st
+
+def header(show_banner=True, warn=True, raise_error=False):
+    con = duckdb.connect(os.environ["FO_DASHBOARD_EXTRACT"], read_only=True)
+    extracted_at = con.execute("select extracted_at from marts.extract_info").fetchone()[0]
+    con.close()
+    now = dt.datetime.fromisoformat(os.environ.get("FO_DASHBOARD_NOW", "2026-11-23T00:00:00+00:00"))
+    if show_banner:
+        st.caption(f"Extract made {extracted_at}")
+    if warn and now - extracted_at > dt.timedelta(hours=36) and now.month in range(3, 11):
+        st.warning("The data may be stale")
+    if raise_error:
+        raise RuntimeError("page broke")
+"""
+
+
+@pytest.fixture
+def tiny_app(tmp_path: Path):
+    """A one-page app and a tiny extract: the page shows the banner, and warns when stale."""
+    pytest.importorskip("streamlit")
+    app_dir = tmp_path / "app"
+    (app_dir / "pages").mkdir(parents=True)
+    (app_dir / "app.py").write_text(APP)
+    (app_dir / "shared.py").write_text(SHARED)
+    set_page(app_dir, "")
+    extract = tmp_path / "extract.duckdb"
+    con = duckdb.connect(str(extract))
+    con.execute("create schema marts")
+    con.execute(
+        "create table marts.extract_info as select now() as extracted_at, 'x' as git_commit"
+    )
+    con.close()
+    return app_dir, extract
+
+
+def set_page(app_dir: Path, arguments: str) -> None:
+    (app_dir / "pages" / "one.py").write_text(f"import shared\nshared.header({arguments})\n")
+
+
+def test_pages_that_render_with_a_banner_and_a_stale_warning_pass(tiny_app):
+    app_dir, extract = tiny_app
+    assert cd.render_pages(extract, app_dir / "app.py") == []
+
+
+def test_a_page_that_raises_is_refused(tiny_app):
+    """Catches a page broken by a mart change that the static rules cannot see."""
+    app_dir, extract = tiny_app
+    set_page(app_dir, "raise_error=True")
+    problems = cd.render_pages(extract, app_dir / "app.py")
+    assert any("one.py" in p and "page broke" in p for p in problems), problems
+
+
+def test_a_page_without_the_banner_is_refused(tiny_app):
+    """Catches a page that shows no freshness line (R6.1)."""
+    app_dir, extract = tiny_app
+    set_page(app_dir, "show_banner=False")
+    problems = cd.render_pages(extract, app_dir / "app.py")
+    assert any("one.py" in p and "no freshness banner" in p for p in problems), problems
+
+
+def test_an_app_that_never_warns_of_a_stale_extract_is_refused(tiny_app):
+    """Catches the stale warning missing in season (R6.2): a 37 hour old extract in May."""
+    app_dir, extract = tiny_app
+    set_page(app_dir, "warn=False")
+    problems = cd.render_pages(extract, app_dir / "app.py")
+    assert any("37 hours old" in p and "no stale warning" in p for p in problems), problems
+
+
+def test_the_gate_renders_the_pages_when_an_app_sits_beside_the_queries(
+    tmp_path, warehouse, tiny_app
+):
+    """Catches R7.2 never running: a broken page fails check_all through the app argument."""
+    app_dir, _ = tiny_app
+    set_page(app_dir, "raise_error=True")
+    directory = write_queries(tmp_path, GOOD)
+    _, problems = cd.check_all(warehouse, directory, exposures(tmp_path), app_dir / "app.py")
+    assert any("page broke" in p for p in problems), problems

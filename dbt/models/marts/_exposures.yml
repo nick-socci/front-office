@@ -11,17 +11,19 @@ version: 2
 
 exposures:
   - name: front_office_dashboard
-    label: Front Office dashboard (planned)
+    label: Front Office dashboard
     type: dashboard
-    maturity: low
+    maturity: medium
     owner:
       name: Nick Socci
     description: >
-      Planned for sub-project 5 and not built. Declared so that the lineage ends where
-      the marts are meant to be read, and so that everything the dashboard will need can
-      be selected in one expression. It names every mart, which records that the marts
-      are the dashboard's interface and not what any page reads; when the dashboard
-      exists this list is rewritten from what it queries (ADR 0045).
+      Sub-project 5 (spec 0232): a Streamlit app, served on mothership's loopback and reached
+      by SSH tunnel, reading one DuckDB extract of exactly the marts listed here (made by
+      `front-office extract-marts` after each daily build). Its pages (standings, matchups,
+      players, lineups, transactions) select, join, filter and sort and compute nothing.
+      This list is what the pages' queries read, and `scripts/check_dashboard.py` fails if
+      a query reads a mart that is not named here or a mart named here is read by no
+      query (ADR 0045's follow-up).
     depends_on:
       - ref('dim_player_league_seasons')
       - ref('dim_fantasy_teams')

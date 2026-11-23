@@ -72,6 +72,12 @@ files = ["ingestion/src", "orchestration", "dashboard"]
 module = "tests.*"
 disallow_untyped_defs = false
 
+# pandas ships no types of its own and pandas-stubs is not a dependency: the dashboard's frames
+# are untyped to mypy.
+[[tool.mypy.overrides]]
+module = ["pandas.*"]
+ignore_missing_imports = true
+
 # The BigQuery client is in the `bigquery` group only; CI's mypy runs without it.
 [[tool.mypy.overrides]]
 module = ["google.*"]
@@ -84,6 +90,6 @@ module = "front_office.bigquery"
 disable_error_code = ["no-untyped-call"]
 
 [tool.pytest.ini_options]
-testpaths = ["ingestion/tests", "orchestration/tests"]
+testpaths = ["ingestion/tests", "orchestration/tests", "dashboard/tests"]
 pythonpath = ["ingestion/src", "scripts", "dbt/python_modules", "dbt/functions", "dashboard"]
 addopts = "-q"

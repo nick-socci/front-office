@@ -363,3 +363,17 @@ others; restarting it alone touches no run, R5.4).
   b)`, `coalesce(a, b)`) and `||` concatenation are not arithmetic nodes, so the gate passes them.
   `coalesce` and `||` are display choices. `greatest` and its kin are deferred: the pages are
   reviewed for them by hand until a query needs one.
+
+### 2026-11-22: the app as built (task 7)
+
+- **The freshness banner is drawn by each page** (`common.header`), not by `app.py`: Streamlit's
+  headless test runs one page's script, so a banner in `app.py` would be invisible to the gate's
+  per-page check (R7.2). `app.py` only shows the no-extract page (R6.3) or runs the navigation.
+- **Column help comes from `_marts__models.yml`**, which ships in the image; the manifest does
+  not (C16). Columns keep their dbt names (R3.2). A column the YAML does not describe, and a
+  joined name such as `home_team_name`, has no help text.
+- **The gate's stale-warning check sets the time** through `FO_DASHBOARD_NOW` (an ISO time with
+  an offset), read only by `freshness.current_time`, so the check does not depend on the month it
+  runs in.
+- **Pickers are select boxes**, and the Players page filters its rows by team and replacement
+  group in the page: a filter, not a computation (ADR 0147).

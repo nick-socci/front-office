@@ -25,7 +25,7 @@ landed as raw JSON, transformed with dbt, stored in DuckDB and BigQuery (the lat
   `scripts/make_espn_seeds.py` and never hand-edited. `espn_reconciliation_residuals.csv`
   is the exception: a register kept by hand, each row naming its league and season and
   carrying its evidence.
-- `dbt/models/marts/_exposures.yml` — what reads the marts: the planned dashboard, and one
+- `dbt/models/marts/_exposures.yml` — what reads the marts: the dashboard (`dashboard/`, held by `scripts/check_dashboard.py`), and one
   exposure per file in `docs/examples/`. `scripts/check_examples.py` (in the gates) fails if
   an example and its exposure disagree, if the example no longer runs, or if it does not
   return the rows stated for it in `docs/examples/expected_on_fixtures.yml`: numbers that
