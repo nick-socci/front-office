@@ -347,3 +347,19 @@ others; restarting it alone touches no run, R5.4).
 - **The DuckDB-path tests use a synthetic warehouse**, because the gates run pytest before they
   build `dbt/ci.duckdb`. The extract of the CI warehouse is checked by
   `scripts/check_dashboard.py` (task 6), which runs after the build.
+
+### 2026-11-22: how the dashboard's gate reads a query (task 6)
+
+- **A query's header gives its example parameters.** A leading `-- example: {"season": 2026, …}`
+  gives a value for every `$parameter` the query uses, and the gate runs the query with them on an
+  extract of `dbt/ci.duckdb` (R7.1). `-- may-be-empty: <reason>` lets a query return no rows on
+  the fixtures; without it, no rows is a failure.
+- **No `queries/` directory means no dashboard yet**, and the gate passes saying so. It existed
+  only between tasks 6 and 7. Once the directory exists, an empty one fails.
+- **`marts.extract_info` is the extract's own table, not a mart.** The freshness banner reads it
+  (R6.1), so R4.3's comparison with the exposure leaves it out. R4.1 and R4.2 apply to it as to
+  any query.
+- **What R4.2 does not see:** a computation through a function over two columns (`greatest(a,
+  b)`, `coalesce(a, b)`) and `||` concatenation are not arithmetic nodes, so the gate passes them.
+  `coalesce` and `||` are display choices. `greatest` and its kin are deferred: the pages are
+  reviewed for them by hand until a query needs one.

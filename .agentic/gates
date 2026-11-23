@@ -6,7 +6,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 step() { printf '\n== %s\n' "$1"; }
 
-step "dependencies (uv sync --locked --group orchestration)"; uv sync --locked --group orchestration
+step "dependencies (uv sync --locked --group orchestration --group dashboard)"; uv sync --locked --group orchestration --group dashboard
 (
   cd dbt
   export DBT_PROFILES_DIR=.
@@ -33,6 +33,7 @@ step "lint SQL (sqlfluff)"; FO_CI_DUCKDB_PATH=dbt/ci.duckdb uv run sqlfluff lint
   step "dbt build (fixtures, anonymised)"; uv run dbt build --target ci --vars '{anonymize: true}'
 )
 step "example queries match their exposures and run"; uv run python scripts/check_examples.py --db dbt/ci.duckdb
+step "dashboard queries (compute nothing, read only the exposure's marts, run)"; uv run python scripts/check_dashboard.py --db dbt/ci.duckdb
 # Before docs generate, which rewrites dbt/target: this reads the build's manifest (spec 0174).
 step "planted failures"; uv run python scripts/check_plants.py --db dbt/ci.duckdb
 # Also reads the build's manifest and compiled SQL: no heavy parse is gathered by its plan (spec 0156).
