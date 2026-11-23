@@ -82,6 +82,9 @@ ALLOWLIST: tuple[re.Pattern[str], ...] = tuple(
         r"every table holds each committed capture once, and the manifest names each",
         r"verify: every row of every table equals what would be sent",
         r"verify \w+\.\w+: \d+ equal, \d+ differ, \d+ missing, \d+ only stored",
+        # `extract-marts`' one success line. Its refusals (`extract-marts: …`) can carry a
+        # library's error text, so none is allowed: they stay withheld.
+        rf"extracted \d+ tables, \d+ rows, to {_PATH}",
     )
 )
 
@@ -105,6 +108,8 @@ class HasLog(Protocol):
 class Result:
     exit_code: int
     tail: tuple[str, ...]
+    # The filtered stdout lines: a command's success line is read from here (`marts_extract`).
+    lines: tuple[str, ...] = ()
 
 
 def filter_line(line: str) -> str:
@@ -145,4 +150,6 @@ def run(args: Sequence[str], context: HasLog, *, prefix: Sequence[str] = FRONT_O
     for line in (*stdout, *stderr):
         context.log.info(line)
     context.log.info(f"exit code {completed.returncode}")
-    return Result(exit_code=completed.returncode, tail=tuple(stderr[-TAIL_LINES:]))
+    return Result(
+        exit_code=completed.returncode, tail=tuple(stderr[-TAIL_LINES:]), lines=tuple(stdout)
+    )

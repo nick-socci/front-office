@@ -17,6 +17,7 @@ Everything is under `/home/front-office` (mode 0700), as the `front-office` user
 | `src/front-office/` | a clone of the public repository, at the commit being built | |
 | `data/raw/` | the production landing zone; `data/raw.lock` and `raw.upload.lock` sit beside it | |
 | `dagster_home/` | Dagster's instance: SQLite run history | |
+| `dashboard/` | the dashboard's extract (`extract.duckdb`), written by the code server and read by the dashboard; create it once with `mkdir -p ~/dashboard` | |
 | `dbt_target/` | dbt's `target/` (`run_results.json`, the bytes billed) | |
 | `secrets/.env`, `secrets/google-key.json`, `secrets/healthchecks-ping-key` | the ESPN cookies, the run's Google key, the healthchecks.io ping key | 0400, in a 0700 directory |
 | `config/front-office.env` | `FO_BQ_PROJECT=<the project>`: not secret, and not in the public repository | |
@@ -56,6 +57,9 @@ Restarting the code server ends a run in flight, so the restart is guarded by a 
 queued, starting, running or being cancelled. The check sits on the restart line, not before the
 build: the build takes minutes, and the schedule (06:00 ET in season) or a person can start a run
 meanwhile. (`dagster run list` cannot tell: it prints ids and jobs, no status.)
+
+The code server's unit mounts `~/dashboard`, which must exist before the restart or the unit does
+not start: run `mkdir -p ~/dashboard` once.
 
 ```bash
 ssh mothership

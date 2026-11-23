@@ -23,6 +23,7 @@ from dagster import (
 from front_office_pipeline import assets, cli, season
 
 GUID = "{272E019C-48D5-42F3-B289-C48A1B163E19}"
+EXTRACTED = "extracted 11 tables, 48210 rows, to /dashboard/extract.duckdb"
 SEVERAL = [
     assets.mlb_captures,
     assets.espn_captures,
@@ -43,7 +44,9 @@ class Recorder:
     ) -> cli.Result:
         self.calls.append((list(args), tuple(prefix)))
         code = self.exits.get(args[0] if args[0] != "backfill" else f"backfill {args[1]}", 0)
-        return cli.Result(code, ("ESPN returned 401: cookies expired",) if code else ())
+        tail = ("ESPN returned 401: cookies expired",) if code else ()
+        lines = (EXTRACTED,) if args[0] == "extract-marts" and not code else ()
+        return cli.Result(code, tail, lines)
 
     @property
     def commands(self) -> list[list[str]]:
@@ -319,3 +322,75 @@ def test_a_run_uses_one_season_even_if_the_clock_crosses_new_years(
     assert result.success
     seasons = {args[args.index("--season") + 1] for args in recorder.commands}
     assert seasons == {"2026"}
+
+
+def test_marts_extract_copies_from_the_duckdb_file_and_reports_counts_not_a_path(
+    recorder: Recorder, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R2.1, R2.7. Catches the wrong warehouse flag, a destination other than the setting, and a
+    path in the metadata (the alerts carry none, ADR 0141)."""
+    monkeypatch.setenv("FO_DASHBOARD_EXTRACT", str(tmp_path / "extract.duckdb"))
+    result = materialize([assets.marts_extract_asset([])], raise_on_error=False)
+    assert result.success
+    assert recorder.calls == [
+        (
+            [
+                "extract-marts",
+                "--out",
+                str(tmp_path / "extract.duckdb"),
+                "--db",
+                str(tmp_path / "w.duckdb"),
+            ],
+            ("front-office",),
+        )
+    ]
+    (event,) = result.get_asset_materialization_events()
+    metadata = {name: value.value for name, value in event.materialization.metadata.items()}
+    assert metadata == {"command": "extract-marts", "tables": 11, "rows": 48210}
+
+
+def test_marts_extract_reads_bigquery_through_the_project_and_the_bigquery_group(
+    recorder: Recorder, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R2.2. Catches a BigQuery run that copies the DuckDB file, or runs without the group."""
+    monkeypatch.setenv("FO_WAREHOUSE", "bigquery")
+    monkeypatch.setenv("FO_BQ_PROJECT", "my-project")
+    monkeypatch.setenv("FO_DASHBOARD_EXTRACT", str(tmp_path / "extract.duckdb"))
+    result = materialize([assets.marts_extract_asset([])], raise_on_error=False)
+    assert result.success
+    assert recorder.calls == [
+        (
+            [
+                "extract-marts",
+                "--out",
+                str(tmp_path / "extract.duckdb"),
+                "--project",
+                "my-project",
+            ],
+            ("uv", "run", "--group", "bigquery", "front-office"),
+        )
+    ]
+
+
+def test_a_failed_extract_fails_the_asset_with_the_stderr_tail(
+    recorder: Recorder, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R2.5. Catches a refused extract that reads as a materialization."""
+    monkeypatch.setenv("FO_DASHBOARD_EXTRACT", str(tmp_path / "extract.duckdb"))
+    recorder.exits = {"extract-marts": 1}
+    result = materialize([assets.marts_extract_asset([])], raise_on_error=False)
+    assert not result.success
+    assert materialized(result) == set()
+    (failure,) = result.get_step_failure_events()
+    error = failure.event_specific_data.error  # type: ignore[union-attr]
+    assert error is not None and "exited 1" in error.message
+
+
+def test_a_bigquery_extract_without_a_project_fails_before_any_command(
+    recorder: Recorder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R3.2. Catches an extract that starts with no project."""
+    monkeypatch.setenv("FO_WAREHOUSE", "bigquery")
+    result = materialize([assets.marts_extract_asset([])], raise_on_error=False)
+    assert not result.success
+    assert recorder.calls == []

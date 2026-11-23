@@ -213,6 +213,23 @@ def stream_build(invocation: DbtCliInvocation) -> Iterator[Any]:
         ) from error
 
 
+def exposure_asset_keys(manifest: Mapping[str, Any], exposure: str) -> list[AssetKey]:
+    """The asset keys of the models a dbt exposure depends on, in the exposure's order.
+
+    The exposure (`dbt/models/marts/_exposures.yml`) stays the one list of what the dashboard
+    reads; `marts_extract` waits for exactly these. The keys come from the translator, so they
+    are the ones the dbt assets carry. A missing exposure raises `KeyError` naming it: an
+    extract with no dependencies would run before the build.
+    """
+    unique_id = f"exposure.{manifest['metadata']['project_name']}.{exposure}"
+    try:
+        named = manifest["exposures"][unique_id]["depends_on"]["nodes"]
+    except KeyError:
+        raise KeyError(f"the manifest has no exposure {exposure!r} naming models") from None
+    translator = SourceToRawInWarehouse()
+    return [translator.get_asset_key(manifest["nodes"][node]) for node in named]
+
+
 def build_dbt_assets(manifest: Mapping[str, Any]) -> AssetsDefinition:
     """One asset per model and seed of `manifest`, built by one streamed `dbt build`."""
     manifest = without_function_parents(manifest)

@@ -149,6 +149,15 @@ def test_the_code_server_mounts_the_credentials_read_only() -> None:
     assert any(m.startswith("%h/data:/data:") for m in mounts)
 
 
+def test_the_code_server_writes_the_dashboards_extract_directory() -> None:
+    """Spec 0232 R2.3, R5.2. Catches a missing mount (the extract would land in the container and
+    vanish at restart), a read-only one, or a path the setting does not name."""
+    assert values(CODE, "Container", "Volume").count("%h/dashboard:/dashboard:rw") == 1
+    assert "FO_DASHBOARD_EXTRACT=/dashboard/extract.duckdb" in values(
+        CODE, "Container", "Environment"
+    )
+
+
 def test_the_ping_key_reaches_the_code_server_only_and_read_only() -> None:
     """R5.1. Catches a writable mount, a wrong path or variable, or the key leaking into the
     daemon or the UI."""

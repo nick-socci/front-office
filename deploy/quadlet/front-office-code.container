@@ -15,7 +15,8 @@
 #
 # Host layout (the runbook): ~/data (the landing zone is ~/data/raw, with its locks beside it),
 # ~/dagster_home, ~/dbt_target, ~/secrets (0700: `.env`, `google-key.json` and `healthchecks-ping-key`, 0400) and
-# ~/config/front-office.env (not secret: FO_BQ_PROJECT=<the project>).
+# ~/config/front-office.env (not secret: FO_BQ_PROJECT=<the project>), and ~/dashboard (the dashboard's
+# extract, `extract.duckdb`, which this server writes and the dashboard reads; create it once, spec 0232).
 
 [Unit]
 Description=Front Office: Dagster code server (runs execute here)
@@ -30,10 +31,12 @@ Exec=dagster api grpc -m front_office_pipeline --location-name front_office_pipe
 EnvironmentFile=%h/config/front-office.env
 Environment=FO_WAREHOUSE=bigquery
 Environment=FO_LANDING_ROOT=/data/raw
+Environment=FO_DASHBOARD_EXTRACT=/dashboard/extract.duckdb
 Environment=GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/google-key.json
 Environment=FO_HEALTHCHECKS_PING_KEY_FILE=/run/secrets/healthchecks-ping-key
 Volume=%h/data:/data:rw
 Volume=%h/dagster_home:/dagster_home:rw
+Volume=%h/dashboard:/dashboard:rw
 Volume=%h/dbt_target:/app/dbt/target:rw
 Volume=%h/secrets/.env:/app/.env:ro
 Volume=%h/secrets/google-key.json:/run/secrets/google-key.json:ro

@@ -78,6 +78,8 @@ CLI_LINES = [
     "raw.mlb_schedule: 12 committed, 10 stored, 2 to send",
     "known account ids: 12; exempt transaction ids checked: 3",
     "every table holds each committed capture once, and the manifest names each",
+    "extracted 11 tables, 48210 rows, to /dashboard/extract.duckdb",
+    "extracted 0 tables, 0 rows, to data/dashboard/extract.duckdb",
 ]
 
 
@@ -113,6 +115,12 @@ def test_each_shape_the_cli_prints_is_kept(line: str) -> None:
         "Traceback (most recent call last):",
         '  File "x.py", line 1, in <module>',
         "boxscores: fetched=1 skipped=2 failed=3 and more",
+        # The refusals can carry a library's own error text, so none is allowed (spec 0232).
+        "extract-marts: BigQuery error: Alice Smith",
+        "extract-marts: fct_x.col has a type the extract does not map",
+        "extracted 11 tables, 48210 rows",
+        "extracted many tables, 5 rows, to /x",
+        "extracted 1 tables, 2 rows, to /x\x00",
         "landed settings",
         "",
         "   ",

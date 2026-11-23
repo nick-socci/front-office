@@ -7,7 +7,8 @@ settings of the process, which is what `dagster dev -m front_office_pipeline` an
 
 `daily` selects every asset but `idmap_capture` (R4.2: the `idmap` job runs it, on its own weekly
 schedule, spec 0218), `source_freshness` included on both warehouses (spec 0219 R4.2: its
-filters are chosen by target type, ADR 0143). Three run-status sensors ping healthchecks.io when
+filters are chosen by target type, ADR 0143) and `marts_extract` (spec 0232 R2.1), which waits
+for the models the dashboard's exposure names. Three run-status sensors ping healthchecks.io when
 `daily` or `idmap` ends (`sensors.py`). `daily` runs in `in_process_executor`, so steps run one
 after another and the two fetches never hold the landing zone's writer lock together (R1.4).
 """
@@ -27,6 +28,9 @@ def build_defs() -> Definitions:
     manifest = dbt_assets.load_manifest(dbt_assets.manifest_target())
     dbt_definition = dbt_assets.build_dbt_assets(manifest)
     source_freshness = assets.source_freshness_asset(dbt_definition.keys)
+    marts_extract = assets.marts_extract_asset(
+        dbt_assets.exposure_asset_keys(manifest, assets.DASHBOARD_EXPOSURE)
+    )
 
     selection = AssetSelection.all() - AssetSelection.assets("idmap_capture")
     daily = define_asset_job("daily", selection=selection, executor_def=in_process_executor)
@@ -44,6 +48,7 @@ def build_defs() -> Definitions:
             assets.raw_in_warehouse,
             dbt_definition,
             source_freshness,
+            marts_extract,
         ],
         jobs=[daily, idmap],
         sensors=sensors.run_sensors([daily, idmap]),

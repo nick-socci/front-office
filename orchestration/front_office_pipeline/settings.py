@@ -5,7 +5,7 @@ Why one module: the landing root must be one path for the CLI (`--raw-root`), fo
 dbt's capture views read the files of another. Every place that needs it asks here. Each
 function takes `environ` (default `os.environ`) so a test names its own settings.
 
-Nothing here reads a file or a credential: it reads seven environment variables.
+Nothing here reads a file or a credential: it reads eight environment variables.
 """
 
 from __future__ import annotations
@@ -73,6 +73,21 @@ def duckdb_path(*, environ: Mapping[str, str] | None = None) -> Path:
     if not path.is_absolute():
         # `load --db` resolves it in the repository root, dbt's profile in `dbt/`.
         raise ValueError(f"FO_DUCKDB_PATH must be an absolute path, not {named!r}")
+    return path
+
+
+def dashboard_extract(*, environ: Mapping[str, str] | None = None) -> Path:
+    """`FO_DASHBOARD_EXTRACT`, else `data/dashboard/extract.duckdb` (spec 0232, R2.1).
+
+    The file `marts_extract` writes and the dashboard reads. Absolute, like the other paths:
+    the CLI runs in the repository root, so a relative one would depend on where it ran.
+    """
+    named = _env(environ).get("FO_DASHBOARD_EXTRACT")
+    if not named:
+        return REPO_ROOT / "data" / "dashboard" / "extract.duckdb"
+    path = Path(named)
+    if not path.is_absolute():
+        raise ValueError(f"FO_DASHBOARD_EXTRACT must be an absolute path, not {named!r}")
     return path
 
 
