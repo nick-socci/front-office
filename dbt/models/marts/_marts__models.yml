@@ -3354,16 +3354,18 @@ unit_tests:
 
   - name: team_standings_count_only_finished_regular_season_matchups
     description: >
-      Latest scoring period 15. Matchup 1 (period 1, scoring periods 1 to 7) is a decided
+      Latest scoring period 21. Matchup 1 (period 1, scoring periods 1 to 7) is a decided
       home win, 6 categories to 3 with 1 level. Matchup 2 (same period) is a tie, 5 to 5.
       Matchup 3 (period 3, scoring periods 15 to 21) is complete on categories but its
-      period's last scoring period is not below the latest, so it is in progress. Matchup 4
+      period's last scoring period is the latest one, its last day still being played, so it
+      is in progress: the boundary of the rule (ADR 0016: settled once the counter is past
+      it). Matchup 4
       is a playoff matchup in a finished period. Only the first two count, so team 1 has 1
       win, team 2 1 loss, teams 3 and 4 1 tie each, and team 5 (no matchup) has 0s. The
       season is not complete, since matchup 3 is not finished. ESPN's own record and seed
       are carried untouched. Catches an in-progress or playoff matchup counted, a side's
-      category counts the wrong way round, a tie counted as a win, and a team with no
-      matchup left out or null.
+      category counts the wrong way round, a tie counted as a win, a matchup counted on its
+      last day, and a team with no matchup left out or null.
     model: fct_team_standings
     given:
       - input: ref('fct_matchup_results')
@@ -3382,7 +3384,7 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_period: 3, scoring_period: 21}
       - input: ref('int_fantasy__league_seasons')
         rows:
-          - {platform: espn, league_id: "1", season: 2026, scoring_type: H2H_MOST_CATEGORIES, latest_scoring_period: 15}
+          - {platform: espn, league_id: "1", season: 2026, scoring_type: H2H_MOST_CATEGORIES, latest_scoring_period: 21}
       - input: ref('int_fantasy__teams')
         rows:
           - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1, wins: 9, losses: 3, ties: 0, playoff_seed: 1}

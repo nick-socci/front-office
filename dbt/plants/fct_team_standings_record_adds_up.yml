@@ -1,0 +1,11 @@
+# fct_team_standings_record_adds_up: wins, losses and ties add up to the matchups counted
+# (spec 0232, R1.2). In the CI fixtures no matchup has finished, so every count is 0 and the test
+# passes on zeros; the plant breaks one team's sum.
+plants:
+  - name: a_win_with_no_matchup_behind_it
+    why: one team is credited a win that no counted matchup gives it
+    sql: >-
+      update marts.fct_team_standings
+      set wins = wins + 1
+      where fantasy_team_id = 1
+    expect: {status: fail, failures: 1}

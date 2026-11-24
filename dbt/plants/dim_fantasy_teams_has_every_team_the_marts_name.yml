@@ -1,0 +1,11 @@
+# dim_fantasy_teams_has_every_team_the_marts_name: every team a mart names has a name (spec
+# 0232, R1.1). The CI fixtures name every team, so the plant removes one.
+plants:
+  - name: a_team_the_marts_name_has_no_row
+    why: >-
+      a team that the marts name is missing from the names: one row for each mart and team
+      column that names it (three in the fixtures)
+    sql: >-
+      delete from marts.dim_fantasy_teams
+      where fantasy_team_id = 1
+    expect: {status: fail, failures: 3}

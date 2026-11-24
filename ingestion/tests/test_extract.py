@@ -268,10 +268,14 @@ def test_publishing_by_rename_leaves_an_open_reader_on_the_old_file(tmp_path: Pa
     """Catches publishing in place, which would break the dashboard's open connection (R2.3)."""
     out = tmp_path / "extract.duckdb"
     extract.extract(bq_reader(good_client()), ["beta"], out)
+    old_inode = out.stat().st_ino
     old = duckdb.connect(str(out), read_only=True)
     newer = good_client()
     newer.tables["beta"] = ([field("k", "STRING")], [FakeRow("a"), FakeRow("b"), FakeRow("c")])
     extract.extract(bq_reader(newer), ["beta"], out)
+    # A rename gives the path a new file; writing into the old one would not, and a reader could
+    # see it half written.
+    assert out.stat().st_ino != old_inode
     assert old.execute("select count(*) from marts.beta").fetchone() == (1,)
     # DuckDB hands the same process the file it already has open, so a new reader is another
     # process, as the dashboard is.
