@@ -149,8 +149,20 @@ no_run_going && systemctl --user restart front-office-code front-office-daemon f
 journalctl --user -u front-office-code -f            # Ctrl-C at a new "Started"
 ```
 
+Rolling back past the dashboard, to an image whose checkout has no
+`deploy/quadlet/front-office-dashboard.container`, the unit is gone (removed above), so name three
+units in the restart line, and check three containers:
+
+```bash
+no_run_going && systemctl --user restart front-office-code front-office-daemon front-office-ui \
+  || echo "NOT RESTARTED: a run is going (or the UI did not answer). Wait for it to end, then run this line again."
+for c in front-office-code front-office-daemon front-office-ui; do
+  podman inspect $c --format "$c {{index .Config.Labels \"org.opencontainers.image.revision\"}}"; done
+```
+
 `no_run_going` is the function defined in *Deploy a commit*; define it first in a new shell. Then
-the same check as a deploy: each container names `<old>`. Rehearsed on 2026-11-20 by the
+the same check as a deploy (with the loop above in the case of a roll back past the dashboard):
+each container names `<old>`. Rehearsed on 2026-11-20 by the
 owner, from `b29c35a` to `942fb27` and back (#218).
 
 ## Rehearse a run at another time

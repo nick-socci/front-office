@@ -19,10 +19,12 @@ The rules, read from the parsed query (sqlglot), CTEs and subqueries included:
   R4.3  the marts the queries read are exactly the `front_office_dashboard` exposure's refs.
   R7.1  an extract of --db is made, as the app's is, and every query runs on it with its
         example parameters, and returns a row unless it says may-be-empty.
+  R7.3  every table of that extract equals its source mart in --db: `except all` both ways,
+        any differing row failing, the table and the two counts named.
   R7.2  when the queries sit beside an `app.py` (the dashboard's), every page is rendered
         headless (Streamlit's AppTest) over that extract: no exception, no error element, the
         freshness banner on each, no stale warning on a fresh extract; and an extract planted
-        37 hours old, at a fixed time in May, shows the stale warning (R6.2).
+        37 hours old, at a fixed time in May, shows the stale warning on every page (R6.2).
 
 Without a `queries/` directory there is nothing to check yet: it says so and exits 0. A
 directory that exists and holds no query is a failure. Every problem is printed, not just the
@@ -237,12 +239,46 @@ def run_queries(
                 extract(reader, tables, out)
             finally:
                 reader.close()
-            problems = _run_on(out, runnable)
+            problems = _compare_with_source(out, db, tables)
+            problems += _run_on(out, runnable)
             if app is not None and len(runnable) == len(reports):
                 problems += render_pages(out, app)
             return problems
     except ExtractRefused as error:
         return [f"extract of {db} refused: {error}"]
+
+
+def _compare_with_source(extract_file: Path, db: Path, tables: list[str]) -> list[str]:
+    """R7.3: each table of the extract holds exactly the rows of its source mart. `except all`
+    both ways, over the extract's own column list, so a dropped, added or changed row, or a
+    duplicate, is a failure naming the table and the two counts."""
+    problems: list[str] = []
+    con = duckdb.connect()
+    try:
+        con.execute(f"attach '{extract_file}' as ext (read_only)")
+        con.execute(f"attach '{db}' as src (read_only)")
+        for table in tables:
+            names = con.execute(
+                "select column_name from information_schema.columns"
+                " where table_catalog = 'ext' and table_schema = 'marts' and table_name = ?"
+                " order by ordinal_position",
+                [table],
+            ).fetchall()
+            columns = ", ".join(f'"{name}"' for (name,) in names)
+            ext = f"select {columns} from ext.marts.{table}"
+            src = f"select {columns} from src.marts.{table}"
+            (extra,) = con.execute(f"select count(*) from ({ext} except all {src})").fetchone()  # type: ignore[misc]
+            (missing,) = con.execute(f"select count(*) from ({src} except all {ext})").fetchone()  # type: ignore[misc]
+            if extra or missing:
+                problems.append(
+                    f"extract of marts.{table} differs from its source: {extra} rows in the"
+                    f" extract and not the source, {missing} in the source and not the extract"
+                )
+    except duckdb.Error as error:
+        problems.append(f"comparing the extract with {db}: {str(error).splitlines()[0]}")
+    finally:
+        con.close()
+    return problems
 
 
 def _run_on(extract_file: Path, reports: list[QueryReport]) -> list[str]:
@@ -318,13 +354,13 @@ def render_pages(extract_file: Path, app: Path) -> list[str]:
             for page in pages:
                 at.switch_page(f"pages/{page}").run()
                 problems += _page_problems(page, at)
-            problems += _plant_stale(extract_file, app, AppTest)
+            problems += _plant_stale(extract_file, app, AppTest, pages)
     finally:
         sys.path.remove(str(app.parent.parent))
     return problems
 
 
-def _plant_stale(extract_file: Path, app: Path, app_test: Any) -> list[str]:
+def _plant_stale(extract_file: Path, app: Path, app_test: Any, pages: list[str]) -> list[str]:
     import streamlit as st
 
     con = duckdb.connect(str(extract_file))
@@ -339,11 +375,19 @@ def _plant_stale(extract_file: Path, app: Path, app_test: Any) -> list[str]:
     st.cache_data.clear()
     with _environment(FO_DASHBOARD_NOW=PLANTED_NOW):
         at = app_test.from_file(str(app), default_timeout=120).run()
-    problems = _page_problems("(planted)", at)
-    if not _warned(at):
-        problems.append(
-            f"an extract {PLANTED_AGE_HOURS} hours old in May shows no stale warning (R6.2)"
-        )
+        problems = _page_problems("(planted)", at)
+        if not _warned(at):
+            problems.append(
+                f"an extract {PLANTED_AGE_HOURS} hours old in May shows no stale warning (R6.2)"
+            )
+        for page in pages:
+            at.switch_page(f"pages/{page}").run()
+            problems += _page_problems(f"{page} (planted)", at)
+            if not _warned(at):
+                problems.append(
+                    f"page {page}: an extract {PLANTED_AGE_HOURS} hours old in May shows no"
+                    " stale warning (R6.2)"
+                )
     return problems
 
 

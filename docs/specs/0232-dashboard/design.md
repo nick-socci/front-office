@@ -50,7 +50,7 @@ flowchart LR
 | C15 | Dagster's UI is reached only by an SSH tunnel to the host's loopback, and holds no credential. | `deploy/quadlet/front-office-ui.container`; the runbook, *See the schedule and the last run* | `dagster-webserver -h 127.0.0.1 -p 3000`, `Network=host`, one volume (the instance); "an SSH tunnel … is the one way in" | 2026-11-21 |
 | C16 | No manifest sits at a fixed path in the code server, so the extract cannot read the exposure from one. The exposure's YAML is in the image. | `orchestration/front_office_pipeline/dbt_assets.py:94` (`load_manifest` parses into a `tempfile.TemporaryDirectory`); `.containerignore:37` (`dbt/target`); design review F3 (dagster-dbt writes each build's artifacts under its own subdirectory) | as stated. `dbt/models/marts/_exposures.yml` is not ignored, so it is in the image | 2026-11-22 |
 | C17 | The dashboard directory is a placeholder. | `git ls-files dashboard` | `dashboard/.gitkeep` only | 2026-11-21 |
-| C19 | ESPN's status counter is past the last day of every season's regular season, and past the final scoring period once a season is over. `is_active` is true for every season, so it does not mark a season in progress. | on `warehouse_217`: `stg_espn__league_settings` (`latest_scoring_period`, `final_scoring_period`, `current_matchup_period`, `is_active`) beside the largest `scoring_period` of the regular-season matchup periods (`int_fantasy__matchup_periods` joined to `fct_matchup_results`, `playoff_tier = 'NONE'`) | latest / final / last regular-season period: 2018 187/179/158; 2019 195/187/166; 2021 187/179/158; 2022 183/182/158; 2023 187/179/158; 2024 196/195/173; 2025 196/188/167; 2026 188/180/159. Regular-season periods: 21, but 23 in 2024 and 22 in 2025. `is_active` true in all nine rows | 2026-11-22 |
+| C19 | ESPN's status counter is past the last day of every season's regular season, and past the final scoring period once a season is over. `is_active` is true for every season, so it does not mark a season in progress. | on `warehouse_217`: `stg_espn__league_settings` (`latest_scoring_period`, `final_scoring_period`, `current_matchup_period`, `is_active`) beside the largest `scoring_period` of the regular-season matchup periods (`int_fantasy__matchup_periods` joined to `fct_matchup_results`, `playoff_tier = 'NONE'`) | latest / final / last regular-season period: 2018 187/179/158; 2019 195/187/166; 2021 187/179/158; 2022 183/182/158; 2023 187/179/158; 2024 196/195/173; 2025 196/188/167; 2026 188/180/159. Regular-season periods: 21, but 23 in 2024 and 22 in 2025. `current_matchup_period`: 24, but 26 in 2024 and 25 in 2025 (the last playoff period, past every regular one; 2020 `ROTO` 1). `is_active` true in all nine rows | 2026-11-22 |
 | C20 | The image leaves out `dashboard/`, `.git` and `dbt/target`, and keeps the commit only as a label. | `.containerignore:29,35,37`; `deploy/Containerfile` (`ARG GIT_COMMIT`, then `LABEL org.opencontainers.image.revision=$GIT_COMMIT`, no `ENV`) | as stated (design review F2, F4) | 2026-11-22 |
 | C18 | sqlglot is in the locked environment the gates install. | `grep -n sqlglot uv.lock` | `sqlglot` 30.19.0, a dependency of `dagster-dbt` 0.29.30 (`extra = ["rs"]`) and of `dbt-core` | 2026-11-21 |
 | C21 | The revised definition and its test hold on the real season. Counting only finished regular-season matchups (R1.5) gives every team its season's full regular season. Each team's difference from ESPN equals what its listed matchups change, and no other team differs. | the prototype on `warehouse_217`: `fct_matchup_results` unpivoted to sides, joined to each matchup period's largest `scoring_period` and to `stg_espn__league_settings.latest_scoring_period`; counted where `playoff_tier = 'NONE'`, `categories_undecided = 0` and that period is below the counter; differences from `int_fantasy__teams` compared with the per-team sum, over the regular-season rows of `rec_espn__winner_differences`, of (result by our winner − result by ESPN's) | `matchups` 21 for every team in 2018, 2019, 2021 to 2023 and 2026, 23 in 2024, 22 in 2025 (96 rows). Rows that differ or have a listed matchup: 6, each equal to its expected change: 2019 team 8 (0, +1, −1), team 9 (+1, 0, −1); 2022 team 7 (−1, +1, 0), team 8 (+1, −1, 0); 2025 team 4 (+1, 0, −1), team 7 (0, +1, −1) | 2026-11-22 |
@@ -377,3 +377,20 @@ others; restarting it alone touches no run, R5.4).
   runs in.
 - **Pickers are select boxes**, and the Players page filters its rows by team and replacement
   group in the page: a filter, not a computation (ADR 0147).
+
+### 2026-11-23: a matchup is finished once ESPN's current matchup period is past it (PR #236 review, ADR 0149)
+
+- **R1.5's rule changed.** The first rule (the period's last mapped scoring period before
+  `latest_scoring_period`) was wrong in season. `int_fantasy__matchup_periods` grows a day at a
+  time from `pointsByScoringPeriod`, so a matchup counted after its first day. A matchup now counts
+  when `matchup_period < current_matchup_period` (ESPN's `status.currentMatchupPeriod`) and no
+  category is undecided. The owner chose this on 2026-11-23. `int_fantasy__league_seasons` carries
+  `current_matchup_period` in place of `latest_scoring_period`.
+- **The CI fixtures** now say which matchup period they are on: `make_fixtures.py` sets
+  `currentMatchupPeriod` to the fixture's own period, as it already set `latestScoringPeriod` to
+  the fixture's span.
+- **The real-season numbers do not change.** After every real season the counter is past every
+  regular-season period (C19: 24 against 21 in 2026), so C21's counts and the six explained
+  differences stand. They are rebuilt and checked again on #232.
+- **The detailed design's `matchups` row and C21's query** describe the first rule. They are left
+  as written, and this entry supersedes them.

@@ -75,10 +75,10 @@ Team names and standings become marts, tested like the rest.
   `rec_espn__winner_differences` change (our result against ESPN's). It is an error for a
   league-season whose regular season is complete, and a warning for one in progress, where a
   capture taken between rollovers can lag.
-- R1.5 THE SYSTEM SHALL count a regular-season matchup only when it is finished. That means the
-  last scoring period of its matchup period is before the league-season's latest scoring period
-  (ESPN's status counter, read as ADR 0016 reads it), and it has no undecided category. So a
-  matchup in progress is in no one's record until its last day has rolled over.
+- R1.5 THE SYSTEM SHALL count a regular-season matchup only when it is finished. That means its
+  matchup period is before ESPN's current matchup period (`status.currentMatchupPeriod`, amended
+  2026-11-23, ADR 0149), and it has no undecided category. So a matchup in progress is in no
+  one's record until ESPN has moved past its period.
   `is_regular_season_complete` is true when every regular-season matchup is finished.
 
 ### R2. An extract of the marts, made by the daily run

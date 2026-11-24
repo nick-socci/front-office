@@ -250,6 +250,55 @@ def test_a_query_that_says_it_may_be_empty_passes(tmp_path, warehouse):
     assert problems == []
 
 
+def drop_a_row(table: str):
+    """An `extract` that drops one row of `table` after the real one has run."""
+    real = cd.extract
+
+    def extract(reader, tables, out):
+        counts = real(reader, tables, out)
+        con = duckdb.connect(str(out))
+        con.execute(
+            f"delete from marts.{table} where rowid = (select min(rowid) from marts.{table})"
+        )
+        con.close()
+        return counts
+
+    return extract
+
+
+def test_an_extract_equal_to_its_source_passes_the_comparison(tmp_path, warehouse):
+    """Catches the comparison failing on tables that match, in the columns the extract holds."""
+    out = tmp_path / "out.duckdb"
+    cd.extract(cd.DuckDBMartReader(warehouse), ["team_names", "standings"], out)
+    assert cd._compare_with_source(out, warehouse, ["team_names", "standings"]) == []
+
+
+def test_an_extract_that_lost_a_row_fails_the_gate_naming_the_table(
+    tmp_path, warehouse, monkeypatch
+):
+    """Catches an extract that drops a row the queries' example parameters never reach: every
+    query still returns rows, so only the comparison with the source can see it (R7.3)."""
+    con = duckdb.connect(str(warehouse))
+    con.execute("insert into marts.standings values (2026, 2, 5)")
+    con.close()
+    monkeypatch.setattr(cd, "extract", drop_a_row("standings"))
+    _, problems = run(tmp_path, warehouse, GOOD)
+    (found,) = [p for p in problems if "marts.standings" in p]
+    assert "0 rows in the extract and not the source, 1 in the source" in found, problems
+    assert not any("marts.team_names" in p for p in problems), problems
+
+
+def test_an_extract_with_a_row_the_source_lacks_fails_the_comparison(tmp_path, warehouse):
+    """Catches the comparison run one way only: a row added to, or changed in, the extract."""
+    out = tmp_path / "out.duckdb"
+    cd.extract(cd.DuckDBMartReader(warehouse), ["team_names", "standings"], out)
+    con = duckdb.connect(str(out))
+    con.execute("update marts.standings set wins = 4")
+    con.close()
+    (found,) = cd._compare_with_source(out, warehouse, ["team_names", "standings"])
+    assert "marts.standings" in found and "1 rows in the extract and not the source, 1 in" in found
+
+
 def test_a_mart_the_warehouse_lacks_stops_the_extract(tmp_path, warehouse):
     """Catches an exposure naming a table the warehouse does not hold: the extract refuses."""
     text = EXPOSURE_YAML + "      - ref('rosters')\n"
@@ -308,7 +357,12 @@ import shared
 
 if not Path(os.environ["FO_DASHBOARD_EXTRACT"]).exists():
     st.stop()
-st.navigation([st.Page("pages/one.py", title="One", default=True)]).run()
+st.navigation(
+    [
+        st.Page("pages/one.py", title="One", default=True),
+        st.Page("pages/two.py", title="Two"),
+    ]
+).run()
 """
 SHARED = """
 import datetime as dt
@@ -339,6 +393,7 @@ def tiny_app(tmp_path: Path):
     (app_dir / "app.py").write_text(APP)
     (app_dir / "shared.py").write_text(SHARED)
     set_page(app_dir, "")
+    set_page(app_dir, "", "two")
     extract = tmp_path / "extract.duckdb"
     con = duckdb.connect(str(extract))
     con.execute("create schema marts")
@@ -349,8 +404,8 @@ def tiny_app(tmp_path: Path):
     return app_dir, extract
 
 
-def set_page(app_dir: Path, arguments: str) -> None:
-    (app_dir / "pages" / "one.py").write_text(f"import shared\nshared.header({arguments})\n")
+def set_page(app_dir: Path, arguments: str, name: str = "one") -> None:
+    (app_dir / "pages" / f"{name}.py").write_text(f"import shared\nshared.header({arguments})\n")
 
 
 def test_pages_that_render_with_a_banner_and_a_stale_warning_pass(tiny_app):
@@ -380,6 +435,17 @@ def test_an_app_that_never_warns_of_a_stale_extract_is_refused(tiny_app):
     set_page(app_dir, "warn=False")
     problems = cd.render_pages(extract, app_dir / "app.py")
     assert any("37 hours old" in p and "no stale warning" in p for p in problems), problems
+
+
+def test_a_later_page_that_loses_the_stale_warning_is_refused(tiny_app):
+    """Catches the stale warning checked on the first page only (R6.2): the second page keeps
+    its freshness line, so a fresh render passes, but it does not warn on a 37 hour old extract
+    in May."""
+    app_dir, extract = tiny_app
+    set_page(app_dir, "warn=False", "two")
+    problems = cd.render_pages(extract, app_dir / "app.py")
+    assert any("two.py" in p and "no stale warning" in p for p in problems), problems
+    assert not any("one.py" in p for p in problems), problems
 
 
 def test_the_gate_renders_the_pages_when_an_app_sits_beside_the_queries(

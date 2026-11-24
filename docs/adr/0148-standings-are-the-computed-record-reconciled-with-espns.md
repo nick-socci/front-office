@@ -1,6 +1,6 @@
 # 0148. Standings are the computed record, reconciled with ESPN's
 
-- Status: accepted
+- Status: accepted, amended by [0149](0149-a-matchup-is-finished-once-espns-current-matchup-period-is-past-it.md)
 - Date: 2026-11-21
 - Spec: [0232-dashboard](../specs/0232-dashboard/design.md) · Issue: #232
 

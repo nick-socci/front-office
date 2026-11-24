@@ -2,10 +2,11 @@
 -- marts, next to the record ESPN reports (spec 0232).
 --
 -- A matchup counts when it is finished: a regular-season matchup (playoff_tier NONE) with
--- no undecided category, whose matchup period's last scoring period is strictly below the
--- league-season's latest scoring period. The last clause is what keeps a matchup still
--- being played, which already has category totals, out of the record. A matchup period
--- with no scoring periods mapped is never finished. The record is read from
+-- no undecided category, in a matchup period before the league-season's current matchup
+-- period, ESPN's status.currentMatchupPeriod (ADR 0149: a matchup is finished once ESPN's
+-- current matchup period is past it). The last clause is what keeps the matchup being
+-- played, which already has category totals, out of the record. A league-season with no
+-- current matchup period has no finished matchup. The record is read from
 -- fct_matchup_results twice, once from each side, and summed.
 --
 -- The record is computed for head-to-head categories only (scoring_type
@@ -28,20 +29,7 @@
 
 {{ config(materialized='table') }}
 
-with last_periods as (
-
-    select
-        platform,
-        league_id,
-        season,
-        matchup_period,
-        max(scoring_period) as last_scoring_period
-    from {{ ref('int_fantasy__matchup_periods') }}
-    group by platform, league_id, season, matchup_period
-
-),
-
-regular_matchups as (
+with regular_matchups as (
 
     select
         results.platform,
@@ -55,15 +43,10 @@ regular_matchups as (
         results.category_ties,
         coalesce(
             results.categories_undecided = 0
-            and last_periods.last_scoring_period < league_seasons.latest_scoring_period,
+            and results.matchup_period < league_seasons.current_matchup_period,
             false
         ) as is_finished
     from {{ ref('fct_matchup_results') }} as results
-    left join last_periods
-        on last_periods.platform = results.platform
-        and last_periods.league_id = results.league_id
-        and last_periods.season = results.season
-        and last_periods.matchup_period = results.matchup_period
     left join {{ ref('int_fantasy__league_seasons') }} as league_seasons
         on league_seasons.platform = results.platform
         and league_seasons.league_id = results.league_id

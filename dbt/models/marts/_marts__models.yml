@@ -178,7 +178,8 @@ models:
         data_tests: [not_null]
       - name: matchups
         description: >
-          The team's finished regular-season matchups. Null unless scoring_type is
+          The team's finished regular-season matchups: no undecided category, in a matchup
+          period before ESPN's current one (ADR 0149). Null unless scoring_type is
           H2H_MOST_CATEGORIES.
         data_type: bigint
       - name: wins
@@ -202,7 +203,8 @@ models:
       - name: is_regular_season_complete
         description: >
           True when the league-season has at least one regular-season matchup and every one
-          is finished. The same on every row of the league-season; it says whether the record
+          is finished (no undecided category, in a matchup period before ESPN's current one,
+          ADR 0149). The same on every row of the league-season; it says whether the record
           is the final one.
         data_type: boolean
         constraints: [{type: not_null}]
@@ -3354,18 +3356,17 @@ unit_tests:
 
   - name: team_standings_count_only_finished_regular_season_matchups
     description: >
-      Latest scoring period 21. Matchup 1 (period 1, scoring periods 1 to 7) is a decided
-      home win, 6 categories to 3 with 1 level. Matchup 2 (same period) is a tie, 5 to 5.
-      Matchup 3 (period 3, scoring periods 15 to 21) is complete on categories but its
-      period's last scoring period is the latest one, its last day still being played, so it
-      is in progress: the boundary of the rule (ADR 0016: settled once the counter is past
-      it). Matchup 4
-      is a playoff matchup in a finished period. Only the first two count, so team 1 has 1
-      win, team 2 1 loss, teams 3 and 4 1 tie each, and team 5 (no matchup) has 0s. The
-      season is not complete, since matchup 3 is not finished. ESPN's own record and seed
-      are carried untouched. Catches an in-progress or playoff matchup counted, a side's
-      category counts the wrong way round, a tie counted as a win, a matchup counted on its
-      last day, and a team with no matchup left out or null.
+      ESPN's current matchup period is 3. Matchup 1 (period 1) is a decided home win, 6
+      categories to 3 with 1 level. Matchup 2 (same period) is a tie, 5 to 5. Matchup 3
+      (period 3) is complete on categories but is the current period, still being played:
+      the boundary of the rule (ADR 0149: finished once the current matchup period is past
+      it). Matchup 4 is a playoff matchup in period 2, before the current one. Only the
+      first two count, so team 1 has 1 win, team 2 1 loss, teams 3 and 4 1 tie each, and
+      team 5 (no matchup) has 0s. The season is not complete, since matchup 3 is not
+      finished. ESPN's own record and seed are carried untouched. Catches an in-progress or
+      playoff matchup counted, a matchup in the current period counted, a side's category
+      counts the wrong way round, a tie counted as a win, and a team with no matchup left
+      out or null.
     model: fct_team_standings
     given:
       - input: ref('fct_matchup_results')
@@ -3374,17 +3375,9 @@ unit_tests:
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 2, matchup_period: 1, playoff_tier: NONE, home_team_id: 3, away_team_id: 4, home_category_wins: 5, away_category_wins: 5, category_ties: 0, categories_undecided: 0, winner: TIE}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 3, matchup_period: 3, playoff_tier: NONE, home_team_id: 1, away_team_id: 3, home_category_wins: 2, away_category_wins: 7, category_ties: 1, categories_undecided: 0, winner: AWAY}
           - {platform: espn, league_id: "1", season: 2026, matchup_id: 4, matchup_period: 2, playoff_tier: WINNERS_BRACKET, home_team_id: 2, away_team_id: 4, home_category_wins: 7, away_category_wins: 3, category_ties: 0, categories_undecided: 0, winner: HOME}
-      - input: ref('int_fantasy__matchup_periods')
-        rows:
-          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_period: 1}
-          - {platform: espn, league_id: "1", season: 2026, matchup_period: 1, scoring_period: 7}
-          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_period: 8}
-          - {platform: espn, league_id: "1", season: 2026, matchup_period: 2, scoring_period: 14}
-          - {platform: espn, league_id: "1", season: 2026, matchup_period: 3, scoring_period: 15}
-          - {platform: espn, league_id: "1", season: 2026, matchup_period: 3, scoring_period: 21}
       - input: ref('int_fantasy__league_seasons')
         rows:
-          - {platform: espn, league_id: "1", season: 2026, scoring_type: H2H_MOST_CATEGORIES, latest_scoring_period: 21}
+          - {platform: espn, league_id: "1", season: 2026, scoring_type: H2H_MOST_CATEGORIES, current_matchup_period: 3}
       - input: ref('int_fantasy__teams')
         rows:
           - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1, wins: 9, losses: 3, ties: 0, playoff_seed: 1}
@@ -3409,11 +3402,9 @@ unit_tests:
     given:
       - input: ref('fct_matchup_results')
         rows: []
-      - input: ref('int_fantasy__matchup_periods')
-        rows: []
       - input: ref('int_fantasy__league_seasons')
         rows:
-          - {platform: espn, league_id: "1", season: 2026, scoring_type: ROTO, latest_scoring_period: 15}
+          - {platform: espn, league_id: "1", season: 2026, scoring_type: ROTO, current_matchup_period: 3}
       - input: ref('int_fantasy__teams')
         rows:
           - {platform: espn, league_id: "1", season: 2026, fantasy_team_id: 1, wins: 4, losses: 2, ties: 1, playoff_seed: 1}
