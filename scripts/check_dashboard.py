@@ -249,16 +249,18 @@ def run_queries(
 
 
 def _compare_with_source(extract_file: Path, db: Path, tables: list[str]) -> list[str]:
-    """R7.3: each table of the extract has its source mart's columns, in order, and exactly its
-    rows: `except all` both ways, so a missing or extra column, or a dropped, added or changed
-    row, or a duplicate, is a failure naming the table."""
+    """R7.3: each table of the extract has its source mart's columns and types, in order, and
+    exactly its rows: `except all` both ways, so a missing, extra or retyped column, or a
+    dropped, added or changed row, or a duplicate, is a failure naming the table."""
     problems: list[str] = []
     con = duckdb.connect()
     try:
         con.execute(f"attach '{extract_file}' as ext (read_only)")
         con.execute(f"attach '{db}' as src (read_only)")
+        # Names and types: `except all` coerces one type to the other, so a column whose type
+        # changed could hold a changed value and still compare equal (round 3).
         listed = (
-            "select column_name from information_schema.columns"
+            "select column_name, data_type from information_schema.columns"
             " where table_catalog = ? and table_schema = 'marts' and table_name = ?"
             " order by ordinal_position"
         )
@@ -269,11 +271,11 @@ def _compare_with_source(extract_file: Path, db: Path, tables: list[str]) -> lis
             # be the source's first: an extract missing one would otherwise compare equal.
             if names != source_names:
                 problems.append(
-                    f"extract of marts.{table} has columns {[n for (n,) in names]}, its source"
-                    f" {[n for (n,) in source_names]}"
+                    f"extract of marts.{table} has columns {[f'{n} {t}' for n, t in names]}, its"
+                    f" source {[f'{n} {t}' for n, t in source_names]}"
                 )
                 continue
-            columns = ", ".join(f'"{name}"' for (name,) in names)
+            columns = ", ".join(f'"{name}"' for name, _ in names)
             ext = f"select {columns} from ext.marts.{table}"
             src = f"select {columns} from src.marts.{table}"
             (extra,) = con.execute(f"select count(*) from ({ext} except all {src})").fetchone()  # type: ignore[misc]

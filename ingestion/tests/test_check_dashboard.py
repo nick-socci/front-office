@@ -311,6 +311,18 @@ def test_an_extract_missing_a_column_fails_the_comparison(tmp_path, warehouse):
     assert "marts.standings" in found and "wins" in found, found
 
 
+def test_an_extract_whose_column_changed_type_fails_the_comparison(tmp_path, warehouse):
+    """Catches a schema check on names alone: `except all` coerces `wins` from text back to a
+    number, so a changed type could pass a changed value (round 3)."""
+    out = tmp_path / "out.duckdb"
+    cd.extract(cd.DuckDBMartReader(warehouse), ["team_names", "standings"], out)
+    con = duckdb.connect(str(out))
+    con.execute("alter table marts.standings alter column wins type varchar")
+    con.close()
+    (found,) = cd._compare_with_source(out, warehouse, ["team_names", "standings"])
+    assert "marts.standings" in found and "wins VARCHAR" in found, found
+
+
 def test_a_mart_the_warehouse_lacks_stops_the_extract(tmp_path, warehouse):
     """Catches an exposure naming a table the warehouse does not hold: the extract refuses."""
     text = EXPOSURE_YAML + "      - ref('rosters')\n"
