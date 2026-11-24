@@ -134,11 +134,12 @@ builds the locked dependencies; later builds reuse them while `uv.lock` is uncha
 
 Older images stay, tagged with their short commit. Pick one from `podman images localhost/front-office`. If the units changed between that commit and the
 running one (`git diff --stat <old> HEAD -- deploy/quadlet/`), the old image needs its own units: an
-image from before ADR 0138 (`a40a20b`) does not work with the three-container units. An image from
-before the dashboard (spec 0232) has no `streamlit`: rolling back past it, stop the dashboard and
-remove its unit first, or it restarts forever on the old image:
-`systemctl --user stop front-office-dashboard && rm ~/.config/containers/systemd/front-office-dashboard.container`
-(then `daemon-reload`).
+image from before ADR 0138 (`a40a20b`) does not work with the three-container units.
+
+First, which case it is: does the old commit have the dashboard
+(`git -C ~/src/front-office cat-file -e <old>:deploy/quadlet/front-office-dashboard.container && echo yes`)?
+
+**If it does** (the usual case):
 
 ```bash
 cd ~/src/front-office && git checkout <old>          # the clone names what runs
@@ -149,11 +150,15 @@ no_run_going && systemctl --user restart front-office-code front-office-daemon f
 journalctl --user -u front-office-code -f            # Ctrl-C at a new "Started"
 ```
 
-Rolling back past the dashboard, to an image whose checkout has no
-`deploy/quadlet/front-office-dashboard.container`, the unit is gone (removed above), so name three
-units in the restart line, and check three containers:
+**If it does not** (rolling back past the dashboard, spec 0232): the old image has no `streamlit`, so
+stop the dashboard and remove its unit before anything else, or it restarts forever on the old
+image; then restart and check the three Dagster units only:
 
 ```bash
+systemctl --user stop front-office-dashboard && rm ~/.config/containers/systemd/front-office-dashboard.container
+cd ~/src/front-office && git checkout <old>          # the clone names what runs
+podman tag localhost/front-office:<old> localhost/front-office:current
+cp deploy/quadlet/*.container ~/.config/containers/systemd/ && systemctl --user daemon-reload
 no_run_going && systemctl --user restart front-office-code front-office-daemon front-office-ui \
   || echo "NOT RESTARTED: a run is going (or the UI did not answer). Wait for it to end, then run this line again."
 for c in front-office-code front-office-daemon front-office-ui; do
@@ -161,8 +166,8 @@ for c in front-office-code front-office-daemon front-office-ui; do
 ```
 
 `no_run_going` is the function defined in *Deploy a commit*; define it first in a new shell. Then
-the same check as a deploy (with the loop above in the case of a roll back past the dashboard):
-each container names `<old>`. Rehearsed on 2026-11-20 by the
+the same check as a deploy (in the second case, the three-unit loop above): each container names
+`<old>`. Rehearsed on 2026-11-20 by the
 owner, from `b29c35a` to `942fb27` and back (#218).
 
 ## Rehearse a run at another time

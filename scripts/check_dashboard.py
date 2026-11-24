@@ -249,21 +249,30 @@ def run_queries(
 
 
 def _compare_with_source(extract_file: Path, db: Path, tables: list[str]) -> list[str]:
-    """R7.3: each table of the extract holds exactly the rows of its source mart. `except all`
-    both ways, over the extract's own column list, so a dropped, added or changed row, or a
-    duplicate, is a failure naming the table and the two counts."""
+    """R7.3: each table of the extract has its source mart's columns, in order, and exactly its
+    rows: `except all` both ways, so a missing or extra column, or a dropped, added or changed
+    row, or a duplicate, is a failure naming the table."""
     problems: list[str] = []
     con = duckdb.connect()
     try:
         con.execute(f"attach '{extract_file}' as ext (read_only)")
         con.execute(f"attach '{db}' as src (read_only)")
+        listed = (
+            "select column_name from information_schema.columns"
+            " where table_catalog = ? and table_schema = 'marts' and table_name = ?"
+            " order by ordinal_position"
+        )
         for table in tables:
-            names = con.execute(
-                "select column_name from information_schema.columns"
-                " where table_catalog = 'ext' and table_schema = 'marts' and table_name = ?"
-                " order by ordinal_position",
-                [table],
-            ).fetchall()
+            names = con.execute(listed, ["ext", table]).fetchall()
+            source_names = con.execute(listed, ["src", table]).fetchall()
+            # The rows are compared over the extract's columns, so the columns themselves must
+            # be the source's first: an extract missing one would otherwise compare equal.
+            if names != source_names:
+                problems.append(
+                    f"extract of marts.{table} has columns {[n for (n,) in names]}, its source"
+                    f" {[n for (n,) in source_names]}"
+                )
+                continue
             columns = ", ".join(f'"{name}"' for (name,) in names)
             ext = f"select {columns} from ext.marts.{table}"
             src = f"select {columns} from src.marts.{table}"

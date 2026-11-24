@@ -299,6 +299,18 @@ def test_an_extract_with_a_row_the_source_lacks_fails_the_comparison(tmp_path, w
     assert "marts.standings" in found and "1 rows in the extract and not the source, 1 in" in found
 
 
+def test_an_extract_missing_a_column_fails_the_comparison(tmp_path, warehouse):
+    """Catches rows compared over the extract's columns only: an extract that lost a column
+    would hold the same rows in the columns it kept, and compare equal (round 2, F1)."""
+    out = tmp_path / "out.duckdb"
+    cd.extract(cd.DuckDBMartReader(warehouse), ["team_names", "standings"], out)
+    con = duckdb.connect(str(out))
+    con.execute("alter table marts.standings drop column wins")
+    con.close()
+    (found,) = cd._compare_with_source(out, warehouse, ["team_names", "standings"])
+    assert "marts.standings" in found and "wins" in found, found
+
+
 def test_a_mart_the_warehouse_lacks_stops_the_extract(tmp_path, warehouse):
     """Catches an exposure naming a table the warehouse does not hold: the extract refuses."""
     text = EXPOSURE_YAML + "      - ref('rosters')\n"
