@@ -25,7 +25,7 @@ landed as raw JSON, transformed with dbt, stored in DuckDB and BigQuery (the lat
   `scripts/make_espn_seeds.py` and never hand-edited. `espn_reconciliation_residuals.csv`
   is the exception: a register kept by hand, each row naming its league and season and
   carrying its evidence.
-- `dbt/models/marts/_exposures.yml` — what reads the marts: the planned dashboard, and one
+- `dbt/models/marts/_exposures.yml` — what reads the marts: the dashboard (`dashboard/`, held by `scripts/check_dashboard.py`), and one
   exposure per file in `docs/examples/`. `scripts/check_examples.py` (in the gates) fails if
   an example and its exposure disagree, if the example no longer runs, or if it does not
   return the rows stated for it in `docs/examples/expected_on_fixtures.yml`: numbers that
@@ -56,7 +56,7 @@ FO_CI_DUCKDB_PATH=dbt/ci.duckdb uv run sqlfluff lint dbt/models dbt/tests   # fr
 cd dbt && DBT_PROFILES_DIR=. uv run dbt build --select <model>          # real season
 cd dbt && DBT_PROFILES_DIR=. uv run dbt build --target ci --vars '{anonymize: true}'
 uv run --group bigquery front-office upload --project "$FO_BQ_PROJECT"   # fill BigQuery's raw tables; --dry-run sends nothing
-uv sync --locked --group orchestration         # Dagster; the gates and CI install it too (add --group bigquery for FO_WAREHOUSE=bigquery)
+uv sync --locked --group orchestration --group dashboard   # Dagster and Streamlit; the gates and CI install both (add --group bigquery for FO_WAREHOUSE=bigquery)
 uv run dagster definitions validate -m front_office_pipeline      # the code location loads (from the repo root)
 uv run dagster job execute -m front_office_pipeline -j daily      # one daily run, no daemon; FO_WAREHOUSE, FO_SEASON, FO_LANDING_ROOT
 uv run dagster dev -m front_office_pipeline                       # the UI and the lineage

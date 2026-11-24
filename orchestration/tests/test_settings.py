@@ -82,3 +82,17 @@ def test_a_relative_duckdb_path_is_refused() -> None:
 def test_dbt_gets_the_same_duckdb_file_as_load() -> None:
     env = settings.dbt_environment(environ={"FO_DUCKDB_PATH": "/x/w.duckdb"})
     assert env["FO_DUCKDB_PATH"] == "/x/w.duckdb"
+
+
+def test_dashboard_extract_defaults_and_is_overridden() -> None:
+    """R2.1. Catches a default outside the repository's `data/`, or a named path ignored."""
+    default = settings.dashboard_extract(environ={})
+    assert default == settings.REPO_ROOT / "data" / "dashboard" / "extract.duckdb"
+    named = {"FO_DASHBOARD_EXTRACT": "/dashboard/extract.duckdb"}
+    assert settings.dashboard_extract(environ=named) == Path("/dashboard/extract.duckdb")
+
+
+def test_a_relative_dashboard_extract_is_refused() -> None:
+    """The CLI runs in the repository root: a relative path would depend on where it ran."""
+    with pytest.raises(ValueError, match="FO_DASHBOARD_EXTRACT"):
+        settings.dashboard_extract(environ={"FO_DASHBOARD_EXTRACT": "extract.duckdb"})

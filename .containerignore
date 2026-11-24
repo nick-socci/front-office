@@ -32,7 +32,7 @@ data
 site
 docs
 fixtures
-dashboard
+dashboard/tests
 **/__pycache__
 dbt/target
 dbt/logs

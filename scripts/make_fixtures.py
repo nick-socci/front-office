@@ -872,6 +872,21 @@ def build_espn_pro_schedule(
     return path
 
 
+def fixture_matchup_period(season: int) -> int:
+    """The matchup period the fixture matchups are in: the one every kept matchup names.
+
+    The settings' current matchup period must be this one. The real season's (24, 25) is far
+    past the fixture's span, and would make every fixture matchup finished while ESPN's
+    records are whole-season ones (ADR 0149).
+    """
+    schedule = latest_espn("matchups", season=season)["schedule"][:FIXTURE_MATCHUPS]
+    periods = {matchup["matchupPeriodId"] for matchup in schedule}
+    if len(periods) != 1:
+        raise SystemExit(f"the {season} fixture matchups are in matchup periods {sorted(periods)}")
+    (period,) = periods
+    return int(period)
+
+
 def build_espn_settings(
     season: int = FIXTURE_SEASON,
     source_periods: tuple[int, ...] = FIXTURE_SOURCE_SCORING_PERIODS,
@@ -885,6 +900,9 @@ def build_espn_settings(
     # on three); see FIXTURE_FETCHED_AT.
     span = fixture_span(source_periods)
     fixture["scoringPeriodId"] = span
+    # A season on its current matchup period, as latestScoringPeriod = span models the
+    # scoring periods: the fixture's matchups are the current, unfinished ones.
+    fixture["status"]["currentMatchupPeriod"] = fixture_matchup_period(season)
     fixture["status"]["latestScoringPeriod"] = span
     fixture["status"]["finalScoringPeriod"] = span
     fixture["settings"]["scoringSettings"]["scoringItems"] = [

@@ -1,0 +1,38 @@
+# The dashboard on `mothership` (spec 0232, ADR 0146): Streamlit over the marts extract the code server
+# writes after each good daily build. It holds no credential and reads one file, so it mounts only
+# `~/dashboard`, read-only: no secrets, no landing zone, no Dagster instance, no config env file.
+#
+# Unlike the other three units it has no `Network=host`. It gets the container's own network, where
+# the app listens on 0.0.0.0:8501 (that is the container's interface, not the host's), and the port
+# is published on the host's loopback only: reach it by `ssh -L 8501:127.0.0.1:8501 mothership`. From
+# its own network it cannot reach the host's loopback services (the code server on 4266, the UI on
+# 3000). It does not wait for the code server either: it runs without it, on the last extract, and
+# restarting it touches no run.
+#
+# Same Quadlet limits as the others (Podman 4.9 has no `Memory=` and no pods, spec C19): the limit is
+# `PodmanArgs`, and the directory is `WorkingDir`, which is where Streamlit reads `.streamlit/config.toml`.
+# The 512m limit is about three times the peak measured on `mothership` on 2026-11-23 (#232):
+# 161 MB over every page for every season (40 views), headless renderer included; 45 MB idle.
+
+[Unit]
+Description=Front Office: dashboard (Streamlit over the marts extract, loopback only)
+
+[Container]
+Image=localhost/front-office:current
+ContainerName=front-office-dashboard
+WorkingDir=/app/dashboard
+Exec=streamlit run front_office_dashboard/app.py --server.address=0.0.0.0
+Environment=FO_DASHBOARD_EXTRACT=/dashboard/extract.duckdb
+Volume=%h/dashboard:/dashboard:ro
+PublishPort=127.0.0.1:8501:8501
+PodmanArgs=--memory=512m
+# PID 1 must reap its children (spec 0218 *Amendments*).
+PodmanArgs=--init
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

@@ -17,10 +17,11 @@ Everything is under `/home/front-office` (mode 0700), as the `front-office` user
 | `src/front-office/` | a clone of the public repository, at the commit being built | |
 | `data/raw/` | the production landing zone; `data/raw.lock` and `raw.upload.lock` sit beside it | |
 | `dagster_home/` | Dagster's instance: SQLite run history | |
+| `dashboard/` | the dashboard's extract (`extract.duckdb`), written by the code server and read by the dashboard; create it once with `mkdir -p ~/dashboard` | |
 | `dbt_target/` | dbt's `target/` (`run_results.json`, the bytes billed) | |
 | `secrets/.env`, `secrets/google-key.json`, `secrets/healthchecks-ping-key` | the ESPN cookies, the run's Google key, the healthchecks.io ping key | 0400, in a 0700 directory |
 | `config/front-office.env` | `FO_BQ_PROJECT=<the project>`: not secret, and not in the public repository | |
-| `.config/containers/systemd/` | the three Quadlet units (`front-office-code`, `-daemon`, `-ui`), copied from `deploy/quadlet/` | |
+| `.config/containers/systemd/` | the four Quadlet units (`front-office-code`, `-daemon`, `-ui`, `-dashboard`), copied from `deploy/quadlet/` | |
 
 ## See the schedule and the last run
 
@@ -38,6 +39,36 @@ A day's run is healthy when the run is `SUCCESS` **and** each fetch asset's `fet
 passed: Dagster does not fail a run for a failed non-blocking check (ADR 0129, 0217 *Amendments*).
 Each run's outcome is also emailed to the owner through healthchecks.io: see *Alerts* and
 *When an alert arrives*.
+
+## The dashboard
+
+The fourth container, `front-office-dashboard`, serves the dashboard (spec 0232) from the same image.
+It holds no credential and mounts one directory, `~/dashboard`, read-only: the extract the code server
+writes after each good daily build. It has no `Network=host`; its port is published on the host's
+loopback only (ADR 0146), and from inside it the host's loopback services (4266, 3000) are out of reach.
+
+```bash
+ssh -L 8501:127.0.0.1:8501 mothership        # then http://localhost:8501
+ssh mothership 'systemctl --user status front-office-dashboard --no-pager'
+ssh mothership "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8501/"     # 200
+```
+
+Out of season there is no daily extract, or the last one is old. Make one by hand with the code
+server's own environment (it holds `FO_BQ_PROJECT` and the Google key; the dashboard never does).
+Define `no_run_going`, the function in *Deploy a commit*, first in the new shell. The command
+refuses, and publishes nothing, if a build changes a mart while it reads, so start it with no run
+going:
+
+```bash
+ssh mothership
+no_run_going && podman exec front-office-code sh -c 'front-office extract-marts --project "$FO_BQ_PROJECT" --out /dashboard/extract.duckdb'
+```
+
+Each page shows when the extract was built and from which commit. A **stale banner** means the
+extract is older than the pages expect: the last daily run did not publish one. Read *When an alert
+arrives* for that run (a failed dbt build publishes nothing, by design), then make one by hand once
+the cause is fixed. Restarting the dashboard alone (`systemctl --user restart front-office-dashboard`)
+touches no run and reads the extract again; it does not depend on the code server being up.
 
 ## Run `daily` by hand
 
@@ -57,6 +88,11 @@ queued, starting, running or being cancelled. The check sits on the restart line
 build: the build takes minutes, and the schedule (06:00 ET in season) or a person can start a run
 meanwhile. (`dagster run list` cannot tell: it prints ids and jobs, no status.)
 
+The code server's unit mounts `~/dashboard` read-write and the dashboard's read-only; it must exist
+before the restart or the units do not start: run `mkdir -p ~/dashboard` once. The `cp` below copies
+the fourth unit with the others, and `restart` starts a unit that is not running yet. Restarting the
+dashboard alone touches no run, so it needs no `no_run_going`.
+
 ```bash
 ssh mothership
 no_run_going() {
@@ -71,7 +107,7 @@ podman build -f deploy/Containerfile --build-arg GIT_COMMIT=$(git rev-parse HEAD
 podman tag localhost/front-office:$sha localhost/front-office:current
 cp deploy/quadlet/*.container ~/.config/containers/systemd/
 systemctl --user daemon-reload
-no_run_going && systemctl --user restart front-office-code front-office-daemon front-office-ui \
+no_run_going && systemctl --user restart front-office-code front-office-daemon front-office-ui front-office-dashboard \
   || echo "NOT RESTARTED: a run is going (or the UI did not answer). Wait for it to end, then run this line again."
 journalctl --user -u front-office-code -f     # Ctrl-C at a new "Started Dagster code server" (about 15 s)
 ```
@@ -83,7 +119,7 @@ Then check the deploy, every time. **This is the step that shows the deploy happ
 after a missed `podman tag` comes back up on the old image and looks just like a deploy (2026-11-20).
 
 ```bash
-for c in front-office-code front-office-daemon front-office-ui; do
+for c in front-office-code front-office-daemon front-office-ui front-office-dashboard; do
   podman inspect $c --format "$c {{index .Config.Labels \"org.opencontainers.image.revision\"}}"; done
 podman exec front-office-daemon dagster schedule list -w /app/deploy/workspace.yaml
 ```
@@ -100,17 +136,38 @@ Older images stay, tagged with their short commit. Pick one from `podman images 
 running one (`git diff --stat <old> HEAD -- deploy/quadlet/`), the old image needs its own units: an
 image from before ADR 0138 (`a40a20b`) does not work with the three-container units.
 
+First, which case it is: does the old commit have the dashboard
+(`git -C ~/src/front-office cat-file -e <old>:deploy/quadlet/front-office-dashboard.container && echo yes`)?
+
+**If it does** (the usual case):
+
 ```bash
+cd ~/src/front-office && git checkout <old>          # the clone names what runs
+podman tag localhost/front-office:<old> localhost/front-office:current
+cp deploy/quadlet/*.container ~/.config/containers/systemd/ && systemctl --user daemon-reload
+no_run_going && systemctl --user restart front-office-code front-office-daemon front-office-ui front-office-dashboard \
+  || echo "NOT RESTARTED: a run is going (or the UI did not answer). Wait for it to end, then run this line again."
+journalctl --user -u front-office-code -f            # Ctrl-C at a new "Started"
+```
+
+**If it does not** (rolling back past the dashboard, spec 0232): the old image has no `streamlit`, so
+stop the dashboard and remove its unit before anything else, or it restarts forever on the old
+image; then restart and check the three Dagster units only:
+
+```bash
+systemctl --user stop front-office-dashboard && rm ~/.config/containers/systemd/front-office-dashboard.container
 cd ~/src/front-office && git checkout <old>          # the clone names what runs
 podman tag localhost/front-office:<old> localhost/front-office:current
 cp deploy/quadlet/*.container ~/.config/containers/systemd/ && systemctl --user daemon-reload
 no_run_going && systemctl --user restart front-office-code front-office-daemon front-office-ui \
   || echo "NOT RESTARTED: a run is going (or the UI did not answer). Wait for it to end, then run this line again."
-journalctl --user -u front-office-code -f            # Ctrl-C at a new "Started"
+for c in front-office-code front-office-daemon front-office-ui; do
+  podman inspect $c --format "$c {{index .Config.Labels \"org.opencontainers.image.revision\"}}"; done
 ```
 
 `no_run_going` is the function defined in *Deploy a commit*; define it first in a new shell. Then
-the same check as a deploy: each container names `<old>`. Rehearsed on 2026-11-20 by the
+the same check as a deploy (in the second case, the three-unit loop above): each container names
+`<old>`. Rehearsed on 2026-11-20 by the
 owner, from `b29c35a` to `942fb27` and back (#218).
 
 ## Rehearse a run at another time

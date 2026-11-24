@@ -66,6 +66,19 @@ models:
       - name: season
         data_type: bigint
         constraints: [{type: not_null}]
+      - name: scoring_type
+        description: >
+          The league's scoring type as ESPN names it (H2H_MOST_CATEGORIES, ROTO, ...),
+          from the settings. fct_team_standings computes a record only for head-to-head
+          categories.
+        data_type: string
+        constraints: [{type: not_null}]
+      - name: current_matchup_period
+        description: >
+          The matchup period ESPN was in when the settings were captured (its
+          status.currentMatchupPeriod). A matchup in an earlier period is over (ADR 0149).
+          Null if the settings do not give it.
+        data_type: bigint
       - name: has_rosters
         description: >
           True when at least one roster entry is loaded for the league-season. Read from

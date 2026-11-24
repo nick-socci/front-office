@@ -1,4 +1,4 @@
-"""The six hand-written assets: one `front-office` command each (ADR 0127, 0129).
+"""The seven hand-written assets: one `front-office` command each (ADR 0127, 0129).
 
 Why they are shaped as they are:
 
@@ -20,11 +20,16 @@ Why they are shaped as they are:
   declared as dependencies that carry no data: the fetches share the landing zone's writer lock,
   and a second writer fails rather than waits (R1.4). `idmap_capture` is upstream of
   `raw_in_warehouse` too but outside `daily` (R4.2).
+- `marts_extract` copies the marts the `front_office_dashboard` exposure names into the
+  dashboard's extract file (spec 0232, R2). It depends on those models' assets, so a failed build
+  step skips it and the previous extract stays (R2.6). Its metadata is the command and the counts
+  from the success line, no path (the alerts carry none, ADR 0141).
 
 Every asset first calls `settings.check_ready`, so a BigQuery run without a project fails before
 any command has run (R3.2). Settings are read when an asset runs, not when it is defined.
 """
 
+import re
 from collections.abc import Generator, Iterable, Mapping
 from typing import Any
 
@@ -46,6 +51,8 @@ from dagster_dbt import DbtCliResource
 from front_office_pipeline import cli, season, settings
 from front_office_pipeline.dbt_assets import dbt_environment
 
+DASHBOARD_EXPOSURE = "front_office_dashboard"
+EXTRACTED_LINE = re.compile(r"extracted (\d+) tables, (\d+) rows, to .+")
 FETCH_COMPLETE = "fetch_complete"
 BIGQUERY_PREFIX = ("uv", "run", "--group", "bigquery", *cli.FRONT_OFFICE)
 
@@ -186,6 +193,38 @@ def raw_in_warehouse(context: AssetExecutionContext) -> MaterializeResult[None]:
             metadata={"stderr_tail": MetadataValue.text("\n".join(result.tail))},
         )
     return MaterializeResult(metadata={"command": args[0]})
+
+
+def marts_extract_asset(upstream: Iterable[AssetKey]) -> Any:
+    """`marts_extract`, downstream of `upstream`: the dbt assets of the exposure's models."""
+
+    @asset(
+        key="marts_extract",
+        deps=list(upstream),
+        description="The dashboard's marts, copied into one DuckDB file (`extract-marts`).",
+    )
+    def marts_extract(context: AssetExecutionContext) -> MaterializeResult[None]:
+        settings.check_ready()
+        out = str(settings.dashboard_extract())
+        if settings.warehouse() == "bigquery":
+            args = ["extract-marts", "--out", out, "--project", settings.bq_project()]
+            result = cli.run(args, context, prefix=BIGQUERY_PREFIX)
+        else:
+            args = ["extract-marts", "--out", out, "--db", str(settings.duckdb_path())]
+            result = cli.run(args, context)
+        if result.exit_code != 0:
+            raise Failure(
+                description=f"`front-office {args[0]}` exited {result.exit_code}",
+                metadata={"stderr_tail": MetadataValue.text("\n".join(result.tail))},
+            )
+        metadata: dict[str, Any] = {"command": args[0]}
+        for line in result.lines:
+            counted = EXTRACTED_LINE.fullmatch(line)
+            if counted:
+                metadata["tables"], metadata["rows"] = int(counted[1]), int(counted[2])
+        return MaterializeResult(metadata=metadata)
+
+    return marts_extract
 
 
 # The feeds dbt reports on (`_raw_feeds__sources.yml`), the check each gets, and its severity

@@ -1,0 +1,13 @@
+[server]
+headless = true
+address = "127.0.0.1"
+port = 8501
+enableXsrfProtection = true
+enableCORS = true
+
+[browser]
+gatherUsageStats = false
+# Where the browser points: localhost, through the SSH tunnel (ADR 0146). Set explicitly, it is
+# also what stops Streamlit looking up the host's public address from an outside service at
+# start, which it does when it listens on 0.0.0.0 headless (as it does in its container).
+serverAddress = "localhost"

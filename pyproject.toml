@@ -22,6 +22,9 @@ orchestration = [
     "dagster-dbt>=0.29.30",
     "dagster-webserver",
 ]
+dashboard = [
+    "streamlit>=1.67",
+]
 dev = [
     "pytest>=8.3",
     "ruff>=0.8",
@@ -53,7 +56,7 @@ packages = ["ingestion/src/front_office", "orchestration/front_office_pipeline"]
 
 [tool.ruff]
 line-length = 100
-src = ["ingestion/src", "ingestion/tests", "scripts", "dbt/python_modules", "dbt/functions", "orchestration"]
+src = ["ingestion/src", "ingestion/tests", "scripts", "dbt/python_modules", "dbt/functions", "orchestration", "dashboard"]
 # BigQuery runs the function file on Python 3.11; keep ruff from rewriting it to newer syntax.
 per-file-target-version = { "dbt/functions/**" = "py311" }
 
@@ -63,11 +66,17 @@ select = ["E", "F", "I", "UP", "B", "SIM", "PTH"]
 [tool.mypy]
 python_version = "3.13"
 strict = true
-files = ["ingestion/src", "orchestration"]
+files = ["ingestion/src", "orchestration", "dashboard"]
 
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+
+# pandas ships no types of its own and pandas-stubs is not a dependency: the dashboard's frames
+# are untyped to mypy.
+[[tool.mypy.overrides]]
+module = ["pandas.*"]
+ignore_missing_imports = true
 
 # The BigQuery client is in the `bigquery` group only; CI's mypy runs without it.
 [[tool.mypy.overrides]]
@@ -81,6 +90,6 @@ module = "front_office.bigquery"
 disable_error_code = ["no-untyped-call"]
 
 [tool.pytest.ini_options]
-testpaths = ["ingestion/tests", "orchestration/tests"]
-pythonpath = ["ingestion/src", "scripts", "dbt/python_modules", "dbt/functions"]
+testpaths = ["ingestion/tests", "orchestration/tests", "dashboard/tests"]
+pythonpath = ["ingestion/src", "scripts", "dbt/python_modules", "dbt/functions", "dashboard"]
 addopts = "-q"

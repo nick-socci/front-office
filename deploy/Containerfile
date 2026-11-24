@@ -1,10 +1,12 @@
-# The production image: the Dagster daemon and UI for the daily run (spec 0218, ADR 0133).
+# The production image: the Dagster code server, daemon and UI for the daily run (spec 0218, ADRs
+# 0133 and 0138), and the dashboard (spec 0232).
 #
-# One image, two containers: the unit files in deploy/quadlet/ start `dagster-daemon run` and
-# `dagster-webserver` from it. It holds the code and dbt's project at the commit it is built
-# from (the `GIT_COMMIT` build argument becomes a label), and no credential: the units mount
-# the ESPN `.env` and the Google key read-only at run time (rule 3), and `.containerignore` at the
-# repository root keeps them out of the build context.
+# One image, four containers: the unit files in deploy/quadlet/ start `dagster api grpc`,
+# `dagster-daemon run`, `dagster-webserver` and `streamlit run` from it. It holds the code and dbt's
+# project at the commit it is built from (the `GIT_COMMIT` build argument becomes a label and
+# `FO_GIT_COMMIT`, which `extract-marts` records), and no credential: the units mount the ESPN
+# `.env` and the Google key read-only at run time into the code server alone (rule 3), the dashboard
+# gets none, and `.containerignore` at the repository root keeps them out of the build context.
 #
 # Build, always from the repository root (the runbook says the same):
 #   podman build -f deploy/Containerfile --build-arg GIT_COMMIT=$(git rev-parse HEAD) \
@@ -28,11 +30,11 @@ WORKDIR /app
 # The locked dependencies first, so a code change does not reinstall them. No default groups:
 # the dev group (sqlfluff, scipy, dbt-duckdb) is not needed by a BigQuery run.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --locked --no-default-groups --group orchestration --group bigquery --no-install-project
+RUN uv sync --locked --no-default-groups --group orchestration --group bigquery --group dashboard --no-install-project
 
 # The code, then the project itself (editable, so the CLI finds /app/.env from its own source).
 COPY . .
-RUN uv sync --locked --no-default-groups --group orchestration --group bigquery
+RUN uv sync --locked --no-default-groups --group orchestration --group bigquery --group dashboard
 
 # dbt's packages at build time: the code location parses dbt when it loads (0217).
 RUN cd dbt && dbt deps
@@ -40,8 +42,15 @@ RUN cd dbt && dbt deps
 RUN mkdir -p /dagster_home && chmod +x /app/deploy/entrypoint.sh
 
 ARG GIT_COMMIT=unknown
+ENV FO_GIT_COMMIT=$GIT_COMMIT
 LABEL org.opencontainers.image.revision=$GIT_COMMIT \
       org.opencontainers.image.source="https://github.com/nick-socci/front-office"
+
+# The build fails if the dashboard is not in the image (its directory excluded, its group not
+# installed, or its marts YAML, which gives the column tooltips, missing). `app.py` runs Streamlit
+# calls at import, so it is rendered headless (AppTest) in its no-extract state, which needs no
+# data: a broken import or syntax error in the app fails the build.
+RUN cd /app/dashboard && FO_DASHBOARD_EXTRACT=/nonexistent/extract.duckdb python -c "from streamlit.testing.v1 import AppTest; at = AppTest.from_file('front_office_dashboard/app.py').run(); assert not at.exception, at.exception; import front_office_dashboard.labels as l; assert l.MARTS_YAML.is_file(), l.MARTS_YAML"
 
 # The entrypoint puts the image's own dagster.yaml in the instance directory, so the instance's
 # settings follow the commit that was built; the volume holds the history.

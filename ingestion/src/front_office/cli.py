@@ -19,6 +19,7 @@ import httpx
 import typer
 
 from front_office import audit as landing_audit
+from front_office import extract as landing_extract
 from front_office import upload as landing_upload
 from front_office.capture_structures import StructureUnreadable
 from front_office.espn import matchup_days as espn_matchup_days
@@ -588,6 +589,52 @@ def upload_command(
         StructureUnreadable,
     ) as error:
         raise refuse(str(error)) from None
+
+
+@app.command("extract-marts")
+def extract_marts_command(
+    out: Annotated[Path, typer.Option("--out", help="The extract's DuckDB file.")],
+    project: Annotated[
+        str | None,
+        typer.Option("--project", help="Read the marts from BigQuery in this GCP project."),
+    ] = None,
+    db: Annotated[
+        Path | None, typer.Option("--db", help="Read the marts from this DuckDB warehouse.")
+    ] = None,
+    dataset: Annotated[str, typer.Option("--dataset", help="The marts' dataset or schema.")] = (
+        "marts"
+    ),
+    exposures: Annotated[
+        Path,
+        typer.Option("--exposures", help="The dbt exposures file naming the dashboard's marts."),
+    ] = landing_extract.DEFAULT_EXPOSURES,
+) -> None:
+    """Copy the dashboard's marts into one DuckDB file, published by one rename."""
+
+    def refuse(message: str) -> typer.Exit:
+        typer.echo(message, err=True)
+        return typer.Exit(code=1)
+
+    if (project is None) == (db is None):
+        raise refuse("give exactly one of --project and --db")
+    reader: landing_extract.MartReader
+    try:
+        tables = landing_extract.dashboard_tables(exposures)
+        if project is not None:
+            try:
+                reader = landing_extract.BigQueryMartReader(project, dataset)
+            except ImportError:
+                raise refuse(
+                    "--project needs the bigquery dependency group: "
+                    "uv run --group bigquery front-office extract-marts ..."
+                ) from None
+        else:
+            assert db is not None
+            reader = landing_extract.DuckDBMartReader(db, dataset)
+        counts = landing_extract.extract(reader, tables, out)
+    except landing_extract.ExtractRefused as error:
+        raise refuse(f"extract-marts: {error}") from None
+    typer.echo(f"extracted {len(counts)} tables, {sum(counts.values())} rows, to {out}")
 
 
 @app.command("audit")

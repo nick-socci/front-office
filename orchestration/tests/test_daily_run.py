@@ -25,6 +25,7 @@ def test_daily_builds_the_fixtures(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     monkeypatch.setenv("FO_LANDING_ROOT", str(FIXTURES))
     monkeypatch.setenv("FO_DUCKDB_PATH", str(database))
     monkeypatch.setenv("FO_CI_DUCKDB_PATH", str(database))
+    monkeypatch.setenv("FO_DASHBOARD_EXTRACT", str(tmp_path / "extract.duckdb"))
     monkeypatch.setenv("FO_SEASON", "2026")
     # The `ci` target is what the fixtures build on; the manifest is the same project's.
     monkeypatch.setattr(settings, "dbt_target", lambda *, environ=None: "ci")
@@ -74,6 +75,51 @@ def test_daily_builds_the_fixtures(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
         assert listed is not None and listed[0] > 0
         built = connection.execute("select count(*) from marts.dim_players").fetchone()
         assert built is not None and built[0] > 0
+
+
+def test_no_extract_is_made_when_the_dbt_step_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """R2.6. Runs the real `daily` job and graph on an ephemeral instance with every command
+    faked to succeed, and the dbt step made to fail (dbt refuses an unknown flag, exit 2).
+
+    Catches an extract that does not wait for the build, or one that runs after it failed,
+    which would publish marts of a build that did not finish. It proves Dagster skips the steps
+    below a failed one in this graph; it does not run a real failing model or test.
+    """
+    monkeypatch.delenv("FO_WAREHOUSE", raising=False)
+    monkeypatch.setenv("FO_LANDING_ROOT", str(tmp_path / "raw"))
+    monkeypatch.setenv("FO_DUCKDB_PATH", str(tmp_path / "w.duckdb"))
+    monkeypatch.setenv("FO_DASHBOARD_EXTRACT", str(tmp_path / "extract.duckdb"))
+    monkeypatch.setenv("FO_SEASON", "2026")
+    monkeypatch.setattr(season, "is_over", lambda root, year: False)
+    commands: list[str] = []
+
+    def run(
+        args: Sequence[str], context: cli.HasLog, *, prefix: Sequence[str] = cli.FRONT_OFFICE
+    ) -> cli.Result:
+        commands.append(args[0])
+        return cli.Result(0, ())
+
+    monkeypatch.setattr(cli, "run", run)
+    monkeypatch.setattr(
+        dbt_assets, "build_args", lambda *, environ=None: ["build", "--no-such-flag"]
+    )
+
+    job = front_office_pipeline.build_defs().resolve_job_def("daily")
+    result = job.execute_in_process(instance=DagsterInstance.ephemeral(), raise_on_error=False)
+
+    assert not result.success
+    failed = [event.step_key for event in result.get_step_failure_events()]
+    assert failed == ["front_office_dbt"]
+    assert "load" in commands  # the steps above the build did run
+    assert "extract-marts" not in commands
+    ran = {event.step_key for event in result.get_step_success_events()}
+    assert "marts_extract" not in ran
+    assert not any(
+        event.asset_key and event.asset_key.to_user_string() == "marts_extract"
+        for event in result.get_asset_materialization_events()
+    )
 
 
 def _ci_args(original: "object") -> "object":

@@ -137,7 +137,7 @@
   }
  },
  "status": {
-  "currentMatchupPeriod": 25,
+  "currentMatchupPeriod": 1,
   "latestScoringPeriod": 2,
   "finalScoringPeriod": 2,
   "isActive": true

@@ -1050,7 +1050,11 @@ def test_the_season_builders_take_their_captures_from_the_season_they_are_given(
     settings = json.loads(settings_path.read_text())
     assert settings["seasonId"] == 2025 and settings["id"] == "111111"
     assert settings["settings"]["name"] == "Fixture League"
-    assert settings["status"] == {"latestScoringPeriod": 2, "finalScoringPeriod": 2}
+    assert settings["status"] == {
+        "currentMatchupPeriod": 1,
+        "latestScoringPeriod": 2,
+        "finalScoringPeriod": 2,
+    }
     assert len(json.loads(matchups_path.read_text())["schedule"]) == 2
     days = json.loads(schedule_path.read_text())["dates"]
     assert [d["date"] for d in days] == list(PAST_DATES)
@@ -1168,13 +1172,42 @@ def test_settings_say_the_span_and_matchup_keys_are_trimmed_not_offset(roots):
     land_settings_and_matchups(raw, 2026)
     settings = json.loads(make_fixtures.build_espn_settings(2026, SOURCE_PERIODS).read_text())
     assert settings["scoringPeriodId"] == 7
-    assert settings["status"] == {"latestScoringPeriod": 7, "finalScoringPeriod": 7}
+    assert settings["status"] == {
+        "currentMatchupPeriod": 1,
+        "latestScoringPeriod": 7,
+        "finalScoringPeriod": 7,
+    }
     matchups = json.loads(make_fixtures.build_espn_matchups(2026, SOURCE_PERIODS).read_text())
     for matchup in matchups["schedule"]:
         for side in ("home", "away"):
             assert sorted(matchup[side]["pointsByScoringPeriod"], key=int) == [
                 str(n) for n in range(1, 8)
             ]
+
+
+def test_settings_are_on_the_matchup_period_the_fixture_matchups_are_in(roots):
+    """Catches currentMatchupPeriod left at the real season's (24), which would put the
+    fixture's one matchup period behind ESPN's current one and make fct_team_standings count
+    it finished against whole-season records, and a period taken from anything but the kept
+    matchups (a period other than the first)."""
+    raw, _fixtures = roots
+    land_settings_and_matchups(raw, 2026)
+    status = {"currentMatchupPeriod": 24, "latestScoringPeriod": 196, "finalScoringPeriod": 188}
+    scoring = {"scoringType": "H2H_CATEGORY", "scoringItems": []}
+    settings = {"id": 7, "seasonId": 2026, "scoringPeriodId": 99, "status": status}
+    settings["settings"] = {"name": "Real Name", "scoringSettings": scoring}
+    land(raw, "espn", "settings", {"season": 2026, "league_id": "7"}, "20260102T000000Z", settings)
+    schedule = [{"id": n, "matchupPeriodId": 3} for n in range(5)]
+    land(
+        raw,
+        "espn",
+        "matchups",
+        {"season": 2026, "league_id": "7"},
+        "20260102T000000Z",
+        {"seasonId": 2026, "schedule": schedule},
+    )
+    built = json.loads(make_fixtures.build_espn_settings(2026, SOURCE_PERIODS).read_text())
+    assert built["status"]["currentMatchupPeriod"] == 3
 
 
 def test_the_helpers_give_the_2025_numbers_unchanged():

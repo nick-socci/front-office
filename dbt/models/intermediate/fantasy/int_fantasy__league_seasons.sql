@@ -30,6 +30,12 @@
 -- on any other stat is null here and fails the build in
 -- stg_espn__league_settings_qualification_is_understood, so a null means no minimum.
 --
+-- scoring_type and current_matchup_period are the settings' own, passed through for
+-- fct_team_standings: a mart reads them here, through the seam, never from staging
+-- (ADR 0148). The first says whether the league plays head-to-head categories at all; the
+-- second, which matchup period ESPN was in when the settings were captured: a matchup is
+-- finished once that is past it (ADR 0149).
+--
 -- A season with rosters and a missing boxscore is covered, and is reported by the input
 -- checks on int_fantasy__started_player_days (#25), not here.
 --
@@ -50,6 +56,8 @@ select
     'espn' as platform,
     settings.league_id,
     settings.season,
+    settings.scoring_type,
+    settings.current_matchup_period,
     rostered.league_id is not null as has_rosters,
     logged.league_id is not null as has_transaction_log,
     case

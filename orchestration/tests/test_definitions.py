@@ -29,6 +29,7 @@ HAND_WRITTEN = {
     "idmap_capture",
     "raw_in_warehouse",
     "source_freshness",
+    "marts_extract",
 }
 
 
@@ -263,3 +264,46 @@ def test_without_function_parents_leaves_other_tests_alone() -> None:
     cleaned = dbt_assets.without_function_parents(manifest)
     for node in tests:
         assert cleaned["nodes"][node["unique_id"]]["depends_on"] == node["depends_on"]
+
+
+def exposure_model_keys(manifest: dict[str, Any]) -> set[AssetKey]:
+    """The asset keys of the models `front_office_dashboard` names, read from the manifest."""
+    exposure = manifest["exposures"]["exposure.front_office.front_office_dashboard"]
+    names = exposure["depends_on"]["nodes"]
+    assert names and all(name.startswith("model.") for name in names)
+    return {AssetKey(["marts", manifest["nodes"][name]["name"]]) for name in names}
+
+
+def test_marts_extract_depends_on_exactly_the_models_the_exposure_names(
+    dev_manifest: dict[str, Any],
+) -> None:
+    """R2.1, R2.6. Catches deps that drift from the exposure (a mart added to it but not waited
+    for, so the extract could run before it is built), or a hard-coded list."""
+    graph = front_office_pipeline.build_defs().resolve_asset_graph()
+    expected = exposure_model_keys(dev_manifest)
+    assert len(expected) >= 11
+    assert graph.get(AssetKey("marts_extract")).parent_keys == expected
+    # Nothing waits for it: it is the last step.
+    assert graph.get(AssetKey("marts_extract")).child_keys == set()
+
+
+def test_daily_runs_marts_extract_and_idmap_does_not(dev_manifest: dict[str, Any]) -> None:
+    """R2.1. Catches an extract left out of `daily`, or one the weekly id-map run makes."""
+    defs = front_office_pipeline.build_defs()
+    assert "marts_extract" in selected(defs)
+    idmap = {
+        k.to_user_string() for k in defs.resolve_job_def("idmap").asset_layer.executable_asset_keys
+    }
+    assert idmap == {"idmap_capture"}
+
+
+def test_the_exposure_must_name_models_or_the_location_does_not_load(
+    dev_manifest: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catches an extract with no deps (it would run first, on the previous build) when the
+    exposure is renamed or emptied."""
+    emptied = copy.deepcopy(dev_manifest)
+    del emptied["exposures"]["exposure.front_office.front_office_dashboard"]
+    monkeypatch.setattr(dbt_assets, "load_manifest", lambda target: emptied)
+    with pytest.raises(KeyError, match="front_office_dashboard"):
+        front_office_pipeline.build_defs()

@@ -1,6 +1,6 @@
 # 0146. The dashboard listens on the host's loopback and is reached by an SSH tunnel
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-21
 - Spec: [0232-dashboard](../specs/0232-dashboard/design.md) · Issue: #232
 

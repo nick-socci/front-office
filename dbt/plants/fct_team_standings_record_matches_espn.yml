@@ -1,0 +1,56 @@
+# fct_team_standings_record_matches_espn: a team's computed record equals ESPN's, less the
+# matchups ESPN's winner differs on (spec 0232, R1.4). The CI fixtures hold no finished
+# matchup and no listed difference, so every plant here sets the rows it needs.
+plants:
+  - name: record_differs_in_a_complete_season
+    why: a team's wins differ from ESPN's with no listed matchup behind it, in a complete regular season
+    sql: >-
+      update marts.fct_team_standings
+      set is_regular_season_complete = true
+      where fantasy_team_id = 1
+    expect: {status: fail, failures: 1}
+  - name: listed_difference_explains_the_record
+    why: >-
+      the sides of a matchup ESPN calls the other way differ from ESPN's record by exactly
+      that matchup (ours AWAY, ESPN's HOME): the test must pass, so a listed difference is
+      not itself a failure
+    materialize: [reconciliation.rec_espn__winner_differences]
+    sql:
+      - >-
+        insert into reconciliation.rec_espn__winner_differences
+            (league_id, season, matchup_id, our_winner, espn_winner, differing_categories,
+             explained_categories, problem)
+        values ('111111', 2026, 1, 'AWAY', 'HOME', 1, 1, null)
+      - >-
+        update marts.fct_team_standings
+        set is_regular_season_complete = true,
+            matchups = 1,
+            wins = case when fantasy_team_id = 6 then 1 else 0 end,
+            losses = case when fantasy_team_id = 9 then 1 else 0 end,
+            ties = 0,
+            reported_wins = case when fantasy_team_id = 9 then 1 else 0 end,
+            reported_losses = case when fantasy_team_id = 6 then 1 else 0 end,
+            reported_ties = 0
+        where fantasy_team_id in (6, 9)
+    expect: pass
+  - name: listed_difference_does_not_cover_a_second_one
+    why: the same, but one team's ESPN loss count is one more than the listed matchup explains
+    materialize: [reconciliation.rec_espn__winner_differences]
+    sql:
+      - >-
+        insert into reconciliation.rec_espn__winner_differences
+            (league_id, season, matchup_id, our_winner, espn_winner, differing_categories,
+             explained_categories, problem)
+        values ('111111', 2026, 1, 'AWAY', 'HOME', 1, 1, null)
+      - >-
+        update marts.fct_team_standings
+        set is_regular_season_complete = true,
+            matchups = 1,
+            wins = case when fantasy_team_id = 6 then 1 else 0 end,
+            losses = case when fantasy_team_id = 9 then 1 else 0 end,
+            ties = 0,
+            reported_wins = case when fantasy_team_id = 9 then 1 else 0 end,
+            reported_losses = case when fantasy_team_id = 6 then 2 else 0 end,
+            reported_ties = 0
+        where fantasy_team_id in (6, 9)
+    expect: {status: fail, failures: 1}
