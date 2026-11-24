@@ -47,9 +47,10 @@ LABEL org.opencontainers.image.revision=$GIT_COMMIT \
       org.opencontainers.image.source="https://github.com/nick-socci/front-office"
 
 # The build fails if the dashboard is not in the image (its directory excluded, its group not
-# installed, or its marts YAML, which gives the column tooltips, missing). `app.py` itself is not
-# imported: it runs Streamlit calls at import.
-RUN cd /app/dashboard && python -c "import front_office_dashboard.data, front_office_dashboard.labels as l; assert l.MARTS_YAML.is_file(), l.MARTS_YAML"
+# installed, or its marts YAML, which gives the column tooltips, missing). `app.py` runs Streamlit
+# calls at import, so it is rendered headless (AppTest) in its no-extract state, which needs no
+# data: a broken import or syntax error in the app fails the build.
+RUN cd /app/dashboard && FO_DASHBOARD_EXTRACT=/nonexistent/extract.duckdb python -c "from streamlit.testing.v1 import AppTest; at = AppTest.from_file('front_office_dashboard/app.py').run(); assert not at.exception, at.exception; import front_office_dashboard.labels as l; assert l.MARTS_YAML.is_file(), l.MARTS_YAML"
 
 # The entrypoint puts the image's own dagster.yaml in the instance directory, so the instance's
 # settings follow the commit that was built; the volume holds the history.

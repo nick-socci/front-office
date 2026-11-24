@@ -71,6 +71,10 @@ class MartReader(Protocol):
         """The table, or `ExtractRefused` if it is missing or has a column that cannot map."""
         ...
 
+    def modified(self, table: str) -> dt.datetime:
+        """When the warehouse last changed the table, asked again after the read (R2.6)."""
+        ...
+
 
 def _quote(identifier: str) -> str:
     return '"' + identifier.replace('"', '""') + '"'
@@ -107,6 +111,12 @@ class BigQueryMartReader:
             client = bigquery.Client(project=project)
         self.client = client
 
+    def modified(self, table: str) -> dt.datetime:
+        modified: dt.datetime = self.client.get_table(
+            f"{self.project}.{self.dataset}.{table}"
+        ).modified
+        return modified
+
     def read(self, table: str) -> MartTable:
         reference = f"{self.project}.{self.dataset}.{table}"
         try:
@@ -141,6 +151,9 @@ class DuckDBMartReader:
         self.connection = duckdb.connect()
         self.connection.execute(f"attach {_literal(str(path))} as src (read_only)")
 
+    def modified(self, table: str) -> dt.datetime:
+        return dt.datetime.fromtimestamp(self.path.stat().st_mtime, dt.UTC)
+
     def read(self, table: str) -> MartTable:
         described = self.connection.execute(
             "select column_name, data_type from information_schema.columns"
@@ -150,7 +163,7 @@ class DuckDBMartReader:
         ).fetchall()
         if not described:
             raise ExtractRefused(f"table {table}: not found in {self.path} ({self.dataset})")
-        modified = dt.datetime.fromtimestamp(self.path.stat().st_mtime, dt.UTC)
+        modified = self.modified(table)
         query = f"select * from src.{_quote(self.dataset)}.{_quote(table)}"
         return MartTable([(str(n), str(t)) for n, t in described], modified, self._rows(query))
 
@@ -251,6 +264,14 @@ def extract(reader: MartReader, tables: list[str], out: Path) -> dict[str, int]:
                 except Exception as error:
                     raise ExtractRefused(f"table {name}: {error}") from error
                 info.append((name, counts[name], table.modified))
+            # R2.6: every table must be of one build. A table the warehouse changed since it was
+            # read means a build ran meanwhile, and the tables may come from two of them.
+            for name, _, read_at in info:
+                if reader.modified(name) != read_at:
+                    raise ExtractRefused(
+                        f"table {name} changed while the extract read it (a build was running): "
+                        "nothing published; run it again once the build ends"
+                    )
             extracted_at = dt.datetime.now(dt.UTC)
             commit = git_commit()
             target.execute(

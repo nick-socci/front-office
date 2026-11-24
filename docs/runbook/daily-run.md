@@ -54,11 +54,14 @@ ssh mothership "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8501/"  
 ```
 
 Out of season there is no daily extract, or the last one is old. Make one by hand with the code
-server's own environment (it holds `FO_BQ_PROJECT` and the Google key; the dashboard never does):
+server's own environment (it holds `FO_BQ_PROJECT` and the Google key; the dashboard never does).
+Define `no_run_going`, the function in *Deploy a commit*, first in the new shell. The command
+refuses, and publishes nothing, if a build changes a mart while it reads, so start it with no run
+going:
 
 ```bash
 ssh mothership
-podman exec front-office-code sh -c 'front-office extract-marts --project "$FO_BQ_PROJECT" --out /dashboard/extract.duckdb'
+no_run_going && podman exec front-office-code sh -c 'front-office extract-marts --project "$FO_BQ_PROJECT" --out /dashboard/extract.duckdb'
 ```
 
 Each page shows when the extract was built and from which commit. A **stale banner** means the

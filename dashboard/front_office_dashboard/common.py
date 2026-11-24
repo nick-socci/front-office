@@ -32,6 +32,9 @@ def league_season(key: str) -> tuple[str, str, int]:
     """The league-season picker (R3.1): `(platform, league_id, season)`, defaulting to the
     latest season in the extract (the query lists them newest first)."""
     found = data.query("league_seasons").to_dict("records")
+    if not found:
+        st.info("The extract holds no league-season yet.")
+        st.stop()
     index = st.selectbox(
         "League and season",
         range(len(found)),

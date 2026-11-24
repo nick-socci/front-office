@@ -277,9 +277,13 @@ def test_the_image_serves_the_dashboard() -> None:
     assert len(syncs) == 2 and all("--group dashboard" in line for line in syncs)
     assert "ENV FO_GIT_COMMIT=$GIT_COMMIT" in code
     assert code.index("ARG GIT_COMMIT=unknown") < code.index("ENV FO_GIT_COMMIT=$GIT_COMMIT")
-    assert any(line.startswith("RUN") and "front_office_dashboard.data" in line for line in code), (
-        "the build must import the app"
-    )
+    assert any(
+        line.startswith("RUN")
+        and "AppTest.from_file('front_office_dashboard/app.py')" in line
+        and "FO_DASHBOARD_EXTRACT=/nonexistent/" in line
+        and "assert not at.exception" in line
+        for line in code
+    ), "the build must render the app headless, in the no-extract state"
     assert any("front_office_dashboard.labels" in line for line in code)
     assert "dashboard" not in ignore_patterns()
 

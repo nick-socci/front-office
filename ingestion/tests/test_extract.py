@@ -295,6 +295,54 @@ def test_publishing_by_rename_leaves_an_open_reader_on_the_old_file(tmp_path: Pa
     old.close()
 
 
+class ChangingClient(FakeClient):
+    """A build that lands after `after` calls of `get_table`: the next calls see a new time."""
+
+    def __init__(self, tables: dict[str, tuple[list[Any], list[FakeRow]]], after: int) -> None:
+        super().__init__(tables)
+        self.after = after
+        self.calls = 0
+
+    def get_table(self, reference: str) -> Any:
+        self.calls += 1
+        if self.calls > self.after:
+            self.modified = dt.datetime(2026, 11, 1, 7, 0, tzinfo=dt.UTC)
+        return super().get_table(reference)
+
+
+def test_a_mart_changed_during_the_read_publishes_nothing(tmp_path: Path) -> None:
+    """Catches an extract of tables from two builds (R2.6): a table modified between its read
+    and the check after the last read must refuse, naming it, and leave the old file alone."""
+    out = tmp_path / "extract.duckdb"
+    extract.extract(bq_reader(good_client()), ["alpha", "beta"], out)
+    before = out.read_bytes()
+    clock = good_client()
+    changing = ChangingClient(clock.tables, after=2)  # both reads see the old time; the check, new
+    with pytest.raises(extract.ExtractRefused, match=r"table alpha changed while the extract read"):
+        extract.extract(bq_reader(changing), ["alpha", "beta"], out)
+    assert out.read_bytes() == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["extract.duckdb"]
+
+
+def test_marts_unchanged_during_the_read_are_published(tmp_path: Path) -> None:
+    """Catches a re-check that refuses when nothing changed."""
+    out = tmp_path / "extract.duckdb"
+    unchanged = ChangingClient(good_client().tables, after=10**6)
+    extract.extract(bq_reader(unchanged), ["alpha", "beta"], out)
+    assert out.is_file()
+
+
+def test_the_duckdb_reader_reports_the_files_modification_time(tmp_path: Path) -> None:
+    """Catches a DuckDB `modified` that is not the time `read` records."""
+    warehouse = tmp_path / "w.duckdb"
+    con = duckdb.connect(str(warehouse))
+    con.execute("create schema marts; create table marts.t as select 1 as a")
+    con.close()
+    reader = extract.DuckDBMartReader(warehouse)
+    assert reader.modified("t") == reader.read("t").modified
+    reader.close()
+
+
 def test_git_commit_prefers_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """Catches ignoring `FO_GIT_COMMIT`, which is all the image has (C20)."""
     monkeypatch.setenv("FO_GIT_COMMIT", "abc123")
